@@ -1,0 +1,66 @@
+orchestrator:
+  model: "opus"
+  max_turns: 500
+  permission_mode: "acceptEdits"
+
+depth:
+  default: "standard"
+  keyword_map:
+    quick: ["quick", "fast", "simple", "just"]
+    thorough: ["thorough", "thoroughly", "careful", "carefully", "deep", "detailed"]
+    exhaustive: ["exhaustive", "exhaustively", "comprehensive", "comprehensively", "complete"]
+
+convergence:
+  max_cycles: 10
+  escalation_threshold: 3
+  max_escalation_depth: 2
+  requirements_dir: ".agent-team"
+  requirements_file: "REQUIREMENTS.md"
+  master_plan_file: "MASTER_PLAN.md"
+
+interview:
+  enabled: true
+  model: "opus"
+  max_exchanges: 50
+
+agents:
+  planner:
+    model: "opus"
+    enabled: true
+  researcher:
+    model: "opus"
+    enabled: true
+  architect:
+    model: "opus"
+    enabled: true
+  code_writer:
+    model: "opus"
+    enabled: true
+  code_reviewer:
+    model: "opus"
+    enabled: true
+  test_runner:
+    model: "opus"
+    enabled: true
+  security_auditor:
+    model: "opus"
+    enabled: true
+  task_assigner:
+    model: "opus"
+    enabled: true
+  debugger:
+    model: "opus"
+    enabled: true
+
+mcp_servers:
+  firecrawl:
+    enabled: true
+  context7:
+    enabled: true
+
+display:
+  show_cost: true
+  show_tools: true
+  show_fleet_composition: true
+  show_convergence_status: true
+  verbose: false
