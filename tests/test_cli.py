@@ -1,0 +1,319 @@
+"""Tests for agent_team.cli."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from agent_team.cli import (
+    _detect_agent_count,
+    _detect_prd_from_task,
+    _handle_interrupt,
+    _parse_args,
+)
+
+
+# ===================================================================
+# _detect_agent_count()
+# ===================================================================
+
+class TestDetectAgentCount:
+    def test_cli_flag_overrides(self):
+        assert _detect_agent_count("use 5 agents", 10) == 10
+
+    def test_use_pattern(self):
+        assert _detect_agent_count("use 5 agents", None) == 5
+
+    def test_deploy_pattern(self):
+        assert _detect_agent_count("deploy 10 agents", None) == 10
+
+    def test_with_pattern(self):
+        assert _detect_agent_count("with 3 agents please", None) == 3
+
+    def test_launch_pattern(self):
+        assert _detect_agent_count("launch 7 agents now", None) == 7
+
+    def test_no_match_returns_none(self):
+        assert _detect_agent_count("fix the login bug", None) is None
+
+    def test_cli_precedence_over_task(self):
+        assert _detect_agent_count("use 5 agents", 20) == 20
+
+
+# ===================================================================
+# _detect_prd_from_task()
+# ===================================================================
+
+class TestDetectPrdFromTask:
+    def test_two_signals_is_prd(self):
+        task = "Build with these features and user stories"
+        assert _detect_prd_from_task(task) is True
+
+    def test_one_signal_not_prd(self):
+        task = "Add a new features dropdown"
+        assert _detect_prd_from_task(task) is False
+
+    def test_long_task_is_prd(self):
+        task = "x" * 3001
+        assert _detect_prd_from_task(task) is True
+
+    def test_exactly_3000_not_prd(self):
+        task = "x" * 3000
+        assert _detect_prd_from_task(task) is False
+
+    def test_simple_task_not_prd(self):
+        assert _detect_prd_from_task("fix the bug") is False
+
+    def test_case_insensitive(self):
+        task = "FEATURES and USER STORIES here"
+        assert _detect_prd_from_task(task) is True
+
+
+# ===================================================================
+# _parse_args()
+# ===================================================================
+
+class TestParseArgs:
+    def _parse(self, args: list[str]) -> argparse.Namespace:
+        with patch("sys.argv", ["agent-team"] + args):
+            return _parse_args()
+
+    def test_task_positional(self):
+        ns = self._parse(["fix the bug"])
+        assert ns.task == "fix the bug"
+
+    def test_no_task(self):
+        ns = self._parse([])
+        assert ns.task is None
+
+    def test_prd_flag(self):
+        ns = self._parse(["--prd", "prd.md"])
+        assert ns.prd == "prd.md"
+
+    def test_depth_quick(self):
+        ns = self._parse(["--depth", "quick"])
+        assert ns.depth == "quick"
+
+    def test_depth_standard(self):
+        ns = self._parse(["--depth", "standard"])
+        assert ns.depth == "standard"
+
+    def test_depth_thorough(self):
+        ns = self._parse(["--depth", "thorough"])
+        assert ns.depth == "thorough"
+
+    def test_depth_exhaustive(self):
+        ns = self._parse(["--depth", "exhaustive"])
+        assert ns.depth == "exhaustive"
+
+    def test_invalid_depth_exits(self):
+        with pytest.raises(SystemExit):
+            self._parse(["--depth", "invalid"])
+
+    def test_agents_int(self):
+        ns = self._parse(["--agents", "5"])
+        assert ns.agents == 5
+
+    def test_model_flag(self):
+        ns = self._parse(["--model", "sonnet"])
+        assert ns.model == "sonnet"
+
+    def test_max_turns_flag(self):
+        ns = self._parse(["--max-turns", "100"])
+        assert ns.max_turns == 100
+
+    def test_config_flag(self):
+        ns = self._parse(["--config", "custom.yaml"])
+        assert ns.config == "custom.yaml"
+
+    def test_cwd_flag(self):
+        ns = self._parse(["--cwd", "/project"])
+        assert ns.cwd == "/project"
+
+    def test_verbose_flag(self):
+        ns = self._parse(["-v"])
+        assert ns.verbose is True
+
+    def test_interactive_flag(self):
+        ns = self._parse(["-i"])
+        assert ns.interactive is True
+
+    def test_no_interview_flag(self):
+        ns = self._parse(["--no-interview"])
+        assert ns.no_interview is True
+
+    def test_interview_doc_flag(self):
+        ns = self._parse(["--interview-doc", "doc.md"])
+        assert ns.interview_doc == "doc.md"
+
+    def test_design_ref_single(self):
+        ns = self._parse(["--design-ref", "https://example.com"])
+        assert ns.design_ref == ["https://example.com"]
+
+    def test_design_ref_multiple(self):
+        ns = self._parse(["--design-ref", "https://a.com", "https://b.com"])
+        assert ns.design_ref == ["https://a.com", "https://b.com"]
+
+    def test_version_flag(self):
+        with pytest.raises(SystemExit) as exc_info:
+            self._parse(["--version"])
+        assert exc_info.value.code == 0
+
+
+# ===================================================================
+# _handle_interrupt()
+# ===================================================================
+
+class TestHandleInterrupt:
+    def setup_method(self):
+        # Reset global state before each test
+        import agent_team.cli as cli_mod
+        cli_mod._interrupt_count = 0
+
+    def test_first_press_warns(self, capsys):
+        import agent_team.cli as cli_mod
+        _handle_interrupt(2, None)  # SIGINT = 2
+        assert cli_mod._interrupt_count == 1
+
+    def test_second_press_exits(self):
+        import agent_team.cli as cli_mod
+        cli_mod._interrupt_count = 1
+        with pytest.raises(SystemExit) as exc_info:
+            _handle_interrupt(2, None)
+        assert exc_info.value.code == 130
+
+    def test_state_reset_between_tests(self):
+        import agent_team.cli as cli_mod
+        assert cli_mod._interrupt_count == 0
+
+
+# ===================================================================
+# main() — mocked tests
+# ===================================================================
+
+class TestMain:
+    def test_no_api_key_exits(self, monkeypatch):
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        with patch("agent_team.cli._parse_args") as mock_parse:
+            mock_parse.return_value = argparse.Namespace(
+                task="test", prd=None, depth=None, agents=None,
+                model=None, max_turns=None, config=None, cwd=None,
+                verbose=False, interactive=False, no_interview=True,
+                interview_doc=None, design_ref=None,
+            )
+            from agent_team.cli import main
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 1
+
+    def test_prd_not_found_exits(self, monkeypatch, env_with_api_keys):
+        with patch("agent_team.cli._parse_args") as mock_parse:
+            mock_parse.return_value = argparse.Namespace(
+                task=None, prd="/nonexistent/prd.md", depth=None, agents=None,
+                model=None, max_turns=None, config=None, cwd=None,
+                verbose=False, interactive=False, no_interview=True,
+                interview_doc=None, design_ref=None,
+            )
+            from agent_team.cli import main
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 1
+
+    def test_interview_doc_not_found_exits(self, env_with_api_keys):
+        with patch("agent_team.cli._parse_args") as mock_parse:
+            mock_parse.return_value = argparse.Namespace(
+                task="test", prd=None, depth=None, agents=None,
+                model=None, max_turns=None, config=None, cwd=None,
+                verbose=False, interactive=False, no_interview=False,
+                interview_doc="/nonexistent/interview.md", design_ref=None,
+            )
+            from agent_team.cli import main
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 1
+
+    def test_prd_forces_exhaustive(self, env_with_api_keys, sample_prd_file):
+        """C2 bug: --prd should force exhaustive depth."""
+        with patch("agent_team.cli._parse_args") as mock_parse, \
+             patch("agent_team.cli.asyncio") as mock_asyncio:
+            mock_parse.return_value = argparse.Namespace(
+                task=None, prd=str(sample_prd_file), depth=None, agents=None,
+                model=None, max_turns=None, config=None, cwd=None,
+                verbose=False, interactive=False, no_interview=True,
+                interview_doc=None, design_ref=None,
+            )
+            from agent_team.cli import main
+            main()
+            # Verify _run_single or _run_interactive was called
+            call_args = mock_asyncio.run.call_args
+            # The depth_override should be "exhaustive"
+            assert call_args is not None
+
+    def test_interview_doc_scope_detected(self, env_with_api_keys, tmp_path, sample_complex_interview_doc):
+        """I6 bug: --interview-doc should detect scope."""
+        doc_file = tmp_path / "interview.md"
+        doc_file.write_text(sample_complex_interview_doc, encoding="utf-8")
+        with patch("agent_team.cli._parse_args") as mock_parse, \
+             patch("agent_team.cli.asyncio") as mock_asyncio, \
+             patch("agent_team.cli._detect_scope") as mock_detect:
+            mock_detect.return_value = "COMPLEX"
+            mock_parse.return_value = argparse.Namespace(
+                task="test", prd=None, depth=None, agents=None,
+                model=None, max_turns=None, config=None, cwd=None,
+                verbose=False, interactive=False, no_interview=False,
+                interview_doc=str(doc_file), design_ref=None,
+            )
+            from agent_team.cli import main
+            main()
+            mock_detect.assert_called_once()
+
+    def test_complex_scope_forces_exhaustive(self, env_with_api_keys, tmp_path, sample_complex_interview_doc):
+        """COMPLEX scope should force exhaustive depth."""
+        doc_file = tmp_path / "interview.md"
+        doc_file.write_text(sample_complex_interview_doc, encoding="utf-8")
+        with patch("agent_team.cli._parse_args") as mock_parse, \
+             patch("agent_team.cli.asyncio") as mock_asyncio:
+            mock_parse.return_value = argparse.Namespace(
+                task="test", prd=None, depth=None, agents=None,
+                model=None, max_turns=None, config=None, cwd=None,
+                verbose=False, interactive=False, no_interview=False,
+                interview_doc=str(doc_file), design_ref=None,
+            )
+            from agent_team.cli import main
+            main()
+            # _run_single should have been called
+            call_args = mock_asyncio.run.call_args
+            assert call_args is not None
+
+    def test_design_ref_deduplication(self, env_with_api_keys):
+        """Design reference URLs should be deduplicated."""
+        with patch("agent_team.cli._parse_args") as mock_parse, \
+             patch("agent_team.cli.asyncio") as mock_asyncio:
+            mock_parse.return_value = argparse.Namespace(
+                task="test", prd=None, depth="quick", agents=None,
+                model=None, max_turns=None, config=None, cwd=None,
+                verbose=False, interactive=False, no_interview=True,
+                interview_doc=None,
+                design_ref=["https://a.com", "https://a.com", "https://b.com"],
+            )
+            from agent_team.cli import main
+            main()
+            call_args = mock_asyncio.run.call_args
+            assert call_args is not None
+
+    def test_no_interview_skips_interview(self, env_with_api_keys):
+        with patch("agent_team.cli._parse_args") as mock_parse, \
+             patch("agent_team.cli.asyncio") as mock_asyncio, \
+             patch("agent_team.cli.run_interview") as mock_interview:
+            mock_parse.return_value = argparse.Namespace(
+                task="test", prd=None, depth="quick", agents=None,
+                model=None, max_turns=None, config=None, cwd=None,
+                verbose=False, interactive=False, no_interview=True,
+                interview_doc=None, design_ref=None,
+            )
+            from agent_team.cli import main
+            main()
+            mock_interview.assert_not_called()

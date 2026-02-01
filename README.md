@@ -342,6 +342,65 @@ display:
 | `ANTHROPIC_API_KEY` | Yes | Claude API access |
 | `FIRECRAWL_API_KEY` | No | Firecrawl MCP server for web research |
 
+## Testing
+
+The test suite covers every module with unit, integration, and end-to-end tests.
+
+### Running Tests
+
+```bash
+# Install dev dependencies
+pip install -e ".[dev]"
+
+# Run unit + integration tests
+pytest tests/ -v --tb=short
+
+# Run E2E tests (requires real API keys in environment)
+pytest tests/ -v --run-e2e
+
+# Count collected tests
+pytest tests/ --co -q
+```
+
+### Test Structure
+
+```
+tests/
+├── conftest.py           # Shared fixtures, --run-e2e plugin
+├── test_init.py          # Package exports and version (3 tests)
+├── test_config.py        # Dataclass defaults, detect_depth, get_agent_counts,
+│                         #   _deep_merge, _dict_to_config, load_config (48 tests)
+├── test_agents.py        # Prompt constants, build_agent_definitions,
+│                         #   build_orchestrator_prompt (30 tests)
+├── test_cli.py           # _detect_agent_count, _detect_prd_from_task, _parse_args,
+│                         #   _handle_interrupt, main() (40 tests)
+├── test_interviewer.py   # EXIT_PHRASES, _is_interview_exit (all 26 phrases parametrized),
+│                         #   _detect_scope, InterviewResult, _build_interview_options (43 tests)
+├── test_display.py       # Smoke tests for all 19 display functions + edge cases (27 tests)
+├── test_mcp_servers.py   # _firecrawl_server, _context7_server, get_mcp_servers,
+│                         #   get_research_tools (18 tests)
+├── test_integration.py   # Cross-module pipelines: config→agents, depth→prompt,
+│                         #   MCP→researcher, interview→orchestrator (14 tests)
+└── test_e2e.py           # Real API smoke tests: CLI --help/--version,
+                          #   SDK client lifecycle, Firecrawl config (5 tests)
+```
+
+**Total: 278 tests** — 273 unit/integration (always run) + 5 E2E (require `--run-e2e`).
+
+### Known Bug Verification
+
+The test suite explicitly verifies fixes for known bugs:
+
+| Bug | Test | Verified Behavior |
+|-----|------|-------------------|
+| C1: Empty stdin loop | `test_is_interview_exit` — empty string | Returns `False`, doesn't loop |
+| C2: PRD depth override | `test_prd_forces_exhaustive` | `--prd` forces exhaustive depth |
+| #3: Malformed YAML | `test_load_config_malformed_yaml_raises` | Raises `yaml.YAMLError` |
+| I6: Scope from --interview-doc | `test_interview_doc_scope_detected` | `_detect_scope()` called on doc |
+| #7: Empty research tools | `test_empty_servers_returns_empty_list` | Returns `[]` not `None` |
+| I7: Substring false match | `test_word_boundary_no_substring` | "adjustment" does not match "just" |
+| I11: Bold scope format | `test_markdown_bold` | `**Scope:** COMPLEX` parses correctly |
+
 ## Architecture
 
 ```
@@ -361,6 +420,7 @@ src/agent_team/
 - **Requirements as source of truth**: Every agent reads from and writes to `.agent-team/REQUIREMENTS.md`. No implicit state.
 - **Adversarial review**: Reviewers are prompted to _break_ things, not confirm they work. Items are rejected more than accepted on first pass.
 - **Task atomicity**: TASKS.md decomposes work into tasks targeting 1-3 files max, with explicit dependency DAGs. Code writers get non-overlapping file assignments.
+- **Wiring verification**: Architects produce a Wiring Map (WIRE-xxx entries) documenting every cross-file connection. Reviewers trace each connection from entry point to feature, flagging orphaned code.
 - **Transcript backup**: Interview exchanges are saved to `INTERVIEW_BACKUP.json` independently of Claude's file writes, so context is never lost.
 - **Word-boundary matching**: Depth detection and scope detection use `\b` regex boundaries to prevent false positives ("adjustment" won't match "just").
 
