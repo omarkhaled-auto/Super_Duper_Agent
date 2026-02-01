@@ -379,6 +379,68 @@ class TestMain:
 
 
 # ===================================================================
+# COMPLEX interview → PRD mode plumbing
+# ===================================================================
+
+class TestComplexInterviewPRDPlumbing:
+    """Verify interview_scope flows through CLI into _run_single/_run_interactive."""
+
+    def test_complex_interview_passes_scope_to_prompt(self, env_with_api_keys, tmp_path, sample_complex_interview_doc):
+        """interview_scope='COMPLEX' should be passed to _run_single."""
+        doc_file = tmp_path / "interview.md"
+        doc_file.write_text(sample_complex_interview_doc, encoding="utf-8")
+        captured = {}
+        original_run_single = None
+
+        async def fake_run_single(**kwargs):
+            captured.update(kwargs)
+
+        with patch("agent_team.cli._parse_args") as mock_parse, \
+             patch("agent_team.cli._run_single", side_effect=fake_run_single) as mock_single, \
+             patch("agent_team.cli._detect_scope", return_value="COMPLEX"):
+            mock_parse.return_value = argparse.Namespace(
+                task="test", prd=None, depth=None, agents=None,
+                model=None, max_turns=None, config=None, cwd=None,
+                verbose=False, interactive=False, no_interview=False,
+                interview_doc=str(doc_file), design_ref=None,
+                no_map=False, map_only=False,
+                progressive=False, no_progressive=False,
+            )
+            from agent_team.cli import main
+            main()
+            assert mock_single.called
+            call_kwargs = mock_single.call_args.kwargs
+            assert call_kwargs.get("interview_scope") == "COMPLEX"
+
+    def test_prd_and_interview_doc_clears_prd(self, env_with_api_keys, tmp_path, sample_complex_interview_doc):
+        """--prd + --interview-doc should nullify args.prd (prd_path=None in call)."""
+        doc_file = tmp_path / "interview.md"
+        doc_file.write_text(sample_complex_interview_doc, encoding="utf-8")
+        prd_file = tmp_path / "prd.md"
+        prd_file.write_text("# PRD\nStuff", encoding="utf-8")
+
+        async def fake_run_single(**kwargs):
+            pass
+
+        with patch("agent_team.cli._parse_args") as mock_parse, \
+             patch("agent_team.cli._run_single", side_effect=fake_run_single) as mock_single, \
+             patch("agent_team.cli._detect_scope", return_value="COMPLEX"):
+            mock_parse.return_value = argparse.Namespace(
+                task="test", prd=str(prd_file), depth=None, agents=None,
+                model=None, max_turns=None, config=None, cwd=None,
+                verbose=False, interactive=False, no_interview=False,
+                interview_doc=str(doc_file), design_ref=None,
+                no_map=False, map_only=False,
+                progressive=False, no_progressive=False,
+            )
+            from agent_team.cli import main
+            main()
+            assert mock_single.called
+            call_kwargs = mock_single.call_args.kwargs
+            assert call_kwargs.get("prd_path") is None
+
+
+# ===================================================================
 # TestMutualExclusion — Finding #10
 # ===================================================================
 

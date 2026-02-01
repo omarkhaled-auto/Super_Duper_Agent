@@ -1140,6 +1140,7 @@ def build_orchestrator_prompt(
     agent_count: int | None = None,
     cwd: str | None = None,
     interview_doc: str | None = None,
+    interview_scope: str | None = None,
     design_reference_urls: list[str] | None = None,
     codebase_map_summary: str | None = None,
 ) -> str:
@@ -1182,6 +1183,15 @@ def build_orchestrator_prompt(
         parts.append(interview_doc)
         parts.append("---END INTERVIEW DOCUMENT---")
 
+    # Activate PRD mode when interview produced a COMPLEX-scope document
+    if interview_scope == "COMPLEX" and interview_doc and not prd_path:
+        parts.append(f"\n[PRD MODE ACTIVE — PRD file: {req_dir}/INTERVIEW.md]")
+        parts.append("The INTERVIEW DOCUMENT above IS the PRD (already injected inline).")
+        parts.append("Do NOT attempt to read a separate PRD file — use the interview content above.")
+        parts.append("Enter PRD Mode as described in Section 4 of your instructions.")
+        parts.append(f"Create MASTER_PLAN.md in {req_dir}/ with milestones.")
+        parts.append(f"Create per-milestone REQUIREMENTS.md files in {req_dir}/milestone-N/")
+
     # Design reference injection
     if design_reference_urls:
         parts.append("\n[DESIGN REFERENCE — UI inspiration from reference website(s)]")
@@ -1202,15 +1212,25 @@ def build_orchestrator_prompt(
 
     parts.append(f"\n[TASK]\n{task}")
 
+    is_prd_mode = bool(prd_path) or (interview_scope == "COMPLEX" and interview_doc is not None)
+
     parts.append("\n[INSTRUCTIONS]")
     parts.append("Execute the full workflow as described in your system prompt.")
     if interview_doc:
         parts.append("Use the INTERVIEW DOCUMENT above as the primary source for requirements.")
-    parts.append("Start by deploying the PLANNING FLEET to create REQUIREMENTS.md.")
-    parts.append("After planning and research, deploy the ARCHITECTURE FLEET for design decisions.")
-    parts.append("Then deploy the TASK ASSIGNER to create TASKS.md (using architecture decisions).")
-    parts.append("Then proceed through the convergence loop.")
-    parts.append("Assign code-writer tasks from TASKS.md (by dependency graph).")
-    parts.append("Do NOT stop until ALL items in REQUIREMENTS.md are marked [x] AND all tasks in TASKS.md are COMPLETE.")
+
+    if is_prd_mode:
+        parts.append("Enter PRD Mode (Section 4): Deploy the PRD ANALYZER FLEET (10+ planners in parallel).")
+        parts.append("Synthesize analyzer outputs into MASTER_PLAN.md with ordered milestones.")
+        parts.append("Create per-milestone REQUIREMENTS.md files.")
+        parts.append("Execute each milestone through the full convergence loop (Section 4, step 4).")
+        parts.append("Do NOT stop until every milestone in MASTER_PLAN.md is COMPLETE and every REQUIREMENTS.md has all items [x].")
+    else:
+        parts.append("Start by deploying the PLANNING FLEET to create REQUIREMENTS.md.")
+        parts.append("After planning and research, deploy the ARCHITECTURE FLEET for design decisions.")
+        parts.append("Then deploy the TASK ASSIGNER to create TASKS.md (using architecture decisions).")
+        parts.append("Then proceed through the convergence loop.")
+        parts.append("Assign code-writer tasks from TASKS.md (by dependency graph).")
+        parts.append("Do NOT stop until ALL items in REQUIREMENTS.md are marked [x] AND all tasks in TASKS.md are COMPLETE.")
 
     return "\n".join(parts)

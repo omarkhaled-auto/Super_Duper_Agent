@@ -340,6 +340,66 @@ class TestBuildOrchestratorPrompt:
         assert "planning:" in prompt
         assert "research:" in prompt
 
+    # --- COMPLEX interview → PRD mode tests ---
+
+    def test_complex_interview_activates_prd_mode(self, default_config, sample_complex_interview_doc):
+        """COMPLEX interview_scope + interview_doc → PRD MODE ACTIVE with INTERVIEW.md path."""
+        prompt = build_orchestrator_prompt(
+            "task", "exhaustive", default_config,
+            interview_doc=sample_complex_interview_doc,
+            interview_scope="COMPLEX",
+        )
+        assert "PRD MODE ACTIVE" in prompt
+        assert "INTERVIEW.md" in prompt
+        assert "already injected inline" in prompt
+
+    def test_complex_interview_prd_instructions(self, default_config, sample_complex_interview_doc):
+        """COMPLEX scope → PRD-specific instructions (analyzer fleet, MASTER_PLAN.md)."""
+        prompt = build_orchestrator_prompt(
+            "task", "exhaustive", default_config,
+            interview_doc=sample_complex_interview_doc,
+            interview_scope="COMPLEX",
+        )
+        assert "PRD ANALYZER FLEET" in prompt
+        assert "MASTER_PLAN.md" in prompt
+        assert "per-milestone REQUIREMENTS.md" in prompt
+        # Should NOT contain standard planner instructions
+        assert "PLANNING FLEET to create REQUIREMENTS.md" not in prompt
+
+    def test_medium_interview_no_prd_mode(self, default_config, sample_interview_doc):
+        """MEDIUM scope → no PRD mode activation."""
+        prompt = build_orchestrator_prompt(
+            "task", "standard", default_config,
+            interview_doc=sample_interview_doc,
+            interview_scope="MEDIUM",
+        )
+        assert "PRD MODE ACTIVE" not in prompt
+        assert "PLANNING FLEET to create REQUIREMENTS.md" in prompt
+
+    def test_prd_path_takes_precedence(self, default_config, sample_complex_interview_doc):
+        """prd_path + COMPLEX → only prd_path PRD MODE marker, not interview-based one."""
+        prompt = build_orchestrator_prompt(
+            "task", "exhaustive", default_config,
+            prd_path="/tmp/spec.md",
+            interview_doc=sample_complex_interview_doc,
+            interview_scope="COMPLEX",
+        )
+        # prd_path marker should be present
+        assert "/tmp/spec.md" in prompt
+        # Interview-based PRD MODE should NOT be present (guard: not prd_path)
+        assert "already injected inline" not in prompt
+        # PRD instructions should still activate (is_prd_mode is True from prd_path)
+        assert "PRD ANALYZER FLEET" in prompt
+
+    def test_no_scope_no_prd_mode(self, default_config, sample_interview_doc):
+        """No interview_scope → no PRD mode even with interview_doc."""
+        prompt = build_orchestrator_prompt(
+            "task", "standard", default_config,
+            interview_doc=sample_interview_doc,
+        )
+        assert "PRD MODE ACTIVE" not in prompt
+        assert "PLANNING FLEET to create REQUIREMENTS.md" in prompt
+
 
 # ===================================================================
 # Template substitution (Finding #20)

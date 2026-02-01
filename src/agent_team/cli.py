@@ -195,6 +195,7 @@ async def _run_interactive(
     agent_count_override: int | None,
     prd_path: str | None,
     interview_doc: str | None = None,
+    interview_scope: str | None = None,
     design_reference_urls: list[str] | None = None,
     codebase_map_summary: str | None = None,
 ) -> None:
@@ -219,6 +220,7 @@ async def _run_interactive(
                 agent_count=agent_count,
                 cwd=cwd,
                 interview_doc=interview_doc,
+                interview_scope=interview_scope,
                 design_reference_urls=design_reference_urls,
                 codebase_map_summary=codebase_map_summary,
             )
@@ -251,6 +253,7 @@ async def _run_interactive(
                 agent_count=agent_count,
                 cwd=cwd,
                 interview_doc=interview_doc,
+                interview_scope=interview_scope,
                 design_reference_urls=design_reference_urls,
                 codebase_map_summary=codebase_map_summary,
             )
@@ -283,6 +286,7 @@ async def _run_single(
     agent_count: int | None,
     prd_path: str | None,
     interview_doc: str | None = None,
+    interview_scope: str | None = None,
     design_reference_urls: list[str] | None = None,
     codebase_map_summary: str | None = None,
 ) -> None:
@@ -303,6 +307,7 @@ async def _run_single(
         agent_count=agent_count,
         cwd=cwd,
         interview_doc=interview_doc,
+        interview_scope=interview_scope,
         design_reference_urls=design_reference_urls,
         codebase_map_summary=codebase_map_summary,
     )
@@ -520,6 +525,7 @@ def main() -> None:
 
     if args.prd and args.interview_doc:
         print_warning("Both --prd and --interview-doc provided; using --interview-doc")
+        args.prd = None  # Clear to prevent dual PRD/interview injection
 
     if args.interview_doc:
         # Pre-existing interview document provided
@@ -637,6 +643,7 @@ def main() -> None:
             agent_count_override=args.agents,
             prd_path=args.prd,
             interview_doc=interview_doc,
+            interview_scope=interview_scope,
             design_reference_urls=design_ref_urls or None,
             codebase_map_summary=codebase_map_summary,
         ))
@@ -656,6 +663,7 @@ def main() -> None:
             agent_count=agent_count,
             prd_path=args.prd,
             interview_doc=interview_doc,
+            interview_scope=interview_scope,
             design_reference_urls=design_ref_urls or None,
             codebase_map_summary=codebase_map_summary,
         ))
