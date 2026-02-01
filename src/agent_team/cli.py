@@ -173,6 +173,7 @@ async def _run_interactive(
     agent_count_override: int | None,
     prd_path: str | None,
     interview_doc: str | None = None,
+    design_reference_urls: list[str] | None = None,
 ) -> None:
     """Run the interactive multi-turn conversation loop."""
     options = _build_options(config, cwd)
@@ -195,6 +196,7 @@ async def _run_interactive(
                 agent_count=agent_count,
                 cwd=cwd,
                 interview_doc=interview_doc,
+                design_reference_urls=design_reference_urls,
             )
             print_task_start(task[:200], depth, agent_count)
             await client.query(prompt)
@@ -225,6 +227,7 @@ async def _run_interactive(
                 agent_count=agent_count,
                 cwd=cwd,
                 interview_doc=interview_doc,
+                design_reference_urls=design_reference_urls,
             )
             # Only inject interview_doc on the first query
             interview_doc = None
@@ -253,6 +256,7 @@ async def _run_single(
     agent_count: int | None,
     prd_path: str | None,
     interview_doc: str | None = None,
+    design_reference_urls: list[str] | None = None,
 ) -> None:
     """Run a single task to completion."""
     options = _build_options(config, cwd)
@@ -271,6 +275,7 @@ async def _run_single(
         agent_count=agent_count,
         cwd=cwd,
         interview_doc=interview_doc,
+        design_reference_urls=design_reference_urls,
     )
 
     print_task_start(task, depth, agent_count)
@@ -380,6 +385,13 @@ def _parse_args() -> argparse.Namespace:
         help="Path to a pre-existing interview document (skips live interview)",
     )
     parser.add_argument(
+        "--design-ref",
+        metavar="URL",
+        nargs="+",
+        default=None,
+        help="Reference website URL(s) for design inspiration",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {__version__}",
@@ -406,6 +418,13 @@ def main() -> None:
 
     # Load config
     config = load_config(config_path=args.config, cli_overrides=cli_overrides)
+
+    # Collect, filter, and deduplicate design reference URLs
+    design_ref_urls: list[str] = list(config.design_reference.urls)
+    if args.design_ref:
+        design_ref_urls.extend(args.design_ref)
+    design_ref_urls = [u for u in design_ref_urls if u and u.strip()]
+    design_ref_urls = list(dict.fromkeys(design_ref_urls))  # deduplicate preserving order
 
     # Resolve working directory
     cwd = args.cwd or os.getcwd()
@@ -499,6 +518,7 @@ def main() -> None:
             agent_count_override=args.agents,
             prd_path=args.prd,
             interview_doc=interview_doc,
+            design_reference_urls=design_ref_urls or None,
         ))
     else:
         # Use the interview doc as the task if no explicit task was given
@@ -516,4 +536,5 @@ def main() -> None:
             agent_count=agent_count,
             prd_path=args.prd,
             interview_doc=interview_doc,
+            design_reference_urls=design_ref_urls or None,
         ))

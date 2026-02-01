@@ -23,6 +23,11 @@ interview:
   model: "opus"
   max_exchanges: 50
 
+# design_reference:
+#   urls: []                                          # Reference website URLs for design inspiration
+#   depth: "full"                                     # "branding" | "screenshots" | "full"
+#   max_pages_per_site: 5                             # Max pages to scrape per reference URL
+
 agents:
   planner:
     model: "opus"

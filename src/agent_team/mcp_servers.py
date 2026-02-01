@@ -66,6 +66,8 @@ def get_research_tools(servers: dict[str, Any]) -> list[str]:
             "mcp__firecrawl__firecrawl_scrape",
             "mcp__firecrawl__firecrawl_map",
             "mcp__firecrawl__firecrawl_extract",
+            "mcp__firecrawl__firecrawl_agent",
+            "mcp__firecrawl__firecrawl_agent_status",
         ])
     if "context7" in servers:
         tools.extend([

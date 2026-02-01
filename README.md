@@ -18,7 +18,7 @@ Interview → Plan → Research → Architect → Assign Tasks → Code → Revi
 |-------|-------|-------------|
 | 0 | **Interviewer** | Talks to you, asks clarifying questions, writes `.agent-team/INTERVIEW.md` |
 | 1 | **Planner** | Explores codebase, creates `.agent-team/REQUIREMENTS.md` with checklist |
-| 2 | **Researcher** | Queries docs (Context7) and web (Firecrawl), adds findings to requirements |
+| 2 | **Researcher** | Queries docs (Context7) and web (Firecrawl), scrapes design references, adds findings to requirements |
 | 3 | **Architect** | Designs solution, file ownership map, interface contracts |
 | 4 | **Task Assigner** | Decomposes requirements into atomic tasks in `.agent-team/TASKS.md` |
 | 5 | **Code Writer** | Implements assigned tasks (non-overlapping files, reads from TASKS.md) |
@@ -105,6 +105,7 @@ Options:
   --cwd DIR               Working directory (default: current directory)
   --no-interview          Skip the interview phase
   --interview-doc FILE    Use a pre-existing interview document (skips live interview)
+  --design-ref URL [URL]  Reference website URL(s) for design inspiration
   -i, --interactive       Force interactive mode
   -v, --verbose           Show all tool calls and agent details
   --version               Show version
@@ -127,6 +128,12 @@ agent-team --prd product-spec.md --depth exhaustive
 
 # Use a previous interview document
 agent-team --interview-doc .agent-team/INTERVIEW.md
+
+# Use a reference website for design inspiration
+agent-team "build a SaaS landing page" --design-ref https://stripe.com
+
+# Multiple design references
+agent-team --prd spec.md --design-ref https://stripe.com https://linear.app
 
 # Skip interview, set working directory
 agent-team --no-interview --cwd /path/to/project "add dark mode"
@@ -161,6 +168,9 @@ Every requirement gets tracked with review cycles:
 ### Technical Requirements
 - [x] TECH-001: All endpoints return proper HTTP status codes (review_cycles: 1)
 
+### Design Requirements
+- [x] DESIGN-001: Use primary color #635bff for headings and CTAs (review_cycles: 1)
+
 ## Review Log
 | Cycle | Reviewer | Item | Verdict | Issues Found |
 |-------|----------|------|---------|-------------|
@@ -194,6 +204,58 @@ If a requirement fails review 3+ times (configurable):
 4. Max escalation depth: 2 levels (configurable)
 5. If exceeded: the system asks the user for guidance
 
+## Design Reference
+
+Provide a reference website URL to have the Researcher agent scrape its design system (colors, typography, spacing, component patterns) and write the findings into REQUIREMENTS.md. Downstream agents then use those design tokens as constraints.
+
+### How to Provide References
+
+References can come from three sources (all are merged and deduplicated):
+
+1. **CLI flag**: `--design-ref https://stripe.com https://linear.app`
+2. **config.yaml**: set `design_reference.urls`
+3. **Interview**: the interviewer asks about design inspiration for frontend tasks
+
+### What Gets Extracted
+
+The Researcher uses Firecrawl to scrape reference sites at three depth levels:
+
+| Depth | What's Extracted |
+|-------|-----------------|
+| `branding` | Color palette, typography, spacing, component styles |
+| `screenshots` | Branding + cloud-hosted screenshot URLs for each page |
+| `full` (default) | Branding + screenshots + component pattern analysis (nav, cards, forms, footer) |
+
+Findings are written to the `## Design Reference` section of REQUIREMENTS.md and tracked as `DESIGN-xxx` checklist items alongside existing `REQ-xxx`, `TECH-xxx`, and `INT-xxx` items.
+
+### Data Flow
+
+```
+config.yaml urls + --design-ref CLI + interview URLs
+    → deduplicated in CLI
+    → injected into orchestrator prompt
+    → orchestrator assigns researcher(s) to design analysis
+    → researcher scrapes via Firecrawl (branding, screenshots, components)
+    → writes to REQUIREMENTS.md ## Design Reference
+    → architect defines design tokens from extracted data
+    → code writer applies colors, fonts, component patterns
+    → reviewer verifies DESIGN-xxx items like any other requirement
+```
+
+### Example
+
+```bash
+agent-team "build a dashboard app" --design-ref https://linear.app
+```
+
+The Researcher will:
+1. Map the site (`firecrawl_map`) to discover key pages
+2. Extract branding (`firecrawl_scrape` with `formats: ["branding"]`) — hex colors, font families, spacing
+3. Capture screenshots (`firecrawl_scrape` with `formats: ["screenshot"]`) — cloud-hosted URLs
+4. Analyze component patterns (`firecrawl_extract` or `firecrawl_agent`) — nav, cards, buttons, forms
+
+If no design reference URL is provided, the feature is entirely skipped at zero cost.
+
 ## Configuration
 
 Create `config.yaml` in your project root or `~/.agent-team/config.yaml`:
@@ -224,6 +286,11 @@ interview:
   enabled: true           # Run interview phase
   model: "opus"           # Model for interviewer
   max_exchanges: 50       # Max interview exchanges
+
+design_reference:
+  urls: []                # Reference website URLs for design inspiration
+  depth: "full"           # "branding" | "screenshots" | "full"
+  max_pages_per_site: 5   # Max pages to scrape per reference URL
 
 agents:
   planner:

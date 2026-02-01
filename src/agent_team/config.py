@@ -65,6 +65,13 @@ class InterviewConfig:
 
 
 @dataclass
+class DesignReferenceConfig:
+    urls: list[str] = field(default_factory=list)
+    depth: str = "full"  # "branding" | "screenshots" | "full"
+    max_pages_per_site: int = 5
+
+
+@dataclass
 class DisplayConfig:
     show_cost: bool = True
     show_tools: bool = True
@@ -79,6 +86,7 @@ class AgentTeamConfig:
     depth: DepthConfig = field(default_factory=DepthConfig)
     convergence: ConvergenceConfig = field(default_factory=ConvergenceConfig)
     interview: InterviewConfig = field(default_factory=InterviewConfig)
+    design_reference: DesignReferenceConfig = field(default_factory=DesignReferenceConfig)
     agents: dict[str, AgentConfig] = field(default_factory=lambda: {
         name: AgentConfig()
         for name in (
@@ -192,6 +200,14 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
             enabled=iv.get("enabled", cfg.interview.enabled),
             model=iv.get("model", cfg.interview.model),
             max_exchanges=iv.get("max_exchanges", cfg.interview.max_exchanges),
+        )
+
+    if "design_reference" in data and isinstance(data["design_reference"], dict):
+        dr = data["design_reference"]
+        cfg.design_reference = DesignReferenceConfig(
+            urls=dr.get("urls") or cfg.design_reference.urls,
+            depth=dr.get("depth") or cfg.design_reference.depth,
+            max_pages_per_site=dr.get("max_pages_per_site") or cfg.design_reference.max_pages_per_site,
         )
 
     if "agents" in data:

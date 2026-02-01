@@ -47,6 +47,10 @@ Status: IN PROGRESS
 ## Research Findings
 <From research fleet — library docs, best practices, external references>
 
+## Design Reference
+<From research fleet — branding analysis, component patterns, screenshots from reference site(s).
+This section is populated ONLY if reference URLs were provided. Omit if not applicable.>
+
 ## Architecture Decision
 <From architect fleet — chosen approach, file ownership map, interface contracts>
 
@@ -61,6 +65,9 @@ Status: IN PROGRESS
 
 ### Integration Requirements
 - [ ] INT-001: <Description> (review_cycles: 0)
+
+### Design Requirements
+- [ ] DESIGN-001: <Description — only if design reference URLs were provided> (review_cycles: 0)
 
 ## Review Log
 | Cycle | Reviewer | Item | Verdict | Issues Found |
@@ -260,6 +267,14 @@ Use the `researcher` agent. Each researcher investigates:
 - Library documentation (via Context7)
 - Web tutorials and best practices (via Firecrawl)
 - Similar implementations and examples
+- **Design reference analysis** (when reference URLs are provided):
+  - Assign researcher(s) to scrape reference sites using Firecrawl tools:
+    - firecrawl_scrape with formats: ["branding"] for design tokens (colors, fonts, spacing)
+    - firecrawl_scrape with formats: ["screenshot"] for visual reference (returns cloud URLs)
+    - firecrawl_extract or firecrawl_agent for component pattern analysis
+    - firecrawl_map to discover key pages on reference site(s)
+  - Researchers write ALL findings (including screenshot URLs) to the Design Reference section of REQUIREMENTS.md
+  - Researchers add DESIGN-xxx requirements to the ### Design Requirements subsection
 
 ### Architecture Fleet
 Use the `architect` agent. Architects:
@@ -320,6 +335,7 @@ Execute this workflow for every task:
 1. DETECT DEPTH from keywords or --depth flag
 2. Deploy PLANNING FLEET → creates .agent-team/REQUIREMENTS.md
 3. Deploy RESEARCH FLEET (if needed) → adds research findings
+   - If design reference URLs are provided, dedicate researcher(s) to design analysis
 3.5. Deploy ARCHITECTURE FLEET → adds architecture decision + tech requirements
 4. Deploy TASK ASSIGNER → decomposes requirements into .agent-team/TASKS.md (uses architecture decisions)
 5. Enter CONVERGENCE LOOP:
@@ -400,6 +416,43 @@ Your job is to gather external knowledge and add it to the Requirements Document
 - If you find that a requirement needs adjustment based on research, note it
 - Add new requirements with the next available ID number
 - Be thorough — missing research leads to bad implementations
+
+## Design Reference Research (when reference URLs are provided)
+If your orchestrator message or REQUIREMENTS.md mentions design reference URLs:
+
+The orchestrator message will specify "Extraction depth" and "Max pages per site" — use those values.
+
+### Workflow by extraction depth:
+- **"branding"**: Only perform step 1c below (branding extraction). Skip screenshots and component analysis.
+- **"screenshots"**: Perform steps 1c and 1d (branding + screenshots). Skip deep component analysis.
+- **"full"** (default): Perform all steps 1a-1e.
+
+### Steps:
+1. For each reference URL:
+   a. firecrawl_map(url, limit=<max_pages_per_site from orchestrator>) — discover pages on the site
+   b. Select key pages: homepage + pricing/about/dashboard/features pages
+   c. firecrawl_scrape(homepage, formats=["branding"]) — extract:
+      - Color palette (primary, secondary, accent, background, text — hex values)
+      - Typography (font families, sizes, weights)
+      - Spacing patterns (base unit, border radius, padding)
+      - Component styles (buttons, inputs)
+   d. firecrawl_scrape(each key page, formats=["screenshot"]) — returns cloud-hosted screenshot URLs
+   e. Component analysis — choose the right tool:
+      - firecrawl_extract(urls=[page_url], prompt="...", schema={...}) — for extracting structured data
+        from a KNOWN page using a JSON schema (e.g., extracting nav items, card layouts)
+      - firecrawl_agent(prompt="...") — for AUTONOMOUS discovery when you don't know which pages
+        contain the components you need (e.g., "find all form patterns on this site")
+      - In both cases, extract: navigation style, card layouts, button/CTA styles, form inputs, footer
+2. Write ALL findings to the **Design Reference** section of REQUIREMENTS.md:
+   - Branding data (colors, fonts, spacing with exact values)
+   - Component patterns (textual descriptions of nav, cards, buttons, forms, footer)
+   - Screenshot URLs for each scraped page (these are cloud-hosted URLs for human/architect reference)
+3. Add DESIGN-xxx requirements to the ### Design Requirements subsection of the checklist
+   (e.g., DESIGN-001: Use primary color #1a1a2e for headings and CTAs)
+4. If scraping fails for a URL, document the failure and continue with remaining URLs
+
+IMPORTANT: Design reference is for INSPIRATION. Write "inspired by" not "copy exactly".
+If Firecrawl tools are unavailable, skip design research entirely and note the limitation.
 """.strip()
 
 ARCHITECT_PROMPT = r"""You are an ARCHITECT agent in the Agent Team system.
@@ -416,6 +469,11 @@ Your job is to design the solution and add the architecture decision to the Requ
 3. Add the **Architecture Decision** section to REQUIREMENTS.md
 4. Add any TECHNICAL REQUIREMENTS you identify (TECH-xxx)
 5. Update existing requirements if the architecture reveals they need refinement
+6. If a **Design Reference** section exists in REQUIREMENTS.md:
+   - Define design tokens based on extracted branding (CSS custom properties, Tailwind theme config, or framework-appropriate format)
+   - Map reference component patterns to the project's component architecture
+   - Specify which patterns to adopt vs. adapt vs. skip
+   - Design reference is a GUIDE — adapt to the project's framework and needs
 
 ## Rules
 - The architecture must address ALL requirements in the checklist
@@ -451,6 +509,12 @@ Your job is to implement requirements from the Requirements Document, guided by 
 - REQUIREMENTS.md is READ-ONLY for code-writers — only reviewers may edit it
 - Do NOT modify TASKS.md — the orchestrator manages task status
 - When done, your task will be marked COMPLETE in TASKS.md by the orchestrator
+- If REQUIREMENTS.md has a **Design Reference** section:
+  - Apply the color palette, typography, and spacing as your starting point
+  - Follow described component patterns (cards, nav, CTAs, etc.)
+  - Treat as "inspired by" — adapt to the project's context
+  - Use the textual descriptions and component patterns written alongside screenshot URLs for visual guidance
+  - Implement DESIGN-xxx requirements like any other requirement
 """.strip()
 
 CODE_REVIEWER_PROMPT = r"""You are an ADVERSARIAL CODE REVIEWER agent in the Agent Team system.
@@ -744,6 +808,7 @@ def build_orchestrator_prompt(
     agent_count: int | None = None,
     cwd: str | None = None,
     interview_doc: str | None = None,
+    design_reference_urls: list[str] | None = None,
 ) -> str:
     """Build the full orchestrator prompt with task-specific context injected."""
     agent_counts = get_agent_counts(depth)
@@ -778,6 +843,18 @@ def build_orchestrator_prompt(
         parts.append("---BEGIN INTERVIEW DOCUMENT---")
         parts.append(interview_doc)
         parts.append("---END INTERVIEW DOCUMENT---")
+
+    # Design reference injection
+    if design_reference_urls:
+        parts.append("\n[DESIGN REFERENCE — UI inspiration from reference website(s)]")
+        parts.append("The user provided reference website(s) for design inspiration.")
+        parts.append("During RESEARCH phase, assign researcher(s) to design reference analysis.")
+        parts.append("Reference URLs:")
+        for url in design_reference_urls:
+            parts.append(f"  - {url}")
+        dr_config = config.design_reference
+        parts.append(f"Extraction depth: {dr_config.depth}")
+        parts.append(f"Max pages per site: {dr_config.max_pages_per_site}")
 
     if prd_path:
         parts.append(f"\n[PRD MODE ACTIVE — PRD file: {prd_path}]")

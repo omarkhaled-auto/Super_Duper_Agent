@@ -114,15 +114,18 @@ QUESTION FRAMEWORK (adapt to detected scope)
 5. **Functional requirements** — Specific features, behaviors, inputs/outputs
 6. **Error handling** — What happens when things go wrong?
 7. **UI/UX** — Any design requirements, wireframes, or interaction patterns?
+8. **Design reference** — Is there a website or app whose design you'd like as inspiration?
+   (e.g., "I like how stripe.com looks"). Only ask this if the task involves frontend/UI work.
+   If the user provides a URL, note it prominently in the document under a "Design Reference" heading.
 
 ### COMPLEX tasks only (add these):
-8. **Target users** — Who are the users? What are their needs?
-9. **Data model** — What data entities exist? How do they relate?
-10. **API design** — What endpoints are needed? What do they accept/return?
-11. **Integrations** — What external services, APIs, or systems are involved?
-12. **Non-functional requirements** — Performance, scalability, accessibility, security
-13. **Deployment** — How will this be deployed? What infrastructure?
-14. **Milestones** — Can this be broken into phases or milestones?
+9. **Target users** — Who are the users? What are their needs?
+10. **Data model** — What data entities exist? How do they relate?
+11. **API design** — What endpoints are needed? What do they accept/return?
+12. **Integrations** — What external services, APIs, or systems are involved?
+13. **Non-functional requirements** — Performance, scalability, accessibility, security
+14. **Deployment** — How will this be deployed? What infrastructure?
+15. **Milestones** — Can this be broken into phases or milestones?
 
 ============================================================
 SCOPE DETECTION
@@ -208,6 +211,9 @@ Date: <timestamp>
 ## UI/UX Notes
 <Any design or interaction requirements>
 
+## Design Reference
+<Reference website URL(s) and what aspects to draw inspiration from. Omit if none provided.>
+
 ## Out of Scope
 - <What NOT to do>
 
@@ -263,6 +269,9 @@ Date: <timestamp>
 
 ## Deployment
 <Infrastructure and deployment requirements>
+
+## Design Reference
+<Reference website URL(s) and what aspects to draw inspiration from. Omit if none provided.>
 
 ## Milestones
 1. <Milestone 1>: <Description and deliverables>
