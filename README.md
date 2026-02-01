@@ -69,9 +69,9 @@ agent-team "redesign UI" --design-ref https://stripe.com  # Match a reference de
 Agent Team runs a **convergence loop**: agents write code, reviewers try to break it, debuggers fix what's broken, and the loop repeats until every requirement passes adversarial review. Nothing ships half-done.
 
 ```
-Interview → Plan → Research → Architect → Assign Tasks → Code → Review → Debug → Test → Done
-                                                          ↑                    ↓
-                                                          └────── (loop until all pass) ──┘
+Interview → Codebase Map → Plan → Research → Architect → Contract → Schedule → Code → Review → Debug → Verify → Done
+                                                                                 ↑                     ↓
+                                                                                 └──── (loop until all pass) ──┘
 ```
 
 ### The Pipeline
@@ -79,15 +79,19 @@ Interview → Plan → Research → Architect → Assign Tasks → Code → Revi
 | Phase | Agent | What It Does |
 |-------|-------|-------------|
 | 0 | **Interviewer** | Talks to you, asks clarifying questions, writes `.agent-team/INTERVIEW.md` |
+| 0.5 | **Codebase Map** | Analyzes project structure, detects languages/frameworks, maps dependencies |
+| 0.75 | **Contract Loading** | Loads `CONTRACTS.json` for interface verification (if enabled) |
 | 1 | **Planner** | Explores codebase, creates `.agent-team/REQUIREMENTS.md` with checklist |
 | 2 | **Researcher** | Queries docs (Context7) and web (Firecrawl), scrapes design references, adds findings to requirements |
 | 3 | **Architect** | Designs solution, file ownership map, wiring map, interface contracts |
 | 4 | **Task Assigner** | Decomposes requirements into atomic tasks in `.agent-team/TASKS.md` |
+| 4.5 | **Smart Scheduler** | Builds dependency DAG, detects file conflicts, computes parallel execution waves |
 | 5 | **Code Writer** | Implements assigned tasks (non-overlapping files, reads from TASKS.md) |
 | 6 | **Code Reviewer** | Adversarial review — tries to break everything, marks items pass/fail |
 | 7 | **Debugger** | Fixes specific issues flagged by reviewers |
 | 8 | **Test Runner** | Writes and runs tests for each requirement |
 | 9 | **Security Auditor** | OWASP checks, dependency audit, credential scanning |
+| 10 | **Progressive Verification** | 4-phase pipeline: contracts → lint → type check → tests |
 
 Steps 5-7 repeat in a **convergence loop** until every `- [ ]` in REQUIREMENTS.md becomes `- [x]`.
 
@@ -353,6 +357,8 @@ Agent Team creates a `.agent-team/` directory in your project:
 | `REQUIREMENTS.md` | Master checklist — the single source of truth |
 | `TASKS.md` | Atomic task breakdown with dependency graph |
 | `MASTER_PLAN.md` | Milestone plan (PRD mode only) |
+| `CONTRACTS.json` | Interface contracts for module exports and wiring |
+| `VERIFICATION.md` | Progressive verification summary (health status per task) |
 
 ### Requirements Checklist
 
@@ -485,6 +491,23 @@ design_reference:
   depth: "full"           # "branding" | "screenshots" | "full"
   max_pages_per_site: 5   # Max pages to scrape per reference URL
 
+codebase_map:
+  enabled: true           # Analyze project structure before planning
+  max_files: 5000         # Max files to scan
+  timeout_seconds: 30.0   # Timeout for map generation
+
+scheduler:
+  enabled: true                     # Enable smart task scheduling
+  conflict_strategy: "wave_split"   # "wave_split" | "lock" | "merge"
+
+verification:
+  enabled: true                             # Enable progressive verification
+  run_lint: true                            # Run lint phase
+  run_type_check: true                      # Run type-check phase
+  run_tests: true                           # Run test phase
+  contract_file: ".agent-team/CONTRACTS.json"
+  verification_file: ".agent-team/VERIFICATION.md"
+
 agents:
   planner:
     model: "opus"
@@ -603,10 +626,16 @@ Options:
   --no-interview          Skip the interview phase
   --interview-doc FILE    Use a pre-existing interview document (skips live interview)
   --design-ref URL [URL]  Reference website URL(s) for design inspiration
+  --progressive           Enable progressive verification pipeline (default)
+  --no-progressive        Disable progressive verification
+  --map-only              Run codebase map analysis and exit
+  --no-map                Skip codebase map analysis
   -i, --interactive       Force interactive mode
   -v, --verbose           Show all tool calls and agent details
   --version               Show version
 ```
+
+Note: `--progressive`/`--no-progressive` and `--map-only`/`--no-map` are mutually exclusive pairs.
 
 ### Common patterns
 
@@ -786,23 +815,41 @@ tests/
 ├── conftest.py           # Shared fixtures, --run-e2e plugin
 ├── test_init.py          # Package exports and version (3 tests)
 ├── test_config.py        # Dataclass defaults, detect_depth, get_agent_counts,
-│                         #   _deep_merge, _dict_to_config, load_config (48 tests)
+│                         #   _deep_merge, _dict_to_config, enum validation,
+│                         #   falsy-value preservation, config propagation (107 tests)
 ├── test_agents.py        # Prompt constants, build_agent_definitions,
-│                         #   build_orchestrator_prompt (30 tests)
+│                         #   build_orchestrator_prompt, per-agent model config,
+│                         #   naming consistency, template substitution (63 tests)
 ├── test_cli.py           # _detect_agent_count, _detect_prd_from_task, _parse_args,
-│                         #   _handle_interrupt, main() (40 tests)
+│                         #   _handle_interrupt, main(), mutual exclusion,
+│                         #   URL validation, build options (63 tests)
 ├── test_interviewer.py   # EXIT_PHRASES, _is_interview_exit (all 26 phrases parametrized),
-│                         #   _detect_scope, InterviewResult, _build_interview_options (43 tests)
-├── test_display.py       # Smoke tests for all 19 display functions + edge cases (27 tests)
+│                         #   _detect_scope, InterviewResult, run_interview,
+│                         #   _build_interview_options (66 tests)
+├── test_display.py       # Smoke tests for all display functions including scheduler
+│                         #   and verification output + console configuration (46 tests)
 ├── test_mcp_servers.py   # _firecrawl_server, _context7_server, get_mcp_servers,
 │                         #   get_research_tools (18 tests)
+├── test_codebase_map.py  # File discovery, exports/imports extraction, framework
+│                         #   detection, role classification, import path resolution,
+│                         #   pyproject parsing, async map generation (118 tests)
+├── test_contracts.py     # Module/wiring contract verification, symbol presence
+│                         #   (Python + TS), serialization, shared language
+│                         #   detection, file read error handling (50 tests)
+├── test_scheduler.py     # Task parsing, dependency graph, topological sort,
+│                         #   execution waves, file conflict detection, critical
+│                         #   path, file context, task context rendering (93 tests)
+├── test_verification.py  # Subprocess runner, verify_task_completion, automated
+│                         #   review phases, health computation, verification
+│                         #   summary output, truncation constants (38 tests)
 ├── test_integration.py   # Cross-module pipelines: config→agents, depth→prompt,
-│                         #   MCP→researcher, interview→orchestrator (14 tests)
+│                         #   MCP→researcher, interview→orchestrator, runtime
+│                         #   wiring for scheduler/contracts/verification (25 tests)
 └── test_e2e.py           # Real API smoke tests: CLI --help/--version,
                           #   SDK client lifecycle, Firecrawl config (5 tests)
 ```
 
-**Total: 278 tests** — 273 unit/integration (always run) + 5 E2E (require `--run-e2e`).
+**Total: 695 tests** — 690 unit/integration (always run) + 5 E2E (require `--run-e2e`).
 
 ### Known Bug Verification
 
@@ -817,6 +864,11 @@ The test suite explicitly verifies fixes for known bugs:
 | #7: Empty research tools | `test_empty_servers_returns_empty_list` | Returns `[]` not `None` |
 | I7: Substring false match | `test_word_boundary_no_substring` | "adjustment" does not match "just" |
 | I11: Bold scope format | `test_markdown_bold` | `**Scope:** COMPLEX` parses correctly |
+| #9: Falsy config override | `TestDesignReferenceFalsyValues` | `urls: []` stays `[]`, not overridden by default |
+| #4: Hardcoded agent model | `TestPerAgentModelConfig` | Config model propagates to agent definitions |
+| #10: CLI flag collision | `TestMutualExclusion` | `--progressive`/`--no-progressive` are mutually exclusive |
+| #17: Name duality | `TestAgentNamingConsistency` | Underscore config keys map to hyphenated SDK names |
+| #20: Template injection | `TestTemplateSubstitution` | `safe_substitute` handles missing vars gracefully |
 
 ---
 
@@ -826,12 +878,18 @@ The test suite explicitly verifies fixes for known bugs:
 src/agent_team/
 ├── __init__.py          # Package entry, version
 ├── __main__.py          # python -m agent_team support
-├── cli.py               # CLI argument parsing, interview/orchestrator dispatch
+├── cli.py               # CLI parsing, interview/orchestrator dispatch, runtime wiring
 ├── config.py            # YAML config loading, depth detection, fleet scaling
-├── agents.py            # 9 agent system prompts + orchestrator prompt
+├── agents.py            # 9 agent system prompts + orchestrator prompt builder
 ├── interviewer.py       # Phase 0: interactive interview session
-├── display.py           # Rich terminal output (banners, tables, progress)
-└── mcp_servers.py       # Firecrawl + Context7 MCP server configuration
+├── display.py           # Rich terminal output (banners, tables, progress, verification)
+├── mcp_servers.py       # Firecrawl + Context7 MCP server configuration
+├── _lang.py             # Shared language detection (Python, TS, JS, Go, Rust, etc.)
+├── enums.py             # Type-safe enums (DepthLevel, TaskStatus, HealthStatus, etc.)
+├── codebase_map.py      # Phase 0.5: project structure analysis, dependency mapping
+├── contracts.py         # Interface contracts: module exports + wiring verification
+├── scheduler.py         # Smart task scheduler: DAG, conflict detection, wave computation
+└── verification.py      # Progressive verification: contracts → lint → types → tests
 ```
 
 ### Key Design Decisions
@@ -840,8 +898,45 @@ src/agent_team/
 - **Adversarial review**: Reviewers are prompted to _break_ things, not confirm they work. Items are rejected more than accepted on first pass.
 - **Task atomicity**: TASKS.md decomposes work into tasks targeting 1-3 files max, with explicit dependency DAGs. Code writers get non-overlapping file assignments.
 - **Wiring verification**: Architects produce a Wiring Map (WIRE-xxx entries) documenting every cross-file connection. Reviewers trace each connection from entry point to feature, flagging orphaned code.
+- **Contract verification**: Interface contracts (`CONTRACTS.json`) declare which symbols each module must export and how modules import from each other. Verification is deterministic and runs without LLM involvement.
+- **Progressive verification**: A 4-phase pipeline (contracts → lint → type check → tests) validates each completed task. Health is tracked as green/yellow/red across the project.
+- **Smart scheduling**: Tasks are parsed into a DAG, file conflicts are detected and resolved via configurable strategies (`wave_split`, `lock`, `merge`), and parallel execution waves are computed using topological sort.
+- **Type-safe enums**: Categorical config values (`depth`, `conflict_strategy`, `severity`, etc.) use `str, Enum` classes for both type safety and JSON/YAML serialization compatibility.
+- **Template safety**: Orchestrator prompt variables use `string.Template.safe_substitute()` — unmatched `$vars` are left intact instead of crashing.
+- **Subprocess security**: All external commands (`lint`, `type check`, `test`) use `asyncio.create_subprocess_exec` (not `shell`), preventing shell injection. Command lists are constructed from hardcoded strings only.
+- **Path traversal protection**: Import path resolution in codebase mapping validates resolved paths stay within the project root.
 - **Transcript backup**: Interview exchanges are saved to `INTERVIEW_BACKUP.json` independently of Claude's file writes, so context is never lost.
 - **Word-boundary matching**: Depth detection and scope detection use `\b` regex boundaries to prevent false positives ("adjustment" won't match "just").
+- **Pipe-safe output**: Rich console uses `force_terminal=sys.stdout.isatty()` to prevent ANSI escape sequences from garbling piped output.
+
+### Module Dependency Graph
+
+```
+cli.py ──────┬──→ config.py ──→ enums.py
+             ├──→ agents.py ──→ config.py
+             ├──→ interviewer.py
+             ├──→ display.py
+             ├──→ mcp_servers.py
+             ├──→ codebase_map.py ──→ _lang.py
+             ├──→ contracts.py ────→ _lang.py
+             ├──→ scheduler.py
+             └──→ verification.py ──→ contracts.py
+```
+
+---
+
+## Security
+
+The following security properties are maintained:
+
+| Area | Protection |
+|------|-----------|
+| Subprocess execution | `create_subprocess_exec` only — no shell interpretation |
+| YAML deserialization | `yaml.safe_load` — no arbitrary object instantiation |
+| Template variables | `string.Template.safe_substitute` — no crash on missing vars |
+| File path resolution | `Path.resolve()` + `startswith()` bounds checking |
+| API key handling | Keys read from environment only, never logged or included in prompts |
+| Signal handling | Thread-safe under CPython GIL, graceful SIGINT with escalation |
 
 ---
 

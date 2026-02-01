@@ -13,7 +13,18 @@ from agent_team.cli import (
     _detect_prd_from_task,
     _handle_interrupt,
     _parse_args,
+    _validate_url,
 )
+
+
+def _parse_args_from(argv: list[str]) -> argparse.Namespace:
+    """Helper to parse args from a list, simulating CLI input."""
+    original = sys.argv
+    sys.argv = ["agent-team"] + argv
+    try:
+        return _parse_args()
+    finally:
+        sys.argv = original
 
 
 # ===================================================================
@@ -157,6 +168,38 @@ class TestParseArgs:
         ns = self._parse(["--design-ref", "https://a.com", "https://b.com"])
         assert ns.design_ref == ["https://a.com", "https://b.com"]
 
+    def test_no_map_flag(self):
+        ns = self._parse(["--no-map"])
+        assert ns.no_map is True
+
+    def test_map_only_flag(self):
+        ns = self._parse(["--map-only"])
+        assert ns.map_only is True
+
+    def test_progressive_flag(self):
+        ns = self._parse(["--progressive"])
+        assert ns.progressive is True
+
+    def test_no_progressive_flag(self):
+        ns = self._parse(["--no-progressive"])
+        assert ns.no_progressive is True
+
+    def test_no_map_default_false(self):
+        ns = self._parse([])
+        assert ns.no_map is False
+
+    def test_map_only_default_false(self):
+        ns = self._parse([])
+        assert ns.map_only is False
+
+    def test_progressive_default_false(self):
+        ns = self._parse([])
+        assert ns.progressive is False
+
+    def test_no_progressive_default_false(self):
+        ns = self._parse([])
+        assert ns.no_progressive is False
+
     def test_version_flag(self):
         with pytest.raises(SystemExit) as exc_info:
             self._parse(["--version"])
@@ -203,6 +246,8 @@ class TestMain:
                 model=None, max_turns=None, config=None, cwd=None,
                 verbose=False, interactive=False, no_interview=True,
                 interview_doc=None, design_ref=None,
+                no_map=False, map_only=False,
+                progressive=False, no_progressive=False,
             )
             from agent_team.cli import main
             with pytest.raises(SystemExit) as exc_info:
@@ -216,6 +261,8 @@ class TestMain:
                 model=None, max_turns=None, config=None, cwd=None,
                 verbose=False, interactive=False, no_interview=True,
                 interview_doc=None, design_ref=None,
+                no_map=False, map_only=False,
+                progressive=False, no_progressive=False,
             )
             from agent_team.cli import main
             with pytest.raises(SystemExit) as exc_info:
@@ -229,6 +276,8 @@ class TestMain:
                 model=None, max_turns=None, config=None, cwd=None,
                 verbose=False, interactive=False, no_interview=False,
                 interview_doc="/nonexistent/interview.md", design_ref=None,
+                no_map=False, map_only=False,
+                progressive=False, no_progressive=False,
             )
             from agent_team.cli import main
             with pytest.raises(SystemExit) as exc_info:
@@ -244,6 +293,8 @@ class TestMain:
                 model=None, max_turns=None, config=None, cwd=None,
                 verbose=False, interactive=False, no_interview=True,
                 interview_doc=None, design_ref=None,
+                no_map=False, map_only=False,
+                progressive=False, no_progressive=False,
             )
             from agent_team.cli import main
             main()
@@ -265,6 +316,8 @@ class TestMain:
                 model=None, max_turns=None, config=None, cwd=None,
                 verbose=False, interactive=False, no_interview=False,
                 interview_doc=str(doc_file), design_ref=None,
+                no_map=False, map_only=False,
+                progressive=False, no_progressive=False,
             )
             from agent_team.cli import main
             main()
@@ -281,6 +334,8 @@ class TestMain:
                 model=None, max_turns=None, config=None, cwd=None,
                 verbose=False, interactive=False, no_interview=False,
                 interview_doc=str(doc_file), design_ref=None,
+                no_map=False, map_only=False,
+                progressive=False, no_progressive=False,
             )
             from agent_team.cli import main
             main()
@@ -298,6 +353,8 @@ class TestMain:
                 verbose=False, interactive=False, no_interview=True,
                 interview_doc=None,
                 design_ref=["https://a.com", "https://a.com", "https://b.com"],
+                no_map=False, map_only=False,
+                progressive=False, no_progressive=False,
             )
             from agent_team.cli import main
             main()
@@ -313,7 +370,105 @@ class TestMain:
                 model=None, max_turns=None, config=None, cwd=None,
                 verbose=False, interactive=False, no_interview=True,
                 interview_doc=None, design_ref=None,
+                no_map=False, map_only=False,
+                progressive=False, no_progressive=False,
             )
             from agent_team.cli import main
             main()
             mock_interview.assert_not_called()
+
+
+# ===================================================================
+# TestMutualExclusion — Finding #10
+# ===================================================================
+
+class TestMutualExclusion:
+    """Tests for Finding #10: mutually exclusive CLI flags."""
+
+    def test_map_only_and_no_map_exclusive(self):
+        """--map-only and --no-map cannot be used together."""
+        with pytest.raises(SystemExit):
+            _parse_args_from(["--map-only", "--no-map", "task"])
+
+    def test_progressive_and_no_progressive_exclusive(self):
+        """--progressive and --no-progressive cannot be used together."""
+        with pytest.raises(SystemExit):
+            _parse_args_from(["--progressive", "--no-progressive", "task"])
+
+    def test_map_only_alone_works(self):
+        args = _parse_args_from(["--map-only", "task"])
+        assert args.map_only is True
+
+    def test_no_map_alone_works(self):
+        args = _parse_args_from(["--no-map", "task"])
+        assert args.no_map is True
+
+
+# ===================================================================
+# TestURLValidation — Finding #19
+# ===================================================================
+
+class TestURLValidation:
+    """Tests for Finding #19: URL validation for --design-ref."""
+
+    def test_invalid_url_rejected(self):
+        """URLs without scheme should be rejected."""
+        with pytest.raises(SystemExit):
+            _parse_args_from(["--design-ref", "not-a-url", "task"])
+
+    def test_valid_url_accepted(self):
+        args = _parse_args_from(["task", "--design-ref", "https://example.com"])
+        assert args.design_ref == ["https://example.com"]
+
+    def test_multiple_valid_urls(self):
+        args = _parse_args_from(["task", "--design-ref", "https://a.com", "https://b.com"])
+        assert len(args.design_ref) == 2
+
+
+# ===================================================================
+# _build_options() — Finding #2
+# ===================================================================
+
+class TestBuildOptions:
+    """Tests for _build_options function."""
+
+    def test_returns_options_object(self):
+        """_build_options should return a ClaudeAgentOptions instance."""
+        from agent_team.cli import _build_options
+        from agent_team.config import AgentTeamConfig
+        cfg = AgentTeamConfig()
+        opts = _build_options(cfg)
+        assert opts is not None
+        assert opts.model == "opus"
+
+    def test_cwd_propagated(self, tmp_path):
+        """cwd parameter should be propagated to options."""
+        from agent_team.cli import _build_options
+        from agent_team.config import AgentTeamConfig
+        cfg = AgentTeamConfig()
+        opts = _build_options(cfg, cwd=str(tmp_path))
+        assert opts.cwd == tmp_path
+
+    def test_template_substitution_in_prompt(self):
+        """System prompt should have template variables substituted."""
+        from agent_team.cli import _build_options
+        from agent_team.config import AgentTeamConfig
+        cfg = AgentTeamConfig()
+        cfg.convergence.escalation_threshold = 5
+        opts = _build_options(cfg)
+        # The system prompt should contain the substituted value
+        assert "$escalation_threshold" not in opts.system_prompt
+
+
+# ===================================================================
+# _process_response() — Finding #2
+# ===================================================================
+
+class TestProcessResponsePlaceholder:
+    """Placeholder tests for _process_response (requires SDK mock)."""
+
+    def test_process_response_is_async(self):
+        """_process_response should be an async function."""
+        import asyncio
+        from agent_team.cli import _process_response
+        assert asyncio.iscoroutinefunction(_process_response)

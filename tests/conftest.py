@@ -8,13 +8,10 @@ import yaml
 from agent_team.config import (
     AgentConfig,
     AgentTeamConfig,
-    ConvergenceConfig,
-    DepthConfig,
-    DesignReferenceConfig,
-    DisplayConfig,
-    InterviewConfig,
+    CodebaseMapConfig,
     MCPServerConfig,
-    OrchestratorConfig,
+    SchedulerConfig,
+    VerificationConfig,
 )
 
 
@@ -51,16 +48,6 @@ def pytest_collection_modifyitems(
 def default_config() -> AgentTeamConfig:
     """AgentTeamConfig with all defaults."""
     return AgentTeamConfig()
-
-
-@pytest.fixture()
-def custom_config() -> AgentTeamConfig:
-    """Non-default config values."""
-    return AgentTeamConfig(
-        orchestrator=OrchestratorConfig(model="sonnet", max_turns=100),
-        depth=DepthConfig(default="thorough"),
-        convergence=ConvergenceConfig(max_cycles=5, escalation_threshold=2),
-    )
 
 
 @pytest.fixture()
@@ -153,14 +140,17 @@ def env_with_api_keys(monkeypatch):
 
 
 @pytest.fixture()
-def env_without_api_keys(monkeypatch):
-    """Remove both API keys from the environment."""
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
-
-
-@pytest.fixture()
 def env_with_anthropic_only(monkeypatch):
     """Set only ANTHROPIC_API_KEY."""
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-anthropic-key")
     monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
+
+
+@pytest.fixture()
+def full_config_with_new_features() -> AgentTeamConfig:
+    """AgentTeamConfig with all new features enabled."""
+    return AgentTeamConfig(
+        codebase_map=CodebaseMapConfig(enabled=True),
+        scheduler=SchedulerConfig(enabled=True),
+        verification=VerificationConfig(enabled=True),
+    )

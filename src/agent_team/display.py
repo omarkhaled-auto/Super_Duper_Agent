@@ -28,7 +28,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-console = Console(force_terminal=True)
+console = Console(force_terminal=sys.stdout.isatty())
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +72,11 @@ def print_fleet_deployment(
     count: int,
     assignments: list[str] | None = None,
 ) -> None:
-    """Print a fleet deployment banner."""
+    """Print a fleet deployment banner.
+
+    Prompt-invoked: called by the orchestrator agent during fleet
+    deployment, not directly from Python runtime code.
+    """
     header = Text()
     header.append(f"Deploying {phase.upper()} Fleet", style="bold green")
     header.append(f"  [{count} x {agent_type}]", style="dim green")
@@ -97,7 +101,11 @@ def print_convergence_status(
     remaining_items: list[str] | None = None,
     escalated_items: list[str] | None = None,
 ) -> None:
-    """Print convergence loop status after a review cycle."""
+    """Print convergence loop status after a review cycle.
+
+    Prompt-invoked: called by the orchestrator agent during convergence
+    loops, not directly from Python runtime code.
+    """
     pct = (completed_items / total_items * 100) if total_items > 0 else 0
     bar_filled = int(pct / 5)
     bar_empty = 20 - bar_filled
@@ -131,7 +139,11 @@ def print_review_results(
     passed: list[str],
     failed: list[tuple[str, str]],
 ) -> None:
-    """Print review results summary."""
+    """Print review results summary.
+
+    Prompt-invoked: called by the orchestrator agent after review
+    cycles, not directly from Python runtime code.
+    """
     table = Table(title="Review Results", show_lines=False, border_style="dim")
     table.add_column("Item", style="white")
     table.add_column("Verdict", style="bold")
@@ -201,7 +213,11 @@ def print_info(message: str) -> None:
 
 
 def print_escalation(item: str, reason: str) -> None:
-    """Print an escalation notice."""
+    """Print an escalation notice.
+
+    Prompt-invoked: called by the orchestrator agent when escalation
+    is triggered, not directly from Python runtime code.
+    """
     console.print()
     console.print(Panel(
         f"[bold red]ESCALATION TRIGGERED[/]\n\n"
@@ -214,7 +230,11 @@ def print_escalation(item: str, reason: str) -> None:
 
 
 def print_user_intervention_needed(item: str) -> None:
-    """Print when max escalation depth is exceeded and user input is needed."""
+    """Print when max escalation depth is exceeded and user input is needed.
+
+    Prompt-invoked: called by the orchestrator agent when human
+    intervention is required, not directly from Python runtime code.
+    """
     console.print()
     console.print(Panel(
         f"[bold red]HUMAN INTERVENTION REQUIRED[/]\n\n"
@@ -290,3 +310,105 @@ def print_interactive_prompt() -> str:
 def print_agent_response(text: str) -> None:
     """Print an agent's text response."""
     console.print(text)
+
+
+# ---------------------------------------------------------------------------
+# Codebase map phase
+# ---------------------------------------------------------------------------
+
+def print_map_start(cwd: str) -> None:
+    """Print codebase map analysis start."""
+    console.print(Panel(
+        f"[bold blue]Analyzing project structure...[/]\n"
+        f"[dim]Directory: {cwd}[/]",
+        border_style="blue",
+        title="Phase 0.5: Codebase Map",
+    ))
+
+
+def print_map_complete(file_count: int, language: str) -> None:
+    """Print codebase map analysis completion."""
+    console.print(
+        f"[green]Codebase map complete:[/] "
+        f"[bold]{file_count}[/] files, "
+        f"primary language: [bold]{language}[/]"
+    )
+    console.print()
+
+
+# ---------------------------------------------------------------------------
+# Scheduler phase
+# ---------------------------------------------------------------------------
+
+def print_schedule_summary(waves: int, conflicts: int) -> None:
+    """Print task schedule summary."""
+    content = Text()
+    content.append("SCHEDULE COMPUTED\n\n", style="bold cyan")
+    content.append(f"Execution waves: {waves}\n", style="white")
+    content.append(f"File conflicts resolved: {conflicts}\n", style="white")
+    console.print(Panel(content, border_style="cyan", title="Smart Scheduler"))
+
+
+def print_wave_start(wave_num: int, task_count: int) -> None:
+    """Print wave execution start."""
+    console.print()
+    console.print(
+        f"[bold cyan]=== Wave {wave_num} ===[/] "
+        f"[dim]({task_count} tasks in parallel)[/]"
+    )
+
+
+def print_wave_complete(wave_num: int) -> None:
+    """Print wave execution completion."""
+    console.print(f"[green]Wave {wave_num} complete.[/]")
+
+
+# ---------------------------------------------------------------------------
+# Verification phase
+# ---------------------------------------------------------------------------
+
+def print_verification_result(task_id: str, status: str) -> None:
+    """Print a single task's verification result."""
+    style_map = {
+        "pass": "bold green",
+        "fail": "bold red",
+        "partial": "bold yellow",
+    }
+    style = style_map.get(status, "white")
+    console.print(f"  [{style}]{status.upper()}[/] {task_id}")
+
+
+def print_verification_summary(state: dict) -> None:
+    """Print the overall verification summary.
+
+    Args:
+        state: Dict with keys 'overall_health', 'completed_tasks' (dict of task_id -> status)
+    """
+    health = state.get("overall_health", "unknown")
+    health_styles = {
+        "green": "bold green",
+        "yellow": "bold yellow",
+        "red": "bold red",
+    }
+    style = health_styles.get(health, "white")
+
+    completed = state.get("completed_tasks", {})
+    pass_count = sum(1 for v in completed.values() if v == "pass")
+    fail_count = sum(1 for v in completed.values() if v == "fail")
+    total = len(completed)
+
+    content = Text()
+    content.append("VERIFICATION SUMMARY\n\n", style="bold white")
+    content.append(f"Overall health: ", style="white")
+    content.append(f"{health.upper()}\n", style=style)
+    content.append(f"Tasks verified: {total}\n", style="white")
+    content.append(f"Passed: {pass_count}  ", style="green")
+    content.append(f"Failed: {fail_count}\n", style="red" if fail_count > 0 else "dim")
+
+    console.print(Panel(content, border_style=health if health in health_styles else "white",
+                        title="Progressive Verification"))
+
+
+def print_contract_violation(violation: str) -> None:
+    """Print a contract violation."""
+    console.print(f"  [red]VIOLATION:[/] {violation}")

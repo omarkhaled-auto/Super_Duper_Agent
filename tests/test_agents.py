@@ -6,7 +6,9 @@ from agent_team.agents import (
     ARCHITECT_PROMPT,
     CODE_REVIEWER_PROMPT,
     CODE_WRITER_PROMPT,
+    CONTRACT_GENERATOR_PROMPT,
     DEBUGGER_PROMPT,
+    INTEGRATION_AGENT_PROMPT,
     ORCHESTRATOR_SYSTEM_PROMPT,
     PLANNER_PROMPT,
     RESEARCHER_PROMPT,
@@ -16,7 +18,7 @@ from agent_team.agents import (
     build_agent_definitions,
     build_orchestrator_prompt,
 )
-from agent_team.config import AgentConfig, AgentTeamConfig
+from agent_team.config import AgentConfig, AgentTeamConfig, SchedulerConfig, VerificationConfig
 
 
 # ===================================================================
@@ -55,8 +57,8 @@ class TestPromptConstants:
         assert len(TASK_ASSIGNER_PROMPT) > 100
 
     def test_orchestrator_has_convergence_placeholders(self):
-        assert "{escalation_threshold}" in ORCHESTRATOR_SYSTEM_PROMPT
-        assert "{max_escalation_depth}" in ORCHESTRATOR_SYSTEM_PROMPT
+        assert "$escalation_threshold" in ORCHESTRATOR_SYSTEM_PROMPT
+        assert "$max_escalation_depth" in ORCHESTRATOR_SYSTEM_PROMPT
 
     def test_orchestrator_has_section_headers(self):
         assert "SECTION 1:" in ORCHESTRATOR_SYSTEM_PROMPT
@@ -84,15 +86,72 @@ class TestPromptConstants:
     def test_debugger_references_wire(self):
         assert "WIRE-xxx" in DEBUGGER_PROMPT
 
+    def test_integration_agent_prompt_non_empty(self):
+        assert len(INTEGRATION_AGENT_PROMPT) > 100
+
+    def test_contract_generator_prompt_non_empty(self):
+        assert len(CONTRACT_GENERATOR_PROMPT) > 100
+
+    def test_orchestrator_has_section_0(self):
+        assert "SECTION 0:" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_orchestrator_has_section_3c(self):
+        assert "SECTION 3c:" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_orchestrator_has_section_3d(self):
+        assert "SECTION 3d:" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_planner_has_codebase_map_awareness(self):
+        assert "codebase map" in PLANNER_PROMPT.lower()
+
+    def test_architect_has_contract_awareness(self):
+        assert "contract" in ARCHITECT_PROMPT.lower()
+
+    def test_task_assigner_has_scheduler_awareness(self):
+        assert "scheduler" in TASK_ASSIGNER_PROMPT.lower()
+
+    def test_code_writer_has_integration_declarations(self):
+        assert "Integration Declarations" in CODE_WRITER_PROMPT
+
+    def test_code_reviewer_has_verification_awareness(self):
+        assert "VERIFICATION.md" in CODE_REVIEWER_PROMPT
+
 
 # ===================================================================
 # build_agent_definitions()
 # ===================================================================
 
 class TestBuildAgentDefinitions:
-    def test_returns_9_agents(self, default_config):
+    def test_returns_9_agents_default(self, default_config):
+        """Default config (scheduler/verification disabled) returns 9 agents."""
         agents = build_agent_definitions(default_config, {})
         assert len(agents) == 9
+
+    def test_returns_10_agents_with_scheduler(self):
+        cfg = AgentTeamConfig(scheduler=SchedulerConfig(enabled=True))
+        agents = build_agent_definitions(cfg, {})
+        assert len(agents) == 10
+        assert "integration-agent" in agents
+
+    def test_returns_10_agents_with_verification(self):
+        cfg = AgentTeamConfig(verification=VerificationConfig(enabled=True))
+        agents = build_agent_definitions(cfg, {})
+        assert len(agents) == 10
+        assert "contract-generator" in agents
+
+    def test_returns_11_agents_with_both(self, full_config_with_new_features):
+        agents = build_agent_definitions(full_config_with_new_features, {})
+        assert len(agents) == 11
+        assert "integration-agent" in agents
+        assert "contract-generator" in agents
+
+    def test_integration_agent_not_present_by_default(self, default_config):
+        agents = build_agent_definitions(default_config, {})
+        assert "integration-agent" not in agents
+
+    def test_contract_generator_not_present_by_default(self, default_config):
+        agents = build_agent_definitions(default_config, {})
+        assert "contract-generator" not in agents
 
     def test_agent_names_are_hyphenated(self, default_config):
         agents = build_agent_definitions(default_config, {})
@@ -160,6 +219,68 @@ class TestBuildAgentDefinitions:
 # build_orchestrator_prompt()
 # ===================================================================
 
+class TestAgentNamingConsistency:
+    """Tests for Finding #17: config keys map to hyphenated SDK names."""
+
+    def test_all_config_keys_produce_sdk_names(self):
+        """Every default config agent key should produce an agent in the output."""
+        cfg = AgentTeamConfig()
+        agents = build_agent_definitions(cfg, {})
+        # All 9 default agents should be present
+        expected_sdk_names = {
+            "planner", "researcher", "architect", "task-assigner",
+            "code-writer", "code-reviewer", "test-runner",
+            "security-auditor", "debugger",
+        }
+        assert expected_sdk_names.issubset(set(agents.keys()))
+
+    def test_underscore_to_hyphen_mapping(self):
+        """Config keys with underscores produce hyphenated SDK names."""
+        cfg = AgentTeamConfig()
+        agents = build_agent_definitions(cfg, {})
+        # Verify specific underscore->hyphen mappings
+        assert "task-assigner" in agents  # from config key "task_assigner"
+        assert "code-writer" in agents     # from config key "code_writer"
+        assert "code-reviewer" in agents   # from config key "code_reviewer"
+        assert "test-runner" in agents     # from config key "test_runner"
+        assert "security-auditor" in agents  # from config key "security_auditor"
+
+    def test_no_underscore_names_in_output(self):
+        """SDK agent names should never contain underscores."""
+        cfg = AgentTeamConfig()
+        agents = build_agent_definitions(cfg, {})
+        for name in agents.keys():
+            assert "_" not in name, f"Agent name '{name}' contains underscore"
+
+
+class TestPerAgentModelConfig:
+    """Tests for Finding #4: per-agent model configuration."""
+
+    def test_custom_model_propagates(self):
+        """Config with planner.model = 'sonnet' should produce a planner with model 'sonnet'."""
+        cfg = AgentTeamConfig()
+        cfg.agents["planner"] = AgentConfig(model="sonnet")
+        agents = build_agent_definitions(cfg, {})
+        assert agents["planner"]["model"] == "sonnet"
+
+    def test_default_model_is_opus(self):
+        """Default config should produce agents with model 'opus'."""
+        cfg = AgentTeamConfig()
+        agents = build_agent_definitions(cfg, {})
+        assert agents["planner"]["model"] == "opus"
+        assert agents["code-writer"]["model"] == "opus"
+
+    def test_each_agent_respects_own_model(self):
+        """Each agent reads its own model config, not a global one."""
+        cfg = AgentTeamConfig()
+        cfg.agents["code_writer"] = AgentConfig(model="haiku")
+        cfg.agents["researcher"] = AgentConfig(model="sonnet")
+        agents = build_agent_definitions(cfg, {})
+        assert agents["code-writer"]["model"] == "haiku"
+        assert agents["researcher"]["model"] == "sonnet"
+        assert agents["planner"]["model"] == "opus"  # unchanged
+
+
 class TestBuildOrchestratorPrompt:
     def test_contains_depth_label(self, default_config):
         prompt = build_orchestrator_prompt("fix bug", "thorough", default_config)
@@ -200,8 +321,56 @@ class TestBuildOrchestratorPrompt:
         assert "https://stripe.com" in prompt
         assert "https://linear.app" in prompt
 
+    def test_contains_codebase_map_summary(self, default_config):
+        summary = "## Codebase Map\n- 50 files\n- Python primary"
+        prompt = build_orchestrator_prompt(
+            "task", "standard", default_config,
+            codebase_map_summary=summary,
+        )
+        assert "CODEBASE MAP" in prompt
+        assert "50 files" in prompt
+
+    def test_no_codebase_map_when_none(self, default_config):
+        prompt = build_orchestrator_prompt("task", "standard", default_config)
+        assert "CODEBASE MAP" not in prompt or "SECTION 0" not in prompt
+
     def test_fleet_scaling_section(self, default_config):
         prompt = build_orchestrator_prompt("task", "standard", default_config)
         assert "FLEET SCALING" in prompt
         assert "planning:" in prompt
         assert "research:" in prompt
+
+
+# ===================================================================
+# Template substitution (Finding #20)
+# ===================================================================
+
+class TestTemplateSubstitution:
+    """Tests for Finding #20: template variable safety."""
+
+    def test_template_variables_substituted(self):
+        """Template variables in orchestrator prompt should be substituted correctly."""
+        import string
+        prompt = string.Template(ORCHESTRATOR_SYSTEM_PROMPT).safe_substitute(
+            escalation_threshold="3",
+            max_escalation_depth="2",
+        )
+        assert "$escalation_threshold" not in prompt
+        assert "$max_escalation_depth" not in prompt
+        assert "3" in prompt  # the substituted value
+        assert "2" in prompt
+
+    def test_safe_substitute_leaves_unknown_vars(self):
+        """safe_substitute should not crash on unknown template variables."""
+        import string
+        prompt = string.Template(ORCHESTRATOR_SYSTEM_PROMPT).safe_substitute(
+            escalation_threshold="5",
+            # deliberately missing max_escalation_depth
+        )
+        # Should not raise, just leave $max_escalation_depth as-is
+        assert "$max_escalation_depth" in prompt
+
+    def test_no_curly_brace_template_vars(self):
+        """Prompt should not contain {variable} style templates."""
+        assert "{escalation_threshold}" not in ORCHESTRATOR_SYSTEM_PROMPT
+        assert "{max_escalation_depth}" not in ORCHESTRATOR_SYSTEM_PROMPT

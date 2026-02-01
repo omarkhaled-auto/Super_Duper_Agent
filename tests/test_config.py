@@ -8,6 +8,7 @@ import yaml
 from agent_team.config import (
     AgentConfig,
     AgentTeamConfig,
+    CodebaseMapConfig,
     ConvergenceConfig,
     DEPTH_AGENT_COUNTS,
     DepthConfig,
@@ -16,6 +17,8 @@ from agent_team.config import (
     InterviewConfig,
     MCPServerConfig,
     OrchestratorConfig,
+    SchedulerConfig,
+    VerificationConfig,
     _deep_merge,
     _dict_to_config,
     detect_depth,
@@ -40,6 +43,10 @@ class TestOrchestratorConfigDefaults:
     def test_permission_mode_default(self):
         c = OrchestratorConfig()
         assert c.permission_mode == "acceptEdits"
+
+    def test_max_budget_usd_default(self):
+        c = OrchestratorConfig()
+        assert c.max_budget_usd is None
 
 
 class TestDepthConfigDefaults:
@@ -138,10 +145,89 @@ class TestDisplayConfigDefaults:
         assert c.verbose is False
 
 
+class TestCodebaseMapConfigDefaults:
+    def test_enabled_default(self):
+        c = CodebaseMapConfig()
+        assert c.enabled is True
+
+    def test_max_files_default(self):
+        c = CodebaseMapConfig()
+        assert c.max_files == 5000
+
+    def test_max_file_size_kb_default(self):
+        c = CodebaseMapConfig()
+        assert c.max_file_size_kb == 50
+
+    def test_max_file_size_kb_ts_default(self):
+        c = CodebaseMapConfig()
+        assert c.max_file_size_kb_ts == 100
+
+    def test_timeout_seconds_default(self):
+        c = CodebaseMapConfig()
+        assert c.timeout_seconds == 30
+
+    def test_exclude_patterns_default(self):
+        c = CodebaseMapConfig()
+        assert "node_modules" in c.exclude_patterns
+        assert ".git" in c.exclude_patterns
+
+
+class TestSchedulerConfigDefaults:
+    def test_enabled_false_by_default(self):
+        c = SchedulerConfig()
+        assert c.enabled is False
+
+    def test_max_parallel_tasks_default(self):
+        c = SchedulerConfig()
+        assert c.max_parallel_tasks == 5
+
+    def test_conflict_strategy_default(self):
+        c = SchedulerConfig()
+        assert c.conflict_strategy == "artificial-dependency"
+
+    def test_enable_context_scoping_default(self):
+        c = SchedulerConfig()
+        assert c.enable_context_scoping is True
+
+    def test_enable_critical_path_default(self):
+        c = SchedulerConfig()
+        assert c.enable_critical_path is True
+
+
+class TestVerificationConfigDefaults:
+    def test_enabled_false_by_default(self):
+        c = VerificationConfig()
+        assert c.enabled is False
+
+    def test_blocking_true_by_default(self):
+        c = VerificationConfig()
+        assert c.blocking is True
+
+    def test_contract_file_default(self):
+        c = VerificationConfig()
+        assert c.contract_file == "CONTRACTS.json"
+
+    def test_verification_file_default(self):
+        c = VerificationConfig()
+        assert c.verification_file == "VERIFICATION.md"
+
+    def test_run_lint_default(self):
+        c = VerificationConfig()
+        assert c.run_lint is True
+
+    def test_run_type_check_default(self):
+        c = VerificationConfig()
+        assert c.run_type_check is True
+
+    def test_run_tests_default(self):
+        c = VerificationConfig()
+        assert c.run_tests is True
+
+
 class TestAgentTeamConfigDefaults:
-    def test_has_9_agents(self):
+    def test_has_11_agents(self):
         c = AgentTeamConfig()
-        assert len(c.agents) == 9
+        assert len(c.agents) == 11
 
     def test_agent_names(self):
         c = AgentTeamConfig()
@@ -149,6 +235,7 @@ class TestAgentTeamConfigDefaults:
             "planner", "researcher", "architect", "task_assigner",
             "code_writer", "code_reviewer", "test_runner",
             "security_auditor", "debugger",
+            "integration_agent", "contract_generator",
         }
         assert set(c.agents.keys()) == expected
 
@@ -157,6 +244,21 @@ class TestAgentTeamConfigDefaults:
         assert len(c.mcp_servers) == 2
         assert "firecrawl" in c.mcp_servers
         assert "context7" in c.mcp_servers
+
+    def test_has_codebase_map_config(self):
+        c = AgentTeamConfig()
+        assert isinstance(c.codebase_map, CodebaseMapConfig)
+        assert c.codebase_map.enabled is True
+
+    def test_has_scheduler_config(self):
+        c = AgentTeamConfig()
+        assert isinstance(c.scheduler, SchedulerConfig)
+        assert c.scheduler.enabled is False
+
+    def test_has_verification_config(self):
+        c = AgentTeamConfig()
+        assert isinstance(c.verification, VerificationConfig)
+        assert c.verification.enabled is False
 
 
 # ===================================================================
@@ -321,6 +423,29 @@ class TestDictToConfig:
         cfg = _dict_to_config({"mcp_servers": {"firecrawl": "invalid"}})
         assert cfg.mcp_servers["firecrawl"].enabled is True
 
+    def test_codebase_map_section(self):
+        cfg = _dict_to_config({"codebase_map": {"enabled": False, "max_files": 1000}})
+        assert cfg.codebase_map.enabled is False
+        assert cfg.codebase_map.max_files == 1000
+
+    def test_scheduler_section(self):
+        cfg = _dict_to_config({"scheduler": {"enabled": True, "max_parallel_tasks": 3}})
+        assert cfg.scheduler.enabled is True
+        assert cfg.scheduler.max_parallel_tasks == 3
+
+    def test_verification_section(self):
+        cfg = _dict_to_config({"verification": {"enabled": True, "blocking": False}})
+        assert cfg.verification.enabled is True
+        assert cfg.verification.blocking is False
+
+    def test_orchestrator_max_budget_usd(self):
+        cfg = _dict_to_config({"orchestrator": {"max_budget_usd": 5.0}})
+        assert cfg.orchestrator.max_budget_usd == 5.0
+
+    def test_orchestrator_max_budget_usd_default(self):
+        cfg = _dict_to_config({})
+        assert cfg.orchestrator.max_budget_usd is None
+
 
 # ===================================================================
 # load_config()
@@ -367,3 +492,84 @@ class TestKnownBugs:
         """Bug #3c: mcp_servers passed as a list should not crash."""
         with pytest.raises((AttributeError, TypeError)):
             _dict_to_config({"mcp_servers": ["firecrawl", "context7"]})
+
+
+class TestDesignReferenceFalsyValues:
+    """Regression tests for Finding #9: falsy config values preserved."""
+
+    def test_empty_urls_preserved(self):
+        """urls: [] should stay empty, not fall back to default."""
+        cfg = _dict_to_config({"design_reference": {"urls": []}})
+        assert cfg.design_reference.urls == []
+
+    def test_zero_max_pages_preserved(self):
+        """max_pages_per_site: 0 should stay 0, not fall back to default."""
+        cfg = _dict_to_config({"design_reference": {"max_pages_per_site": 0}})
+        assert cfg.design_reference.max_pages_per_site == 0
+
+    def test_empty_depth_preserved(self):
+        """depth: '' should stay empty string, not fall back to default."""
+        cfg = _dict_to_config({"design_reference": {"depth": ""}})
+        assert cfg.design_reference.depth == ""
+
+    def test_normal_values_still_work(self):
+        """Normal values should still work correctly."""
+        cfg = _dict_to_config({"design_reference": {"urls": ["https://example.com"], "depth": "branding", "max_pages_per_site": 10}})
+        assert cfg.design_reference.urls == ["https://example.com"]
+        assert cfg.design_reference.depth == "branding"
+        assert cfg.design_reference.max_pages_per_site == 10
+
+
+# ===================================================================
+# Enum validation (Findings #15, #16)
+# ===================================================================
+
+class TestEnumValidation:
+    """Tests for Finding #15/#16: enum-like string validation."""
+
+    def test_invalid_conflict_strategy_raises(self):
+        with pytest.raises(ValueError, match="conflict_strategy"):
+            _dict_to_config({"scheduler": {"conflict_strategy": "invalid-strategy"}})
+
+    def test_valid_conflict_strategy_accepted(self):
+        cfg = _dict_to_config({"scheduler": {"conflict_strategy": "integration-agent"}})
+        assert cfg.scheduler.conflict_strategy == "integration-agent"
+
+    def test_invalid_design_ref_depth_raises(self):
+        with pytest.raises(ValueError, match="design_reference.depth"):
+            _dict_to_config({"design_reference": {"depth": "invalid-depth"}})
+
+    def test_valid_design_ref_depth_accepted(self):
+        cfg = _dict_to_config({"design_reference": {"depth": "branding"}})
+        assert cfg.design_reference.depth == "branding"
+
+
+# ===================================================================
+# Config propagation (Finding #7)
+# ===================================================================
+
+class TestConfigPropagation:
+    """Tests for Finding #7: config values propagated to enforcement points."""
+
+    def test_timeout_seconds_accessible(self):
+        """codebase_map.timeout_seconds is accessible and has sensible default."""
+        cfg = AgentTeamConfig()
+        assert cfg.codebase_map.timeout_seconds == 30
+        assert isinstance(cfg.codebase_map.timeout_seconds, int)
+
+    def test_custom_timeout_persists(self):
+        """Custom timeout value set via config is preserved."""
+        cfg = _dict_to_config({"codebase_map": {"timeout_seconds": 60}})
+        assert cfg.codebase_map.timeout_seconds == 60
+
+    def test_verification_paths_accessible(self):
+        """verification config paths are accessible."""
+        cfg = AgentTeamConfig()
+        assert cfg.verification.contract_file == "CONTRACTS.json"
+        assert cfg.verification.verification_file == "VERIFICATION.md"
+
+    def test_display_flags_accessible(self):
+        """Display config flags are accessible."""
+        cfg = AgentTeamConfig()
+        assert cfg.display.show_fleet_composition is True
+        assert cfg.display.show_convergence_status is True

@@ -11,7 +11,22 @@ from __future__ import annotations
 from typing import Any
 
 from .config import AgentConfig, AgentTeamConfig, get_agent_counts
-from .mcp_servers import get_mcp_servers, get_research_tools
+from .mcp_servers import get_research_tools
+
+# Mapping from config underscore keys to SDK hyphenated names
+_CONFIG_TO_SDK_NAME: dict[str, str] = {
+    "planner": "planner",
+    "researcher": "researcher",
+    "architect": "architect",
+    "task_assigner": "task-assigner",
+    "code_writer": "code-writer",
+    "code_reviewer": "code-reviewer",
+    "test_runner": "test-runner",
+    "security_auditor": "security-auditor",
+    "debugger": "debugger",
+    "integration_agent": "integration-agent",
+    "contract_generator": "contract-generator",
+}
 
 # ---------------------------------------------------------------------------
 # Orchestrator system prompt
@@ -22,6 +37,17 @@ You are the ORCHESTRATOR of a convergence-driven multi-agent system called Agent
 Your purpose is to take ANY task — from a one-line fix to a full Product Requirements Document (PRD) — and drive it to COMPLETE, VERIFIED implementation using fleets of specialized agents.
 
 You have access to specialized sub-agents. You MUST use them to complete tasks. You are a COORDINATOR, not an implementer.
+
+============================================================
+SECTION 0: CODEBASE MAP
+============================================================
+
+When a codebase map summary is provided in the task message, USE IT to:
+- Assign files to tasks accurately (know what exists)
+- Identify shared/high-fan-in files (require integration-agent or serialization)
+- Understand import dependencies (set task dependencies correctly)
+- Detect framework (choose appropriate patterns)
+Do NOT re-scan the project if the map is provided.
 
 ============================================================
 SECTION 1: REQUIREMENTS DOCUMENT PROTOCOL
@@ -155,7 +181,7 @@ CONVERGENCE LOOP:
 3. CHECK: Are ALL items [x] in REQUIREMENTS.md?
    - YES → Proceed to TESTING phase (step 6)
    - NO → Check per-item failure counts:
-     a. If any item has review_cycles >= {escalation_threshold} → ESCALATE (step 5)
+     a. If any item has review_cycles >= $escalation_threshold → ESCALATE (step 5)
      b. Otherwise → Deploy DEBUGGER FLEET (step 4)
 
 4. Deploy DEBUGGER FLEET
@@ -169,7 +195,7 @@ CONVERGENCE LOOP:
    - REWRITE or SPLIT the requirement into sub-tasks
    - Sub-tasks go through the FULL pipeline
    - Parent item marked [x] only when ALL sub-tasks are [x]
-   - Max escalation depth: {max_escalation_depth} levels
+   - Max escalation depth: $max_escalation_depth levels
    - If exceeded: ASK THE USER for guidance
    - WIRING ESCALATION: If a WIRE-xxx item reaches the escalation threshold, escalate to Architecture fleet
      (instead of Planning + Research) to re-examine the wiring decision — the mechanism may need redesigning
@@ -217,6 +243,31 @@ When assigning work to code-writers in the convergence loop:
 4. Re-evaluate for newly unblocked tasks
 5. Repeat until all tasks in TASKS.md are COMPLETE
 6. Then proceed to adversarial review (using REQUIREMENTS.md)
+
+============================================================
+SECTION 3c: SMART TASK SCHEDULING
+============================================================
+
+When the scheduler is enabled, after TASKS.md is created:
+1. The scheduler computes execution waves (parallel groups)
+2. Tasks in the same wave have no dependencies on each other
+3. File conflicts are detected — conflicting tasks get artificial dependencies
+4. Critical path is identified — assign your best agents to zero-slack tasks
+5. Each agent gets scoped context (only its files + contracts, not everything)
+6. For shared files: agents write INTEGRATION DECLARATIONS instead of editing directly
+7. After each wave, the integration-agent processes all declarations atomically
+
+============================================================
+SECTION 3d: PROGRESSIVE VERIFICATION
+============================================================
+
+When verification is enabled, after each task completes:
+1. Run contract verification (deterministic, fast — does file X export symbol Y?)
+2. Run lint/type-check if applicable
+3. Run affected tests only (not full suite)
+4. Mark task green/yellow/red in .agent-team/VERIFICATION.md
+5. BLOCKING: Only proceed to next wave if current wave has no RED tasks
+6. If RED: assign debugger agent to fix, re-verify, then proceed
 
 ============================================================
 SECTION 4: PRD MODE
@@ -451,6 +502,8 @@ Your job is to EXPLORE the codebase and CREATE the Requirements Document (.agent
 ## Output
 Write the REQUIREMENTS.md file to `.agent-team/REQUIREMENTS.md` in the project directory.
 If REQUIREMENTS.md already exists, READ it first and ADD your findings to the Context section.
+
+If a codebase map is provided, use it to understand existing modules and their relationships when breaking down tasks.
 """.strip()
 
 RESEARCHER_PROMPT = r"""You are a RESEARCHER agent in the Agent Team system.
@@ -561,6 +614,8 @@ Your job is to design the solution and add the architecture decision to the Requ
 - The Wiring Map must be EXHAUSTIVE — if a file imports from another file, it needs a WIRE-xxx entry
 - Consider error handling, edge cases, and failure modes
 - Be specific — vague architecture leads to implementation problems
+
+Define module contracts: for each new module, specify its exported symbols (name, kind, signature). For module wiring, specify which modules import what from where. Output these as a contracts section in REQUIREMENTS.md.
 """.strip()
 
 CODE_WRITER_PROMPT = r"""You are a CODE WRITER agent in the Agent Team system.
@@ -604,6 +659,10 @@ Your job is to implement requirements from the Requirements Document, guided by 
   - Treat as "inspired by" — adapt to the project's context
   - Use the textual descriptions and component patterns written alongside screenshot URLs for visual guidance
   - Implement DESIGN-xxx requirements like any other requirement
+
+For shared files (files touched by multiple tasks), write INTEGRATION DECLARATIONS instead of editing directly. Format:
+## Integration Declarations
+- `<path>`: ACTION `<symbol>`
 """.strip()
 
 CODE_REVIEWER_PROMPT = r"""You are an ADVERSARIAL CODE REVIEWER agent in the Agent Team system.
@@ -681,6 +740,8 @@ For NEW application logic files (components, routes, handlers, services, utiliti
 - Any NEW middleware that isn't in a chain → flag as orphan
 If orphans are found: create a Review Log entry with item ID "ORPHAN-CHECK", FAIL verdict, and list the orphaned items.
 Orphan detection catches the "built but forgot to wire" problem.
+
+If verification results are available in .agent-team/VERIFICATION.md, check them. Contract violations and test failures are blockers.
 """.strip()
 
 TEST_RUNNER_PROMPT = r"""You are a TEST RUNNER agent in the Agent Team system.
@@ -881,6 +942,81 @@ Completed: 0/<N>
 Include a Total Tasks count in the header.
 Number tasks sequentially: TASK-001, TASK-002, ...
 There is NO LIMIT on task count. If the project genuinely needs 500 tasks, produce 500 tasks.
+
+If the scheduler is enabled, include dependency and file information in each task to enable automatic wave computation and conflict detection.
+""".strip()
+
+
+INTEGRATION_AGENT_PROMPT = r"""You are an INTEGRATION AGENT in the Agent Team system.
+
+Your job is to process integration declarations from code-writer agents and make atomic edits to shared files.
+
+## Your Tasks
+1. Read all integration declarations from the current wave's code-writer outputs
+2. Detect conflicts between declarations (e.g., two agents both want to add an import to the same file)
+3. Resolve conflicts by merging declarations intelligently
+4. Make ALL edits to shared files atomically — no partial updates
+5. Verify that all declarations have been processed
+
+## Integration Declaration Format
+```
+## Integration Declarations
+- `src/types/index.ts`: EXPORT `UserProfile` interface
+- `src/routes/index.ts`: ADD route `/api/users`
+- `src/server.ts`: IMPORT `authRouter` from `./routes/auth`
+```
+
+## Rules
+- Process ALL declarations from ALL agents in the current wave
+- Make edits atomically — if one edit fails, roll back all edits to that file
+- Verify imports resolve to real files and exports
+- Do NOT modify files beyond what declarations specify
+- Report any unresolvable conflicts to the orchestrator
+""".strip()
+
+CONTRACT_GENERATOR_PROMPT = r"""You are a CONTRACT GENERATOR agent in the Agent Team system.
+
+Your job is to read the architecture decision from REQUIREMENTS.md and generate a CONTRACTS.json file that defines module contracts and wiring contracts.
+
+## Your Tasks
+1. Read `.agent-team/REQUIREMENTS.md` — focus on the Architecture Decision and Integration Roadmap sections
+2. For each module in the architecture:
+   a. Define its exported symbols (name, kind: function/class/interface/type/const, optional signature)
+   b. Create a ModuleContract entry
+3. For each wiring point in the Wiring Map:
+   a. Define which symbols flow from source to target
+   b. Create a WiringContract entry
+4. Write the complete CONTRACTS.json file to `.agent-team/CONTRACTS.json`
+
+## Output Format (CONTRACTS.json)
+```json
+{
+  "version": "1.0",
+  "modules": {
+    "src/services/auth.py": {
+      "exports": [
+        {"name": "AuthService", "kind": "class", "signature": null}
+      ],
+      "created_by_task": "TASK-005"
+    }
+  },
+  "wirings": [
+    {
+      "source_module": "src/routes/auth.py",
+      "target_module": "src/services/auth.py",
+      "imports": ["AuthService"],
+      "created_by_task": "TASK-005"
+    }
+  ]
+}
+```
+
+## Rules
+- Every module in the architecture MUST have a contract
+- Every WIRE-xxx entry MUST have a corresponding wiring contract
+- Be SPECIFIC about symbol names — vague contracts are useless
+- Use POSIX-normalized paths (forward slashes)
+- The contract file is machine-consumed — correctness over readability
 """.strip()
 
 
@@ -895,7 +1031,7 @@ def build_agent_definitions(
     """Build the agents dict for ClaudeAgentOptions.
 
     Returns a dict of agent name → AgentDefinition kwargs.
-    All agents use Opus 4.5 for maximum intelligence.
+    Each agent's model is read from the per-agent config (defaults to 'opus').
     """
     research_tools = get_research_tools(mcp_servers)
 
@@ -906,7 +1042,7 @@ def build_agent_definitions(
             "description": "Explores codebase and creates the Requirements Document",
             "prompt": PLANNER_PROMPT,
             "tools": ["Read", "Glob", "Grep", "Bash", "Write"],
-            "model": "opus",
+            "model": config.agents.get("planner", AgentConfig()).model,
         }
 
     if config.agents.get("researcher", AgentConfig()).enabled:
@@ -917,7 +1053,7 @@ def build_agent_definitions(
                 "Read", "Write", "Edit", "WebSearch", "WebFetch",
                 *research_tools,
             ],
-            "model": "opus",
+            "model": config.agents.get("researcher", AgentConfig()).model,
         }
 
     if config.agents.get("architect", AgentConfig()).enabled:
@@ -925,7 +1061,7 @@ def build_agent_definitions(
             "description": "Designs solution architecture and file ownership map",
             "prompt": ARCHITECT_PROMPT,
             "tools": ["Read", "Glob", "Grep", "Write", "Edit"],
-            "model": "opus",
+            "model": config.agents.get("architect", AgentConfig()).model,
         }
 
     if config.agents.get("task_assigner", AgentConfig()).enabled:
@@ -933,7 +1069,7 @@ def build_agent_definitions(
             "description": "Decomposes requirements into atomic implementation tasks",
             "prompt": TASK_ASSIGNER_PROMPT,
             "tools": ["Read", "Write", "Glob", "Grep", "Bash"],
-            "model": "opus",
+            "model": config.agents.get("task_assigner", AgentConfig()).model,
         }
 
     if config.agents.get("code_writer", AgentConfig()).enabled:
@@ -941,7 +1077,7 @@ def build_agent_definitions(
             "description": "Implements requirements by writing code in assigned files",
             "prompt": CODE_WRITER_PROMPT,
             "tools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
-            "model": "opus",
+            "model": config.agents.get("code_writer", AgentConfig()).model,
         }
 
     if config.agents.get("code_reviewer", AgentConfig()).enabled:
@@ -949,7 +1085,7 @@ def build_agent_definitions(
             "description": "Adversarial reviewer that finds bugs, gaps, and issues",
             "prompt": CODE_REVIEWER_PROMPT,
             "tools": ["Read", "Glob", "Grep", "Edit"],
-            "model": "opus",
+            "model": config.agents.get("code_reviewer", AgentConfig()).model,
         }
 
     if config.agents.get("test_runner", AgentConfig()).enabled:
@@ -957,7 +1093,7 @@ def build_agent_definitions(
             "description": "Writes and runs tests to verify requirements",
             "prompt": TEST_RUNNER_PROMPT,
             "tools": ["Read", "Write", "Edit", "Bash", "Grep"],
-            "model": "opus",
+            "model": config.agents.get("test_runner", AgentConfig()).model,
         }
 
     if config.agents.get("security_auditor", AgentConfig()).enabled:
@@ -965,7 +1101,7 @@ def build_agent_definitions(
             "description": "Audits code for security vulnerabilities (OWASP)",
             "prompt": SECURITY_AUDITOR_PROMPT,
             "tools": ["Read", "Grep", "Glob", "Bash"],
-            "model": "opus",
+            "model": config.agents.get("security_auditor", AgentConfig()).model,
         }
 
     if config.agents.get("debugger", AgentConfig()).enabled:
@@ -973,7 +1109,24 @@ def build_agent_definitions(
             "description": "Fixes specific issues identified by reviewers",
             "prompt": DEBUGGER_PROMPT,
             "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
-            "model": "opus",
+            "model": config.agents.get("debugger", AgentConfig()).model,
+        }
+
+    # Conditional agents for new features
+    if config.agents.get("integration_agent", AgentConfig()).enabled and config.scheduler.enabled:
+        agents["integration-agent"] = {
+            "description": "Processes integration declarations and makes atomic shared file edits",
+            "prompt": INTEGRATION_AGENT_PROMPT,
+            "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+            "model": config.agents.get("integration_agent", AgentConfig()).model,
+        }
+
+    if config.agents.get("contract_generator", AgentConfig()).enabled and config.verification.enabled:
+        agents["contract-generator"] = {
+            "description": "Generates module and wiring contracts from architecture decisions",
+            "prompt": CONTRACT_GENERATOR_PROMPT,
+            "tools": ["Read", "Write", "Grep", "Glob"],
+            "model": config.agents.get("contract_generator", AgentConfig()).model,
         }
 
     return agents
@@ -988,6 +1141,7 @@ def build_orchestrator_prompt(
     cwd: str | None = None,
     interview_doc: str | None = None,
     design_reference_urls: list[str] | None = None,
+    codebase_map_summary: str | None = None,
 ) -> str:
     """Build the full orchestrator prompt with task-specific context injected."""
     agent_counts = get_agent_counts(depth)
@@ -1007,6 +1161,11 @@ def build_orchestrator_prompt(
 
     if cwd:
         parts.append(f"[PROJECT DIR: {cwd}]")
+
+    # Codebase map injection
+    if codebase_map_summary:
+        parts.append("\n[CODEBASE MAP — Pre-computed project structure analysis]")
+        parts.append(codebase_map_summary)
 
     # Agent count guidance
     parts.append("\n[FLEET SCALING for this depth level]")

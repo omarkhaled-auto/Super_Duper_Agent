@@ -9,6 +9,7 @@ from agent_team.display import (
     print_agent_response,
     print_banner,
     print_completion,
+    print_contract_violation,
     print_convergence_status,
     print_cost_summary,
     print_error,
@@ -21,9 +22,14 @@ from agent_team.display import (
     print_interview_start,
     print_prd_mode,
     print_review_results,
+    print_schedule_summary,
     print_task_start,
     print_user_intervention_needed,
+    print_verification_result,
+    print_verification_summary,
     print_warning,
+    print_wave_complete,
+    print_wave_start,
 )
 
 
@@ -118,6 +124,14 @@ class TestDisplaySmoke:
         assert console is not None
 
 
+class TestConsoleConfiguration:
+    """Tests for Finding #18: console force_terminal setting."""
+
+    def test_console_exists(self):
+        from agent_team.display import console
+        assert console is not None
+
+
 class TestDisplayEdgeCases:
     def test_task_start_truncates_at_120(self):
         long_task = "a" * 200
@@ -135,3 +149,91 @@ class TestDisplayEdgeCases:
         with patch.object(console, "input", side_effect=EOFError):
             result = print_interactive_prompt()
             assert result == ""
+
+
+class TestSchedulerVerificationDisplay:
+    """Tests for the 6 runtime display functions (scheduler + verification).
+
+    These functions are imported by cli.py and will be wired into the
+    runtime pipeline when the scheduler/verification modules are connected.
+    Tests use capsys to verify output is produced.
+    """
+
+    def test_print_schedule_summary(self, capsys):
+        print_schedule_summary(waves=3, conflicts=2)
+        captured = capsys.readouterr()
+        assert captured.out  # something was printed
+
+    def test_print_schedule_summary_zero_conflicts(self, capsys):
+        print_schedule_summary(waves=1, conflicts=0)
+        captured = capsys.readouterr()
+        assert captured.out
+
+    def test_print_wave_start(self, capsys):
+        print_wave_start(wave_num=1, task_count=4)
+        captured = capsys.readouterr()
+        assert captured.out
+
+    def test_print_wave_start_large_wave(self, capsys):
+        print_wave_start(wave_num=10, task_count=25)
+        captured = capsys.readouterr()
+        assert captured.out
+
+    def test_print_wave_complete(self, capsys):
+        print_wave_complete(wave_num=1)
+        captured = capsys.readouterr()
+        assert captured.out
+
+    def test_print_wave_complete_high_wave(self, capsys):
+        print_wave_complete(wave_num=5)
+        captured = capsys.readouterr()
+        assert captured.out
+
+    def test_print_verification_result_pass(self, capsys):
+        print_verification_result(task_id="T1", status="pass")
+        captured = capsys.readouterr()
+        assert captured.out
+
+    def test_print_verification_result_fail(self, capsys):
+        print_verification_result(task_id="T2", status="fail")
+        captured = capsys.readouterr()
+        assert captured.out
+
+    def test_print_verification_result_partial(self, capsys):
+        print_verification_result(task_id="T3", status="partial")
+        captured = capsys.readouterr()
+        assert captured.out
+
+    def test_print_verification_result_unknown_status(self, capsys):
+        print_verification_result(task_id="T4", status="unknown")
+        captured = capsys.readouterr()
+        assert captured.out
+
+    def test_print_verification_summary_green(self, capsys):
+        state = {
+            "overall_health": "green",
+            "completed_tasks": {"T1": "pass", "T2": "pass"},
+        }
+        print_verification_summary(state)
+        captured = capsys.readouterr()
+        assert captured.out
+
+    def test_print_verification_summary_red(self, capsys):
+        state = {
+            "overall_health": "red",
+            "completed_tasks": {"T1": "pass", "T2": "fail", "T3": "fail"},
+        }
+        print_verification_summary(state)
+        captured = capsys.readouterr()
+        assert captured.out
+
+    def test_print_verification_summary_empty(self, capsys):
+        state = {"overall_health": "unknown", "completed_tasks": {}}
+        print_verification_summary(state)
+        captured = capsys.readouterr()
+        assert captured.out
+
+    def test_print_contract_violation(self, capsys):
+        print_contract_violation("Missing return type on foo()")
+        captured = capsys.readouterr()
+        assert captured.out

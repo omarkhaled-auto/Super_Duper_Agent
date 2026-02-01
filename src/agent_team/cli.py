@@ -11,6 +11,7 @@ import asyncio
 import os
 import re
 import signal
+import string
 import sys
 from pathlib import Path
 from typing import Any
@@ -37,14 +38,22 @@ from .display import (
     print_agent_response,
     print_banner,
     print_completion,
+    print_contract_violation,
     print_cost_summary,
     print_error,
     print_info,
     print_interactive_prompt,
     print_interview_skip,
+    print_map_complete,
+    print_map_start,
     print_prd_mode,
+    print_schedule_summary,
     print_task_start,
+    print_verification_result,
+    print_verification_summary,
     print_warning,
+    print_wave_complete,
+    print_wave_start,
 )
 from .interviewer import _detect_scope, run_interview
 from .mcp_servers import get_mcp_servers
@@ -68,6 +77,17 @@ def _detect_agent_count(task: str, cli_count: int | None) -> int | None:
     if match:
         return int(match.group(1))
     return None
+
+
+def _validate_url(url: str) -> str:
+    """Validate a URL has scheme and netloc. Raises argparse.ArgumentTypeError."""
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    if not parsed.scheme or not parsed.netloc:
+        raise argparse.ArgumentTypeError(
+            f"Invalid URL: {url!r} — must include scheme (https://) and host"
+        )
+    return url
 
 
 # ---------------------------------------------------------------------------
@@ -105,13 +125,15 @@ def _build_options(
         for name, defn in agent_defs_raw.items()
     }
 
-    # Inject runtime values into orchestrator system prompt
-    system_prompt = ORCHESTRATOR_SYSTEM_PROMPT.replace(
-        "{escalation_threshold}",
-        str(config.convergence.escalation_threshold),
-    ).replace(
-        "{max_escalation_depth}",
-        str(config.convergence.max_escalation_depth),
+    # Inject runtime values into orchestrator system prompt.
+    # Security note: safe_substitute is used (not substitute) so unknown
+    # $-references are left untouched rather than raising.  The values are
+    # int-typed config fields converted to str -- no user-controlled template
+    # syntax can reach here because yaml.safe_load produces Python ints, not
+    # arbitrary strings containing $ placeholders.
+    system_prompt = string.Template(ORCHESTRATOR_SYSTEM_PROMPT).safe_substitute(
+        escalation_threshold=str(config.convergence.escalation_threshold),
+        max_escalation_depth=str(config.convergence.max_escalation_depth),
     )
 
     opts_kwargs: dict[str, Any] = {
@@ -174,6 +196,7 @@ async def _run_interactive(
     prd_path: str | None,
     interview_doc: str | None = None,
     design_reference_urls: list[str] | None = None,
+    codebase_map_summary: str | None = None,
 ) -> None:
     """Run the interactive multi-turn conversation loop."""
     options = _build_options(config, cwd)
@@ -197,6 +220,7 @@ async def _run_interactive(
                 cwd=cwd,
                 interview_doc=interview_doc,
                 design_reference_urls=design_reference_urls,
+                codebase_map_summary=codebase_map_summary,
             )
             print_task_start(task[:200], depth, agent_count)
             await client.query(prompt)
@@ -228,8 +252,11 @@ async def _run_interactive(
                 cwd=cwd,
                 interview_doc=interview_doc,
                 design_reference_urls=design_reference_urls,
+                codebase_map_summary=codebase_map_summary,
             )
-            # Only inject interview_doc on the first query
+            # Clear interview doc after first query -- the orchestrator has
+            # already received it. Re-injecting on every interactive query
+            # would waste context and could cause confusion.
             interview_doc = None
 
             if is_prd:
@@ -257,6 +284,7 @@ async def _run_single(
     prd_path: str | None,
     interview_doc: str | None = None,
     design_reference_urls: list[str] | None = None,
+    codebase_map_summary: str | None = None,
 ) -> None:
     """Run a single task to completion."""
     options = _build_options(config, cwd)
@@ -276,6 +304,7 @@ async def _run_single(
         cwd=cwd,
         interview_doc=interview_doc,
         design_reference_urls=design_reference_urls,
+        codebase_map_summary=codebase_map_summary,
     )
 
     print_task_start(task, depth, agent_count)
@@ -293,6 +322,11 @@ async def _run_single(
 # Signal handling
 # ---------------------------------------------------------------------------
 
+# Note: _interrupt_count is a module-level global accessed from the signal
+# handler. This is safe because signal handlers in CPython run in the main
+# thread (GIL protects single-threaded integer increment).  The asyncio
+# event loop also runs in the main thread, so there is no concurrent
+# modification from other threads.
 _interrupt_count = 0
 
 
@@ -389,7 +423,31 @@ def _parse_args() -> argparse.Namespace:
         metavar="URL",
         nargs="+",
         default=None,
+        type=_validate_url,
         help="Reference website URL(s) for design inspiration",
+    )
+    map_group = parser.add_mutually_exclusive_group()
+    map_group.add_argument(
+        "--no-map",
+        action="store_true",
+        help="Skip codebase mapping phase",
+    )
+    map_group.add_argument(
+        "--map-only",
+        action="store_true",
+        help="Run codebase map and print summary, then exit",
+    )
+
+    prog_group = parser.add_mutually_exclusive_group()
+    prog_group.add_argument(
+        "--progressive",
+        action="store_true",
+        help="Enable progressive verification",
+    )
+    prog_group.add_argument(
+        "--no-progressive",
+        action="store_true",
+        help="Disable progressive verification",
     )
     parser.add_argument(
         "--version",
@@ -418,6 +476,12 @@ def main() -> None:
 
     # Load config
     config = load_config(config_path=args.config, cli_overrides=cli_overrides)
+
+    # Apply progressive verification flags
+    if args.progressive:
+        config.verification.enabled = True
+    elif args.no_progressive:
+        config.verification.enabled = False
 
     # Collect, filter, and deduplicate design reference URLs
     design_ref_urls: list[str] = list(config.design_reference.urls)
@@ -496,6 +560,61 @@ def main() -> None:
             print_info("Proceeding without interview context.")
 
     # -------------------------------------------------------------------
+    # Phase 0.5: Codebase Map
+    # -------------------------------------------------------------------
+    codebase_map_summary: str | None = None
+    if config.codebase_map.enabled and not args.no_map:
+        try:
+            from .codebase_map import generate_codebase_map, summarize_map
+            print_map_start(cwd)
+            cmap = asyncio.run(generate_codebase_map(cwd, timeout=config.codebase_map.timeout_seconds))
+            codebase_map_summary = summarize_map(cmap)
+            print_map_complete(cmap.total_files, cmap.primary_language)
+            if args.map_only:
+                console.print(codebase_map_summary)
+                sys.exit(0)
+        except Exception as exc:
+            print_warning(f"Codebase mapping failed: {exc}")
+            print_info("Proceeding without codebase map.")
+
+    # -------------------------------------------------------------------
+    # Phase 0.75: Contract Loading + Scheduling
+    # -------------------------------------------------------------------
+    contract_registry = None
+    schedule_info = None
+
+    if config.verification.enabled:
+        try:
+            from .contracts import ContractRegistry, load_contracts
+            contract_path = Path(cwd) / config.convergence.requirements_dir / config.verification.contract_file
+            if contract_path.is_file():
+                contract_registry = load_contracts(contract_path)
+                print_info(f"Contracts loaded from {contract_path}")
+            else:
+                print_info("No contract file found -- verification will use empty registry.")
+                contract_registry = ContractRegistry()
+        except Exception as exc:
+            print_warning(f"Contract loading failed: {exc}")
+
+    if config.scheduler.enabled:
+        try:
+            from .scheduler import compute_schedule, parse_tasks_md
+            tasks_path = Path(cwd) / config.convergence.requirements_dir / "TASKS.md"
+            if tasks_path.is_file():
+                tasks_content = tasks_path.read_text(encoding="utf-8")
+                task_graph = parse_tasks_md(tasks_content)
+                schedule_info = compute_schedule(task_graph)
+                total_conflicts = sum(schedule_info.conflict_summary.values())
+                print_schedule_summary(
+                    waves=schedule_info.total_waves,
+                    conflicts=total_conflicts,
+                )
+            else:
+                print_info("No TASKS.md found -- scheduler will be used post-orchestration.")
+        except Exception as exc:
+            print_warning(f"Scheduler failed: {exc}")
+
+    # -------------------------------------------------------------------
     # Determine orchestrator mode
     # -------------------------------------------------------------------
     # If interview produced a document, we have enough context for single-shot,
@@ -519,6 +638,7 @@ def main() -> None:
             prd_path=args.prd,
             interview_doc=interview_doc,
             design_reference_urls=design_ref_urls or None,
+            codebase_map_summary=codebase_map_summary,
         ))
     else:
         # Use the interview doc as the task if no explicit task was given
@@ -537,4 +657,39 @@ def main() -> None:
             prd_path=args.prd,
             interview_doc=interview_doc,
             design_reference_urls=design_ref_urls or None,
+            codebase_map_summary=codebase_map_summary,
         ))
+
+    # -------------------------------------------------------------------
+    # Post-orchestration: Verification (if enabled)
+    # -------------------------------------------------------------------
+    if config.verification.enabled and contract_registry is not None:
+        try:
+            from .contracts import verify_all_contracts
+            from .verification import (
+                ProgressiveVerificationState,
+                write_verification_summary,
+            )
+
+            verification_path = (
+                Path(cwd) / config.convergence.requirements_dir
+                / config.verification.verification_file
+            )
+            print_info("Running post-orchestration verification...")
+
+            # Verify contracts against current project state
+            vr = verify_all_contracts(contract_registry, Path(cwd))
+            if not vr.passed:
+                for v in vr.violations:
+                    print_contract_violation(v.description)
+
+            # Write verification summary to disk
+            state = ProgressiveVerificationState()
+            write_verification_summary(state, verification_path)
+
+            print_verification_summary({
+                "overall_health": "green" if vr.passed else "red",
+                "completed_tasks": {"contracts": "pass" if vr.passed else "fail"},
+            })
+        except Exception as exc:
+            print_warning(f"Post-orchestration verification failed: {exc}")

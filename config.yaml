@@ -69,3 +69,27 @@ display:
   show_fleet_composition: true
   show_convergence_status: true
   verbose: false
+
+# Codebase Map — pre-analyze target project structure
+codebase_map:
+  enabled: true
+  max_files: 5000
+  max_file_size_kb: 50
+  max_file_size_kb_ts: 100
+  timeout_seconds: 30
+
+# Smart Scheduler — DAG-based task ordering with conflict resolution
+scheduler:
+  enabled: false
+  max_parallel_tasks: 5
+  conflict_strategy: "artificial-dependency"
+  enable_context_scoping: true
+  enable_critical_path: true
+
+# Progressive Verification — contract-based checks after each task
+verification:
+  enabled: false
+  blocking: true
+  run_lint: true
+  run_type_check: true
+  run_tests: true

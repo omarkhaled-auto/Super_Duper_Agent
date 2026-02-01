@@ -189,3 +189,102 @@ class TestBuildInterviewOptions:
         cfg = AgentTeamConfig()
         opts = _build_interview_options(cfg, cwd=str(tmp_path))
         assert opts.cwd == tmp_path
+
+
+# ===================================================================
+# _detect_scope() — scope detection from document content (Finding #2)
+# ===================================================================
+
+class TestDetectScopeFromContent:
+    """Additional tests for _detect_scope with varied document content."""
+
+    def test_simple_scope_detection(self):
+        """Simple task doc should detect as SIMPLE."""
+        doc = "# Task Brief: Fix button\nScope: SIMPLE\nDate: 2025-01-01\n"
+        result = _detect_scope(doc)
+        assert result == "SIMPLE"
+
+    def test_complex_prd_scope_detection(self):
+        """Complex PRD-like text should detect as COMPLEX."""
+        doc = (
+            "# PRD: Full SaaS Application\n"
+            "Scope: COMPLEX\n"
+            "Date: 2025-01-01\n\n"
+            "## Executive Summary\n"
+            "Build a full SaaS application with user authentication, "
+            "payment processing with Stripe, admin dashboard, "
+            "multi-tenant architecture, real-time notifications, "
+            "REST API, GraphQL endpoint, database migrations, "
+            "CI/CD pipeline, and comprehensive testing suite.\n"
+        )
+        result = _detect_scope(doc)
+        assert result == "COMPLEX"
+
+    def test_scope_value_always_valid(self):
+        """_detect_scope should always return one of the three valid values."""
+        for doc in [
+            "Scope: SIMPLE\n",
+            "Scope: MEDIUM\n",
+            "Scope: COMPLEX\n",
+            "No scope header here\n",
+            "",
+        ]:
+            result = _detect_scope(doc)
+            assert result in ("SIMPLE", "MEDIUM", "COMPLEX")
+
+
+# ===================================================================
+# InterviewResult — additional dataclass tests (Finding #2)
+# ===================================================================
+
+class TestInterviewResultExtended:
+    """Extended tests for InterviewResult dataclass."""
+
+    def test_creation_with_all_fields(self):
+        result = InterviewResult(
+            doc_content="# Interview\nTest content",
+            doc_path="/some/path/INTERVIEW.md",
+            scope="MODERATE",
+            exchange_count=5,
+            cost=0.50,
+        )
+        assert result.doc_content == "# Interview\nTest content"
+        assert result.doc_path == "/some/path/INTERVIEW.md"
+        assert result.scope == "MODERATE"
+        assert result.exchange_count == 5
+        assert result.cost == 0.50
+
+    def test_empty_doc_content(self):
+        result = InterviewResult(
+            doc_content="",
+            doc_path="/path/INTERVIEW.md",
+            scope="SIMPLE",
+            exchange_count=0,
+            cost=0.0,
+        )
+        assert result.doc_content == ""
+        assert result.exchange_count == 0
+
+    def test_zero_cost(self):
+        result = InterviewResult(
+            doc_content="content",
+            doc_path="/path/INTERVIEW.md",
+            scope="MEDIUM",
+            exchange_count=3,
+            cost=0.0,
+        )
+        assert result.cost == 0.0
+
+
+# ===================================================================
+# run_interview() — async function check (Finding #2)
+# ===================================================================
+
+class TestRunInterview:
+    """Tests for run_interview async function."""
+
+    def test_run_interview_is_async(self):
+        """run_interview should be an async function."""
+        import asyncio
+        from agent_team.interviewer import run_interview
+        assert asyncio.iscoroutinefunction(run_interview)
