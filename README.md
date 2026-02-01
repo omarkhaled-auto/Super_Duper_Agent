@@ -2,6 +2,68 @@
 
 Convergence-driven multi-agent orchestration system built on the [Claude Agent SDK](https://docs.anthropic.com/en/docs/claude-agent-sdk). Takes any task — from a one-line bug fix to a full PRD — and drives it to verified completion using fleets of specialized AI agents.
 
+---
+
+## Quick Start (TL;DR)
+
+```bash
+git clone https://github.com/omarkhaled-auto/Super_Duper_Agent.git
+cd Super_Duper_Agent
+pip install -e .
+export ANTHROPIC_API_KEY=sk-ant-...        # required
+export FIRECRAWL_API_KEY=fc-...            # optional, enables web research
+```
+
+**5 commands that cover 90% of use cases:**
+
+```bash
+agent-team                                           # Interactive — interview first, then build
+agent-team "quick fix: button doesn't submit"        # Quick bug fix (auto-detected)
+agent-team "thoroughly add JWT auth"                  # Standard feature (auto-detected thorough)
+agent-team --prd spec.md                              # Full app from PRD (auto exhaustive)
+agent-team "redesign UI" --design-ref https://stripe.com  # Match a reference design
+```
+
+**Cheat sheet — pick a depth:**
+
+| Depth | Trigger | Agents | Use when |
+|-------|---------|--------|----------|
+| Quick | `"quick"`, `"fast"`, `"simple"` in task | 1-2 | Typo, one-file fix |
+| Standard | (default) | 2-5 | Normal feature, bug |
+| Thorough | `"thorough"`, `"deep"`, `"detailed"` in task | 3-8 | Multi-file feature, refactor |
+| Exhaustive | `--prd`, `"exhaustive"`, `"comprehensive"` in task | 5-10 | Full app, major system |
+
+**End the interview** by saying: `"I'm done"`, `"let's go"`, `"start building"`, `"ship it"`, `"lgtm"`, or `"proceed"`.
+
+---
+
+## Table of Contents
+
+- [How It Works](#how-it-works)
+- [Installation](#installation)
+- [Usage Guide](#usage-guide)
+  - [Task Type A: Quick Bug Fix](#task-type-a-quick-bug-fix)
+  - [Task Type B: Standard Feature](#task-type-b-standard-feature)
+  - [Task Type C: Thorough Multi-File Feature](#task-type-c-thorough-multi-file-feature)
+  - [Task Type D: Full App Build from PRD](#task-type-d-full-app-build-from-prd)
+  - [Task Type E: Using Design References](#task-type-e-using-design-references)
+  - [Task Type F: Resuming with a Previous Interview](#task-type-f-resuming-with-a-previous-interview)
+- [The Interview Phase](#the-interview-phase)
+- [What It Produces](#what-it-produces)
+- [Convergence Loop](#convergence-loop)
+- [Design Reference](#design-reference)
+- [Configuration](#configuration)
+  - [Config Recipes](#config-recipes)
+- [CLI Reference](#cli-reference)
+- [Practical Workflow Examples](#practical-workflow-examples)
+- [Depth Levels — Deep Dive](#depth-levels--deep-dive)
+- [Troubleshooting](#troubleshooting)
+- [Testing](#testing)
+- [Architecture](#architecture)
+- [License](#license)
+
+---
+
 ## How It Works
 
 Agent Team runs a **convergence loop**: agents write code, reviewers try to break it, debuggers fix what's broken, and the loop repeats until every requirement passes adversarial review. Nothing ships half-done.
@@ -19,7 +81,7 @@ Interview → Plan → Research → Architect → Assign Tasks → Code → Revi
 | 0 | **Interviewer** | Talks to you, asks clarifying questions, writes `.agent-team/INTERVIEW.md` |
 | 1 | **Planner** | Explores codebase, creates `.agent-team/REQUIREMENTS.md` with checklist |
 | 2 | **Researcher** | Queries docs (Context7) and web (Firecrawl), scrapes design references, adds findings to requirements |
-| 3 | **Architect** | Designs solution, file ownership map, interface contracts |
+| 3 | **Architect** | Designs solution, file ownership map, wiring map, interface contracts |
 | 4 | **Task Assigner** | Decomposes requirements into atomic tasks in `.agent-team/TASKS.md` |
 | 5 | **Code Writer** | Implements assigned tasks (non-overlapping files, reads from TASKS.md) |
 | 6 | **Code Reviewer** | Adversarial review — tries to break everything, marks items pass/fail |
@@ -42,109 +104,247 @@ Agents deploy in parallel fleets. Fleet size scales with task complexity:
 
 Depth is auto-detected from keywords in your task ("quick fix" → Quick, "thorough review" → Thorough) or set explicitly with `--depth`.
 
+---
+
 ## Installation
 
-Requires Python 3.10+ and Node.js (for MCP servers).
+### Prerequisites
+
+- **Python 3.10+** — check with `python --version`
+- **Node.js** — needed for MCP servers (Context7, Firecrawl). Check with `node --version`
+- **Anthropic API key** — get one at https://console.anthropic.com/
+
+### Step-by-step
 
 ```bash
-# Clone
+# 1. Clone the repository
 git clone https://github.com/omarkhaled-auto/Super_Duper_Agent.git
 cd Super_Duper_Agent
 
-# Install
+# 2. Install the package
 pip install -e .
 
-# Set your API key
+# 3. Set your Anthropic API key (REQUIRED)
+#    Linux/macOS:
 export ANTHROPIC_API_KEY=sk-ant-...
+#    Windows (PowerShell):
+$env:ANTHROPIC_API_KEY="sk-ant-..."
+#    Windows (cmd):
+set ANTHROPIC_API_KEY=sk-ant-...
 
-# Optional: enable web research
+# 4. (Optional) Set Firecrawl key for web research + design reference scraping
 export FIRECRAWL_API_KEY=fc-...
+
+# 5. Verify
+agent-team --version   # should print 0.1.0
 ```
 
-## Usage
+### Persistent keys with .env
 
-### Interactive Mode (recommended)
+Create a `.env` file in the project root:
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+FIRECRAWL_API_KEY=fc-...
+```
+
+Load before running:
+
+```bash
+# Linux/macOS
+export $(grep -v '^#' .env | xargs)
+
+# Windows (PowerShell)
+Get-Content .env | ForEach-Object { if ($_ -match '^\s*([^#][^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($matches[1].Trim(), $matches[2].Trim(), "Process") } }
+```
+
+### Environment Variables
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `ANTHROPIC_API_KEY` | Yes | Claude API access |
+| `FIRECRAWL_API_KEY` | No | Firecrawl MCP server for web research + design scraping |
+
+---
+
+## Usage Guide
+
+### Task Type A: Quick Bug Fix
+
+**Best for:** One-file fixes, typos, broken imports, CSS tweaks.
+
+```bash
+agent-team "quick fix: the submit button on /login calls the wrong API endpoint"
+```
+
+What happens:
+1. Interview is skipped (task is self-explanatory at this depth)
+2. 1-2 planners scan the codebase, write REQUIREMENTS.md
+3. 1 code writer fixes the issue
+4. 1-2 reviewers verify the fix
+5. Done
+
+**Tips:**
+- Use `--no-interview` if you already know exactly what's wrong
+- Add `--cwd /path/to/project` if you're not in the project directory
+- The word "quick" or "fast" in your task auto-selects Quick depth
+
+```bash
+# Equivalent explicit version
+agent-team --no-interview --depth quick --cwd ./my-app "fix the login button"
+```
+
+### Task Type B: Standard Feature
+
+**Best for:** Adding a component, new API endpoint, small integration, single-module work.
+
+```bash
+agent-team "add user profile editing with avatar upload to the Express API"
+```
+
+What happens:
+1. **Interview** — the interviewer asks 3-5 clarifying questions (boundaries, error handling, validation). Answer them, then say `I'm done` or `let's go`
+2. **Plan** — planners explore your codebase and create REQUIREMENTS.md
+3. **Research** — researchers look up library docs (e.g., multer for file uploads) via Context7
+4. **Architecture** — architect designs the solution, creates a wiring map
+5. **Task assignment** — decomposes into atomic TASKS.md entries
+6. **Convergence loop** — code, review, debug, repeated until all items pass
+7. **Testing + security audit**
+
+**Tips:**
+- Let the interview run. 2-3 exchanges gives the agents much better context
+- Standard depth (default) is right for most features
+- If working with an unfamiliar library, Firecrawl + Context7 help a lot — make sure both keys are set
+
+### Task Type C: Thorough Multi-File Feature
+
+**Best for:** Features touching 5-20 files, cross-cutting concerns, refactors, integrations.
+
+```bash
+agent-team "thoroughly refactor the authentication system to use JWT with refresh tokens"
+```
+
+Or be explicit:
+
+```bash
+agent-team --depth thorough "refactor auth to JWT with refresh tokens"
+```
+
+What happens:
+- Same pipeline as Standard, but with **3-8 agents per phase**
+- Multiple code writers work in parallel on non-overlapping files
+- Multiple reviewers independently try to break the implementation
+- The convergence loop runs more iterations with more thorough reviews
+
+**Tips:**
+- The word "thorough", "deep", "detailed", or "carefully" in your task auto-selects this depth
+- Use `--agents 15` to override the total agent count if you want more
+- Use `-v` (verbose) to see which tools each agent is calling — useful for debugging stalls
+- Expect 3+ convergence cycles; the adversarial reviewers are strict
+
+### Task Type D: Full App Build from PRD
+
+**Best for:** Greenfield apps, major systems, 20+ files, anything with a full spec.
+
+There are two paths:
+
+**Path 1: You already have a PRD file**
+
+```bash
+agent-team --prd product-spec.md
+```
+
+This automatically forces **exhaustive** depth. The orchestrator reads the PRD, creates a MASTER_PLAN.md with milestones, and executes each milestone through the full pipeline.
+
+**Path 2: Build the PRD through the interview**
 
 ```bash
 agent-team
 ```
 
-Starts an interview session. The interviewer asks about your project, writes a structured requirements document, then hands off to the orchestrator. Type `I'm done`, `let's go`, or `start building` when ready.
+Just run with no arguments. The interviewer will ask 15-20 deep questions (target users, data model, API design, integrations, deployment). When it detects COMPLEX scope, it writes a full PRD to `.agent-team/INTERVIEW.md` and the orchestrator receives exhaustive depth.
 
-### Single-Shot Mode
+**Tips:**
+- For the interview: give detailed answers. The more context you provide, the better the requirements document
+- Say "I'm done" only when all your requirements are captured
+- If the interview produced scope COMPLEX, the system automatically forces exhaustive depth
+- If you have design inspiration: `--design-ref https://stripe.com https://linear.app`
+- The Firecrawl key is especially valuable here — researchers will scrape library docs, design references, and competitive examples
 
-```bash
-agent-team "Add JWT authentication to the Express API"
-```
+### Task Type E: Using Design References
 
-Skips interactive mode. Detects depth from keywords and runs to completion.
-
-### PRD Mode
-
-```bash
-agent-team --prd requirements.md
-```
-
-Reads a full Product Requirements Document. Activates exhaustive depth, decomposes into milestones, and executes each milestone through the full convergence pipeline.
-
-### All CLI Options
-
-```
-agent-team [TASK] [OPTIONS]
-
-Positional:
-  TASK                    Task description (omit for interactive mode)
-
-Options:
-  --prd FILE              Path to a PRD file for full application build
-  --depth LEVEL           Override depth: quick | standard | thorough | exhaustive
-  --agents N              Override total agent count (distributed across phases)
-  --model MODEL           Override model (default: opus)
-  --max-turns N           Override max agentic turns (default: 500)
-  --config FILE           Path to config.yaml
-  --cwd DIR               Working directory (default: current directory)
-  --no-interview          Skip the interview phase
-  --interview-doc FILE    Use a pre-existing interview document (skips live interview)
-  --design-ref URL [URL]  Reference website URL(s) for design inspiration
-  -i, --interactive       Force interactive mode
-  -v, --verbose           Show all tool calls and agent details
-  --version               Show version
-```
-
-### Examples
+**Best for:** Any frontend/UI task where you want to match an existing design aesthetic.
 
 ```bash
-# Quick bug fix — minimal agents, fast
-agent-team "quick fix: the login button doesn't submit the form"
-
-# Thorough feature — more agents, deeper review
-agent-team "thoroughly add user profile editing with avatar upload"
-
-# Specify exact agent count
-agent-team "use 20 agents to refactor the authentication system"
-
-# Full app from PRD with exhaustive depth
-agent-team --prd product-spec.md --depth exhaustive
-
-# Use a previous interview document
-agent-team --interview-doc .agent-team/INTERVIEW.md
-
-# Use a reference website for design inspiration
+# Single reference
 agent-team "build a SaaS landing page" --design-ref https://stripe.com
 
-# Multiple design references
+# Multiple references
 agent-team --prd spec.md --design-ref https://stripe.com https://linear.app
 
-# Skip interview, set working directory
-agent-team --no-interview --cwd /path/to/project "add dark mode"
-
-# Interactive mode with verbose output
-agent-team -i -v
+# Via config.yaml (persistent) — see Configuration section below
 ```
+
+What the researcher extracts:
+- **Colors** — hex values for primary, secondary, accent, backgrounds
+- **Typography** — font families, sizes, weights, line heights
+- **Spacing** — padding, margin patterns
+- **Component patterns** — nav structure, card layouts, button styles, form patterns
+- **Screenshots** — cloud-hosted URLs of key pages
+
+All findings go into REQUIREMENTS.md as `DESIGN-xxx` checklist items that code writers implement and reviewers verify. If no URL is provided, this feature is entirely skipped at zero cost.
+
+### Task Type F: Resuming with a Previous Interview
+
+If you ran an interview in a previous session:
+
+```bash
+agent-team --interview-doc .agent-team/INTERVIEW.md "build the dashboard"
+```
+
+This skips the live interview and feeds the existing document directly to the orchestrator. The scope is detected from the `Scope:` header in the document (SIMPLE/MEDIUM/COMPLEX).
+
+---
+
+## The Interview Phase
+
+The interview is **Phase 0** — it runs before any agents deploy. A good interview saves convergence cycles downstream.
+
+### Starting
+
+```bash
+agent-team                                     # Full interactive (no seed)
+agent-team "build a task management app"       # With a task seed
+agent-team -i "build a task management app"    # Force interactive with seed
+```
+
+### During the interview
+
+- **Answer specifically.** "A login page" is worse than "Email + password login, no OAuth, redirect to /dashboard on success, show inline errors on failure."
+- **Mention your stack.** "It's a Next.js 14 app with Supabase" gives the interviewer real context to explore.
+- **Let it explore your codebase.** If you're in an existing project directory, the interviewer uses Glob/Read/Grep to ask informed questions about your actual code.
+- **Don't rush.** 5-10 exchanges for a medium feature, 15-20 for a complex app. The document quality directly affects everything downstream.
+
+### Ending the interview
+
+Say any of these phrases (case-insensitive, punctuation ignored):
+
+> `I'm done` · `im done` · `i am done` · `let's go` · `lets go` · `start building` · `start coding` · `proceed` · `build it` · `go ahead` · `that's it` · `thats it` · `that's all` · `thats all` · `begin` · `execute` · `run it` · `ship it` · `do it` · `let's start` · `lets start` · `good to go` · `ready` · `looks good` · `lgtm`
+
+**Negation is handled:** "I'm **not** done" and "don't proceed yet" will NOT end the interview.
+
+### Skipping the interview
+
+```bash
+agent-team --no-interview "fix the login bug"               # Skip entirely
+agent-team --interview-doc .agent-team/INTERVIEW.md         # Use existing document
+```
+
+---
 
 ## What It Produces
 
-Agent Team creates a `.agent-team/` directory in your project with:
+Agent Team creates a `.agent-team/` directory in your project:
 
 | File | Purpose |
 |------|---------|
@@ -168,6 +368,9 @@ Every requirement gets tracked with review cycles:
 ### Technical Requirements
 - [x] TECH-001: All endpoints return proper HTTP status codes (review_cycles: 1)
 
+### Wiring Requirements
+- [x] WIRE-001: Auth middleware wired to /api routes via Express.use() (review_cycles: 1)
+
 ### Design Requirements
 - [x] DESIGN-001: Use primary color #635bff for headings and CTAs (review_cycles: 1)
 
@@ -180,6 +383,8 @@ Every requirement gets tracked with review cycles:
 ```
 
 The task is **complete only when every `[ ]` becomes `[x]`**.
+
+---
 
 ## Convergence Loop
 
@@ -204,6 +409,8 @@ If a requirement fails review 3+ times (configurable):
 4. Max escalation depth: 2 levels (configurable)
 5. If exceeded: the system asks the user for guidance
 
+---
+
 ## Design Reference
 
 Provide a reference website URL to have the Researcher agent scrape its design system (colors, typography, spacing, component patterns) and write the findings into REQUIREMENTS.md. Downstream agents then use those design tokens as constraints.
@@ -226,8 +433,6 @@ The Researcher uses Firecrawl to scrape reference sites at three depth levels:
 | `screenshots` | Branding + cloud-hosted screenshot URLs for each page |
 | `full` (default) | Branding + screenshots + component pattern analysis (nav, cards, forms, footer) |
 
-Findings are written to the `## Design Reference` section of REQUIREMENTS.md and tracked as `DESIGN-xxx` checklist items alongside existing `REQ-xxx`, `TECH-xxx`, and `INT-xxx` items.
-
 ### Data Flow
 
 ```
@@ -242,19 +447,7 @@ config.yaml urls + --design-ref CLI + interview URLs
     → reviewer verifies DESIGN-xxx items like any other requirement
 ```
 
-### Example
-
-```bash
-agent-team "build a dashboard app" --design-ref https://linear.app
-```
-
-The Researcher will:
-1. Map the site (`firecrawl_map`) to discover key pages
-2. Extract branding (`firecrawl_scrape` with `formats: ["branding"]`) — hex colors, font families, spacing
-3. Capture screenshots (`firecrawl_scrape` with `formats: ["screenshot"]`) — cloud-hosted URLs
-4. Analyze component patterns (`firecrawl_extract` or `firecrawl_agent`) — nav, cards, buttons, forms
-
-If no design reference URL is provided, the feature is entirely skipped at zero cost.
+---
 
 ## Configuration
 
@@ -335,12 +528,236 @@ display:
   verbose: false
 ```
 
-## Environment Variables
+### Config Recipes
 
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `ANTHROPIC_API_KEY` | Yes | Claude API access |
-| `FIRECRAWL_API_KEY` | No | Firecrawl MCP server for web research |
+**Cost-conscious (small tasks):**
+```yaml
+depth:
+  default: "quick"
+convergence:
+  max_cycles: 3
+agents:
+  security_auditor:
+    enabled: false
+```
+
+**Maximum quality (production features):**
+```yaml
+depth:
+  default: "thorough"
+convergence:
+  max_cycles: 15
+  escalation_threshold: 2
+interview:
+  max_exchanges: 100
+```
+
+**Mixed models (save cost on sub-agents):**
+```yaml
+orchestrator:
+  model: "opus"
+agents:
+  planner:
+    model: "sonnet"
+  researcher:
+    model: "sonnet"
+  code_writer:
+    model: "opus"       # keep opus for coding
+  code_reviewer:
+    model: "opus"       # keep opus for adversarial review
+  test_runner:
+    model: "sonnet"
+  security_auditor:
+    model: "sonnet"
+  debugger:
+    model: "opus"
+```
+
+**Backend-only (no design scraping):**
+```yaml
+mcp_servers:
+  firecrawl:
+    enabled: false
+design_reference:
+  urls: []
+```
+
+---
+
+## CLI Reference
+
+```
+agent-team [TASK] [OPTIONS]
+
+Positional:
+  TASK                    Task description (omit for interactive mode)
+
+Options:
+  --prd FILE              Path to a PRD file for full application build
+  --depth LEVEL           Override depth: quick | standard | thorough | exhaustive
+  --agents N              Override total agent count (distributed across phases)
+  --model MODEL           Override model (default: opus)
+  --max-turns N           Override max agentic turns (default: 500)
+  --config FILE           Path to config.yaml
+  --cwd DIR               Working directory (default: current directory)
+  --no-interview          Skip the interview phase
+  --interview-doc FILE    Use a pre-existing interview document (skips live interview)
+  --design-ref URL [URL]  Reference website URL(s) for design inspiration
+  -i, --interactive       Force interactive mode
+  -v, --verbose           Show all tool calls and agent details
+  --version               Show version
+```
+
+### Common patterns
+
+```bash
+# ---- Modes ----
+agent-team                                    # Interactive (interview → orchestrate)
+agent-team "task"                             # Single-shot (auto-detect depth)
+agent-team -i "task"                          # Force interactive with seed
+agent-team --prd spec.md                      # PRD mode (exhaustive)
+
+# ---- Depth control ----
+agent-team --depth quick "task"               # Explicit quick
+agent-team "quick fix for the typo"           # Auto-detected quick
+agent-team "do a thorough review of auth"     # Auto-detected thorough
+agent-team --depth exhaustive "task"          # Explicit exhaustive
+
+# ---- Agent control ----
+agent-team --agents 20 "task"                 # Override total agents
+agent-team "use 10 agents for this"           # Detected from task text
+agent-team "deploy 5 agents to fix auth"      # Also detected
+
+# ---- Interview control ----
+agent-team --no-interview "task"              # Skip interview
+agent-team --interview-doc doc.md "task"      # Use existing document
+
+# ---- Design references ----
+agent-team --design-ref https://stripe.com                      # Single
+agent-team --design-ref https://stripe.com https://linear.app   # Multiple
+
+# ---- Project control ----
+agent-team --cwd /path/to/project "task"      # Set working directory
+agent-team --config custom.yaml "task"        # Custom config file
+
+# ---- Output control ----
+agent-team -v "task"                          # Verbose (show tool calls)
+```
+
+---
+
+## Practical Workflow Examples
+
+### Fix a bug in an existing project
+
+```bash
+cd my-project
+agent-team --no-interview "quick fix: the /api/users endpoint returns 500 when email contains a plus sign"
+```
+
+### Add a feature with interview
+
+```bash
+cd my-project
+agent-team "add Stripe subscription billing to the Express backend"
+# Interview: 5-8 exchanges about plans, webhooks, trial periods
+# Say: "I'm done"
+# Agents build it
+```
+
+### Build a full app from scratch
+
+```bash
+mkdir new-saas && cd new-saas
+agent-team
+# Interview: 15-20 exchanges building a full PRD
+# Interviewer detects COMPLEX scope → exhaustive depth
+# Say: "let's go"
+# Full pipeline: plan → research → architect → code → review → debug → test
+```
+
+### Redesign UI to match a reference
+
+```bash
+cd my-frontend
+agent-team "redesign the dashboard to look like Linear" \
+  --design-ref https://linear.app \
+  --depth thorough
+```
+
+### Run from a PRD you wrote
+
+```bash
+agent-team --prd docs/product-spec.md --design-ref https://stripe.com
+# Exhaustive depth auto-activated
+# MASTER_PLAN.md created with milestones
+# Each milestone goes through the full convergence loop
+```
+
+### Cost-effective quick iterations
+
+```bash
+# First pass: quick depth, no interview
+agent-team --no-interview --depth quick "add a logout button to the navbar"
+
+# Review what it built, then refine with more depth
+agent-team --no-interview --depth standard "fix the logout button: it should clear localStorage and redirect to /login"
+```
+
+---
+
+## Depth Levels — Deep Dive
+
+Depth is the single most important parameter. It controls how many agents deploy and how thorough the process is.
+
+### How depth is determined (precedence order)
+
+1. **`--depth` flag** — explicit, always wins
+2. **`--prd` flag** — forces exhaustive automatically
+3. **Interview scope COMPLEX** — forces exhaustive automatically
+4. **Auto-detected from keywords** — keywords in your task text
+5. **Config default** — `standard` unless changed in config.yaml
+
+### Auto-detection keywords
+
+| Keyword in your task | Maps to |
+|---------------------|---------|
+| `quick`, `fast`, `simple`, `just` | Quick |
+| `thorough`, `thoroughly`, `careful`, `carefully`, `deep`, `detailed` | Thorough |
+| `exhaustive`, `exhaustively`, `comprehensive`, `comprehensively`, `complete` | Exhaustive |
+
+When multiple keywords appear, the **most intensive** depth wins. "Quick but comprehensive" resolves to **Exhaustive**.
+
+Word-boundary matching prevents false positives — "adjustment" does NOT match "just".
+
+### What each depth level does
+
+| | Quick | Standard | Thorough | Exhaustive |
+|---|---|---|---|---|
+| **Interview** | Skipped or 2-3 Q's | 3-5 questions | 5-10 questions | 15-20 questions |
+| **Planners** | 1-2 | 3-5 | 5-8 | 8-10 |
+| **Researchers** | 0-1 | 2-3 | 3-5 | 5-8 |
+| **Code writers** | 1 | 2-3 | 3-6 | 5-10 |
+| **Reviewers** | 1-2 | 2-3 | 3-5 | 5-8 |
+| **Convergence cycles** | 1-2 typical | 2-4 typical | 3-6 typical | 5-10 typical |
+| **Cost** | $ | $$ | $$$ | $$$$ |
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| `Error: ANTHROPIC_API_KEY not set` | `export ANTHROPIC_API_KEY=sk-ant-...` or add to `.env` |
+| `[warn] FIRECRAWL_API_KEY not set` | Set it or disable firecrawl in config. Web research still works via Context7 |
+| Interview loops forever | Say an exit phrase: "I'm done", "let's go", "proceed" |
+| Interview exits too early | Avoid accidental exit phrases. "Ready" and "begin" trigger exit |
+| Convergence loop stuck | Check `.agent-team/REQUIREMENTS.md` Review Log for what keeps failing. Consider reducing `escalation_threshold` |
+| Too expensive | Use `--depth quick`, disable unused agents, or use `sonnet` model for sub-agents |
+| `agent-team` command not found | Run `pip install -e .` again, or use `python -m agent_team` instead |
+| Wrong project directory | Use `--cwd /absolute/path/to/project` |
+
+---
 
 ## Testing
 
@@ -352,7 +769,7 @@ The test suite covers every module with unit, integration, and end-to-end tests.
 # Install dev dependencies
 pip install -e ".[dev]"
 
-# Run unit + integration tests
+# Run unit + integration tests (no API keys needed)
 pytest tests/ -v --tb=short
 
 # Run E2E tests (requires real API keys in environment)
@@ -401,6 +818,8 @@ The test suite explicitly verifies fixes for known bugs:
 | I7: Substring false match | `test_word_boundary_no_substring` | "adjustment" does not match "just" |
 | I11: Bold scope format | `test_markdown_bold` | `**Scope:** COMPLEX` parses correctly |
 
+---
+
 ## Architecture
 
 ```
@@ -423,6 +842,8 @@ src/agent_team/
 - **Wiring verification**: Architects produce a Wiring Map (WIRE-xxx entries) documenting every cross-file connection. Reviewers trace each connection from entry point to feature, flagging orphaned code.
 - **Transcript backup**: Interview exchanges are saved to `INTERVIEW_BACKUP.json` independently of Claude's file writes, so context is never lost.
 - **Word-boundary matching**: Depth detection and scope detection use `\b` regex boundaries to prevent false positives ("adjustment" won't match "just").
+
+---
 
 ## License
 
