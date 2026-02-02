@@ -16,6 +16,7 @@ from agent_team.cli import (
     _detect_backend,
     _detect_prd_from_task,
     _drain_interventions,
+    _extract_design_urls_from_interview,
     _handle_interrupt,
     _parse_args,
     _validate_url,
@@ -1069,3 +1070,75 @@ class TestCompletedPhasesPopulation:
         assert "interview" in state.completed_phases
         assert "constraints" in state.completed_phases
         assert "codebase_map" in state.completed_phases
+
+
+# ===================================================================
+# _extract_design_urls_from_interview()
+# ===================================================================
+
+class TestExtractDesignUrlsFromInterview:
+    def test_extracts_urls_from_design_reference_section(self):
+        doc = (
+            "## Understanding Summary\nSome text\n\n"
+            "## Design Reference\n"
+            "- https://stripe.com/pricing\n"
+            "- https://linear.app\n\n"
+            "## Milestones\nMore text"
+        )
+        urls = _extract_design_urls_from_interview(doc)
+        assert urls == ["https://stripe.com/pricing", "https://linear.app"]
+
+    def test_returns_empty_when_no_section(self):
+        doc = "## Understanding Summary\nSome text\n## Milestones\nMore text"
+        urls = _extract_design_urls_from_interview(doc)
+        assert urls == []
+
+    def test_deduplicates_urls(self):
+        doc = (
+            "## Design Reference\n"
+            "- https://stripe.com\n"
+            "- https://stripe.com\n"
+        )
+        urls = _extract_design_urls_from_interview(doc)
+        assert urls == ["https://stripe.com"]
+
+    def test_stops_at_next_section(self):
+        doc = (
+            "## Design Reference\n"
+            "- https://stripe.com\n\n"
+            "## Milestones\n"
+            "- https://other.com\n"
+        )
+        urls = _extract_design_urls_from_interview(doc)
+        assert urls == ["https://stripe.com"]
+        assert "https://other.com" not in urls
+
+    def test_handles_empty_section(self):
+        doc = (
+            "## Design Reference\n\n"
+            "## Milestones\nMore text"
+        )
+        urls = _extract_design_urls_from_interview(doc)
+        assert urls == []
+
+
+# ===================================================================
+# _build_resume_context() — design research skip signal
+# ===================================================================
+
+class TestBuildResumeContextDesignResearch:
+    def test_design_research_complete_in_resume_context(self):
+        from agent_team.state import RunState
+        from agent_team.cli import _build_resume_context
+        state = RunState(task="test")
+        state.artifacts["design_research_complete"] = "true"
+        ctx = _build_resume_context(state, "/tmp/fake")
+        assert "Design research is ALREADY COMPLETE" in ctx
+        assert "Do NOT re-scrape" in ctx
+
+    def test_no_design_research_flag_no_skip(self):
+        from agent_team.state import RunState
+        from agent_team.cli import _build_resume_context
+        state = RunState(task="test")
+        ctx = _build_resume_context(state, "/tmp/fake")
+        assert "Design research is ALREADY COMPLETE" not in ctx

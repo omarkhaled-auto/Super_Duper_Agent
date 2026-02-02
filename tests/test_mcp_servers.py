@@ -8,6 +8,7 @@ from agent_team.mcp_servers import (
     _firecrawl_server,
     get_mcp_servers,
     get_research_tools,
+    is_firecrawl_available,
 )
 
 
@@ -138,3 +139,30 @@ class TestGetResearchTools:
         assert "mcp__firecrawl__firecrawl_agent_status" in tools
         assert "mcp__context7__resolve-library-id" in tools
         assert "mcp__context7__query-docs" in tools
+
+
+# ===================================================================
+# is_firecrawl_available()
+# ===================================================================
+
+class TestIsFirecrawlAvailable:
+    def test_is_firecrawl_available_with_key(self, monkeypatch):
+        monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-test-key")
+        cfg = AgentTeamConfig()
+        assert is_firecrawl_available(cfg) is True
+
+    def test_is_firecrawl_available_no_key(self, monkeypatch):
+        monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
+        cfg = AgentTeamConfig()
+        assert is_firecrawl_available(cfg) is False
+
+    def test_is_firecrawl_available_disabled(self, monkeypatch):
+        monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-test-key")
+        cfg = AgentTeamConfig()
+        cfg.mcp_servers["firecrawl"] = MCPServerConfig(enabled=False)
+        assert is_firecrawl_available(cfg) is False
+
+    def test_is_firecrawl_available_missing_config(self):
+        cfg = AgentTeamConfig()
+        del cfg.mcp_servers["firecrawl"]
+        assert is_firecrawl_available(cfg) is False

@@ -12,6 +12,8 @@ from typing import Any
 
 from .config import AgentConfig, AgentTeamConfig, get_agent_counts
 from .mcp_servers import get_research_tools
+from .code_quality_standards import get_standards_for_agent
+from .ui_standards import load_ui_standards
 
 # ---------------------------------------------------------------------------
 # Orchestrator system prompt
@@ -58,9 +60,11 @@ Status: IN PROGRESS
 ## Research Findings
 <From research fleet — library docs, best practices, external references>
 
-## Design Reference
-<From research fleet — branding analysis, component patterns, screenshots from reference site(s).
-This section is populated ONLY if reference URLs were provided. Omit if not applicable.>
+## Design Standards & Reference
+<UI Design Standards are ALWAYS applied as baseline quality framework.
+If design reference URLs were provided, branding analysis from research fleet goes here —
+extracted values (colors, fonts, spacing) override the generic standards tokens.
+If NO reference URLs: apply standards with project-appropriate color/typography choices.>
 
 ## Architecture Decision
 <From architect fleet — chosen approach, file ownership map, interface contracts>
@@ -574,6 +578,10 @@ If your orchestrator message or REQUIREMENTS.md mentions design reference URLs:
 
 The orchestrator message will specify "Extraction depth" and "Max pages per site" — use those values.
 
+The orchestrator message will also specify "Cache TTL (maxAge)" — pass this value
+as the maxAge parameter on ALL firecrawl_scrape and firecrawl_map calls.
+Example: firecrawl_scrape(url, formats=["branding"], maxAge=7200000)
+
 ### Workflow by extraction depth:
 - **"branding"**: Only perform step 1c below (branding extraction). Skip screenshots and component analysis.
 - **"screenshots"**: Perform steps 1c and 1d (branding + screenshots). Skip deep component analysis.
@@ -645,11 +653,31 @@ Do NOT edit the Requirements Checklist in REQUIREMENTS.md -- only code-reviewer 
 6. Add **WIRE-xxx** requirements to the ### Wiring Requirements subsection — one per wiring point
 7. Add any TECH-xxx requirements you identify
 8. Update existing requirements if the architecture reveals they need refinement
-9. If a **Design Reference** section exists in REQUIREMENTS.md:
-   - Define design tokens based on extracted branding
-   - Map reference component patterns to the project's component architecture
-   - Specify which patterns to adopt vs. adapt vs. skip
-   - Design reference is a GUIDE — adapt to the project's framework and needs
+9. **Design System Architecture** (ALWAYS for UI-producing tasks):
+   - FIRST: Choose a bold aesthetic direction for this project (reference UI Design Standards
+     Section 2). A fintech dashboard is NOT a children's game is NOT a news site. Commit to
+     a specific design personality — do NOT default to "generic modern SaaS."
+   - Choose DISTINCTIVE typography. NEVER use Inter, Roboto, or Arial (see Standards Section 3
+     for alternatives by category). Pick one display font + one body font with high contrast.
+   - Define the project's design tokens. If a Design Standards & Reference section exists
+     in REQUIREMENTS.md with extracted branding, use those specific values. Otherwise, choose
+     values that match the aesthetic direction, structured following the standards' architecture
+     (primary/secondary/accent/neutral color roles, 8px spacing grid, modular type scale).
+   - Map tokens to the project's framework (Tailwind theme config, CSS custom properties, etc.).
+   - Define a component pattern library with ALL states specified: default, hover, focus,
+     active, disabled, loading, error, empty (see Standards Section 8).
+   - Reference the anti-patterns list (SLOP-001 through SLOP-015) — ensure the architecture
+     does NOT lead to any of these patterns. Pay special attention to SLOP-001 (purple default),
+     SLOP-002 (generic fonts), SLOP-003 (three-box cliche), and SLOP-013 (no visual hierarchy).
+   - If the project has an existing design system, EXTEND it rather than replacing it.
+10. **Code Architecture Quality** (ALWAYS):
+   - Architecture quality standards are appended to this prompt.
+   - Design error handling hierarchy upfront: define custom error types, which layer catches what.
+   - Dependencies flow ONE direction: UI → Application → Domain → Infrastructure. No circular imports.
+   - Design for N+1 avoidance from the start; pagination built into every list endpoint.
+   - Group by feature, not by type (/features/auth/ not /controllers/ + /models/ + /services/).
+   - External services behind interfaces (repository pattern, adapter pattern).
+   - Document caching strategy and async processing needs.
 
 ## Rules
 - The architecture must address ALL requirements in the checklist
@@ -698,12 +726,40 @@ Your job is to implement requirements from the Requirements Document, guided by 
 - REQUIREMENTS.md is READ-ONLY for code-writers — only reviewers may edit it
 - Do NOT modify TASKS.md — the orchestrator manages task status
 - When done, your task will be marked COMPLETE in TASKS.md by the orchestrator
-- If REQUIREMENTS.md has a **Design Reference** section:
-  - Apply the color palette, typography, and spacing as your starting point
-  - Follow described component patterns (cards, nav, CTAs, etc.)
-  - Treat as "inspired by" — adapt to the project's context
-  - Use the textual descriptions and component patterns written alongside screenshot URLs for visual guidance
-  - Implement DESIGN-xxx requirements like any other requirement
+- **UI Quality Standards** (ALWAYS for files producing UI output):
+  - Follow the UI Design Standards injected in the orchestrator context.
+    These are your quality baseline — every UI element must meet them.
+  - BEFORE writing UI code, check the architect's design direction. Every component
+    must fit that direction. A brutalist app uses sharp corners and mono fonts;
+    a luxury brand uses refined serif headings and generous whitespace.
+  - Use the spacing system (8px grid): never use arbitrary pixel values.
+  - Use DISTINCTIVE typography — NEVER Inter, Roboto, or Arial (see Standards Section 3).
+  - Use weight EXTREMES (100-200 for light, 800-900 for bold), not timid 400 vs 600.
+  - Structure colors by semantic role (primary, neutral, semantic states).
+    Primary color on max 10-15% of the screen. Neutral palette does 80% of the work.
+  - Check your output against the anti-patterns list (SLOP-001 to SLOP-015).
+    If you catch yourself writing `bg-indigo-500`, centering all text, making a
+    3-card grid, or using Inter — STOP and correct immediately.
+  - ALL interactive components need ALL states: default, hover, focus, active,
+    disabled, loading, error, empty. No static-only HTML.
+  - Write specific, human copy — not "unleash the power" marketing platitudes.
+    Error messages helpful. Empty states have personality. Buttons describe actions.
+  - If REQUIREMENTS.md has a **Design Standards & Reference** section with
+    extracted branding, use those specific values (hex colors, font families).
+  - If NO extracted branding: choose values matching the design direction,
+    structured per the standards' color/typography architecture.
+  - Implement DESIGN-xxx requirements like any other requirement.
+  - Apply framework-adaptive patterns from Section 12 of the standards.
+- **Code Quality Standards** (ALWAYS):
+  - Frontend and backend quality standards are appended to this prompt. Follow them.
+  - BEFORE writing code, check against the anti-patterns list for your domain.
+  - If you catch yourself writing an N+1 query (BACK-002), using `any` in TypeScript (FRONT-007),
+    defining components inside render functions (FRONT-001), or concatenating SQL strings (BACK-001) —
+    STOP and correct immediately.
+  - Every async operation needs error handling (try-catch with specific errors, not broad catch).
+  - Every function that takes external input needs validation (BACK-008).
+  - Every React component needs proper cleanup in useEffect (FRONT-005).
+  - Test your code mentally: what happens on null? empty? error? concurrent access?
 
 For shared files (files touched by multiple tasks), write INTEGRATION DECLARATIONS instead of editing directly. Format:
 ## Integration Declarations
@@ -788,6 +844,70 @@ Orphan detection catches the "built but forgot to wire" problem.
 
 If verification results are available in .agent-team/VERIFICATION.md, check them. Contract violations and test failures are blockers.
 
+## Design Quality Review (MANDATORY for UI-producing code)
+After reviewing functional requirements, perform a design quality sweep on all UI code:
+
+1. **Anti-Pattern Scan** (SLOP-001 through SLOP-015):
+   - [SLOP-001] Any `bg-indigo-*`, `bg-purple-*`, or `bg-violet-*` as primary when user didn't request it?
+   - [SLOP-002] Using Inter, Roboto, Arial, or system-ui as the ONLY font?
+   - [SLOP-003] Features section = 3 identical icon-title-description cards?
+   - [SLOP-004] All text center-aligned including body paragraphs?
+   - [SLOP-005] Hero section >= 100vh pushing content below fold?
+   - [SLOP-006] Drop shadows on 4+ different component types?
+   - [SLOP-007] Generic copy: "unleash", "transform", "next-generation", "empower"?
+   - [SLOP-008] Decorative floating orbs, mesh gradients, or noise as filler?
+   - [SLOP-009] Spacing values not on 4/8px grid (13px, 37px, etc.)?
+   - [SLOP-010] Font weights only 400 and 600, no extremes?
+   - [SLOP-011] Interactive components missing states (no error/loading/empty)?
+   - [SLOP-012] Same border-radius on all elements (no radius system)?
+   - [SLOP-013] Only font-size creates hierarchy (no weight/color/spacing variation)?
+   - [SLOP-014] Multi-color gradients on buttons, cards, AND backgrounds?
+   - [SLOP-015] Design looks identical regardless of project purpose?
+
+2. **Component State Completeness**: Interactive elements (buttons, inputs,
+   selects, links, cards) must have: default, hover, focus, active, disabled.
+   Forms must have: validation, error messages, required indicators.
+   Data views must have: loading skeleton, empty state, error state.
+
+3. **Typography Distinctiveness**: Are fonts distinctive and paired with
+   intention? Is there a clear type scale with contrast between heading/body?
+
+4. **Spacing Consistency**: All values on 8px grid. Consistent rhythm.
+
+5. **Color Architecture**: Colors structured by semantic role (primary,
+   neutral, semantic). Primary on max 10-15% of screen.
+
+6. **Accessibility**: WCAG AA contrast (4.5:1 body, 3:1 large). Focus
+   indicators. Semantic HTML. Form labels. Keyboard nav. Touch >= 44px.
+
+7. **Copy Quality**: Specific not generic. Helpful error messages.
+   Action-oriented buttons. Personality in empty states.
+
+If design quality issues found: Review Log entry with "DESIGN-QUALITY"
+item ID, FAIL verdict, list specific SLOP-xxx violations. BLOCKING.
+
+## Code Quality Review (MANDATORY for all code)
+After reviewing functional requirements and design quality, perform a code quality sweep:
+
+1. **Frontend Anti-Pattern Scan** (for React/Vue/frontend code):
+   Check FRONT-001 through FRONT-015 — especially FRONT-001 (components in render),
+   FRONT-003 (derived state), FRONT-005 (missing cleanup), FRONT-007 (any abuse).
+
+2. **Backend Anti-Pattern Scan** (for API/server/database code):
+   Check BACK-001 through BACK-015 — especially BACK-001 (SQL injection),
+   BACK-002 (N+1), BACK-006 (broken auth), BACK-008 (missing validation).
+
+3. **Review Priority**: Security → Correctness → Performance → Architecture → Testing → Style.
+   NEVER approve code with security issues just because it "works."
+
+4. **Severity Classification**: Every finding must be classified:
+   - CRITICAL/HIGH → BLOCKING (must fix)
+   - MEDIUM → Request changes (should fix)
+   - LOW → Comment (nice to fix)
+
+If code quality issues found: Review Log entry with "CODE-QUALITY" item ID,
+FAIL verdict, list specific FRONT-xxx or BACK-xxx violations. BLOCKING for CRITICAL/HIGH.
+
 REVIEW AUTHORITY:
 YOU are the ONLY agent authorized to mark requirement items [x] in REQUIREMENTS.md.
 No other agent (coder, debugger, architect) may do this.
@@ -819,6 +939,20 @@ Your job is to write and run tests that verify the requirements are implemented 
 - Test edge cases and error conditions
 - If a test fails, document exactly what failed and why
 - Do NOT mark testing items [x] if ANY test fails
+
+## Testing Quality Standards (ALWAYS APPLIED)
+Testing quality standards are appended to this prompt. Follow them.
+- Every test MUST have meaningful assertions — TEST-002 violations are grounds for rewrite.
+- Test BEHAVIOR, not implementation (TEST-003): test inputs → outputs, not internal method calls.
+- Include error path tests for every API endpoint: 400, 401, 403, 404, 500 (TEST-015).
+- Include boundary tests: null, empty, 0, negative, max value, unicode (TEST-001).
+- One behavior per test case; descriptive names that explain what's being tested (TEST-008).
+- Arrange-Act-Assert structure always; each section clearly identifiable.
+- Mock only external dependencies (APIs, DBs); use real internal code (TEST-004).
+- If you need 10+ mocks for a single test, flag the code as too coupled (TEST-011).
+- Run tests in isolation: no shared state between tests (TEST-007).
+- NEVER commit tests that depend on timing, execution order, or random data (TEST-006).
+- Prefer integration tests for cross-module features over unit tests with heavy mocking.
 """.strip()
 
 SECURITY_AUDITOR_PROMPT = r"""You are a SECURITY AUDITOR agent in the Agent Team system.
@@ -895,6 +1029,17 @@ REVIEW BOUNDARY:
 You CANNOT mark requirement items [x] in REQUIREMENTS.md — only the code-reviewer agents can.
 After you fix issues, the orchestrator MUST deploy a reviewer to verify your fixes.
 Focus on fixing the code, not on marking requirements as complete.
+
+## Debugging Methodology (ALWAYS APPLIED)
+Debugging quality standards are appended to this prompt. Follow them.
+- NEVER jump to code changes without understanding the root cause (DEBUG-004).
+- Follow the 6-step methodology: Reproduce → Hypothesize → Validate → Fix → Verify → Prevent.
+- EVERY bug fix MUST include a regression test (DEBUG-006). No exceptions.
+- Read the FULL stack trace and error context before forming hypotheses (DEBUG-007).
+- Check git history (recent changes) — the bug may be in a recent commit.
+- Fix the ROOT CAUSE, not the symptom (DEBUG-001). If X is null, find WHY it's null.
+- Run the FULL test suite after fixing to ensure no regressions (DEBUG-010).
+- Document your diagnosis: what was the root cause, why did it happen, how was it fixed.
 """.strip()
 
 TASK_ASSIGNER_PROMPT = r"""You are a TASK ASSIGNER agent in the Agent Team system.
@@ -1197,6 +1342,12 @@ def build_agent_definitions(
             for name in agents:
                 agents[name]["prompt"] = constraints_block + "\n\n" + agents[name]["prompt"]
 
+    # Inject code quality standards into relevant agent prompts
+    for name in agents:
+        quality_standards = get_standards_for_agent(name)
+        if quality_standards:
+            agents[name]["prompt"] = agents[name]["prompt"] + "\n\n" + quality_standards
+
     return agents
 
 
@@ -1245,6 +1396,18 @@ def build_orchestrator_prompt(
     for phase, (lo, hi) in agent_counts.items():
         parts.append(f"  {phase}: {lo}-{hi} agents")
 
+    # UI Design Standards injection (ALWAYS — baseline quality)
+    standards_content = load_ui_standards(config.design_reference.standards_file)
+    if standards_content:
+        parts.append(f"\n{standards_content}")
+        if design_reference_urls:
+            parts.append(
+                "\n[NOTE: Design Reference URLs are also provided below. "
+                "The extracted branding (colors, fonts, spacing values) OVERRIDES "
+                "the generic tokens above, but the structural principles, anti-patterns, "
+                "and quality standards STILL APPLY as the baseline framework.]"
+            )
+
     # Interview document injection
     if interview_doc:
         parts.append("\n[INTERVIEW DOCUMENT — User's requirements from Phase 0]")
@@ -1275,6 +1438,12 @@ def build_orchestrator_prompt(
         dr_config = config.design_reference
         parts.append(f"Extraction depth: {dr_config.depth}")
         parts.append(f"Max pages per site: {dr_config.max_pages_per_site}")
+        parts.append(f"Cache TTL (maxAge): {dr_config.cache_ttl_seconds * 1000} milliseconds")
+
+        if len(design_reference_urls) > 1:
+            parts.append("\n[DESIGN REFERENCE — URL ASSIGNMENT]")
+            parts.append("Assign each design reference URL to EXACTLY ONE researcher.")
+            parts.append("Do NOT assign the same URL to multiple researchers.")
 
     if prd_path:
         parts.append(f"\n[PRD MODE ACTIVE — PRD file: {prd_path}]")

@@ -151,6 +151,14 @@ class TestDesignReferenceConfigDefaults:
         c = DesignReferenceConfig()
         assert c.max_pages_per_site == 5
 
+    def test_cache_ttl_seconds_default(self):
+        c = DesignReferenceConfig()
+        assert c.cache_ttl_seconds == 7200
+
+    def test_standards_file_default_empty(self):
+        c = DesignReferenceConfig()
+        assert c.standards_file == ""
+
 
 class TestDisplayConfigDefaults:
     def test_show_cost(self):
@@ -537,6 +545,12 @@ class TestDesignReferenceFalsyValues:
         assert cfg.design_reference.max_pages_per_site == 10
 
 
+class TestDesignReferenceCacheTTL:
+    def test_design_reference_cache_ttl_from_yaml(self):
+        cfg = _dict_to_config({"design_reference": {"cache_ttl_seconds": 3600}})
+        assert cfg.design_reference.cache_ttl_seconds == 3600
+
+
 # ===================================================================
 # Enum validation (Findings #15, #16)
 # ===================================================================
@@ -878,3 +892,21 @@ class TestOrchestratorBackendConfig:
     def test_backend_invalid_raises(self):
         with pytest.raises(ValueError, match="orchestrator.backend"):
             _dict_to_config({"orchestrator": {"backend": "invalid"}})
+
+
+# ===================================================================
+# DesignReference standards_file wiring
+# ===================================================================
+
+class TestDesignReferenceStandardsFile:
+    def test_standards_file_from_yaml(self):
+        cfg = _dict_to_config({"design_reference": {"standards_file": "/path/to/custom.md"}})
+        assert cfg.design_reference.standards_file == "/path/to/custom.md"
+
+    def test_standards_file_default_when_absent(self):
+        cfg = _dict_to_config({"design_reference": {}})
+        assert cfg.design_reference.standards_file == ""
+
+    def test_standards_file_empty_string_preserved(self):
+        cfg = _dict_to_config({"design_reference": {"standards_file": ""}})
+        assert cfg.design_reference.standards_file == ""

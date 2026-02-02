@@ -145,6 +145,26 @@ def _validate_url(url: str) -> str:
     return url
 
 
+_URL_RE = re.compile(r'https?://[^\s<>\[\]()"\',;]+')
+
+
+def _extract_design_urls_from_interview(doc_content: str) -> list[str]:
+    """Extract URLs from the 'Design Reference' section of an interview doc."""
+    urls: list[str] = []
+    in_section = False
+    for line in doc_content.splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith("## design reference"):
+            in_section = True
+            continue
+        if in_section and stripped.startswith("## ") and "design reference" not in stripped.lower():
+            break
+        if in_section:
+            for match in _URL_RE.finditer(line):
+                urls.append(match.group(0).rstrip(".,;:!?)"))
+    return list(dict.fromkeys(urls))
+
+
 # ---------------------------------------------------------------------------
 # PRD detection
 # ---------------------------------------------------------------------------
@@ -673,7 +693,10 @@ def _subcommand_init() -> None:
         "  min_exchanges: 3\n\n"
         "display:\n"
         "  show_cost: true\n"
-        "  verbose: false\n",
+        "  verbose: false\n"
+        "\ndesign_reference:\n"
+        "  # standards_file: ./my-design-standards.md  # replace built-in UI standards\n"
+        "  # depth: full  # branding | screenshots | full\n",
         encoding="utf-8",
     )
     print_info("Created config.yaml with default settings.")
@@ -804,6 +827,11 @@ def _build_resume_context(state: object, cwd: str) -> str:
     lines.append("- Continue convergence from the first PENDING task in TASKS.md.")
     lines.append("- If REQUIREMENTS.md has unchecked items, resume the convergence loop.")
     lines.append("- Treat existing [x] items as already verified.")
+
+    artifacts = getattr(state, "artifacts", {})
+    if artifacts.get("design_research_complete") == "true":
+        lines.append("- Design research is ALREADY COMPLETE. Do NOT re-scrape design reference URLs.")
+        lines.append("  Use the existing Design Reference section in REQUIREMENTS.md as-is.")
 
     return "\n".join(lines)
 
@@ -974,6 +1002,24 @@ def main() -> None:
     design_ref_urls = [u for u in design_ref_urls if u and u.strip()]
     design_ref_urls = list(dict.fromkeys(design_ref_urls))  # deduplicate preserving order
 
+    if design_ref_urls:
+        from .mcp_servers import is_firecrawl_available
+        if not is_firecrawl_available(config):
+            print_warning(
+                "Design reference URLs provided but Firecrawl is unavailable "
+                "(FIRECRAWL_API_KEY not set or firecrawl disabled). "
+                "Researchers will fall back to WebFetch with less detail."
+            )
+
+    # Validate custom standards file if specified
+    if config.design_reference.standards_file:
+        standards_path = Path(config.design_reference.standards_file)
+        if not standards_path.is_file():
+            print_warning(
+                f"Custom standards file not found: {config.design_reference.standards_file}. "
+                f"Falling back to built-in UI design standards."
+            )
+
     # Resolve working directory
     cwd = args.cwd or os.getcwd()
 
@@ -1030,8 +1076,8 @@ def main() -> None:
         _current_state.artifacts["config_path"] = args.config
     if args.prd:
         _current_state.artifacts["prd_path"] = args.prd
-    if getattr(args, "design_ref", None):
-        _current_state.artifacts["design_ref_urls"] = ",".join(args.design_ref)
+    if design_ref_urls:
+        _current_state.artifacts["design_ref_urls"] = ",".join(design_ref_urls)
 
     # -------------------------------------------------------------------
     # Phase 0: Interview
@@ -1080,6 +1126,15 @@ def main() -> None:
         except Exception as exc:
             print_error(f"Interview failed: {exc}")
             print_info("Proceeding without interview context.")
+
+    if interview_doc:
+        interview_urls = _extract_design_urls_from_interview(interview_doc)
+        if interview_urls:
+            design_ref_urls.extend(interview_urls)
+            design_ref_urls = list(dict.fromkeys(design_ref_urls))
+            print_info(f"Extracted {len(interview_urls)} design reference URL(s) from interview")
+            # Update state with merged URLs
+            _current_state.artifacts["design_ref_urls"] = ",".join(design_ref_urls)
 
     _current_state.completed_phases.append("interview")
     _current_state.current_phase = "constraints"
@@ -1257,6 +1312,10 @@ def main() -> None:
         if _current_state:
             _current_state.completed_phases.append("orchestration")
             _current_state.current_phase = "post_orchestration"
+        if design_ref_urls and _current_state:
+            req_path = Path(cwd) / config.convergence.requirements_dir / config.convergence.requirements_file
+            if req_path.is_file() and "## Design Reference" in req_path.read_text(encoding="utf-8"):
+                _current_state.artifacts["design_research_complete"] = "true"
 
     finally:
         # Stop intervention queue

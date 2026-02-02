@@ -591,3 +591,254 @@ class TestBuildOrchestratorPromptDepthHandling:
         ctx_pos = prompt.index(ctx)
         task_pos = prompt.index("[TASK]")
         assert ctx_pos < task_pos
+
+
+# ===================================================================
+# build_orchestrator_prompt() — design reference cache & dedup
+# ===================================================================
+
+class TestDesignReferenceCacheAndDedup:
+    def test_prompt_contains_cache_ttl(self, default_config):
+        urls = ["https://stripe.com"]
+        prompt = build_orchestrator_prompt(
+            "task", "standard", default_config,
+            design_reference_urls=urls,
+        )
+        assert "Cache TTL (maxAge): 7200000 milliseconds" in prompt
+
+    def test_cache_ttl_in_milliseconds(self, default_config):
+        default_config.design_reference.cache_ttl_seconds = 3600
+        urls = ["https://stripe.com"]
+        prompt = build_orchestrator_prompt(
+            "task", "standard", default_config,
+            design_reference_urls=urls,
+        )
+        assert "Cache TTL (maxAge): 3600000 milliseconds" in prompt
+
+    def test_dedup_instruction_with_multiple_urls(self, default_config):
+        urls = ["https://stripe.com", "https://linear.app"]
+        prompt = build_orchestrator_prompt(
+            "task", "standard", default_config,
+            design_reference_urls=urls,
+        )
+        assert "URL ASSIGNMENT" in prompt
+        assert "EXACTLY ONE researcher" in prompt
+
+    def test_no_dedup_instruction_with_single_url(self, default_config):
+        urls = ["https://stripe.com"]
+        prompt = build_orchestrator_prompt(
+            "task", "standard", default_config,
+            design_reference_urls=urls,
+        )
+        assert "URL ASSIGNMENT" not in prompt
+
+
+# ===================================================================
+# UI Design Standards injection
+# ===================================================================
+
+class TestUIDesignStandardsInjection:
+    """Tests for built-in UI design standards in orchestrator + agent prompts."""
+
+    def test_always_contains_ui_standards(self, default_config):
+        prompt = build_orchestrator_prompt("build a landing page", "standard", default_config)
+        assert "UI DESIGN STANDARDS" in prompt
+        assert "SLOP-001" in prompt
+        assert "SLOP-015" in prompt
+
+    def test_ui_standards_with_design_refs(self, default_config):
+        urls = ["https://stripe.com"]
+        prompt = build_orchestrator_prompt("task", "standard", default_config, design_reference_urls=urls)
+        assert "UI DESIGN STANDARDS" in prompt
+        assert "DESIGN REFERENCE" in prompt
+        assert "OVERRIDES" in prompt
+
+    def test_ui_standards_before_design_refs(self, default_config):
+        urls = ["https://stripe.com"]
+        prompt = build_orchestrator_prompt("task", "standard", default_config, design_reference_urls=urls)
+        standards_pos = prompt.index("UI DESIGN STANDARDS")
+        ref_pos = prompt.index("[DESIGN REFERENCE")
+        assert standards_pos < ref_pos
+
+    def test_custom_standards_file_used(self, default_config, tmp_path):
+        custom = tmp_path / "my-standards.md"
+        custom.write_text("MY CUSTOM DESIGN RULES", encoding="utf-8")
+        default_config.design_reference.standards_file = str(custom)
+        prompt = build_orchestrator_prompt("build UI", "standard", default_config)
+        assert "MY CUSTOM DESIGN RULES" in prompt
+        assert "SLOP-001" not in prompt
+
+    def test_architect_has_design_system_architecture(self):
+        assert "Design System Architecture" in ARCHITECT_PROMPT
+
+    def test_code_writer_has_ui_quality_standards(self):
+        assert "UI Quality Standards" in CODE_WRITER_PROMPT
+
+    def test_code_reviewer_has_design_quality_review(self):
+        assert "Design Quality Review" in CODE_REVIEWER_PROMPT
+
+    def test_code_reviewer_has_anti_pattern_check(self):
+        assert "SLOP-001" in CODE_REVIEWER_PROMPT
+
+
+# ===================================================================
+# Code Quality Standards injection
+# ===================================================================
+
+class TestCodeQualityInjection:
+    """Tests that build_agent_definitions injects quality standards into the right agents."""
+
+    def test_code_writer_has_frontend_standards(self, default_config):
+        agents = build_agent_definitions(default_config, {})
+        assert "FRONT-001" in agents["code-writer"]["prompt"]
+        assert "BACK-001" in agents["code-writer"]["prompt"]
+
+    def test_code_reviewer_has_review_standards(self, default_config):
+        agents = build_agent_definitions(default_config, {})
+        assert "REVIEW-001" in agents["code-reviewer"]["prompt"]
+
+    def test_test_runner_has_testing_standards(self, default_config):
+        agents = build_agent_definitions(default_config, {})
+        assert "TEST-001" in agents["test-runner"]["prompt"]
+
+    def test_debugger_has_debugging_standards(self, default_config):
+        agents = build_agent_definitions(default_config, {})
+        assert "DEBUG-001" in agents["debugger"]["prompt"]
+
+    def test_architect_has_architecture_quality(self, default_config):
+        agents = build_agent_definitions(default_config, {})
+        assert "ARCHITECTURE QUALITY" in agents["architect"]["prompt"]
+
+    def test_planner_has_no_quality_standards(self, default_config):
+        agents = build_agent_definitions(default_config, {})
+        assert "FRONT-001" not in agents["planner"]["prompt"]
+        assert "BACK-001" not in agents["planner"]["prompt"]
+        assert "REVIEW-001" not in agents["planner"]["prompt"]
+        assert "TEST-001" not in agents["planner"]["prompt"]
+        assert "DEBUG-001" not in agents["planner"]["prompt"]
+
+    def test_researcher_has_no_quality_standards(self, default_config):
+        agents = build_agent_definitions(default_config, {})
+        assert "FRONT-001" not in agents["researcher"]["prompt"]
+
+    def test_task_assigner_has_no_quality_standards(self, default_config):
+        agents = build_agent_definitions(default_config, {})
+        assert "FRONT-001" not in agents["task-assigner"]["prompt"]
+
+    def test_security_auditor_has_no_quality_standards(self, default_config):
+        agents = build_agent_definitions(default_config, {})
+        assert "FRONT-001" not in agents["security-auditor"]["prompt"]
+        assert "TEST-001" not in agents["security-auditor"]["prompt"]
+
+    def test_quality_standards_after_constraints(self, default_config):
+        """Quality standards appended after constraints."""
+        constraints = [ConstraintEntry("Use Python 3.12", "requirement", "task", 1)]
+        agents = build_agent_definitions(default_config, {}, constraints=constraints)
+        prompt = agents["code-writer"]["prompt"]
+        constraint_pos = prompt.index("Python 3.12")
+        front_pos = prompt.index("FRONT-001")
+        assert constraint_pos < front_pos
+
+    def test_all_frontend_anti_patterns_in_code_writer(self, default_config):
+        agents = build_agent_definitions(default_config, {})
+        prompt = agents["code-writer"]["prompt"]
+        for i in range(1, 16):
+            code = f"FRONT-{i:03d}"
+            assert code in prompt, f"Missing {code} in code-writer prompt"
+
+    def test_all_backend_anti_patterns_in_code_writer(self, default_config):
+        agents = build_agent_definitions(default_config, {})
+        prompt = agents["code-writer"]["prompt"]
+        for i in range(1, 16):
+            code = f"BACK-{i:03d}"
+            assert code in prompt, f"Missing {code} in code-writer prompt"
+
+    def test_integration_agent_has_no_quality_standards(self):
+        """integration-agent (scheduler-only) gets no quality standards."""
+        from agent_team.config import SchedulerConfig
+        cfg = AgentTeamConfig(scheduler=SchedulerConfig(enabled=True))
+        agents = build_agent_definitions(cfg, {})
+        assert "integration-agent" in agents
+        assert "FRONT-001" not in agents["integration-agent"]["prompt"]
+        assert "REVIEW-001" not in agents["integration-agent"]["prompt"]
+
+    def test_contract_generator_has_no_quality_standards(self):
+        """contract-generator (verification-only) gets no quality standards."""
+        from agent_team.config import VerificationConfig
+        cfg = AgentTeamConfig(verification=VerificationConfig(enabled=True))
+        agents = build_agent_definitions(cfg, {})
+        assert "contract-generator" in agents
+        assert "FRONT-001" not in agents["contract-generator"]["prompt"]
+        assert "TEST-001" not in agents["contract-generator"]["prompt"]
+
+    def test_quality_standards_with_scheduler_enabled(self):
+        """Quality standards still injected when scheduler is enabled (10 agents)."""
+        from agent_team.config import SchedulerConfig
+        cfg = AgentTeamConfig(scheduler=SchedulerConfig(enabled=True))
+        agents = build_agent_definitions(cfg, {})
+        assert len(agents) == 10
+        assert "FRONT-001" in agents["code-writer"]["prompt"]
+        assert "REVIEW-001" in agents["code-reviewer"]["prompt"]
+
+    def test_quality_standards_with_both_enabled(self):
+        """Quality standards injected correctly with scheduler + verification (11 agents)."""
+        from agent_team.config import SchedulerConfig, VerificationConfig
+        cfg = AgentTeamConfig(
+            scheduler=SchedulerConfig(enabled=True),
+            verification=VerificationConfig(enabled=True),
+        )
+        agents = build_agent_definitions(cfg, {})
+        assert len(agents) == 11
+        # Quality agents still get standards
+        assert "FRONT-001" in agents["code-writer"]["prompt"]
+        assert "DEBUG-001" in agents["debugger"]["prompt"]
+        # Non-quality agents don't
+        assert "FRONT-001" not in agents["integration-agent"]["prompt"]
+        assert "FRONT-001" not in agents["contract-generator"]["prompt"]
+
+    def test_all_disabled_no_crash_from_injection(self):
+        """When all agents disabled, injection loop runs on empty dict without crash."""
+        cfg = AgentTeamConfig()
+        for name in cfg.agents:
+            cfg.agents[name] = AgentConfig(enabled=False)
+        agents = build_agent_definitions(cfg, {})
+        assert agents == {}
+
+    def test_empty_constraints_plus_standards(self):
+        """Empty constraints + standards: standards still injected, no constraints prefix."""
+        agents = build_agent_definitions(AgentTeamConfig(), {}, constraints=[])
+        prompt = agents["code-writer"]["prompt"]
+        assert "FRONT-001" in prompt
+        assert "USER CONSTRAINTS" not in prompt
+
+    def test_custom_model_does_not_affect_standards(self):
+        """Per-agent model config doesn't interfere with standards injection."""
+        cfg = AgentTeamConfig()
+        cfg.agents["code_writer"] = AgentConfig(model="sonnet")
+        agents = build_agent_definitions(cfg, {})
+        assert agents["code-writer"]["model"] == "sonnet"
+        assert "FRONT-001" in agents["code-writer"]["prompt"]
+        assert "BACK-001" in agents["code-writer"]["prompt"]
+
+
+# ===================================================================
+# Prompt strengthening
+# ===================================================================
+
+class TestPromptStrengthening:
+    """Tests that agent prompt constants have their strengthening sections."""
+
+    def test_architect_has_code_architecture_quality(self):
+        assert "Code Architecture Quality" in ARCHITECT_PROMPT
+
+    def test_code_writer_has_code_quality_standards(self):
+        assert "Code Quality Standards" in CODE_WRITER_PROMPT
+
+    def test_code_reviewer_has_code_quality_review(self):
+        assert "Code Quality Review" in CODE_REVIEWER_PROMPT
+
+    def test_test_runner_has_testing_quality_standards(self):
+        assert "Testing Quality Standards" in TEST_RUNNER_PROMPT
+
+    def test_debugger_has_debugging_methodology(self):
+        assert "Debugging Methodology" in DEBUGGER_PROMPT

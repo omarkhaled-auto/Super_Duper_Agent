@@ -200,8 +200,9 @@ Redirect agents mid-run without restarting.
 !! focus on the API, stop changing CSS
 ```
 
-**How:** Type `!!` followed by your message in the terminal while agents are running.
-**When:** Agents are going in the wrong direction and you want to course-correct immediately.
+**How:** Type `!!` followed by your message and press Enter while agents are running. Your message is queued in the background and sent to the orchestrator as a highest-priority follow-up when the current turn finishes.
+**When:** Agents are going in the wrong direction and you want to course-correct without restarting.
+**Note:** On Windows, the terminal may not show what you're typing while output is streaming — type anyway and press Enter. The system reads your input in the background.
 
 ---
 
@@ -320,6 +321,20 @@ agents:
 ```
 
 Available agents: `planner`, `researcher`, `architect`, `task_assigner`, `code_writer`, `code_reviewer`, `test_runner`, `security_auditor`, `debugger`
+
+### Built-in Quality Standards
+
+70 code quality anti-patterns are **always injected** into relevant agents — no configuration needed:
+
+| Agent | Standards Injected | Anti-Patterns |
+|-------|-------------------|---------------|
+| `code_writer` | Frontend + Backend | 30 (FRONT-001→015, BACK-001→015) |
+| `code_reviewer` | Code Review | 15 (REVIEW-001→015) |
+| `test_runner` | Testing | 15 (TEST-001→015) |
+| `debugger` | Debugging | 10 (DEBUG-001→010) |
+| `architect` | Architecture Quality | Quality rules (no numbered codes) |
+
+Other agents (planner, researcher, task_assigner, security_auditor) receive no quality standards.
 
 ---
 

@@ -75,3 +75,11 @@ def get_research_tools(servers: dict[str, Any]) -> list[str]:
             "mcp__context7__query-docs",
         ])
     return tools
+
+
+def is_firecrawl_available(config: AgentTeamConfig) -> bool:
+    """Check if Firecrawl MCP server is configured and has an API key."""
+    firecrawl_cfg = config.mcp_servers.get("firecrawl")
+    if not firecrawl_cfg or not firecrawl_cfg.enabled:
+        return False
+    return bool(os.environ.get("FIRECRAWL_API_KEY"))

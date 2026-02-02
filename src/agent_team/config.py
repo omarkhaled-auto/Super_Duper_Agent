@@ -85,6 +85,8 @@ class DesignReferenceConfig:
     urls: list[str] = field(default_factory=list)
     depth: str = "full"  # "branding" | "screenshots" | "full"
     max_pages_per_site: int = 5
+    cache_ttl_seconds: int = 7200  # 2 hours
+    standards_file: str = ""  # empty = built-in; path = custom file
 
 
 @dataclass
@@ -431,6 +433,8 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
             urls=dr.get("urls", cfg.design_reference.urls),
             depth=dr.get("depth", cfg.design_reference.depth),
             max_pages_per_site=dr.get("max_pages_per_site", cfg.design_reference.max_pages_per_site),
+            cache_ttl_seconds=dr.get("cache_ttl_seconds", cfg.design_reference.cache_ttl_seconds),
+            standards_file=dr.get("standards_file", cfg.design_reference.standards_file),
         )
 
         # Validate design_reference.depth enum value

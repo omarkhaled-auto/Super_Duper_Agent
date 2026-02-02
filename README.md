@@ -100,10 +100,10 @@ Interview → Codebase Map → Plan → Research → Architect → Contract → 
 | 3 | **Architect** | Designs solution, file ownership map, wiring map, interface contracts |
 | 4 | **Task Assigner** | Decomposes requirements into atomic tasks in `.agent-team/TASKS.md` |
 | 4.5 | **Smart Scheduler** | Builds dependency DAG, detects file conflicts, computes parallel execution waves |
-| 5 | **Code Writer** | Implements assigned tasks (non-overlapping files, reads from TASKS.md) |
-| 6 | **Code Reviewer** | Adversarial review — tries to break everything, marks items pass/fail |
-| 7 | **Debugger** | Fixes specific issues flagged by reviewers |
-| 8 | **Test Runner** | Writes and runs tests for each requirement |
+| 5 | **Code Writer** | Implements assigned tasks (non-overlapping files, reads from TASKS.md). Has 30 frontend + backend anti-patterns injected |
+| 6 | **Code Reviewer** | Adversarial review — tries to break everything, marks items pass/fail. Has 15 review anti-patterns injected |
+| 7 | **Debugger** | Fixes specific issues flagged by reviewers. Has 10 debugging anti-patterns + methodology injected |
+| 8 | **Test Runner** | Writes and runs tests for each requirement. Has 15 testing anti-patterns injected |
 | 9 | **Security Auditor** | OWASP checks, dependency audit, credential scanning |
 | 10 | **Progressive Verification** | 4-phase pipeline: contracts → lint → type check → tests |
 
@@ -401,13 +401,15 @@ Just write naturally — say "NEVER touch the database migrations" in your task 
 
 ## User Interventions
 
-If you need to redirect the agents mid-run, type a message prefixed with `!!` in the terminal:
+If you need to redirect the agents mid-run, type a message prefixed with `!!` and press Enter:
 
 ```
 !! stop changing the CSS, focus on the API endpoints
 ```
 
-The orchestrator will pause new agent deployments, read your intervention, adjust the plan, and resume. This lets you course-correct without restarting.
+Your message is queued in the background and sent to the orchestrator as a highest-priority follow-up when the current turn finishes. The orchestrator pauses new agent deployments, reads your intervention, adjusts the plan, and resumes. This lets you course-correct without restarting.
+
+> **Windows note:** The terminal may not visually show what you're typing while output is streaming. Type your `!! message` anyway and press Enter — the system reads input in the background.
 
 ---
 
@@ -952,21 +954,24 @@ tests/
 ├── test_config.py        # Dataclass defaults, detect_depth, get_agent_counts,
 │                         #   _deep_merge, _dict_to_config, enum validation,
 │                         #   falsy-value preservation, config propagation,
-│                         #   constraint extraction, DepthDetection (112 tests)
+│                         #   constraint extraction, DepthDetection (161 tests)
 ├── test_agents.py        # Prompt constants, build_agent_definitions,
 │                         #   build_orchestrator_prompt, per-agent model config,
 │                         #   naming consistency, template substitution,
-│                         #   convergence gates, constraint injection (69 tests)
+│                         #   convergence gates, constraint injection,
+│                         #   code quality standards injection, UI standards
+│                         #   injection, prompt strengthening (133 tests)
 ├── test_cli.py           # _detect_agent_count, _detect_prd_from_task, _parse_args,
 │                         #   _handle_interrupt, main(), mutual exclusion,
-│                         #   URL validation, build options, template vars (70 tests)
+│                         #   URL validation, build options, template vars,
+│                         #   subscription backend, resume subcommand (120 tests)
 ├── test_interviewer.py   # EXIT_PHRASES, _is_interview_exit (all 26 phrases parametrized),
 │                         #   _detect_scope, InterviewResult, run_interview,
-│                         #   _build_interview_options, phase helpers (66 tests)
+│                         #   _build_interview_options, phase helpers (102 tests)
 ├── test_display.py       # Smoke tests for all display functions including scheduler
-│                         #   and verification output + console configuration (46 tests)
+│                         #   and verification output + console configuration (50 tests)
 ├── test_mcp_servers.py   # _firecrawl_server, _context7_server, get_mcp_servers,
-│                         #   get_research_tools (18 tests)
+│                         #   get_research_tools (22 tests)
 ├── test_codebase_map.py  # File discovery, exports/imports extraction, framework
 │                         #   detection, role classification, import path resolution,
 │                         #   pyproject parsing, async map generation,
@@ -977,21 +982,29 @@ tests/
 ├── test_scheduler.py     # Task parsing, dependency graph, topological sort,
 │                         #   execution waves, file conflict detection, critical
 │                         #   path, file context, task context rendering,
-│                         #   config wiring (max_parallel, conflict_strategy) (101 tests)
+│                         #   config wiring (max_parallel, conflict_strategy) (106 tests)
 ├── test_verification.py  # Subprocess runner, verify_task_completion, automated
 │                         #   review phases, health computation, verification
-│                         #   summary output, blocking config wiring (44 tests)
+│                         #   summary output, blocking config wiring (46 tests)
 ├── test_state.py         # RunState, RunSummary, save/load state, atomic writes,
-│                         #   staleness detection (14 tests)
+│                         #   staleness detection (29 tests)
 ├── test_integration.py   # Cross-module pipelines: config→agents, depth→prompt,
 │                         #   MCP→researcher, interview→orchestrator, runtime
 │                         #   wiring for scheduler/contracts/verification,
-│                         #   config field wiring end-to-end (29 tests)
+│                         #   config field wiring end-to-end (31 tests)
+├── test_ui_standards.py  # UI design standards loading, custom standards file,
+│                         #   SLOP anti-pattern validation,
+│                         #   get_ui_design_standards() (25 tests)
+├── test_code_quality_standards.py
+│                         # Frontend/backend/review/testing/debugging/architecture
+│                         #   standards validation, anti-pattern completeness,
+│                         #   get_standards_for_agent(), agent mapping,
+│                         #   edge cases (empty/case/underscore) (49 tests)
 └── test_e2e.py           # Real API smoke tests: CLI --help/--version,
                           #   SDK client lifecycle, Firecrawl config (5 tests)
 ```
 
-**Total: 871 tests** — 866 unit/integration (always run) + 5 E2E (require `--run-e2e`).
+**Total: 1057 tests** — 1052 unit/integration (always run) + 5 E2E (require `--run-e2e`).
 
 ### Known Bug Verification
 
@@ -1026,7 +1039,9 @@ src/agent_team/
 ├── __main__.py          # python -m agent_team support
 ├── cli.py               # CLI parsing, subcommands, interview/orchestrator dispatch, budget tracking
 ├── config.py            # YAML config loading, depth detection, constraint extraction, fleet scaling
-├── agents.py            # 9 agent system prompts + orchestrator prompt builder + constraint injection
+├── agents.py            # 9 agent system prompts + orchestrator prompt builder + constraint/quality-standards injection
+├── code_quality_standards.py  # Non-configurable code quality standards (70 anti-patterns across 5 domains)
+├── ui_standards.py      # Built-in UI design standards (SLOP-001→015) + custom standards file support
 ├── interviewer.py       # Phase 0: 3-phase interactive interview with min-exchange enforcement
 ├── display.py           # Rich terminal output (banners, tables, progress, verification)
 ├── state.py             # Run state persistence: save/load STATE.json, atomic writes, staleness detection
@@ -1048,6 +1063,7 @@ src/agent_team/
 - **Contract verification**: Interface contracts (`CONTRACTS.json`) declare which symbols each module must export and how modules import from each other. Verification is deterministic and runs without LLM involvement.
 - **Progressive verification**: A 4-phase pipeline (contracts → lint → type check → tests) validates each completed task. Health is tracked as green/yellow/red across the project.
 - **Constraint propagation**: User constraints ("never", "must", "only") are extracted from task text and interview, then injected into every agent's system prompt with emphasis levels.
+- **Code quality standards**: 70 anti-patterns across 5 domains (Frontend, Backend, Code Review, Testing, Debugging) plus Architecture quality rules are automatically injected into relevant agent prompts. Non-configurable — always on, zero setup. Each agent receives only its domain-specific standards (e.g., code-writer gets Frontend + Backend, test-runner gets Testing).
 - **Convergence gates**: Only code-reviewer and test-runner agents can mark items `[x]`. Debug fixes require mandatory re-review. These rules are embedded in each agent's prompt.
 - **Smart scheduling**: Tasks are parsed into a DAG, file conflicts are detected and resolved via configurable strategies, execution waves are capped by `max_parallel_tasks`, and critical path analysis identifies bottleneck tasks.
 - **Type-safe enums**: Categorical config values (`depth`, `conflict_strategy`, `severity`, etc.) use `str, Enum` classes for both type safety and JSON/YAML serialization compatibility.
@@ -1064,6 +1080,8 @@ src/agent_team/
 ```
 cli.py ──────┬──→ config.py ──→ enums.py
              ├──→ agents.py ──→ config.py
+             │                ├──→ code_quality_standards.py
+             │                └──→ ui_standards.py
              ├──→ interviewer.py
              ├──→ display.py
              ├──→ state.py
