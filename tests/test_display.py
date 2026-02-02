@@ -17,7 +17,6 @@ from agent_team.display import (
     print_fleet_deployment,
     print_info,
     print_interview_end,
-    print_interview_prompt,
     print_interview_skip,
     print_interview_start,
     print_prd_mode,
@@ -25,11 +24,8 @@ from agent_team.display import (
     print_schedule_summary,
     print_task_start,
     print_user_intervention_needed,
-    print_verification_result,
     print_verification_summary,
     print_warning,
-    print_wave_complete,
-    print_wave_start,
 )
 
 
@@ -138,12 +134,6 @@ class TestDisplayEdgeCases:
         # Should not raise, and should truncate
         print_task_start(long_task, "standard")
 
-    def test_print_interview_prompt_eof(self):
-        """print_interview_prompt returns empty string on EOFError."""
-        with patch.object(console, "input", side_effect=EOFError):
-            result = print_interview_prompt()
-            assert result == ""
-
     def test_print_interactive_prompt_eof(self):
         from agent_team.display import print_interactive_prompt
         with patch.object(console, "input", side_effect=EOFError):
@@ -166,46 +156,6 @@ class TestSchedulerVerificationDisplay:
 
     def test_print_schedule_summary_zero_conflicts(self, capsys):
         print_schedule_summary(waves=1, conflicts=0)
-        captured = capsys.readouterr()
-        assert captured.out
-
-    def test_print_wave_start(self, capsys):
-        print_wave_start(wave_num=1, task_count=4)
-        captured = capsys.readouterr()
-        assert captured.out
-
-    def test_print_wave_start_large_wave(self, capsys):
-        print_wave_start(wave_num=10, task_count=25)
-        captured = capsys.readouterr()
-        assert captured.out
-
-    def test_print_wave_complete(self, capsys):
-        print_wave_complete(wave_num=1)
-        captured = capsys.readouterr()
-        assert captured.out
-
-    def test_print_wave_complete_high_wave(self, capsys):
-        print_wave_complete(wave_num=5)
-        captured = capsys.readouterr()
-        assert captured.out
-
-    def test_print_verification_result_pass(self, capsys):
-        print_verification_result(task_id="T1", status="pass")
-        captured = capsys.readouterr()
-        assert captured.out
-
-    def test_print_verification_result_fail(self, capsys):
-        print_verification_result(task_id="T2", status="fail")
-        captured = capsys.readouterr()
-        assert captured.out
-
-    def test_print_verification_result_partial(self, capsys):
-        print_verification_result(task_id="T3", status="partial")
-        captured = capsys.readouterr()
-        assert captured.out
-
-    def test_print_verification_result_unknown_status(self, capsys):
-        print_verification_result(task_id="T4", status="unknown")
         captured = capsys.readouterr()
         assert captured.out
 

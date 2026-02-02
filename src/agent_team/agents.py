@@ -13,7 +13,6 @@ from typing import Any
 from .config import AgentConfig, AgentTeamConfig, get_agent_counts
 from .mcp_servers import get_research_tools
 
-# Mapping from config underscore keys to SDK hyphenated names
 # ---------------------------------------------------------------------------
 # Orchestrator system prompt
 # ---------------------------------------------------------------------------

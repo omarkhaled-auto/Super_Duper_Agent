@@ -273,15 +273,6 @@ def print_interview_start(initial_task: str | None = None, min_exchanges: int | 
     console.print(Panel(content, border_style="magenta", title="Phase 0"))
 
 
-def print_interview_prompt() -> str:
-    """Print the interview prompt and return user input."""
-    console.print()
-    try:
-        return console.input("[bold magenta]you>[/] ")
-    except (EOFError, KeyboardInterrupt):
-        return ""
-
-
 def print_interview_end(exchange_count: int, scope: str, doc_path: str) -> None:
     """Print interview completion summary."""
     content = Text()
@@ -386,13 +377,6 @@ def print_depth_detection(detection: object) -> None:
         console.print(part)
 
 
-def print_intervention_hint() -> None:
-    """Print a hint about mid-run intervention capability."""
-    console.print(
-        "[dim]Tip: Type !! followed by your message to intervene during orchestration[/]"
-    )
-
-
 # ---------------------------------------------------------------------------
 # Scheduler phase
 # ---------------------------------------------------------------------------
@@ -406,34 +390,9 @@ def print_schedule_summary(waves: int, conflicts: int) -> None:
     console.print(Panel(content, border_style="cyan", title="Smart Scheduler"))
 
 
-def print_wave_start(wave_num: int, task_count: int) -> None:
-    """Print wave execution start."""
-    console.print()
-    console.print(
-        f"[bold cyan]=== Wave {wave_num} ===[/] "
-        f"[dim]({task_count} tasks in parallel)[/]"
-    )
-
-
-def print_wave_complete(wave_num: int) -> None:
-    """Print wave execution completion."""
-    console.print(f"[green]Wave {wave_num} complete.[/]")
-
-
 # ---------------------------------------------------------------------------
 # Verification phase
 # ---------------------------------------------------------------------------
-
-def print_verification_result(task_id: str, status: str) -> None:
-    """Print a single task's verification result."""
-    style_map = {
-        "pass": "bold green",
-        "fail": "bold red",
-        "partial": "bold yellow",
-    }
-    style = style_map.get(status, "white")
-    console.print(f"  [{style}]{status.upper()}[/] {task_id}")
-
 
 def print_verification_summary(state: dict) -> None:
     """Print the overall verification summary.

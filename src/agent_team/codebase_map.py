@@ -19,7 +19,7 @@ import os
 import re
 import sys
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from ._lang import _LANGUAGE_MAP as _CORE_LANGUAGE_MAP

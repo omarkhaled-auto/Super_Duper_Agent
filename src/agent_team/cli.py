@@ -637,11 +637,16 @@ def _subcommand_status() -> None:
 
 def _subcommand_resume() -> None:
     """Resume from STATE.json."""
-    from .state import load_state
+    from .state import is_stale, load_state
     state = load_state()
     if not state:
         print_error("No saved state found. Nothing to resume.")
         return
+    if is_stale(state, ""):
+        print_warning(
+            f"Saved state is from a different task: {state.task[:80]}\n"
+            "Run 'agent-team clean' to clear stale state, or re-run with the same task."
+        )
     print_info(f"Resuming run {state.run_id} — task: {state.task[:80]}")
     print_info(f"Last phase: {state.current_phase}")
     print_warning("Resume is not yet fully implemented. Please re-run with the same task.")
