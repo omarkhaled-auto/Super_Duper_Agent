@@ -24,16 +24,26 @@ agent-team --prd spec.md                              # Full app from PRD (auto 
 agent-team "redesign UI" --design-ref https://stripe.com  # Match a reference design
 ```
 
+**Manage your workspace:**
+
+```bash
+agent-team init                                      # Generate a starter config.yaml
+agent-team status                                    # Show .agent-team/ contents and run state
+agent-team clean                                     # Delete .agent-team/ directory (with confirmation)
+agent-team guide                                     # Print built-in usage guide
+agent-team --dry-run "add auth"                      # Preview depth, agents, config — no API calls
+```
+
 **Cheat sheet — pick a depth:**
 
 | Depth | Trigger | Agents | Use when |
 |-------|---------|--------|----------|
 | Quick | `"quick"`, `"fast"`, `"simple"` in task | 1-2 | Typo, one-file fix |
 | Standard | (default) | 2-5 | Normal feature, bug |
-| Thorough | `"thorough"`, `"deep"`, `"detailed"` in task | 3-8 | Multi-file feature, refactor |
-| Exhaustive | `--prd`, `"exhaustive"`, `"comprehensive"` in task | 5-10 | Full app, major system |
+| Thorough | `"thorough"`, `"refactor"`, `"redesign"`, `"deep"` in task | 3-8 | Multi-file feature, refactor |
+| Exhaustive | `--prd`, `"exhaustive"`, `"migrate"`, `"comprehensive"` in task | 5-10 | Full app, major system |
 
-**End the interview** by saying: `"I'm done"`, `"let's go"`, `"start building"`, `"ship it"`, `"lgtm"`, or `"proceed"`.
+**End the interview** by saying: `"I'm done"`, `"let's go"`, `"start building"`, `"ship it"`, `"lgtm"`, or `"proceed"`. The system will show a summary and ask you to confirm before finalizing.
 
 ---
 
@@ -49,12 +59,15 @@ agent-team "redesign UI" --design-ref https://stripe.com  # Match a reference de
   - [Task Type E: Using Design References](#task-type-e-using-design-references)
   - [Task Type F: Resuming with a Previous Interview](#task-type-f-resuming-with-a-previous-interview)
 - [The Interview Phase](#the-interview-phase)
+- [Constraint Extraction](#constraint-extraction)
+- [User Interventions](#user-interventions)
 - [What It Produces](#what-it-produces)
 - [Convergence Loop](#convergence-loop)
 - [Design Reference](#design-reference)
 - [Configuration](#configuration)
   - [Config Recipes](#config-recipes)
 - [CLI Reference](#cli-reference)
+  - [Subcommands](#subcommands)
 - [Practical Workflow Examples](#practical-workflow-examples)
 - [Depth Levels — Deep Dive](#depth-levels--deep-dive)
 - [Troubleshooting](#troubleshooting)
@@ -78,7 +91,8 @@ Interview → Codebase Map → Plan → Research → Architect → Contract → 
 
 | Phase | Agent | What It Does |
 |-------|-------|-------------|
-| 0 | **Interviewer** | Talks to you, asks clarifying questions, writes `.agent-team/INTERVIEW.md` |
+| 0 | **Interviewer** | Talks to you through 3 phases (Discovery → Refinement → Ready), writes `.agent-team/INTERVIEW.md` |
+| 0.25 | **Constraint Extractor** | Scans your task and interview for prohibitions, requirements, and scope limits — injects them into every agent |
 | 0.5 | **Codebase Map** | Analyzes project structure, detects languages/frameworks, maps dependencies |
 | 0.75 | **Contract Loading** | Loads `CONTRACTS.json` for interface verification (if enabled) |
 | 1 | **Planner** | Explores codebase, creates `.agent-team/REQUIREMENTS.md` with checklist |
@@ -314,6 +328,18 @@ This skips the live interview and feeds the existing document directly to the or
 
 The interview is **Phase 0** — it runs before any agents deploy. A good interview saves convergence cycles downstream.
 
+### Three Phases
+
+The interview progresses through structured phases based on exchange count:
+
+| Phase | When | What happens |
+|-------|------|-------------|
+| **Discovery** | First half of min exchanges | Interviewer explores your codebase with tools, asks clarifying questions, shows "My Current Understanding" |
+| **Refinement** | Second half of min exchanges | Deepens understanding, proposes approaches, shows "What I Propose" and "Remaining Questions" |
+| **Ready** | After min exchanges reached | Can finalize — shows "Final Understanding" and "Proposed Approach" |
+
+The system enforces a minimum number of exchanges (default: 3) before allowing finalization, so the interviewer always explores your codebase before writing the document.
+
 ### Starting
 
 ```bash
@@ -328,6 +354,7 @@ agent-team -i "build a task management app"    # Force interactive with seed
 - **Mention your stack.** "It's a Next.js 14 app with Supabase" gives the interviewer real context to explore.
 - **Let it explore your codebase.** If you're in an existing project directory, the interviewer uses Glob/Read/Grep to ask informed questions about your actual code.
 - **Don't rush.** 5-10 exchanges for a medium feature, 15-20 for a complex app. The document quality directly affects everything downstream.
+- **State constraints clearly.** Say things like "never change the database schema" or "must use the existing auth system" — these get extracted and enforced across all agents (see [Constraint Extraction](#constraint-extraction)).
 
 ### Ending the interview
 
@@ -337,12 +364,50 @@ Say any of these phrases (case-insensitive, punctuation ignored):
 
 **Negation is handled:** "I'm **not** done" and "don't proceed yet" will NOT end the interview.
 
+**Three-tier exit handling:**
+
+1. **Before minimum exchanges** — the system redirects you back with a summary of understanding gaps and focused questions, so nothing gets finalized too early.
+2. **After minimum exchanges** — the system shows a full summary of everything discussed and asks you to confirm ("Does this capture everything? Say **yes** to finalize").
+3. **After confirmation** — writes the final INTERVIEW.md document.
+
 ### Skipping the interview
 
 ```bash
 agent-team --no-interview "fix the login bug"               # Skip entirely
 agent-team --interview-doc .agent-team/INTERVIEW.md         # Use existing document
 ```
+
+---
+
+## Constraint Extraction
+
+When you write things like "never change the database schema" or "must use TypeScript" in your task or during the interview, the system automatically picks them up and injects them into every agent's prompt.
+
+### What gets extracted
+
+| Type | Trigger words | Example |
+|------|--------------|---------|
+| **Prohibition** | "never", "don't", "zero", "must not" | "Don't modify the API contract" |
+| **Requirement** | "must", "always", "required" | "Must use the existing auth middleware" |
+| **Scope limit** | "only", "just the", "limited to" | "Only change files in src/components/" |
+
+Constraints written in ALL CAPS or with emphasis words like "absolutely" or "critical" get higher priority. The system deduplicates across task text and interview document.
+
+### How to use
+
+Just write naturally — say "NEVER touch the database migrations" in your task or during the interview, and every agent will see it as a high-priority prohibition.
+
+---
+
+## User Interventions
+
+If you need to redirect the agents mid-run, type a message prefixed with `!!` in the terminal:
+
+```
+!! stop changing the CSS, focus on the API endpoints
+```
+
+The orchestrator will pause new agent deployments, read your intervention, adjust the plan, and resume. This lets you course-correct without restarting.
 
 ---
 
@@ -356,9 +421,10 @@ Agent Team creates a `.agent-team/` directory in your project:
 | `INTERVIEW_BACKUP.json` | JSON transcript backup of the interview |
 | `REQUIREMENTS.md` | Master checklist — the single source of truth |
 | `TASKS.md` | Atomic task breakdown with dependency graph |
-| `MASTER_PLAN.md` | Milestone plan (PRD mode only) |
+| `MASTER_PLAN.md` | Milestone plan (PRD mode only — name is configurable) |
 | `CONTRACTS.json` | Interface contracts for module exports and wiring |
 | `VERIFICATION.md` | Progressive verification summary (health status per task) |
+| `STATE.json` | Run state snapshot — saved on interrupt for potential resume |
 
 ### Requirements Checklist
 
@@ -405,6 +471,17 @@ The core mechanism that ensures quality:
    c. Escalation depth exceeded → asks YOU for guidance
 4. If all items pass → Testing Fleet → Security Audit → Done
 ```
+
+### Convergence Gates
+
+Four hard rules are enforced during the convergence loop to prevent quality shortcuts:
+
+| Gate | Rule |
+|------|------|
+| **Review authority** | Only code-reviewer and test-runner agents can mark checklist items `[x]`. Coders, debuggers, and architects cannot. |
+| **Mandatory re-review** | After every debug fix, a reviewer must verify the fix. Debug → Re-Review is non-negotiable. |
+| **Cycle reporting** | After every review cycle, the orchestrator reports "Cycle N: X/Y requirements complete (Z%)". |
+| **Depth ≠ thoroughness** | The depth level controls fleet size, not review quality. Even at Quick depth, reviews are thorough. |
 
 ### Escalation Protocol
 
@@ -457,21 +534,25 @@ config.yaml urls + --design-ref CLI + interview URLs
 
 ## Configuration
 
-Create `config.yaml` in your project root or `~/.agent-team/config.yaml`:
+Create `config.yaml` in your project root or `~/.agent-team/config.yaml`, or run `agent-team init` to generate a starter config.
 
 ```yaml
 orchestrator:
   model: "opus"           # Model for the orchestrator
   max_turns: 500          # Max agentic turns per session
+  max_budget_usd: null    # Cost cap — warns at 80%, stops at 100% (null = unlimited)
   permission_mode: "acceptEdits"
 
 depth:
   default: "standard"     # Default depth when no keywords detected
   auto_detect: true       # Detect depth from task keywords
   keyword_map:
-    quick: ["quick", "fast", "simple", "just"]
-    thorough: ["thorough", "carefully", "deep", "detailed"]
-    exhaustive: ["exhaustive", "comprehensive", "complete"]
+    quick: ["quick", "fast", "simple"]
+    thorough: ["thorough", "carefully", "deep", "detailed", "refactor",
+               "redesign", "restyle", "rearchitect", "overhaul",
+               "rewrite", "restructure", "revamp", "modernize"]
+    exhaustive: ["exhaustive", "comprehensive", "complete",
+                 "migrate", "migration", "replatform", "entire", "every", "whole"]
 
 convergence:
   max_cycles: 10                    # Max convergence loop iterations
@@ -479,12 +560,15 @@ convergence:
   max_escalation_depth: 2           # Max re-planning levels
   requirements_dir: ".agent-team"
   requirements_file: "REQUIREMENTS.md"
-  master_plan_file: "MASTER_PLAN.md"
+  master_plan_file: "MASTER_PLAN.md"  # Customizable — change to any filename
 
 interview:
-  enabled: true           # Run interview phase
-  model: "opus"           # Model for interviewer
-  max_exchanges: 50       # Max interview exchanges
+  enabled: true                        # Run interview phase
+  model: "opus"                        # Model for interviewer
+  max_exchanges: 50                    # Max interview exchanges
+  min_exchanges: 3                     # Minimum before allowing finalization
+  require_understanding_summary: true  # Force structured "My Understanding" sections
+  require_codebase_exploration: true   # Force tool use (Glob/Read/Grep) in Discovery phase
 
 design_reference:
   urls: []                # Reference website URLs for design inspiration
@@ -494,14 +578,21 @@ design_reference:
 codebase_map:
   enabled: true           # Analyze project structure before planning
   max_files: 5000         # Max files to scan
+  max_file_size_kb: 50    # Max file size (KB) for Python files
+  max_file_size_kb_ts: 100  # Max file size (KB) for TypeScript/JavaScript files
+  exclude_patterns: []    # Additional directories to exclude (merged with built-in defaults)
   timeout_seconds: 30.0   # Timeout for map generation
 
 scheduler:
-  enabled: true                     # Enable smart task scheduling
-  conflict_strategy: "wave_split"   # "wave_split" | "lock" | "merge"
+  enabled: true                              # Enable smart task scheduling
+  max_parallel_tasks: 5                      # Max tasks per execution wave
+  conflict_strategy: "artificial-dependency"  # How to resolve file conflicts between parallel tasks
+  enable_context_scoping: true               # Compute per-task file context
+  enable_critical_path: true                 # Compute critical path analysis
 
 verification:
   enabled: true                             # Enable progressive verification
+  blocking: true                            # true = failures are hard stops, false = failures become warnings
   run_lint: true                            # Run lint phase
   run_type_check: true                      # Run type-check phase
   run_tests: true                           # Run test phase
@@ -546,8 +637,8 @@ mcp_servers:
 display:
   show_cost: true
   show_tools: true
-  show_fleet_composition: true
-  show_convergence_status: true
+  show_fleet_composition: true    # Show agent fleet details during deployment
+  show_convergence_status: true   # Show convergence cycle progress
   verbose: false
 ```
 
@@ -555,6 +646,8 @@ display:
 
 **Cost-conscious (small tasks):**
 ```yaml
+orchestrator:
+  max_budget_usd: 5.0     # Hard cap at $5
 depth:
   default: "quick"
 convergence:
@@ -573,6 +666,15 @@ convergence:
   escalation_threshold: 2
 interview:
   max_exchanges: 100
+  min_exchanges: 5         # Force deeper exploration
+verification:
+  blocking: true           # Failures are hard stops
+```
+
+**Non-blocking verification (move fast, fix later):**
+```yaml
+verification:
+  blocking: false          # Failures become warnings instead of hard stops
 ```
 
 **Mixed models (save cost on sub-agents):**
@@ -611,9 +713,17 @@ design_reference:
 
 ```
 agent-team [TASK] [OPTIONS]
+agent-team <subcommand>
 
 Positional:
   TASK                    Task description (omit for interactive mode)
+
+Subcommands:
+  init                    Generate a starter config.yaml in the current directory
+  status                  Show .agent-team/ contents and saved run state
+  resume                  Resume from a saved STATE.json (experimental)
+  clean                   Delete .agent-team/ directory (asks for confirmation)
+  guide                   Print the built-in usage guide
 
 Options:
   --prd FILE              Path to a PRD file for full application build
@@ -626,6 +736,7 @@ Options:
   --no-interview          Skip the interview phase
   --interview-doc FILE    Use a pre-existing interview document (skips live interview)
   --design-ref URL [URL]  Reference website URL(s) for design inspiration
+  --dry-run               Show task analysis (depth, agents, config) without making API calls
   --progressive           Enable progressive verification pipeline (default)
   --no-progressive        Disable progressive verification
   --map-only              Run codebase map analysis and exit
@@ -637,6 +748,17 @@ Options:
 
 Note: `--progressive`/`--no-progressive` and `--map-only`/`--no-map` are mutually exclusive pairs.
 
+### Subcommands
+
+Run these without a task:
+
+```bash
+agent-team init       # Creates config.yaml with documented defaults
+agent-team status     # Lists files in .agent-team/, shows run ID and phase if STATE.json exists
+agent-team clean      # Deletes .agent-team/ — asks "Delete .agent-team/ directory? [y/N]" first
+agent-team guide      # Prints a quick reference of all commands and flags
+```
+
 ### Common patterns
 
 ```bash
@@ -645,11 +767,13 @@ agent-team                                    # Interactive (interview → orche
 agent-team "task"                             # Single-shot (auto-detect depth)
 agent-team -i "task"                          # Force interactive with seed
 agent-team --prd spec.md                      # PRD mode (exhaustive)
+agent-team --dry-run "task"                   # Preview what would happen (no API calls)
 
 # ---- Depth control ----
 agent-team --depth quick "task"               # Explicit quick
 agent-team "quick fix for the typo"           # Auto-detected quick
-agent-team "do a thorough review of auth"     # Auto-detected thorough
+agent-team "refactor the auth module"         # Auto-detected thorough (refactor keyword)
+agent-team "migrate to PostgreSQL"            # Auto-detected exhaustive (migrate keyword)
 agent-team --depth exhaustive "task"          # Explicit exhaustive
 
 # ---- Agent control ----
@@ -668,6 +792,11 @@ agent-team --design-ref https://stripe.com https://linear.app   # Multiple
 # ---- Project control ----
 agent-team --cwd /path/to/project "task"      # Set working directory
 agent-team --config custom.yaml "task"        # Custom config file
+
+# ---- Workspace management ----
+agent-team init                               # Generate starter config.yaml
+agent-team status                             # Check .agent-team/ state
+agent-team clean                              # Delete .agent-team/ directory
 
 # ---- Output control ----
 agent-team -v "task"                          # Verbose (show tool calls)
@@ -751,13 +880,15 @@ Depth is the single most important parameter. It controls how many agents deploy
 
 | Keyword in your task | Maps to |
 |---------------------|---------|
-| `quick`, `fast`, `simple`, `just` | Quick |
-| `thorough`, `thoroughly`, `careful`, `carefully`, `deep`, `detailed` | Thorough |
-| `exhaustive`, `exhaustively`, `comprehensive`, `comprehensively`, `complete` | Exhaustive |
+| `quick`, `fast`, `simple` | Quick |
+| `thorough`, `carefully`, `deep`, `detailed`, `refactor`, `redesign`, `restyle`, `rearchitect`, `overhaul`, `rewrite`, `restructure`, `revamp`, `modernize` | Thorough |
+| `exhaustive`, `comprehensive`, `complete`, `migrate`, `migration`, `replatform`, `entire`, `every`, `whole` | Exhaustive |
 
 When multiple keywords appear, the **most intensive** depth wins. "Quick but comprehensive" resolves to **Exhaustive**.
 
 Word-boundary matching prevents false positives — "adjustment" does NOT match "just".
+
+The system now shows you exactly which keywords were matched and why a depth was chosen (visible in terminal output).
 
 ### What each depth level does
 
@@ -778,11 +909,15 @@ Word-boundary matching prevents false positives — "adjustment" does NOT match 
 | Problem | Solution |
 |---------|----------|
 | `Error: ANTHROPIC_API_KEY not set` | `export ANTHROPIC_API_KEY=sk-ant-...` or add to `.env` |
+| `Configuration error: ...` | Check your config.yaml — the system now shows clean error messages for invalid configs (e.g., `min_exchanges > max_exchanges`) |
 | `[warn] FIRECRAWL_API_KEY not set` | Set it or disable firecrawl in config. Web research still works via Context7 |
-| Interview loops forever | Say an exit phrase: "I'm done", "let's go", "proceed" |
-| Interview exits too early | Avoid accidental exit phrases. "Ready" and "begin" trigger exit |
+| Interview won't let me finish | You haven't reached the minimum exchange count (default: 3). Answer a few more questions, then say "I'm done" |
+| Interview exits too early | Shouldn't happen anymore — the system now asks for confirmation before finalizing. If it still does, check `min_exchanges` in config |
 | Convergence loop stuck | Check `.agent-team/REQUIREMENTS.md` Review Log for what keeps failing. Consider reducing `escalation_threshold` |
-| Too expensive | Use `--depth quick`, disable unused agents, or use `sonnet` model for sub-agents |
+| Too expensive | Set `max_budget_usd` in config, use `--depth quick`, disable unused agents, or use `sonnet` model for sub-agents |
+| Want to preview before spending tokens | Use `--dry-run` to see depth, agents, and config without making any API calls |
+| Need to redirect agents mid-run | Type `!! your message` in the terminal to send a priority intervention |
+| Interrupted mid-run | State is auto-saved on Ctrl+C. Run `agent-team status` to see saved state |
 | `agent-team` command not found | Run `pip install -e .` again, or use `python -m agent_team` instead |
 | Wrong project directory | Use `--cwd /absolute/path/to/project` |
 
@@ -816,40 +951,47 @@ tests/
 ├── test_init.py          # Package exports and version (3 tests)
 ├── test_config.py        # Dataclass defaults, detect_depth, get_agent_counts,
 │                         #   _deep_merge, _dict_to_config, enum validation,
-│                         #   falsy-value preservation, config propagation (107 tests)
+│                         #   falsy-value preservation, config propagation,
+│                         #   constraint extraction, DepthDetection (112 tests)
 ├── test_agents.py        # Prompt constants, build_agent_definitions,
 │                         #   build_orchestrator_prompt, per-agent model config,
-│                         #   naming consistency, template substitution (63 tests)
+│                         #   naming consistency, template substitution,
+│                         #   convergence gates, constraint injection (69 tests)
 ├── test_cli.py           # _detect_agent_count, _detect_prd_from_task, _parse_args,
 │                         #   _handle_interrupt, main(), mutual exclusion,
-│                         #   URL validation, build options (63 tests)
+│                         #   URL validation, build options, template vars (70 tests)
 ├── test_interviewer.py   # EXIT_PHRASES, _is_interview_exit (all 26 phrases parametrized),
 │                         #   _detect_scope, InterviewResult, run_interview,
-│                         #   _build_interview_options (66 tests)
+│                         #   _build_interview_options, phase helpers (66 tests)
 ├── test_display.py       # Smoke tests for all display functions including scheduler
 │                         #   and verification output + console configuration (46 tests)
 ├── test_mcp_servers.py   # _firecrawl_server, _context7_server, get_mcp_servers,
 │                         #   get_research_tools (18 tests)
 ├── test_codebase_map.py  # File discovery, exports/imports extraction, framework
 │                         #   detection, role classification, import path resolution,
-│                         #   pyproject parsing, async map generation (118 tests)
+│                         #   pyproject parsing, async map generation,
+│                         #   config wiring (max_files, exclude_patterns) (125 tests)
 ├── test_contracts.py     # Module/wiring contract verification, symbol presence
 │                         #   (Python + TS), serialization, shared language
 │                         #   detection, file read error handling (50 tests)
 ├── test_scheduler.py     # Task parsing, dependency graph, topological sort,
 │                         #   execution waves, file conflict detection, critical
-│                         #   path, file context, task context rendering (93 tests)
+│                         #   path, file context, task context rendering,
+│                         #   config wiring (max_parallel, conflict_strategy) (101 tests)
 ├── test_verification.py  # Subprocess runner, verify_task_completion, automated
 │                         #   review phases, health computation, verification
-│                         #   summary output, truncation constants (38 tests)
+│                         #   summary output, blocking config wiring (44 tests)
+├── test_state.py         # RunState, RunSummary, save/load state, atomic writes,
+│                         #   staleness detection (14 tests)
 ├── test_integration.py   # Cross-module pipelines: config→agents, depth→prompt,
 │                         #   MCP→researcher, interview→orchestrator, runtime
-│                         #   wiring for scheduler/contracts/verification (25 tests)
+│                         #   wiring for scheduler/contracts/verification,
+│                         #   config field wiring end-to-end (29 tests)
 └── test_e2e.py           # Real API smoke tests: CLI --help/--version,
                           #   SDK client lifecycle, Firecrawl config (5 tests)
 ```
 
-**Total: 695 tests** — 690 unit/integration (always run) + 5 E2E (require `--run-e2e`).
+**Total: 871 tests** — 866 unit/integration (always run) + 5 E2E (require `--run-e2e`).
 
 ### Known Bug Verification
 
@@ -869,6 +1011,10 @@ The test suite explicitly verifies fixes for known bugs:
 | #10: CLI flag collision | `TestMutualExclusion` | `--progressive`/`--no-progressive` are mutually exclusive |
 | #17: Name duality | `TestAgentNamingConsistency` | Underscore config keys map to hyphenated SDK names |
 | #20: Template injection | `TestTemplateSubstitution` | `safe_substitute` handles missing vars gracefully |
+| Tier 3a: Off-by-one exit | `TestInterviewPhases` | Exit at exactly `min_exchanges` triggers confirmation, not redirect |
+| DepthDetection recursion | `TestDepthDetection` | `__getattr__` doesn't loop during `copy.deepcopy` or `pickle` |
+| O(n²) cost counting | `TestCostAccumulation` | Each `ResultMessage.total_cost_usd` counted exactly once |
+| Config validation crash | `TestDictToConfig` | `min_exchanges > max_exchanges` raises clean `ValueError` |
 
 ---
 
@@ -878,11 +1024,12 @@ The test suite explicitly verifies fixes for known bugs:
 src/agent_team/
 ├── __init__.py          # Package entry, version
 ├── __main__.py          # python -m agent_team support
-├── cli.py               # CLI parsing, interview/orchestrator dispatch, runtime wiring
-├── config.py            # YAML config loading, depth detection, fleet scaling
-├── agents.py            # 9 agent system prompts + orchestrator prompt builder
-├── interviewer.py       # Phase 0: interactive interview session
+├── cli.py               # CLI parsing, subcommands, interview/orchestrator dispatch, budget tracking
+├── config.py            # YAML config loading, depth detection, constraint extraction, fleet scaling
+├── agents.py            # 9 agent system prompts + orchestrator prompt builder + constraint injection
+├── interviewer.py       # Phase 0: 3-phase interactive interview with min-exchange enforcement
 ├── display.py           # Rich terminal output (banners, tables, progress, verification)
+├── state.py             # Run state persistence: save/load STATE.json, atomic writes, staleness detection
 ├── mcp_servers.py       # Firecrawl + Context7 MCP server configuration
 ├── _lang.py             # Shared language detection (Python, TS, JS, Go, Rust, etc.)
 ├── enums.py             # Type-safe enums (DepthLevel, TaskStatus, HealthStatus, etc.)
@@ -900,8 +1047,11 @@ src/agent_team/
 - **Wiring verification**: Architects produce a Wiring Map (WIRE-xxx entries) documenting every cross-file connection. Reviewers trace each connection from entry point to feature, flagging orphaned code.
 - **Contract verification**: Interface contracts (`CONTRACTS.json`) declare which symbols each module must export and how modules import from each other. Verification is deterministic and runs without LLM involvement.
 - **Progressive verification**: A 4-phase pipeline (contracts → lint → type check → tests) validates each completed task. Health is tracked as green/yellow/red across the project.
-- **Smart scheduling**: Tasks are parsed into a DAG, file conflicts are detected and resolved via configurable strategies (`wave_split`, `lock`, `merge`), and parallel execution waves are computed using topological sort.
+- **Constraint propagation**: User constraints ("never", "must", "only") are extracted from task text and interview, then injected into every agent's system prompt with emphasis levels.
+- **Convergence gates**: Only code-reviewer and test-runner agents can mark items `[x]`. Debug fixes require mandatory re-review. These rules are embedded in each agent's prompt.
+- **Smart scheduling**: Tasks are parsed into a DAG, file conflicts are detected and resolved via configurable strategies, execution waves are capped by `max_parallel_tasks`, and critical path analysis identifies bottleneck tasks.
 - **Type-safe enums**: Categorical config values (`depth`, `conflict_strategy`, `severity`, etc.) use `str, Enum` classes for both type safety and JSON/YAML serialization compatibility.
+- **State persistence**: Run state (task, depth, phase, cost) is saved to `STATE.json` on interrupt via atomic file writes (`tempfile` + `os.replace`), preventing corruption if the process dies mid-write.
 - **Template safety**: Orchestrator prompt variables use `string.Template.safe_substitute()` — unmatched `$vars` are left intact instead of crashing.
 - **Subprocess security**: All external commands (`lint`, `type check`, `test`) use `asyncio.create_subprocess_exec` (not `shell`), preventing shell injection. Command lists are constructed from hardcoded strings only.
 - **Path traversal protection**: Import path resolution in codebase mapping validates resolved paths stay within the project root.
@@ -916,6 +1066,7 @@ cli.py ──────┬──→ config.py ──→ enums.py
              ├──→ agents.py ──→ config.py
              ├──→ interviewer.py
              ├──→ display.py
+             ├──→ state.py
              ├──→ mcp_servers.py
              ├──→ codebase_map.py ──→ _lang.py
              ├──→ contracts.py ────→ _lang.py
@@ -936,7 +1087,8 @@ The following security properties are maintained:
 | Template variables | `string.Template.safe_substitute` — no crash on missing vars |
 | File path resolution | `Path.resolve()` + `startswith()` bounds checking |
 | API key handling | Keys read from environment only, never logged or included in prompts |
-| Signal handling | Thread-safe under CPython GIL, graceful SIGINT with escalation |
+| Signal handling | Thread-safe under CPython GIL, first Ctrl+C warns, second saves state and exits |
+| State file writes | Atomic via `tempfile.mkstemp` + `os.replace` — no corruption on crash |
 
 ---
 
