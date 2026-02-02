@@ -498,3 +498,43 @@ class TestRunAutomatedReviewPhases:
         )
         # No config files -> no tools detected -> empty results
         assert results == []
+
+
+# ===================================================================
+# Post-orchestration verification integration
+# ===================================================================
+
+
+class TestPostOrchestrationVerification:
+    """Integration tests for the verification pipeline wiring."""
+
+    def test_state_populated_after_update(self):
+        state = ProgressiveVerificationState()
+        result = TaskVerificationResult(
+            task_id="post-orchestration",
+            contracts_passed=True,
+            lint_passed=True,
+            type_check_passed=True,
+            tests_passed=True,
+            overall="pass",
+        )
+        update_verification_state(state, result)
+        assert "post-orchestration" in state.completed_tasks
+        assert state.overall_health == "green"
+
+    def test_summary_has_table_row(self, tmp_path):
+        state = ProgressiveVerificationState()
+        result = TaskVerificationResult(
+            task_id="post-orchestration",
+            contracts_passed=True,
+            lint_passed=True,
+            type_check_passed=True,
+            tests_passed=True,
+            overall="pass",
+        )
+        update_verification_state(state, result)
+        out = tmp_path / "VERIFICATION.md"
+        write_verification_summary(state, out)
+        content = out.read_text()
+        assert "post-orchestration" in content
+        assert "PASS" in content

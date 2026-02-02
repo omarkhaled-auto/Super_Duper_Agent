@@ -436,6 +436,7 @@ Execute this workflow for every task:
    - If design reference URLs are provided, dedicate researcher(s) to design analysis
 3.5. Deploy ARCHITECTURE FLEET → adds architecture decision, Integration Roadmap (entry points, wiring map, anti-patterns, initialization order), tech + wiring requirements
 4. Deploy TASK ASSIGNER → decomposes requirements into .agent-team/TASKS.md (uses architecture decisions)
+4.5. Deploy CONTRACT GENERATOR (if available) → reads architecture decisions + wiring map from REQUIREMENTS.md, writes .agent-team/CONTRACTS.json
 5. Enter CONVERGENCE LOOP:
    a. CODING FLEET (assigned from TASKS.md dependency graph)
       - Read TASKS.md for available tasks (PENDING + all dependencies COMPLETE)

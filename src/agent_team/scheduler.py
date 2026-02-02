@@ -276,6 +276,52 @@ def parse_tasks_md(content: str) -> list[TaskNode]:
     return tasks
 
 
+def update_tasks_md_statuses(
+    content: str,
+    completed_ids: set[str] | None = None,
+) -> str:
+    """Update task statuses in TASKS.md content.
+
+    For each ``### TASK-xxx`` block, if the task ID is in *completed_ids*
+    (or *completed_ids* is ``None`` meaning mark ALL complete), the
+    ``- Status: PENDING`` line is replaced with ``- Status: COMPLETE``.
+
+    Returns the updated Markdown string.  Non-task content is preserved
+    verbatim.
+    """
+    if completed_ids is not None and not completed_ids:
+        return content  # empty set → nothing to update
+
+    lines = content.split("\n")
+    current_task_id: str | None = None
+    result: list[str] = []
+
+    for line in lines:
+        # Detect task header (### TASK-001: ...)
+        stripped = line.strip()
+        if stripped.startswith("###"):
+            id_match = RE_TASK_ID.match(stripped)
+            if id_match:
+                current_task_id = id_match.group(1)
+
+        # Replace status line if task should be marked complete
+        if current_task_id is not None:
+            status_match = RE_STATUS.match(stripped)
+            if status_match:
+                old_status = status_match.group(1).upper()
+                should_update = (
+                    completed_ids is None or current_task_id in completed_ids
+                )
+                if should_update and old_status == "PENDING":
+                    line = line.replace(
+                        status_match.group(1), "COMPLETE"
+                    )
+
+        result.append(line)
+
+    return "\n".join(result)
+
+
 # ---------------------------------------------------------------------------
 # Dependency graph construction
 # ---------------------------------------------------------------------------

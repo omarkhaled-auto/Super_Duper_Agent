@@ -116,6 +116,9 @@ class TestPromptConstants:
     def test_code_reviewer_has_verification_awareness(self):
         assert "VERIFICATION.md" in CODE_REVIEWER_PROMPT
 
+    def test_orchestrator_has_contract_generator_step(self):
+        assert "CONTRACT GENERATOR" in ORCHESTRATOR_SYSTEM_PROMPT
+
 
 # ===================================================================
 # build_agent_definitions()

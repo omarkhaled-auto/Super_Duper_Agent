@@ -669,6 +669,24 @@ def main() -> None:
         ))
 
     # -------------------------------------------------------------------
+    # Post-orchestration: Update TASKS.md statuses
+    # -------------------------------------------------------------------
+    if config.scheduler.enabled:
+        try:
+            from .scheduler import update_tasks_md_statuses
+
+            tasks_path = (
+                Path(cwd) / config.convergence.requirements_dir / "TASKS.md"
+            )
+            if tasks_path.is_file():
+                old_content = tasks_path.read_text(encoding="utf-8")
+                new_content = update_tasks_md_statuses(old_content)
+                tasks_path.write_text(new_content, encoding="utf-8")
+                print_info("TASKS.md statuses updated to COMPLETE.")
+        except Exception as exc:
+            print_warning(f"Task status update failed: {exc}")
+
+    # -------------------------------------------------------------------
     # Post-orchestration: Verification (if enabled)
     # -------------------------------------------------------------------
     if config.verification.enabled and contract_registry is not None:
@@ -676,6 +694,8 @@ def main() -> None:
             from .contracts import verify_all_contracts
             from .verification import (
                 ProgressiveVerificationState,
+                update_verification_state,
+                verify_task_completion,
                 write_verification_summary,
             )
 
@@ -685,19 +705,32 @@ def main() -> None:
             )
             print_info("Running post-orchestration verification...")
 
-            # Verify contracts against current project state
+            # Phase 1: Verify contracts against current project state
             vr = verify_all_contracts(contract_registry, Path(cwd))
             if not vr.passed:
                 for v in vr.violations:
                     print_contract_violation(v.description)
 
-            # Write verification summary to disk
+            # Phase 2-4: Run full verification pipeline
+            result = asyncio.run(verify_task_completion(
+                task_id="post-orchestration",
+                project_root=Path(cwd),
+                registry=contract_registry,
+                run_lint=config.verification.run_lint,
+                run_type_check=config.verification.run_type_check,
+                run_tests=config.verification.run_tests,
+            ))
+
+            # Build state and write summary
             state = ProgressiveVerificationState()
+            update_verification_state(state, result)
             write_verification_summary(state, verification_path)
 
             print_verification_summary({
-                "overall_health": "green" if vr.passed else "red",
-                "completed_tasks": {"contracts": "pass" if vr.passed else "fail"},
+                "overall_health": state.overall_health,
+                "completed_tasks": {
+                    result.task_id: result.overall,
+                },
             })
         except Exception as exc:
             print_warning(f"Post-orchestration verification failed: {exc}")

@@ -1108,3 +1108,56 @@ class TestRenderTaskContextMd:
         ctx = build_task_context(task)
         md = render_task_context_md(ctx)
         assert "Interface Contracts" not in md
+
+
+# ===================================================================
+# update_tasks_md_statuses()
+# ===================================================================
+
+
+class TestUpdateTasksMdStatuses:
+    """Tests for update_tasks_md_statuses()."""
+
+    def test_marks_all_complete_when_no_ids(self):
+        from agent_team.scheduler import update_tasks_md_statuses
+
+        md = (
+            "### TASK-001: Types\n- Status: PENDING\n"
+            "### TASK-002: Store\n- Status: PENDING\n"
+        )
+        result = update_tasks_md_statuses(md)
+        assert "PENDING" not in result
+        assert result.count("COMPLETE") == 2
+
+    def test_marks_specific_ids_only(self):
+        from agent_team.scheduler import update_tasks_md_statuses
+
+        md = (
+            "### TASK-001: Types\n- Status: PENDING\n"
+            "### TASK-002: Store\n- Status: PENDING\n"
+        )
+        result = update_tasks_md_statuses(md, completed_ids={"TASK-001"})
+        assert result.count("COMPLETE") == 1
+        assert "PENDING" in result
+
+    def test_empty_set_returns_unchanged(self):
+        from agent_team.scheduler import update_tasks_md_statuses
+
+        md = "### TASK-001: Types\n- Status: PENDING\n"
+        result = update_tasks_md_statuses(md, completed_ids=set())
+        assert result == md
+
+    def test_preserves_non_task_content(self):
+        from agent_team.scheduler import update_tasks_md_statuses
+
+        md = "# Tasks\nPreamble text\n### TASK-001: Types\n- Status: PENDING\n"
+        result = update_tasks_md_statuses(md)
+        assert "# Tasks" in result
+        assert "Preamble text" in result
+
+    def test_already_complete_stays_complete(self):
+        from agent_team.scheduler import update_tasks_md_statuses
+
+        md = "### TASK-001: Types\n- Status: COMPLETE\n"
+        result = update_tasks_md_statuses(md)
+        assert result.count("COMPLETE") == 1
