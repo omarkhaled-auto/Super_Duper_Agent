@@ -168,8 +168,10 @@ def print_completion(task: str, total_cycles: int, total_cost: float | None) -> 
     content.append("TASK COMPLETE\n\n", style="bold green")
     content.append(f"Task: {task[:100]}\n", style="white")
     content.append(f"Convergence cycles: {total_cycles}\n", style="white")
-    if total_cost is not None:
+    if total_cost is not None and total_cost > 0:
         content.append(f"Total cost: ${total_cost:.4f}\n", style="white")
+    elif total_cost is None:
+        content.append("Cost: included in subscription\n", style="dim")
 
     console.print()
     console.print(Panel(content, border_style="green", title="Complete"))
@@ -484,13 +486,14 @@ def print_intervention_hint() -> None:
 # Run summary
 # ---------------------------------------------------------------------------
 
-def print_run_summary(summary) -> None:
+def print_run_summary(summary, backend: str = "api") -> None:
     """Print a comprehensive run summary.
 
     Args:
         summary: A RunSummary-like object with task, depth, total_cost,
                  cycle_count, requirements_passed, requirements_total,
                  and files_changed attributes.
+        backend: Authentication backend ("api" or "cli").
     """
     task = getattr(summary, "task", "")
     depth = getattr(summary, "depth", "standard")
@@ -508,7 +511,9 @@ def print_run_summary(summary) -> None:
     if req_total > 0:
         pct = req_passed / req_total * 100
         content.append(f"Requirements: {req_passed}/{req_total} ({pct:.0f}%)\n", style="white")
-    if total_cost > 0:
+    if backend == "cli":
+        content.append("Cost: included in subscription\n", style="dim")
+    elif total_cost > 0:
         content.append(f"Total cost: ${total_cost:.4f}\n", style="white")
     if files_changed:
         content.append(f"Files changed: {len(files_changed)}\n", style="white")

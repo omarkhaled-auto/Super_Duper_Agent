@@ -24,6 +24,7 @@ from agent_team.display import (
     print_prd_mode,
     print_resume_banner,
     print_review_results,
+    print_run_summary,
     print_schedule_summary,
     print_task_start,
     print_user_intervention_needed,
@@ -232,3 +233,61 @@ class TestResumeBannerDisplay:
         print_resume_banner(state)
         captured = capsys.readouterr()
         assert captured.out
+
+
+# ===================================================================
+# Subscription / CLI backend display
+# ===================================================================
+
+class TestSubscriptionDisplay:
+    """Tests for subscription mode display (cost=None or $0)."""
+
+    def test_print_completion_none_cost_shows_subscription(self, capsys):
+        """cost=None shows 'included in subscription' instead of $0."""
+        print_completion("fix bug", 3, None)
+        captured = capsys.readouterr()
+        assert "subscription" in captured.out
+
+    def test_print_completion_zero_cost_hides_cost(self, capsys):
+        """cost=0.0 should not show '$0.0000'."""
+        print_completion("fix bug", 3, 0.0)
+        captured = capsys.readouterr()
+        assert "$0.0000" not in captured.out
+
+    def test_print_completion_positive_cost_shows_dollars(self, capsys):
+        """Positive cost still shows dollar amount."""
+        print_completion("fix bug", 3, 1.5)
+        captured = capsys.readouterr()
+        assert "$1.5000" in captured.out
+
+    def test_print_run_summary_cli_backend(self, capsys):
+        """backend='cli' shows 'subscription' instead of cost."""
+        from agent_team.state import RunSummary
+        summary = RunSummary(task="fix bug", depth="standard", total_cost=0.0)
+        print_run_summary(summary, backend="cli")
+        captured = capsys.readouterr()
+        assert "subscription" in captured.out
+
+    def test_print_run_summary_api_backend_with_cost(self, capsys):
+        """backend='api' with cost shows dollar amount."""
+        from agent_team.state import RunSummary
+        summary = RunSummary(task="fix bug", depth="standard", total_cost=2.5)
+        print_run_summary(summary, backend="api")
+        captured = capsys.readouterr()
+        assert "$2.5000" in captured.out
+
+    def test_print_run_summary_api_backend_zero_cost(self, capsys):
+        """backend='api' with zero cost omits cost line."""
+        from agent_team.state import RunSummary
+        summary = RunSummary(task="fix bug", depth="standard", total_cost=0.0)
+        print_run_summary(summary, backend="api")
+        captured = capsys.readouterr()
+        assert "subscription" not in captured.out
+
+    def test_print_run_summary_default_backend_is_api(self, capsys):
+        """Default backend parameter is 'api'."""
+        from agent_team.state import RunSummary
+        summary = RunSummary(task="fix bug", depth="standard", total_cost=0.0)
+        print_run_summary(summary)  # no backend kwarg
+        captured = capsys.readouterr()
+        assert "subscription" not in captured.out

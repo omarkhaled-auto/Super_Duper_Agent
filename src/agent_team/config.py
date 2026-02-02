@@ -20,6 +20,7 @@ class OrchestratorConfig:
     max_turns: int = 500
     permission_mode: str = "acceptEdits"
     max_budget_usd: float | None = None
+    backend: str = "auto"  # "auto" | "api" | "cli"
 
 
 @dataclass
@@ -378,11 +379,18 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
 
     if "orchestrator" in data:
         o = data["orchestrator"]
+        backend = o.get("backend", cfg.orchestrator.backend)
+        if backend not in ("auto", "api", "cli"):
+            raise ValueError(
+                f"Invalid orchestrator.backend: {backend!r}. "
+                f"Must be one of: auto, api, cli"
+            )
         cfg.orchestrator = OrchestratorConfig(
             model=o.get("model", cfg.orchestrator.model),
             max_turns=o.get("max_turns", cfg.orchestrator.max_turns),
             permission_mode=o.get("permission_mode", cfg.orchestrator.permission_mode),
             max_budget_usd=o.get("max_budget_usd", cfg.orchestrator.max_budget_usd),
+            backend=backend,
         )
 
     if "depth" in data:

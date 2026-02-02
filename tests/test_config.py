@@ -852,3 +852,29 @@ class TestConfigPropagationToRuntime:
         assert cfg.orchestrator.max_budget_usd == 42.5
         assert cfg.convergence.max_cycles == 20
         assert cfg.convergence.master_plan_file == "CUSTOM_PLAN.md"
+
+
+# ===================================================================
+# OrchestratorConfig.backend
+# ===================================================================
+
+class TestOrchestratorBackendConfig:
+    def test_backend_default_auto(self):
+        c = OrchestratorConfig()
+        assert c.backend == "auto"
+
+    def test_backend_from_yaml(self):
+        cfg = _dict_to_config({"orchestrator": {"backend": "cli"}})
+        assert cfg.orchestrator.backend == "cli"
+
+    def test_backend_api_from_yaml(self):
+        cfg = _dict_to_config({"orchestrator": {"backend": "api"}})
+        assert cfg.orchestrator.backend == "api"
+
+    def test_backend_auto_from_yaml(self):
+        cfg = _dict_to_config({"orchestrator": {"backend": "auto"}})
+        assert cfg.orchestrator.backend == "auto"
+
+    def test_backend_invalid_raises(self):
+        with pytest.raises(ValueError, match="orchestrator.backend"):
+            _dict_to_config({"orchestrator": {"backend": "invalid"}})

@@ -13,6 +13,7 @@ import queue
 import re
 import signal
 import string
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -242,8 +243,8 @@ async def _process_response(
                 cost = msg.total_cost_usd
                 phase_costs[current_phase] = phase_costs.get(current_phase, 0.0) + cost
 
-    # Budget warning check
-    if config.orchestrator.max_budget_usd is not None:
+    # Budget warning check — skip in CLI/subscription mode (no per-token billing)
+    if config.orchestrator.max_budget_usd is not None and _backend == "api":
         cumulative = sum(phase_costs.values())
         budget = config.orchestrator.max_budget_usd
         if cumulative >= budget:
@@ -389,13 +390,13 @@ async def _run_interactive(
             total_cost += cost
             total_cost += await _drain_interventions(client, intervention, config, phase_costs)
 
-    if config.display.show_cost and total_cost > 0:
+    if config.display.show_cost and total_cost > 0 and _backend == "api":
         print_cost_summary(phase_costs)
 
     # Run summary (always shown, not gated behind show_cost)
     from .state import RunSummary
     summary = RunSummary(task="(interactive session)", depth=last_depth, total_cost=total_cost)
-    print_run_summary(summary)
+    print_run_summary(summary, backend=_backend)
 
     return total_cost
 
@@ -450,9 +451,9 @@ async def _run_single(
         total_cost = await _process_response(client, config, phase_costs)
         total_cost += await _drain_interventions(client, intervention, config, phase_costs)
 
-    # Cost breakdown (gated behind show_cost)
+    # Cost breakdown (gated behind show_cost; skip in subscription mode)
     cycle_count = 0
-    if config.display.show_cost:
+    if config.display.show_cost and _backend == "api":
         print_cost_summary(phase_costs)
 
     # Read REQUIREMENTS.md for actual cycle count (always, for RunSummary)
@@ -464,12 +465,13 @@ async def _run_single(
             print_warning(f"Could not parse review cycles: {exc}")
 
     if config.display.show_cost:
-        print_completion(task[:100], cycle_count, total_cost)
+        cost_for_display = total_cost if _backend == "api" else None
+        print_completion(task[:100], cycle_count, cost_for_display)
 
     # Run summary (always shown, not gated behind show_cost)
     from .state import RunSummary
     summary = RunSummary(task=task[:100], depth=depth, total_cost=total_cost, cycle_count=cycle_count)
-    print_run_summary(summary)
+    print_run_summary(summary, backend=_backend)
 
     return total_cost
 
@@ -561,6 +563,12 @@ def _parse_args() -> argparse.Namespace:
         "--cwd",
         default=None,
         help="Working directory for the project (default: current dir)",
+    )
+    parser.add_argument(
+        "--backend",
+        choices=["auto", "api", "cli"],
+        default=None,
+        help="Authentication backend: auto (default), api (require ANTHROPIC_API_KEY), cli (require claude login)",
     )
     parser.add_argument(
         "--verbose", "-v",
@@ -740,6 +748,7 @@ def _subcommand_resume() -> tuple[argparse.Namespace, str] | None:
         model=None,
         max_turns=None,
         agents=None,
+        backend=None,
         verbose=False,
         interactive=False,
         dry_run=False,
@@ -843,15 +852,77 @@ def _subcommand_guide() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Backend detection
+# ---------------------------------------------------------------------------
+
+# Module-level backend tracker: set during main() after detection.
+_backend: str = "api"
+
+
+def _check_claude_cli_auth() -> bool:
+    """Check if claude CLI is installed and authenticated."""
+    try:
+        result = subprocess.run(
+            ["claude", "--version"],
+            capture_output=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return False
+
+
+def _detect_backend(requested: str) -> str:
+    """Detect which authentication backend to use.
+
+    Returns "api" or "cli". Exits with error if neither works.
+    """
+    has_api_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
+
+    if requested == "api":
+        if not has_api_key:
+            print_error("--backend=api requires ANTHROPIC_API_KEY.")
+            print_info("Get your key at: https://console.anthropic.com/settings/keys")
+            sys.exit(1)
+        return "api"
+
+    if requested == "cli":
+        if not _check_claude_cli_auth():
+            print_error("--backend=cli requires 'claude login' authentication.")
+            print_info("Run: claude login")
+            sys.exit(1)
+        return "cli"
+
+    # auto: prefer API key, fall back to CLI
+    if has_api_key:
+        return "api"
+    if _check_claude_cli_auth():
+        return "cli"
+
+    # Neither available
+    print_error("No authentication found.")
+    print_info("Option 1 — API key:")
+    if sys.platform == "win32":
+        print_info('  PowerShell: $env:ANTHROPIC_API_KEY = "sk-..."')
+        print_info('  CMD: set ANTHROPIC_API_KEY=sk-...')
+    else:
+        print_info('  export ANTHROPIC_API_KEY="sk-..."')
+    print_info("Option 2 — Claude subscription:")
+    print_info("  Run: claude login")
+    sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
 def main() -> None:
     """CLI entry point."""
     # Reset globals at start to prevent stale state across multiple invocations
-    global _interrupt_count, _current_state
+    global _interrupt_count, _current_state, _backend
     _interrupt_count = 0
     _current_state = None
+    _backend = "api"
 
     # Check for subcommands before argparse
     _resume_ctx: str | None = None
@@ -919,17 +990,14 @@ def main() -> None:
         print_error(f"Interview document not found: {args.interview_doc}")
         sys.exit(1)
 
-    # Check for API key
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print_error("ANTHROPIC_API_KEY environment variable not set.")
-        print_info("Get your key at: https://console.anthropic.com/settings/keys")
-        print_info("Then set it:")
-        if sys.platform == "win32":
-            print_info('  PowerShell: $env:ANTHROPIC_API_KEY = "sk-..."')
-            print_info('  CMD: set ANTHROPIC_API_KEY=sk-...')
-        else:
-            print_info('  export ANTHROPIC_API_KEY="sk-..."')
-        sys.exit(1)
+    # Detect authentication backend
+    backend_requested = getattr(args, "backend", None) or config.orchestrator.backend
+    _backend = _detect_backend(backend_requested)
+
+    if _backend == "api":
+        print_info("Backend: Anthropic API (ANTHROPIC_API_KEY)")
+    else:
+        print_info("Backend: Claude subscription (claude login)")
 
     # -------------------------------------------------------------------
     # C4: Dry-run mode (early gate before interview)

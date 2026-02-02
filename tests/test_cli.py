@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -10,7 +11,9 @@ import pytest
 
 from agent_team.cli import (
     InterventionQueue,
+    _check_claude_cli_auth,
     _detect_agent_count,
+    _detect_backend,
     _detect_prd_from_task,
     _drain_interventions,
     _handle_interrupt,
@@ -240,12 +243,15 @@ class TestHandleInterrupt:
 # ===================================================================
 
 class TestMain:
-    def test_no_api_key_exits(self, monkeypatch):
+    def test_no_auth_exits(self, monkeypatch):
+        """Neither API key nor CLI auth → exit code 1."""
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-        with patch("agent_team.cli._parse_args") as mock_parse:
+        with patch("agent_team.cli._parse_args") as mock_parse, \
+             patch("agent_team.cli._check_claude_cli_auth", return_value=False):
             mock_parse.return_value = argparse.Namespace(
                 task="test", prd=None, depth=None, agents=None,
                 model=None, max_turns=None, config=None, cwd=None,
+                backend=None,
                 verbose=False, interactive=False, no_interview=True,
                 interview_doc=None, design_ref=None,
                 no_map=False, map_only=False,
@@ -262,6 +268,7 @@ class TestMain:
             mock_parse.return_value = argparse.Namespace(
                 task=None, prd="/nonexistent/prd.md", depth=None, agents=None,
                 model=None, max_turns=None, config=None, cwd=None,
+                backend=None,
                 verbose=False, interactive=False, no_interview=True,
                 interview_doc=None, design_ref=None,
                 no_map=False, map_only=False,
@@ -278,6 +285,7 @@ class TestMain:
             mock_parse.return_value = argparse.Namespace(
                 task="test", prd=None, depth=None, agents=None,
                 model=None, max_turns=None, config=None, cwd=None,
+                backend=None,
                 verbose=False, interactive=False, no_interview=False,
                 interview_doc="/nonexistent/interview.md", design_ref=None,
                 no_map=False, map_only=False,
@@ -296,6 +304,7 @@ class TestMain:
             mock_parse.return_value = argparse.Namespace(
                 task=None, prd=str(sample_prd_file), depth=None, agents=None,
                 model=None, max_turns=None, config=None, cwd=None,
+                backend=None,
                 verbose=False, interactive=False, no_interview=True,
                 interview_doc=None, design_ref=None,
                 no_map=False, map_only=False,
@@ -320,6 +329,7 @@ class TestMain:
             mock_parse.return_value = argparse.Namespace(
                 task="test", prd=None, depth=None, agents=None,
                 model=None, max_turns=None, config=None, cwd=None,
+                backend=None,
                 verbose=False, interactive=False, no_interview=False,
                 interview_doc=str(doc_file), design_ref=None,
                 no_map=False, map_only=False,
@@ -339,6 +349,7 @@ class TestMain:
             mock_parse.return_value = argparse.Namespace(
                 task="test", prd=None, depth=None, agents=None,
                 model=None, max_turns=None, config=None, cwd=None,
+                backend=None,
                 verbose=False, interactive=False, no_interview=False,
                 interview_doc=str(doc_file), design_ref=None,
                 no_map=False, map_only=False,
@@ -358,6 +369,7 @@ class TestMain:
             mock_parse.return_value = argparse.Namespace(
                 task="test", prd=None, depth="quick", agents=None,
                 model=None, max_turns=None, config=None, cwd=None,
+                backend=None,
                 verbose=False, interactive=False, no_interview=True,
                 interview_doc=None,
                 design_ref=["https://a.com", "https://a.com", "https://b.com"],
@@ -377,6 +389,7 @@ class TestMain:
             mock_parse.return_value = argparse.Namespace(
                 task="test", prd=None, depth="quick", agents=None,
                 model=None, max_turns=None, config=None, cwd=None,
+                backend=None,
                 verbose=False, interactive=False, no_interview=True,
                 interview_doc=None, design_ref=None,
                 no_map=False, map_only=False,
@@ -395,6 +408,7 @@ class TestMain:
             mock_parse.return_value = argparse.Namespace(
                 task="test", prd=None, depth=None, agents=None,
                 model=None, max_turns=None, config=None, cwd=None,
+                backend=None,
                 verbose=False, interactive=False, no_interview=True,
                 interview_doc=None, design_ref=None,
                 no_map=False, map_only=False,
@@ -414,6 +428,7 @@ class TestMain:
             mock_parse.return_value = argparse.Namespace(
                 task="test", prd=None, depth=None, agents=None,
                 model=None, max_turns=None, config=None, cwd=None,
+                backend=None,
                 verbose=False, interactive=False, no_interview=True,
                 interview_doc=None, design_ref=None,
                 no_map=False, map_only=False,
@@ -424,6 +439,111 @@ class TestMain:
             with pytest.raises(SystemExit) as exc_info:
                 main()
             assert exc_info.value.code == 1
+
+
+# ===================================================================
+# Backend detection
+# ===================================================================
+
+class TestDetectBackend:
+    def test_detect_backend_api_with_key(self, monkeypatch):
+        """Returns 'api' when ANTHROPIC_API_KEY is set."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+        assert _detect_backend("auto") == "api"
+
+    def test_detect_backend_cli_fallback(self, monkeypatch):
+        """Returns 'cli' when no API key but CLI is available."""
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        with patch("agent_team.cli._check_claude_cli_auth", return_value=True):
+            assert _detect_backend("auto") == "cli"
+
+    def test_detect_backend_api_explicit(self, monkeypatch):
+        """--backend=api with key returns 'api'."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+        assert _detect_backend("api") == "api"
+
+    def test_detect_backend_api_explicit_no_key_exits(self, monkeypatch):
+        """--backend=api without key exits."""
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        with pytest.raises(SystemExit) as exc_info:
+            _detect_backend("api")
+        assert exc_info.value.code == 1
+
+    def test_detect_backend_cli_explicit_no_auth_exits(self):
+        """--backend=cli without CLI auth exits."""
+        with patch("agent_team.cli._check_claude_cli_auth", return_value=False):
+            with pytest.raises(SystemExit) as exc_info:
+                _detect_backend("cli")
+            assert exc_info.value.code == 1
+
+    def test_detect_backend_auto_no_auth_exits(self, monkeypatch):
+        """Neither auth available → exit."""
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        with patch("agent_team.cli._check_claude_cli_auth", return_value=False):
+            with pytest.raises(SystemExit) as exc_info:
+                _detect_backend("auto")
+            assert exc_info.value.code == 1
+
+    def test_detect_backend_cli_explicit_with_auth(self):
+        """--backend=cli with CLI auth returns 'cli'."""
+        with patch("agent_team.cli._check_claude_cli_auth", return_value=True):
+            assert _detect_backend("cli") == "cli"
+
+
+class TestCheckClaudeCliAuth:
+    def test_returns_true_when_claude_found(self):
+        """Returns True when claude --version succeeds."""
+        mock_result = MagicMock(returncode=0)
+        with patch("agent_team.cli.subprocess.run", return_value=mock_result):
+            assert _check_claude_cli_auth() is True
+
+    def test_returns_false_when_not_found(self):
+        """Returns False when claude is not installed."""
+        with patch("agent_team.cli.subprocess.run", side_effect=FileNotFoundError):
+            assert _check_claude_cli_auth() is False
+
+    def test_returns_false_on_timeout(self):
+        """Returns False when subprocess times out."""
+        with patch("agent_team.cli.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=5)):
+            assert _check_claude_cli_auth() is False
+
+    def test_returns_false_on_nonzero_exit(self):
+        """Returns False when claude --version exits with non-zero."""
+        mock_result = MagicMock(returncode=1)
+        with patch("agent_team.cli.subprocess.run", return_value=mock_result):
+            assert _check_claude_cli_auth() is False
+
+
+class TestBackendFlag:
+    def test_backend_flag_parsed(self):
+        """--backend cli parses correctly."""
+        with patch("sys.argv", ["agent-team", "--backend", "cli", "test"]):
+            args = _parse_args()
+            assert args.backend == "cli"
+
+    def test_backend_flag_default_none(self):
+        """Backend defaults to None when not specified."""
+        with patch("sys.argv", ["agent-team", "test"]):
+            args = _parse_args()
+            assert args.backend is None
+
+    def test_backend_flag_api(self):
+        """--backend api parses correctly."""
+        with patch("sys.argv", ["agent-team", "--backend", "api", "test"]):
+            args = _parse_args()
+            assert args.backend == "api"
+
+    def test_backend_flag_auto(self):
+        """--backend auto parses correctly."""
+        with patch("sys.argv", ["agent-team", "--backend", "auto", "test"]):
+            args = _parse_args()
+            assert args.backend == "auto"
+
+    def test_backend_flag_invalid_exits(self):
+        """Invalid --backend value exits."""
+        with pytest.raises(SystemExit):
+            with patch("sys.argv", ["agent-team", "--backend", "invalid", "test"]):
+                _parse_args()
 
 
 # ===================================================================
@@ -449,6 +569,7 @@ class TestComplexInterviewPRDPlumbing:
             mock_parse.return_value = argparse.Namespace(
                 task="test", prd=None, depth=None, agents=None,
                 model=None, max_turns=None, config=None, cwd=None,
+                backend=None,
                 verbose=False, interactive=False, no_interview=False,
                 interview_doc=str(doc_file), design_ref=None,
                 no_map=False, map_only=False,
@@ -477,6 +598,7 @@ class TestComplexInterviewPRDPlumbing:
             mock_parse.return_value = argparse.Namespace(
                 task="test", prd=str(prd_file), depth=None, agents=None,
                 model=None, max_turns=None, config=None, cwd=None,
+                backend=None,
                 verbose=False, interactive=False, no_interview=False,
                 interview_doc=str(doc_file), design_ref=None,
                 no_map=False, map_only=False,
