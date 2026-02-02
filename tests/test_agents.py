@@ -532,6 +532,24 @@ class TestConvergenceGates:
         assert "CANNOT" in DEBUGGER_PROMPT
         assert "code-reviewer" in DEBUGGER_PROMPT.lower() or "reviewer" in DEBUGGER_PROMPT.lower()
 
+    def test_orchestrator_has_show_fleet_composition_placeholder(self):
+        assert "$show_fleet_composition" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_orchestrator_has_show_convergence_status_placeholder(self):
+        assert "$show_convergence_status" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_orchestrator_has_max_cycles_placeholder(self):
+        assert "$max_cycles" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_orchestrator_has_master_plan_file_placeholder(self):
+        assert "$master_plan_file" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_orchestrator_has_max_budget_placeholder(self):
+        assert "$max_budget_usd" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_orchestrator_has_section_6b(self):
+        assert "SECTION 6b:" in ORCHESTRATOR_SYSTEM_PROMPT
+
 
 # ===================================================================
 # build_orchestrator_prompt depth handling

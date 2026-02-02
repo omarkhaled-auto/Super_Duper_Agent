@@ -1161,3 +1161,107 @@ class TestUpdateTasksMdStatuses:
         md = "### TASK-001: Types\n- Status: COMPLETE\n"
         result = update_tasks_md_statuses(md)
         assert result.count("COMPLETE") == 1
+
+
+# ===================================================================
+# Scheduler Config Wiring Tests (fields 5-8)
+# ===================================================================
+
+
+class TestSchedulerConfigWiring:
+    """Verify that SchedulerConfig fields reach scheduling functions."""
+
+    def test_max_parallel_tasks_caps_wave_size(self):
+        """5 independent tasks with max_parallel=2 should produce waves of <=2."""
+        nodes = [_make_node(f"TASK-{i:03d}") for i in range(1, 6)]
+        graph = build_dependency_graph(nodes)
+        waves = compute_execution_waves(nodes, graph, max_parallel_tasks=2)
+        for wave in waves:
+            assert len(wave.task_ids) <= 2
+
+    def test_max_parallel_tasks_none_no_cap(self):
+        """All 5 independent tasks in one wave when max_parallel is None."""
+        nodes = [_make_node(f"TASK-{i:03d}") for i in range(1, 6)]
+        graph = build_dependency_graph(nodes)
+        waves = compute_execution_waves(nodes, graph, max_parallel_tasks=None)
+        assert len(waves) == 1
+        assert len(waves[0].task_ids) == 5
+
+    def test_conflict_strategy_sets_resolution_field(self):
+        """conflict_strategy should appear in FileConflict.resolution."""
+        nodes = [
+            _make_node("TASK-001", files=["shared.py"]),
+            _make_node("TASK-002", files=["shared.py"]),
+        ]
+        graph = build_dependency_graph(nodes)
+        waves = compute_execution_waves(nodes, graph)
+        conflicts = detect_file_conflicts(
+            waves[0], {t.id: t for t in nodes},
+            conflict_strategy="integration-agent",
+        )
+        assert len(conflicts) == 1
+        assert conflicts[0].resolution == "integration-agent"
+
+    def test_conflict_strategy_none_defaults_artificial(self):
+        """None conflict_strategy should default to 'artificial-dependency'."""
+        nodes = [
+            _make_node("TASK-001", files=["shared.py"]),
+            _make_node("TASK-002", files=["shared.py"]),
+        ]
+        graph = build_dependency_graph(nodes)
+        waves = compute_execution_waves(nodes, graph)
+        conflicts = detect_file_conflicts(
+            waves[0], {t.id: t for t in nodes},
+            conflict_strategy=None,
+        )
+        assert len(conflicts) == 1
+        assert conflicts[0].resolution == "artificial-dependency"
+
+    def test_enable_critical_path_false_skips_computation(self):
+        """critical_path disabled should return empty CriticalPathInfo."""
+        from agent_team.config import SchedulerConfig
+
+        nodes = [
+            _make_node("TASK-001"),
+            _make_node("TASK-002", depends_on=["TASK-001"]),
+        ]
+        cfg = SchedulerConfig(enabled=True, enable_critical_path=False)
+        result = compute_schedule(nodes, scheduler_config=cfg)
+        assert result.critical_path.path == []
+        assert result.critical_path.total_length == 0
+
+    def test_enable_critical_path_true_computes(self):
+        """critical_path enabled should produce a non-empty path."""
+        from agent_team.config import SchedulerConfig
+
+        nodes = [
+            _make_node("TASK-001"),
+            _make_node("TASK-002", depends_on=["TASK-001"]),
+        ]
+        cfg = SchedulerConfig(enabled=True, enable_critical_path=True)
+        result = compute_schedule(nodes, scheduler_config=cfg)
+        assert len(result.critical_path.path) > 0
+
+    def test_integration_agent_strategy_logs_warning(self, caplog):
+        """integration-agent strategy should log a warning."""
+        import logging
+        from agent_team.config import SchedulerConfig
+
+        nodes = [_make_node("TASK-001")]
+        cfg = SchedulerConfig(
+            enabled=True,
+            conflict_strategy="integration-agent",
+        )
+        with caplog.at_level(logging.WARNING, logger="agent_team.scheduler"):
+            compute_schedule(nodes, scheduler_config=cfg)
+        assert "integration-agent" in caplog.text
+
+    def test_compute_schedule_none_config_backwards_compat(self):
+        """No config param should work identically to previous behavior."""
+        nodes = [
+            _make_node("TASK-001"),
+            _make_node("TASK-002", depends_on=["TASK-001"]),
+        ]
+        result = compute_schedule(nodes)
+        assert result.total_waves >= 1
+        assert len(result.critical_path.path) > 0

@@ -187,6 +187,11 @@ def _build_options(
     system_prompt = string.Template(ORCHESTRATOR_SYSTEM_PROMPT).safe_substitute(
         escalation_threshold=str(config.convergence.escalation_threshold),
         max_escalation_depth=str(config.convergence.max_escalation_depth),
+        show_fleet_composition=str(config.display.show_fleet_composition),
+        show_convergence_status=str(config.display.show_convergence_status),
+        max_cycles=str(config.convergence.max_cycles),
+        master_plan_file=config.convergence.master_plan_file,
+        max_budget_usd=str(config.orchestrator.max_budget_usd),
     )
 
     opts_kwargs: dict[str, Any] = {
@@ -234,6 +239,16 @@ async def _process_response(
             if msg.total_cost_usd:
                 cost = msg.total_cost_usd
                 phase_costs[current_phase] = phase_costs.get(current_phase, 0.0) + cost
+
+    # Budget warning check
+    if config.orchestrator.max_budget_usd is not None:
+        cumulative = sum(phase_costs.values())
+        budget = config.orchestrator.max_budget_usd
+        if cumulative >= budget:
+            print_warning(f"Budget limit reached: ${cumulative:.2f} >= ${budget:.2f}")
+        elif cumulative >= budget * 0.8:
+            print_warning(f"Budget warning: ${cumulative:.2f} of ${budget:.2f} used (80%+)")
+
     return cost
 
 
@@ -872,7 +887,14 @@ def main() -> None:
         try:
             from .codebase_map import generate_codebase_map, summarize_map
             print_map_start(cwd)
-            cmap = asyncio.run(generate_codebase_map(cwd, timeout=config.codebase_map.timeout_seconds))
+            cmap = asyncio.run(generate_codebase_map(
+                cwd,
+                timeout=config.codebase_map.timeout_seconds,
+                max_files=config.codebase_map.max_files,
+                max_file_size_kb=config.codebase_map.max_file_size_kb,
+                max_file_size_kb_ts=config.codebase_map.max_file_size_kb_ts,
+                exclude_patterns=config.codebase_map.exclude_patterns,
+            ))
             codebase_map_summary = summarize_map(cmap)
             print_map_complete(cmap.total_files, cmap.primary_language)
             if args.map_only:
@@ -908,7 +930,7 @@ def main() -> None:
             if tasks_path.is_file():
                 tasks_content = tasks_path.read_text(encoding="utf-8")
                 task_graph = parse_tasks_md(tasks_content)
-                schedule_info = compute_schedule(task_graph)
+                schedule_info = compute_schedule(task_graph, scheduler_config=config.scheduler)
                 total_conflicts = sum(schedule_info.conflict_summary.values())
                 print_schedule_summary(
                     waves=schedule_info.total_waves,
@@ -1056,6 +1078,7 @@ def main() -> None:
                 run_lint=config.verification.run_lint,
                 run_type_check=config.verification.run_type_check,
                 run_tests=config.verification.run_tests,
+                blocking=config.verification.blocking,
             ))
 
             # Build state and write summary

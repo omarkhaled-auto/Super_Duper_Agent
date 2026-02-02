@@ -11,13 +11,16 @@ Zero external dependencies -- stdlib only.
 
 from __future__ import annotations
 
+import logging
 import re
 from collections import deque
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    pass  # CodebaseMap would be imported here when available
+    from .config import SchedulerConfig
+
+_logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Dataclasses
@@ -515,13 +518,19 @@ def _build_in_degree(
 
 
 def compute_execution_waves(
-    tasks: list[TaskNode], graph: dict[str, list[str]]
+    tasks: list[TaskNode],
+    graph: dict[str, list[str]],
+    *,
+    max_parallel_tasks: int | None = None,
 ) -> list[ExecutionWave]:
     """Compute parallel execution waves using level-by-level Kahn's.
 
     Tasks with in-degree 0 form wave 1.  After removing those tasks
     and decrementing successor in-degrees, the next batch of
     in-degree-0 tasks forms wave 2, and so on.
+
+    When *max_parallel_tasks* is set and positive, each "ready" batch
+    is split into sub-waves of at most that many tasks.
 
     Returns a list of :class:`ExecutionWave` with ``wave_number``
     starting at 1.  If a cycle is detected (no ready tasks but
@@ -535,23 +544,27 @@ def compute_execution_waves(
 
     while remaining:
         # Find all nodes with in-degree 0
-        ready = [t for t, deg in remaining.items() if deg == 0]
+        ready = sorted(t for t, deg in remaining.items() if deg == 0)
         if not ready:
             break  # cycle detected -- cannot proceed
 
-        wave = ExecutionWave(
-            wave_number=wave_num, task_ids=sorted(ready)
-        )
-        waves.append(wave)
+        # Split ready batch into sub-waves if max_parallel_tasks is set
+        if max_parallel_tasks is not None and max_parallel_tasks > 0 and len(ready) > max_parallel_tasks:
+            chunks = [ready[i:i + max_parallel_tasks] for i in range(0, len(ready), max_parallel_tasks)]
+        else:
+            chunks = [ready]
 
-        # Remove ready nodes and decrement successors' in-degrees
+        for chunk in chunks:
+            wave = ExecutionWave(wave_number=wave_num, task_ids=chunk)
+            waves.append(wave)
+            wave_num += 1
+
+        # Remove all ready nodes and decrement successors' in-degrees
         for t in ready:
             del remaining[t]
             for succ in graph.get(t, []):
                 if succ in remaining:
                     remaining[succ] -= 1
-
-        wave_num += 1
 
     return waves
 
@@ -562,7 +575,10 @@ def compute_execution_waves(
 
 
 def detect_file_conflicts(
-    wave: ExecutionWave, tasks: dict[str, TaskNode]
+    wave: ExecutionWave,
+    tasks: dict[str, TaskNode],
+    *,
+    conflict_strategy: str | None = None,
 ) -> list[FileConflict]:
     """Detect file-level conflicts within a single execution wave.
 
@@ -576,12 +592,17 @@ def detect_file_conflicts(
         The execution wave to check.
     tasks:
         Mapping of task ID to :class:`TaskNode` for lookup.
+    conflict_strategy:
+        Resolution strategy for detected conflicts.  Defaults to
+        ``"artificial-dependency"`` when ``None``.
 
     Returns
     -------
     list[FileConflict]
         Detected conflicts, sorted by file path for determinism.
     """
+    effective_strategy = conflict_strategy or "artificial-dependency"
+
     # Build a map of file -> list of task IDs that touch it
     file_to_tasks: dict[str, list[str]] = {}
     for task_id in wave.task_ids:
@@ -603,7 +624,7 @@ def detect_file_conflicts(
                     file_path=file_path,
                     task_ids=sorted(task_ids),
                     conflict_type="write-write",
-                    resolution="artificial-dependency",
+                    resolution=effective_strategy,
                 )
             )
 
@@ -739,7 +760,11 @@ def compute_critical_path(
 # ---------------------------------------------------------------------------
 
 
-def compute_schedule(tasks: list[TaskNode]) -> ScheduleResult:
+def compute_schedule(
+    tasks: list[TaskNode],
+    *,
+    scheduler_config: "SchedulerConfig | None" = None,
+) -> ScheduleResult:
     """Run the full scheduling pipeline.
 
     Steps:
@@ -750,6 +775,15 @@ def compute_schedule(tasks: list[TaskNode]) -> ScheduleResult:
     5. **Resolve conflicts** by injecting artificial dependencies.
     6. **Recompute waves** after conflict resolution.
     7. **Compute the critical path** via forward/backward passes.
+
+    Parameters
+    ----------
+    tasks:
+        List of parsed task nodes.
+    scheduler_config:
+        Optional scheduler configuration. When provided, honours
+        ``max_parallel_tasks``, ``conflict_strategy``,
+        ``enable_critical_path``, and ``enable_context_scoping``.
 
     Raises
     ------
@@ -773,6 +807,23 @@ def compute_schedule(tasks: list[TaskNode]) -> ScheduleResult:
             ),
         )
 
+    # Extract config values (all default to None / True for backwards compat)
+    max_parallel = None
+    conflict_strat = None
+    enable_cp = True
+    if scheduler_config is not None:
+        max_parallel = scheduler_config.max_parallel_tasks
+        conflict_strat = scheduler_config.conflict_strategy
+        enable_cp = scheduler_config.enable_critical_path
+        if not scheduler_config.enable_context_scoping:
+            _logger.info("Context scoping disabled via config.")
+
+    if conflict_strat == "integration-agent":
+        _logger.warning(
+            "conflict_strategy='integration-agent' is not fully implemented; "
+            "falling back to 'artificial-dependency' for conflict resolution."
+        )
+
     # Step 1: Build graph and validate
     graph = build_dependency_graph(tasks)
     errors = validate_graph(graph, tasks)
@@ -786,13 +837,13 @@ def compute_schedule(tasks: list[TaskNode]) -> ScheduleResult:
         )
 
     # Step 2: Initial wave computation
-    waves = compute_execution_waves(tasks, graph)
+    waves = compute_execution_waves(tasks, graph, max_parallel_tasks=max_parallel)
 
     # Step 3: Detect conflicts across all waves
     task_map = {t.id: t for t in tasks}
     all_conflicts: list[FileConflict] = []
     for wave in waves:
-        wave_conflicts = detect_file_conflicts(wave, task_map)
+        wave_conflicts = detect_file_conflicts(wave, task_map, conflict_strategy=conflict_strat)
         wave.estimated_conflicts = wave_conflicts
         all_conflicts.extend(wave_conflicts)
 
@@ -802,16 +853,19 @@ def compute_schedule(tasks: list[TaskNode]) -> ScheduleResult:
 
         # Rebuild graph and recompute waves after resolution
         graph = build_dependency_graph(tasks)
-        waves = compute_execution_waves(tasks, graph)
+        waves = compute_execution_waves(tasks, graph, max_parallel_tasks=max_parallel)
 
         # Re-detect to capture any residual conflicts
         for wave in waves:
             wave.estimated_conflicts = detect_file_conflicts(
-                wave, task_map
+                wave, task_map, conflict_strategy=conflict_strat
             )
 
-    # Step 5: Compute critical path
-    critical_path = compute_critical_path(tasks, graph)
+    # Step 5: Compute critical path (gated by config)
+    if enable_cp:
+        critical_path = compute_critical_path(tasks, graph)
+    else:
+        critical_path = CriticalPathInfo(path=[], total_length=0, bottleneck_tasks=[])
 
     # Step 6: Build conflict summary
     conflict_summary: dict[str, int] = {}

@@ -1246,3 +1246,99 @@ class TestParsePyproject:
         result = _parse_pyproject(toml_file)
         names = [fw.name for fw in result]
         assert "aiohttp" in names
+
+
+# ===================================================================
+# Config Wiring Tests (fields 1-4)
+# ===================================================================
+
+
+class TestConfigWiring:
+    """Verify that CodebaseMapConfig fields reach _generate_map_sync."""
+
+    def test_max_files_caps_result(self, tmp_path: Path) -> None:
+        """max_files=3 should cap total files to 3."""
+        for i in range(10):
+            (tmp_path / f"mod_{i}.py").write_text(f"x = {i}", encoding="utf-8")
+
+        from agent_team.codebase_map import _generate_map_sync
+        result = _generate_map_sync(tmp_path, max_files=3)
+        assert result.total_files <= 3
+
+    def test_max_files_none_uses_default(self, tmp_path: Path) -> None:
+        """max_files=None should still work (falls back to _MAX_FILES)."""
+        (tmp_path / "a.py").write_text("x = 1", encoding="utf-8")
+        from agent_team.codebase_map import _generate_map_sync
+        result = _generate_map_sync(tmp_path, max_files=None)
+        assert result.total_files >= 1
+
+    def test_max_file_size_kb_excludes_large_py(self, tmp_path: Path) -> None:
+        """A .py file > 1KB should be excluded when max_file_size_kb=1."""
+        (tmp_path / "small.py").write_text("x = 1", encoding="utf-8")
+        (tmp_path / "big.py").write_text("x = 1\n" * 500, encoding="utf-8")
+
+        from agent_team.codebase_map import _generate_map_sync
+        result = _generate_map_sync(tmp_path, max_file_size_kb=1)
+        module_names = [m.path for m in result.modules]
+        # big.py should be excluded (>1KB)
+        assert not any("big.py" in p for p in module_names)
+
+    def test_max_file_size_kb_ts_excludes_large_ts(self, tmp_path: Path) -> None:
+        """A .ts file > 1KB should be excluded when max_file_size_kb_ts=1."""
+        (tmp_path / "small.ts").write_text("const x = 1;", encoding="utf-8")
+        (tmp_path / "big.ts").write_text("const x = 1;\n" * 500, encoding="utf-8")
+
+        from agent_team.codebase_map import _generate_map_sync
+        result = _generate_map_sync(tmp_path, max_file_size_kb_ts=1)
+        module_names = [m.path for m in result.modules]
+        assert not any("big.ts" in p for p in module_names)
+
+    def test_exclude_patterns_merged_with_defaults(self, tmp_path: Path) -> None:
+        """Config exclude_patterns should merge with defaults, not replace them."""
+        # Create node_modules (default exclude) and my_vendor (custom exclude)
+        nm = tmp_path / "node_modules" / "pkg"
+        nm.mkdir(parents=True)
+        (nm / "index.js").write_text("module.exports = {};", encoding="utf-8")
+
+        mv = tmp_path / "my_vendor"
+        mv.mkdir()
+        (mv / "lib.py").write_text("x = 1", encoding="utf-8")
+
+        (tmp_path / "app.py").write_text("x = 1", encoding="utf-8")
+
+        from agent_team.codebase_map import _generate_map_sync
+        result = _generate_map_sync(tmp_path, exclude_patterns=["my_vendor"])
+        paths = [m.path for m in result.modules]
+        # Both node_modules (default) and my_vendor (config) should be excluded
+        assert not any("node_modules" in p for p in paths)
+        assert not any("my_vendor" in p for p in paths)
+        assert any("app.py" in p for p in paths)
+
+    def test_exclude_patterns_none_uses_defaults_only(self, tmp_path: Path) -> None:
+        """None means only _DEFAULT_EXCLUDE applies."""
+        nm = tmp_path / "node_modules" / "pkg"
+        nm.mkdir(parents=True)
+        (nm / "index.js").write_text("module.exports = {};", encoding="utf-8")
+        (tmp_path / "app.py").write_text("x = 1", encoding="utf-8")
+
+        from agent_team.codebase_map import _generate_map_sync
+        result = _generate_map_sync(tmp_path, exclude_patterns=None)
+        paths = [m.path for m in result.modules]
+        assert not any("node_modules" in p for p in paths)
+        assert any("app.py" in p for p in paths)
+
+    def test_all_params_none_matches_original_behavior(self, tmp_path: Path) -> None:
+        """All None params should behave identically to calling with no args."""
+        (tmp_path / "main.py").write_text("def main(): pass", encoding="utf-8")
+
+        from agent_team.codebase_map import _generate_map_sync
+        result_default = _generate_map_sync(tmp_path)
+        result_none = _generate_map_sync(
+            tmp_path,
+            max_files=None,
+            max_file_size_kb=None,
+            max_file_size_kb_ts=None,
+            exclude_patterns=None,
+        )
+        assert result_default.total_files == result_none.total_files
+        assert result_default.primary_language == result_none.primary_language

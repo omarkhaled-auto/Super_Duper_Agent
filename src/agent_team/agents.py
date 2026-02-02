@@ -290,7 +290,7 @@ When the user provides a PRD (via --prd flag or a large task describing a full a
 
 3. MILESTONE DECOMPOSITION:
    - Synthesize planner outputs into ordered Milestones
-   - Create `.agent-team/MASTER_PLAN.md` with milestone list + dependencies
+   - Create `.agent-team/$master_plan_file` with milestone list + dependencies
    - Create per-milestone REQUIREMENTS.md files
 
 4. MILESTONE EXECUTION (sequential, respecting dependencies):
@@ -315,7 +315,7 @@ When the user provides a PRD (via --prd flag or a large task describing a full a
 
 5. Cross-milestone context: Later milestones receive context from completed ones.
 
-PRD MODE NEVER STOPS until every milestone in MASTER_PLAN.md is COMPLETE and every REQUIREMENTS.md has all items [x].
+PRD MODE NEVER STOPS until every milestone in $master_plan_file is COMPLETE and every REQUIREMENTS.md has all items [x].
 
 ============================================================
 SECTION 5: ADVERSARIAL REVIEW PROTOCOL
@@ -379,7 +379,7 @@ Use the `architect` agent. Architects:
 
 ### Task Assignment
 Use the `task-assigner` agent. Deploy AFTER planning and research:
-- Reads REQUIREMENTS.md and MASTER_PLAN.md (if PRD mode)
+- Reads REQUIREMENTS.md and $master_plan_file (if PRD mode)
 - Explores the codebase to understand existing structure
 - Produces .agent-team/TASKS.md with every atomic task
 - Each task has: ID, description, parent requirement, dependencies, files, status
@@ -417,6 +417,24 @@ Use the `security-auditor` agent for:
 - OWASP vulnerability checks
 - Dependency vulnerability audit
 - Authentication/authorization review
+
+============================================================
+SECTION 6b: DISPLAY & BUDGET CONFIGURATION
+============================================================
+
+Display settings (configured by the user):
+- Fleet composition display: $show_fleet_composition
+- Convergence status display: $show_convergence_status
+
+If fleet composition display is "False", do NOT call print_fleet_deployment() during fleet launches.
+If convergence status display is "False", do NOT call print_convergence_status() during convergence cycles.
+When either is disabled, still perform the underlying work — just skip the display call.
+
+Budget limit: $max_budget_usd
+If a budget limit is set (not "None"), be cost-conscious. Prefer smaller fleets. Track approximate cost and warn when nearing the budget.
+
+Maximum convergence cycles: $max_cycles
+If the convergence loop reaches $max_cycles cycles without all items marked [x], STOP and report the current state to the user. Ask for guidance on whether to continue.
 
 ============================================================
 SECTION 7: WORKFLOW EXECUTION
@@ -1200,6 +1218,7 @@ def build_orchestrator_prompt(
     agent_counts = get_agent_counts(depth_str)
     req_dir = config.convergence.requirements_dir
     req_file = config.convergence.requirements_file
+    master_plan = config.convergence.master_plan_file
 
     # Build the task prompt that gets sent as the user message
     parts: list[str] = []
@@ -1241,7 +1260,7 @@ def build_orchestrator_prompt(
         parts.append("The INTERVIEW DOCUMENT above IS the PRD (already injected inline).")
         parts.append("Do NOT attempt to read a separate PRD file — use the interview content above.")
         parts.append("Enter PRD Mode as described in Section 4 of your instructions.")
-        parts.append(f"Create MASTER_PLAN.md in {req_dir}/ with milestones.")
+        parts.append(f"Create {master_plan} in {req_dir}/ with milestones.")
         parts.append(f"Create per-milestone REQUIREMENTS.md files in {req_dir}/milestone-N/")
 
     # Design reference injection
@@ -1259,7 +1278,7 @@ def build_orchestrator_prompt(
     if prd_path:
         parts.append(f"\n[PRD MODE ACTIVE — PRD file: {prd_path}]")
         parts.append("Read the PRD file and enter PRD Mode as described in your instructions.")
-        parts.append(f"Create MASTER_PLAN.md in {req_dir}/ with milestones.")
+        parts.append(f"Create {master_plan} in {req_dir}/ with milestones.")
         parts.append(f"Create per-milestone REQUIREMENTS.md files in {req_dir}/milestone-N/")
 
     parts.append(f"\n[TASK]\n{task}")
@@ -1273,10 +1292,10 @@ def build_orchestrator_prompt(
 
     if is_prd_mode:
         parts.append("Enter PRD Mode (Section 4): Deploy the PRD ANALYZER FLEET (10+ planners in parallel).")
-        parts.append("Synthesize analyzer outputs into MASTER_PLAN.md with ordered milestones.")
+        parts.append(f"Synthesize analyzer outputs into {master_plan} with ordered milestones.")
         parts.append("Create per-milestone REQUIREMENTS.md files.")
         parts.append("Execute each milestone through the full convergence loop (Section 4, step 4).")
-        parts.append("Do NOT stop until every milestone in MASTER_PLAN.md is COMPLETE and every REQUIREMENTS.md has all items [x].")
+        parts.append(f"Do NOT stop until every milestone in {master_plan} is COMPLETE and every REQUIREMENTS.md has all items [x].")
     else:
         parts.append("Start by deploying the PLANNING FLEET to create REQUIREMENTS.md.")
         parts.append("After planning and research, deploy the ARCHITECTURE FLEET for design decisions.")

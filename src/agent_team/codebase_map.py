@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import functools
 import json
 import os
 import re
@@ -721,13 +722,23 @@ def _detect_primary_language(modules: list[ModuleInfo]) -> str:
 # Synchronous core
 # ---------------------------------------------------------------------------
 
-def _generate_map_sync(root: Path) -> CodebaseMap:
+def _generate_map_sync(
+    root: Path,
+    *,
+    max_files: int | None = None,
+    max_file_size_kb: int | None = None,
+    max_file_size_kb_ts: int | None = None,
+    exclude_patterns: list[str] | None = None,
+) -> CodebaseMap:
     """Perform the full scan synchronously.  Called inside an executor."""
     exclude = set(_DEFAULT_EXCLUDE)
+    if exclude_patterns is not None:
+        exclude.update(exclude_patterns)
     files = _discover_source_files(root, exclude)
 
-    # Cap at _MAX_FILES to prevent unbounded work.
-    files = files[:_MAX_FILES]
+    # Cap at effective max files to prevent unbounded work.
+    effective_max_files = max_files if max_files is not None else _MAX_FILES
+    files = files[:effective_max_files]
 
     modules: list[ModuleInfo] = []
     for fpath in files:
@@ -741,7 +752,10 @@ def _generate_map_sync(root: Path) -> CodebaseMap:
             size = fpath.stat().st_size
         except OSError:
             continue
-        max_size = _MAX_SIZE_TS if lang in ("typescript", "javascript") else _MAX_SIZE_PY
+        if lang in ("typescript", "javascript"):
+            max_size = (max_file_size_kb_ts * 1024) if max_file_size_kb_ts is not None else _MAX_SIZE_TS
+        else:
+            max_size = (max_file_size_kb * 1024) if max_file_size_kb is not None else _MAX_SIZE_PY
         if size > max_size:
             continue
         if size == 0:
@@ -802,6 +816,11 @@ def _generate_map_sync(root: Path) -> CodebaseMap:
 async def generate_codebase_map(
     project_root: str | Path,
     timeout: float = 30.0,
+    *,
+    max_files: int | None = None,
+    max_file_size_kb: int | None = None,
+    max_file_size_kb_ts: int | None = None,
+    exclude_patterns: list[str] | None = None,
 ) -> CodebaseMap:
     """Scan *project_root* and return a complete ``CodebaseMap``.
 
@@ -816,11 +835,33 @@ async def generate_codebase_map(
         Maximum wall-clock seconds before the scan is cancelled.
         Defaults to 30.0; callers should pass
         ``config.codebase_map.timeout_seconds`` to honour user config.
+    max_files:
+        Cap on the number of files to process.  ``None`` uses the
+        built-in ``_MAX_FILES`` constant.
+    max_file_size_kb:
+        Maximum file size (KB) for Python files.  ``None`` uses the
+        built-in ``_MAX_SIZE_PY`` constant.
+    max_file_size_kb_ts:
+        Maximum file size (KB) for TS/JS files.  ``None`` uses the
+        built-in ``_MAX_SIZE_TS`` constant.
+    exclude_patterns:
+        Additional directory names to exclude (merged with
+        ``_DEFAULT_EXCLUDE``).  ``None`` uses defaults only.
     """
     root = Path(project_root).resolve()
     loop = asyncio.get_event_loop()
     return await asyncio.wait_for(
-        loop.run_in_executor(None, _generate_map_sync, root),
+        loop.run_in_executor(
+            None,
+            functools.partial(
+                _generate_map_sync,
+                root,
+                max_files=max_files,
+                max_file_size_kb=max_file_size_kb,
+                max_file_size_kb_ts=max_file_size_kb_ts,
+                exclude_patterns=exclude_patterns,
+            ),
+        ),
         timeout=timeout,
     )
 

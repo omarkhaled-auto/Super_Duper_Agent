@@ -788,3 +788,67 @@ class TestInterviewConfigValidation:
     def test_min_exchanges_exceeds_max_raises(self):
         with pytest.raises(ValueError, match="min_exchanges must be <= max_exchanges"):
             _dict_to_config({"interview": {"min_exchanges": 100, "max_exchanges": 50}})
+
+
+# ===================================================================
+# Config Propagation to Runtime Tests
+# ===================================================================
+
+
+class TestConfigPropagationToRuntime:
+    """Verify config fields round-trip through _dict_to_config."""
+
+    def test_codebase_map_fields_from_yaml(self):
+        cfg = _dict_to_config({
+            "codebase_map": {
+                "max_files": 1000,
+                "max_file_size_kb": 25,
+                "max_file_size_kb_ts": 75,
+                "exclude_patterns": ["my_vendor", "dist"],
+            }
+        })
+        assert cfg.codebase_map.max_files == 1000
+        assert cfg.codebase_map.max_file_size_kb == 25
+        assert cfg.codebase_map.max_file_size_kb_ts == 75
+        assert "my_vendor" in cfg.codebase_map.exclude_patterns
+        assert "dist" in cfg.codebase_map.exclude_patterns
+
+    def test_scheduler_fields_from_yaml(self):
+        cfg = _dict_to_config({
+            "scheduler": {
+                "max_parallel_tasks": 3,
+                "conflict_strategy": "integration-agent",
+                "enable_context_scoping": False,
+                "enable_critical_path": False,
+            }
+        })
+        assert cfg.scheduler.max_parallel_tasks == 3
+        assert cfg.scheduler.conflict_strategy == "integration-agent"
+        assert cfg.scheduler.enable_context_scoping is False
+        assert cfg.scheduler.enable_critical_path is False
+
+    def test_verification_blocking_from_yaml(self):
+        cfg = _dict_to_config({"verification": {"blocking": False}})
+        assert cfg.verification.blocking is False
+
+    def test_display_gating_from_yaml(self):
+        cfg = _dict_to_config({
+            "display": {
+                "show_fleet_composition": False,
+                "show_convergence_status": False,
+            }
+        })
+        assert cfg.display.show_fleet_composition is False
+        assert cfg.display.show_convergence_status is False
+
+    def test_orchestrator_awareness_from_yaml(self):
+        cfg = _dict_to_config({
+            "orchestrator": {"max_budget_usd": 42.5},
+            "convergence": {
+                "max_cycles": 20,
+                "master_plan_file": "CUSTOM_PLAN.md",
+            },
+        })
+        assert cfg.orchestrator.max_budget_usd == 42.5
+        assert cfg.convergence.max_cycles == 20
+        assert cfg.convergence.master_plan_file == "CUSTOM_PLAN.md"

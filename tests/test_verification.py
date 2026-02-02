@@ -538,3 +538,74 @@ class TestPostOrchestrationVerification:
         content = out.read_text()
         assert "post-orchestration" in content
         assert "PASS" in content
+
+
+# ===================================================================
+# Blocking Config Wiring Tests (field 9)
+# ===================================================================
+
+
+class TestBlockingConfigWiring:
+    """Verify that the 'blocking' flag changes compute_overall_status behavior."""
+
+    def test_blocking_true_failures_are_fail(self):
+        result = TaskVerificationResult(
+            task_id="T-BLK-1",
+            contracts_passed=True,
+            lint_passed=False,
+            type_check_passed=True,
+            tests_passed=True,
+        )
+        assert compute_overall_status(result, blocking=True) == "fail"
+
+    def test_blocking_false_failures_are_partial(self):
+        result = TaskVerificationResult(
+            task_id="T-BLK-2",
+            contracts_passed=True,
+            lint_passed=False,
+            type_check_passed=True,
+            tests_passed=True,
+        )
+        assert compute_overall_status(result, blocking=False) == "partial"
+
+    def test_blocking_false_contracts_fail_is_partial(self):
+        result = TaskVerificationResult(
+            task_id="T-BLK-3",
+            contracts_passed=False,
+            lint_passed=True,
+            type_check_passed=True,
+            tests_passed=True,
+        )
+        assert compute_overall_status(result, blocking=False) == "partial"
+
+    def test_blocking_false_tests_fail_is_partial(self):
+        result = TaskVerificationResult(
+            task_id="T-BLK-4",
+            contracts_passed=True,
+            lint_passed=True,
+            type_check_passed=True,
+            tests_passed=False,
+        )
+        assert compute_overall_status(result, blocking=False) == "partial"
+
+    def test_blocking_true_is_default(self):
+        """No arg should behave like blocking=True."""
+        result = TaskVerificationResult(
+            task_id="T-BLK-5",
+            contracts_passed=True,
+            lint_passed=False,
+            type_check_passed=True,
+            tests_passed=True,
+        )
+        assert compute_overall_status(result) == "fail"
+
+    def test_blocking_false_all_pass_still_pass(self):
+        """Everything passes + blocking=False should still be 'pass'."""
+        result = TaskVerificationResult(
+            task_id="T-BLK-6",
+            contracts_passed=True,
+            lint_passed=True,
+            type_check_passed=True,
+            tests_passed=True,
+        )
+        assert compute_overall_status(result, blocking=False) == "pass"

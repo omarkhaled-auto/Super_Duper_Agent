@@ -22,7 +22,6 @@ from pathlib import Path
 
 from .contracts import (
     ContractRegistry,
-    VerificationResult,
     verify_all_contracts,
 )
 
@@ -83,6 +82,8 @@ async def verify_task_completion(
     run_lint: bool = True,
     run_type_check: bool = True,
     run_tests: bool = True,
+    *,
+    blocking: bool = True,
 ) -> TaskVerificationResult:
     """Run the 4-phase verification pipeline for a completed task.
 
@@ -138,7 +139,7 @@ async def verify_task_completion(
                 issues.append(f"Tests failed: {output}")
 
     result.issues = issues
-    result.overall = compute_overall_status(result)
+    result.overall = compute_overall_status(result, blocking=blocking)
     return result
 
 
@@ -147,27 +148,32 @@ async def verify_task_completion(
 # ---------------------------------------------------------------------------
 
 
-def compute_overall_status(result: TaskVerificationResult) -> str:
+def compute_overall_status(result: TaskVerificationResult, *, blocking: bool = True) -> str:
     """Compute overall status from individual phase results.
 
     Rules:
-        - Any phase explicitly fails -> ``"fail"``
+        - Any phase explicitly fails -> ``"fail"`` (or ``"partial"`` when *blocking* is False)
         - All executed phases pass    -> ``"pass"``
         - Mix of pass/None (some phases not run) -> ``"partial"``
         - No phases ran at all        -> ``"partial"``
 
     IMPORTANT: contracts pass + tests fail = ``"fail"`` (behavioral
     regression overrides structural satisfaction).
+
+    When *blocking* is ``False``, failures are downgraded to ``"partial"``
+    instead of ``"fail"``, allowing the pipeline to continue with warnings.
     """
+    fail_status = "fail" if blocking else "partial"
+
     # Check blocking failures first.
     if result.contracts_passed is False:
-        return "fail"
+        return fail_status
     if result.tests_passed is False:
-        return "fail"  # contracts pass + tests fail = FAIL (RED)
+        return fail_status  # contracts pass + tests fail = FAIL (RED) when blocking
     if result.lint_passed is False:
-        return "fail"
+        return fail_status
     if result.type_check_passed is False:
-        return "fail"
+        return fail_status
 
     # Determine how many phases actually ran.
     phases = [

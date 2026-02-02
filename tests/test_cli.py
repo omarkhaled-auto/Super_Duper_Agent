@@ -570,6 +570,60 @@ class TestBuildOptions:
         # The system prompt should contain the substituted value
         assert "$escalation_threshold" not in opts.system_prompt
 
+    def test_display_flags_substituted_in_prompt(self):
+        """show_fleet_composition=False should appear as 'False' in prompt."""
+        from agent_team.cli import _build_options
+        from agent_team.config import AgentTeamConfig, DisplayConfig
+        cfg = AgentTeamConfig(display=DisplayConfig(show_fleet_composition=False))
+        opts = _build_options(cfg)
+        assert "$show_fleet_composition" not in opts.system_prompt
+        assert "False" in opts.system_prompt
+
+    def test_display_flags_true_by_default(self):
+        """Default config should substitute 'True' for display flags."""
+        from agent_team.cli import _build_options
+        from agent_team.config import AgentTeamConfig
+        cfg = AgentTeamConfig()
+        opts = _build_options(cfg)
+        assert "$show_fleet_composition" not in opts.system_prompt
+        assert "$show_convergence_status" not in opts.system_prompt
+
+    def test_max_cycles_substituted(self):
+        """max_cycles=25 should appear in the resolved prompt."""
+        from agent_team.cli import _build_options
+        from agent_team.config import AgentTeamConfig, ConvergenceConfig
+        cfg = AgentTeamConfig(convergence=ConvergenceConfig(max_cycles=25))
+        opts = _build_options(cfg)
+        assert "$max_cycles" not in opts.system_prompt
+        assert "25" in opts.system_prompt
+
+    def test_master_plan_file_substituted(self):
+        """Custom master_plan_file should appear in resolved prompt."""
+        from agent_team.cli import _build_options
+        from agent_team.config import AgentTeamConfig, ConvergenceConfig
+        cfg = AgentTeamConfig(convergence=ConvergenceConfig(master_plan_file="MY_PLAN.md"))
+        opts = _build_options(cfg)
+        assert "$master_plan_file" not in opts.system_prompt
+        assert "MY_PLAN.md" in opts.system_prompt
+
+    def test_max_budget_usd_substituted(self):
+        """max_budget_usd=50.0 should appear in the resolved prompt."""
+        from agent_team.cli import _build_options
+        from agent_team.config import AgentTeamConfig, OrchestratorConfig
+        cfg = AgentTeamConfig(orchestrator=OrchestratorConfig(max_budget_usd=50.0))
+        opts = _build_options(cfg)
+        assert "$max_budget_usd" not in opts.system_prompt
+        assert "50.0" in opts.system_prompt
+
+    def test_max_budget_usd_none_substituted(self):
+        """max_budget_usd=None should appear as 'None' without crash."""
+        from agent_team.cli import _build_options
+        from agent_team.config import AgentTeamConfig
+        cfg = AgentTeamConfig()
+        opts = _build_options(cfg)
+        assert "$max_budget_usd" not in opts.system_prompt
+        assert "None" in opts.system_prompt
+
 
 # ===================================================================
 # _process_response() — Finding #2
