@@ -27,11 +27,16 @@ class DepthConfig:
     default: str = "standard"
     auto_detect: bool = True
     keyword_map: dict[str, list[str]] = field(default_factory=lambda: {
-        "quick": ["quick", "fast", "simple", "just"],
-        "thorough": ["thorough", "thoroughly", "careful", "carefully", "deep", "detailed"],
+        "quick": ["quick", "fast", "simple"],
+        "thorough": [
+            "thorough", "thoroughly", "careful", "carefully", "deep", "detailed",
+            "refactor", "redesign", "restyle", "rearchitect", "overhaul",
+            "rewrite", "restructure", "revamp", "modernize",
+        ],
         "exhaustive": [
             "exhaustive", "exhaustively", "comprehensive",
             "comprehensively", "complete",
+            "migrate", "migration", "replatform", "entire", "every", "whole",
         ],
     })
 
@@ -62,6 +67,16 @@ class InterviewConfig:
     enabled: bool = True
     model: str = "opus"
     max_exchanges: int = 50
+    min_exchanges: int = 3
+    require_understanding_summary: bool = True
+    require_codebase_exploration: bool = True
+
+
+def _validate_interview_config(cfg: InterviewConfig) -> None:
+    if cfg.min_exchanges < 1:
+        raise ValueError("min_exchanges must be >= 1")
+    if cfg.min_exchanges > cfg.max_exchanges:
+        raise ValueError("min_exchanges must be <= max_exchanges")
 
 
 @dataclass
@@ -110,6 +125,46 @@ class VerificationConfig:
     run_lint: bool = True
     run_type_check: bool = True
     run_tests: bool = True
+
+
+@dataclass
+class ConstraintEntry:
+    text: str
+    category: str  # "prohibition" | "requirement" | "scope"
+    source: str    # "task" | "interview"
+    emphasis: int  # 1=normal, 2=caps, 3=caps+emphasis word
+
+
+@dataclass
+class DepthDetection:
+    level: str
+    source: str  # "keyword" | "scope" | "default" | "override"
+    matched_keywords: list[str]
+    explanation: str
+
+    def __str__(self) -> str:
+        return self.level
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, str):
+            return self.level == other
+        if isinstance(other, DepthDetection):
+            return self.level == other.level
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(self.level)
+
+    def __getattr__(self, name: str):
+        # Guard against recursion during copy/pickle/deepcopy: these
+        # protocols probe for __reduce__, __getstate__, etc. before
+        # __dict__ is populated, which would cause self.level to
+        # re-enter __getattr__ infinitely.
+        try:
+            level = self.__dict__["level"]
+        except KeyError:
+            raise AttributeError(name) from None
+        return getattr(level, name)
 
 
 @dataclass
@@ -164,26 +219,142 @@ DEPTH_AGENT_COUNTS: dict[str, dict[str, tuple[int, int]]] = {
 }
 
 
-def detect_depth(task: str, config: AgentTeamConfig) -> str:
-    """Detect depth level from task keywords. Returns the most intensive match.
+def detect_depth(task: str, config: AgentTeamConfig) -> DepthDetection:
+    """Detect depth level from task keywords. Returns a DepthDetection with metadata.
 
-    Uses word-boundary matching to avoid substring false positives
-    (e.g. "adjustment" should not match "just").
+    Uses word-boundary matching to avoid substring false positives.
+    The returned DepthDetection supports str() conversion and == comparison
+    with strings for backwards compatibility.
     """
     if not config.depth.auto_detect:
-        return config.depth.default
+        return DepthDetection(config.depth.default, "default", [], "Auto-detect disabled")
     task_lower = task.lower()
-    # Check from most intensive to least
     for level in ("exhaustive", "thorough", "quick"):
         keywords = config.depth.keyword_map.get(level, [])
-        if any(re.search(rf"\b{re.escape(kw)}\b", task_lower) for kw in keywords):
-            return level
-    return config.depth.default
+        matched = [kw for kw in keywords if re.search(rf"\b{re.escape(kw)}\b", task_lower)]
+        if matched:
+            return DepthDetection(level, "keyword", matched, f"Matched keywords: {matched}")
+    return DepthDetection(config.depth.default, "default", [], "No keyword matches")
 
 
 def get_agent_counts(depth: str) -> dict[str, tuple[int, int]]:
     """Return (min, max) agent counts per phase for the given depth."""
     return DEPTH_AGENT_COUNTS.get(depth, DEPTH_AGENT_COUNTS["standard"])
+
+
+# ---------------------------------------------------------------------------
+# Constraint extraction
+# ---------------------------------------------------------------------------
+
+_PROHIBITION_RE = re.compile(
+    r"(?:^|[.!?;]\s*)((?:no|zero|never|don'?t|do\s+not|must\s+not|shall\s+not|cannot|can'?t)\s+.{5,200}?)(?:[.!?;]|$)",
+    re.IGNORECASE | re.MULTILINE,
+)
+_REQUIREMENT_RE = re.compile(
+    r"(?:^|[.!?;]\s*)((?:must|always|required|shall|need\s+to|have\s+to)\s+.{5,200}?)(?:[.!?;]|$)",
+    re.IGNORECASE | re.MULTILINE,
+)
+_SCOPE_RE_CONSTRAINT = re.compile(
+    r"(?:^|[.!?;]\s*)((?:only|limited\s+to|just\s+the|nothing\s+but|exclusively)\s+.{5,200}?)(?:[.!?;]|$)",
+    re.IGNORECASE | re.MULTILINE,
+)
+_EMPHASIS_WORDS = {"zero", "never", "absolutely", "strictly", "critical", "crucial", "must"}
+
+_FALSE_POSITIVE_PHRASES = frozenset({
+    "cannot be overstated", "cannot thank", "cannot emphasize enough",
+    "cannot stress enough", "cannot overstate", "must have seen",
+    "must have been", "must be noted", "do not hesitate",
+})
+
+
+def _compute_emphasis(text: str, normalized: str, emphasis_words: set[str]) -> int:
+    """Compute emphasis level for a constraint.
+
+    Returns:
+        1 = normal
+        2 = ALL_CAPS or emphasis word present
+        3 = ALL_CAPS + emphasis word
+    """
+    emphasis = 1
+    is_all_caps = text != text.lower() and text.upper() == text
+    has_emphasis_word = any(w in normalized for w in emphasis_words)
+
+    if is_all_caps:
+        emphasis = 2
+    if has_emphasis_word:
+        emphasis = max(emphasis, 2)
+        if is_all_caps:
+            emphasis = 3
+
+    return emphasis
+
+
+def extract_constraints(task: str, interview_doc: str | None = None) -> list[ConstraintEntry]:
+    """Extract user constraints from task description and interview document."""
+    constraints: list[ConstraintEntry] = []
+
+    seen_texts: set[str] = set()
+
+    def _add_constraints(text: str, source: str) -> None:
+        for match in _PROHIBITION_RE.finditer(text):
+            constraint_text = match.group(1).strip()
+            normalized = constraint_text.lower()
+            # Filter false positives
+            if any(fp in normalized for fp in _FALSE_POSITIVE_PHRASES):
+                continue
+            if normalized not in seen_texts:
+                seen_texts.add(normalized)
+                emphasis = _compute_emphasis(constraint_text, normalized, _EMPHASIS_WORDS)
+                constraints.append(ConstraintEntry(constraint_text, "prohibition", source, emphasis))
+
+        for match in _REQUIREMENT_RE.finditer(text):
+            constraint_text = match.group(1).strip()
+            normalized = constraint_text.lower()
+            # Filter false positives
+            if any(fp in normalized for fp in _FALSE_POSITIVE_PHRASES):
+                continue
+            if normalized not in seen_texts:
+                seen_texts.add(normalized)
+                emphasis = _compute_emphasis(constraint_text, normalized, _EMPHASIS_WORDS)
+                constraints.append(ConstraintEntry(constraint_text, "requirement", source, emphasis))
+
+        for match in _SCOPE_RE_CONSTRAINT.finditer(text):
+            constraint_text = match.group(1).strip()
+            normalized = constraint_text.lower()
+            # Filter false positives
+            if any(fp in normalized for fp in _FALSE_POSITIVE_PHRASES):
+                continue
+            if normalized not in seen_texts:
+                seen_texts.add(normalized)
+                emphasis = _compute_emphasis(constraint_text, normalized, _EMPHASIS_WORDS)
+                constraints.append(ConstraintEntry(constraint_text, "scope", source, emphasis))
+
+    _add_constraints(task, "task")
+    if interview_doc:
+        _add_constraints(interview_doc, "interview")
+
+    return constraints
+
+
+def format_constraints_block(constraints: list[ConstraintEntry]) -> str:
+    """Format constraints as a prompt block for injection into agent prompts."""
+    if not constraints:
+        return ""
+    lines = ["", "============================================================",
+             "USER CONSTRAINTS (MANDATORY — VIOLATING THESE IS A FAILURE)",
+             "============================================================", ""]
+    for c in constraints:
+        prefix = {"prohibition": "PROHIBITION", "requirement": "REQUIREMENT", "scope": "SCOPE"}.get(c.category, "CONSTRAINT")
+        emphasis_marker = "!!!" if c.emphasis >= 3 else "!!" if c.emphasis >= 2 else ""
+        lines.append(f"  [{prefix}] {emphasis_marker}{c.text}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def parse_max_review_cycles(requirements_content: str) -> int:
+    """Parse the maximum review_cycles value from REQUIREMENTS.md content."""
+    matches = re.findall(r'\(review_cycles:\s*(\d+)\)', requirements_content)
+    return max((int(m) for m in matches), default=0)
 
 
 # ---------------------------------------------------------------------------
@@ -239,7 +410,12 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
             enabled=iv.get("enabled", cfg.interview.enabled),
             model=iv.get("model", cfg.interview.model),
             max_exchanges=iv.get("max_exchanges", cfg.interview.max_exchanges),
+            min_exchanges=iv.get("min_exchanges", cfg.interview.min_exchanges),
+            require_understanding_summary=iv.get("require_understanding_summary", cfg.interview.require_understanding_summary),
+            require_codebase_exploration=iv.get("require_codebase_exploration", cfg.interview.require_codebase_exploration),
         )
+        # Validate the InterviewConfig
+        _validate_interview_config(cfg.interview)
 
     if "design_reference" in data and isinstance(data["design_reference"], dict):
         dr = data["design_reference"]

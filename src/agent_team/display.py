@@ -250,7 +250,7 @@ def print_user_intervention_needed(item: str) -> None:
 # Interview phase
 # ---------------------------------------------------------------------------
 
-def print_interview_start(initial_task: str | None = None) -> None:
+def print_interview_start(initial_task: str | None = None, min_exchanges: int | None = None) -> None:
     """Print the interview phase startup banner."""
     content = Text()
     content.append("INTERVIEW PHASE\n\n", style="bold magenta")
@@ -262,6 +262,11 @@ def print_interview_start(initial_task: str | None = None) -> None:
         'Say "I\'m done", "let\'s go", or "start building" when ready to proceed.\n',
         style="dim",
     )
+    if min_exchanges is not None:
+        content.append(
+            f"Minimum exchanges: {min_exchanges} (the interviewer will explore before accepting finalization)\n",
+            style="dim yellow",
+        )
     if initial_task:
         content.append(f"\nSeeded with: {initial_task[:120]}", style="dim cyan")
     console.print()
@@ -292,6 +297,22 @@ def print_interview_skip(reason: str) -> None:
     """Print when the interview phase is skipped."""
     console.print(f"[dim]Interview skipped: {reason}[/]")
     console.print()
+
+
+def print_interview_min_not_reached(exchange_count: int, min_exchanges: int) -> None:
+    """Print when user tries to exit before minimum exchanges."""
+    console.print(
+        f"[yellow]Interview at {exchange_count} of {min_exchanges} minimum exchanges. "
+        f"The interviewer will continue exploring before finalizing.[/]"
+    )
+
+
+def print_interview_pending_exit() -> None:
+    """Print when interview is in pending exit confirmation state."""
+    console.print(
+        "[dim]The interviewer is preparing a final summary. "
+        "Say 'yes' to confirm and finalize, or continue the conversation.[/]"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -334,6 +355,42 @@ def print_map_complete(file_count: int, language: str) -> None:
         f"primary language: [bold]{language}[/]"
     )
     console.print()
+
+
+# ---------------------------------------------------------------------------
+# Depth detection & intervention
+# ---------------------------------------------------------------------------
+
+def print_depth_detection(detection: object) -> None:
+    """Show why a particular depth level was chosen.
+
+    Args:
+        detection: A DepthDetection-like object with .level, .source,
+                   .matched_keywords, and .explanation attributes.
+    """
+    if detection is None:
+        return
+    level = getattr(detection, "level", str(detection))
+    source = getattr(detection, "source", "unknown")
+    keywords = getattr(detection, "matched_keywords", [])
+    explanation = getattr(detection, "explanation", "")
+
+    parts = [f"[bold white]Depth:[/] [bold yellow]{level.upper()}[/]"]
+    if source == "keyword" and keywords:
+        parts.append(f"  [dim]Matched: {', '.join(keywords)}[/]")
+    elif source == "default":
+        parts.append(f"  [dim]No keyword match — using default[/]")
+    if explanation:
+        parts.append(f"  [dim]{explanation}[/]")
+    for part in parts:
+        console.print(part)
+
+
+def print_intervention_hint() -> None:
+    """Print a hint about mid-run intervention capability."""
+    console.print(
+        "[dim]Tip: Type !! followed by your message to intervene during orchestration[/]"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -412,3 +469,44 @@ def print_verification_summary(state: dict) -> None:
 def print_contract_violation(violation: str) -> None:
     """Print a contract violation."""
     console.print(f"  [red]VIOLATION:[/] {violation}")
+
+
+# ---------------------------------------------------------------------------
+# Run summary
+# ---------------------------------------------------------------------------
+
+def print_run_summary(summary) -> None:
+    """Print a comprehensive run summary.
+
+    Args:
+        summary: A RunSummary-like object with task, depth, total_cost,
+                 cycle_count, requirements_passed, requirements_total,
+                 and files_changed attributes.
+    """
+    task = getattr(summary, "task", "")
+    depth = getattr(summary, "depth", "standard")
+    total_cost = getattr(summary, "total_cost", 0.0)
+    cycle_count = getattr(summary, "cycle_count", 0)
+    req_passed = getattr(summary, "requirements_passed", 0)
+    req_total = getattr(summary, "requirements_total", 0)
+    files_changed = getattr(summary, "files_changed", [])
+
+    content = Text()
+    content.append("RUN SUMMARY\n\n", style="bold green")
+    content.append(f"Task: {task[:100]}\n", style="white")
+    content.append(f"Depth: {depth.upper()}\n", style="white")
+    content.append(f"Convergence cycles: {cycle_count}\n", style="white")
+    if req_total > 0:
+        pct = req_passed / req_total * 100
+        content.append(f"Requirements: {req_passed}/{req_total} ({pct:.0f}%)\n", style="white")
+    if total_cost > 0:
+        content.append(f"Total cost: ${total_cost:.4f}\n", style="white")
+    if files_changed:
+        content.append(f"Files changed: {len(files_changed)}\n", style="white")
+        for f in files_changed[:10]:
+            content.append(f"  {f}\n", style="dim")
+        if len(files_changed) > 10:
+            content.append(f"  ... and {len(files_changed) - 10} more\n", style="dim")
+
+    console.print()
+    console.print(Panel(content, border_style="green", title="Summary"))

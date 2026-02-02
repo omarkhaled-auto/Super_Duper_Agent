@@ -35,8 +35,10 @@ from .display import (
     print_agent_response,
     print_info,
     print_interview_end,
-    print_interview_prompt,
+    print_interview_min_not_reached,
+    print_interview_pending_exit,
     print_interview_start,
+    print_warning,
 )
 
 # ---------------------------------------------------------------------------
@@ -74,6 +76,38 @@ EXIT_PHRASES: list[str] = [
 INTERVIEWER_SYSTEM_PROMPT = r"""You are a SENIOR TECHNICAL PM / REQUIREMENTS ANALYST acting as the interviewer for the Agent Team system.
 
 Your purpose is to have a focused, productive conversation with the user to understand EXACTLY what they want built, then produce a structured document that will feed into the multi-agent orchestrator.
+
+## MANDATORY RESPONSE FORMAT
+
+Every response you give MUST include clearly labeled sections. The sections depend on the interview phase:
+
+**DISCOVERY Phase (early exchanges):**
+- ### My Current Understanding
+- ### What I Found in the Codebase
+- ### Questions
+
+**REFINEMENT Phase (middle exchanges):**
+- ### Updated Understanding
+- ### What I Propose
+- ### Remaining Questions
+
+**READY Phase (after minimum exchanges):**
+- ### Final Understanding
+- ### Proposed Approach
+
+## INTERVIEW PHASES
+
+The interview progresses through three phases:
+1. **DISCOVERY** — Explore the codebase, understand the project structure, ask clarifying questions
+2. **REFINEMENT** — Deepen understanding, propose approaches, refine requirements
+3. **READY** — Summarize, confirm, and prepare for handoff to the orchestrator
+
+## ANTI-PATTERNS (DO NOT DO THESE)
+
+- Do NOT treat a detailed first prompt as a complete specification — ALWAYS explore the codebase first
+- Do NOT skip codebase exploration — use Glob, Grep, and Read tools in EVERY discovery exchange
+- Do NOT offer to finalize before the minimum exchange count is reached
+- Do NOT provide a shallow summary without demonstrating understanding of the actual code
 
 ============================================================
 CORE RULES
@@ -417,6 +451,133 @@ def _build_interview_options(
 
 
 # ---------------------------------------------------------------------------
+# Interview phase & prompt helpers
+# ---------------------------------------------------------------------------
+
+
+def _get_interview_phase(exchange_count: int, min_exchanges: int) -> str:
+    """Return the current interview phase based on exchange count.
+
+    Phases:
+        DISCOVERY: exchanges 1 to floor(min/2) — explore the codebase and requirements
+        REFINEMENT: floor(min/2)+1 to min — deepen understanding and refine approach
+        READY: after min — can finalize
+    """
+    if min_exchanges <= 0:
+        return "READY"
+    half = min_exchanges // 2
+    if exchange_count <= half:
+        return "DISCOVERY"
+    if exchange_count <= min_exchanges:
+        return "REFINEMENT"
+    return "READY"
+
+
+def _build_exchange_prompt(
+    user_input: str,
+    exchange_count: int,
+    min_exchanges: int,
+    phase: str,
+    require_understanding: bool = True,
+    require_exploration: bool = True,
+) -> str:
+    """Wrap user message with phase-appropriate structural requirements."""
+    parts = [f"[Exchange {exchange_count}] [Phase: {phase}]"]
+
+    if phase == "DISCOVERY":
+        reqs = ["\n\nMANDATORY REQUIREMENTS FOR THIS RESPONSE:"]
+        req_num = 1
+        if require_exploration:
+            reqs.append(f"\n{req_num}. Use your tools (Glob, Grep, Read) to explore the codebase BEFORE answering")
+            req_num += 1
+        if require_understanding:
+            reqs.append(
+                f"\n{req_num}. Your response MUST include these sections:"
+                "\n   ### My Current Understanding"
+                "\n   ### What I Found in the Codebase"
+                "\n   ### Questions"
+            )
+            req_num += 1
+        reqs.append(f"\n{req_num}. Do NOT suggest finalizing yet — you are in the DISCOVERY phase")
+        req_num += 1
+        reqs.append(f"\n{req_num}. Ask at least 2 clarifying questions")
+        parts.append("".join(reqs))
+    elif phase == "REFINEMENT":
+        reqs = ["\n\nMANDATORY REQUIREMENTS FOR THIS RESPONSE:"]
+        req_num = 1
+        if require_exploration:
+            reqs.append(f"\n{req_num}. Continue exploring the codebase with your tools for deeper understanding")
+            req_num += 1
+        if require_understanding:
+            reqs.append(
+                f"\n{req_num}. Your response MUST include these sections:"
+                "\n   ### Updated Understanding"
+                "\n   ### What I Propose"
+                "\n   ### Remaining Questions"
+            )
+            req_num += 1
+        reqs.append(f"\n{req_num}. Build on previous findings — show how your understanding has evolved")
+        parts.append("".join(reqs))
+        if exchange_count <= min_exchanges:
+            parts.append(f"\n{req_num + 1}. Do NOT suggest finalizing yet — minimum exchanges not reached")
+    else:  # READY
+        parts.append(
+            "\n\nYou may now offer to finalize if appropriate. Include:"
+            "\n   ### Final Understanding"
+            "\n   ### Proposed Approach"
+        )
+
+    parts.append(f"\n\nUSER MESSAGE:\n{user_input}")
+    return "\n".join(parts)
+
+
+def _build_continuation_prompt(exchange_count: int, min_exchanges: int) -> str:
+    """When user says exit phrase before min, gracefully redirect."""
+    remaining = min_exchanges - exchange_count
+    return (
+        f"The user would like to wrap up, but we've only had {exchange_count} of "
+        f"{min_exchanges} minimum exchanges. There are still {remaining} more exchanges "
+        f"needed to ensure thorough understanding.\n\n"
+        f"INSTRUCTIONS:\n"
+        f"1. Acknowledge the user's readiness\n"
+        f"2. Show a summary of your current understanding\n"
+        f"3. Identify the most critical gaps in understanding\n"
+        f"4. Ask 1-2 focused questions about those gaps\n"
+        f"5. Do NOT finalize or write any document yet"
+    )
+
+
+def _build_exit_confirmation_prompt() -> str:
+    """After min exchanges, show final summary and ask for confirmation."""
+    return (
+        "The user wants to finalize the interview.\n\n"
+        "INSTRUCTIONS:\n"
+        "1. Present a complete summary of everything discussed\n"
+        "2. List all requirements and constraints you've identified\n"
+        "3. Assess the scope (SIMPLE / MEDIUM / COMPLEX)\n"
+        "4. Ask: 'Does this capture everything? Say **yes** to finalize, "
+        "or tell me what I missed.'"
+    )
+
+
+async def _process_interview_response(client: ClaudeSDKClient, verbose: bool = False) -> float:
+    """Process and display the interviewer's response stream."""
+    cost = 0.0
+    async for msg in client.receive_response():
+        if isinstance(msg, AssistantMessage):
+            for block in msg.content:
+                if isinstance(block, TextBlock):
+                    print_agent_response(block.text)
+                elif isinstance(block, ToolUseBlock):
+                    if verbose:
+                        print_info(f"[tool] {block.name}")
+        elif isinstance(msg, ResultMessage):
+            if msg.total_cost_usd:
+                cost += msg.total_cost_usd
+    return cost
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
@@ -431,7 +592,7 @@ async def run_interview(
     and produces `.agent-team/INTERVIEW.md`.  Returns an InterviewResult
     with the document content and metadata.
     """
-    print_interview_start(initial_task)
+    print_interview_start(initial_task, min_exchanges=config.interview.min_exchanges)
 
     options = _build_interview_options(config, cwd)
     exchange_count = 0
@@ -470,114 +631,126 @@ async def run_interview(
             await client.query(opening)
 
             # Process the interviewer's first response
-            async for msg in client.receive_response():
-                if isinstance(msg, AssistantMessage):
-                    for block in msg.content:
-                        if isinstance(block, TextBlock):
-                            print_agent_response(block.text)
-                        elif isinstance(block, ToolUseBlock):
-                            if config.display.verbose:
-                                print_info(f"[tool] {block.name}")
-                elif isinstance(msg, ResultMessage):
-                    if msg.total_cost_usd:
-                        total_cost += msg.total_cost_usd
+            total_cost += await _process_interview_response(client, config.display.verbose)
+            transcript.append({"role": "system", "content": "(opening prompt sent)"})
+            transcript.append({"role": "assistant", "content": "(initial response)"})
 
             # Multi-turn conversation loop
-            empty_count = 0  # track consecutive empty inputs (C1 fix)
+            empty_count = 0
+            pending_exit: bool = False
+
             while exchange_count < config.interview.max_exchanges:
-                user_input = print_interview_prompt()
+                # Get user input
+                try:
+                    user_input = console.input("[bold cyan]You:[/] ").strip()
+                except EOFError:
+                    break
+
+                # Handle empty input
                 if not user_input:
                     empty_count += 1
                     if empty_count >= 3:
-                        print_info(
-                            "Three consecutive empty inputs detected — "
-                            "ending interview (possible non-interactive stdin)."
-                        )
+                        print_warning("Multiple empty inputs — ending interview.")
                         break
                     continue
-                empty_count = 0  # reset on real input
+                empty_count = 0
 
                 exchange_count += 1
+                min_ex = config.interview.min_exchanges
 
-                if _is_interview_exit(user_input):
-                    transcript.append({"role": "user", "content": user_input, "action": "exit"})
-                    # Send the finalization instruction
-                    finalize_msg = (
-                        f"The user has indicated they are done with the interview "
-                        f'(they said: "{user_input}").\n\n'
-                        f"Write the FINAL version of the interview document to "
-                        f"{doc_path}. Make sure the Scope: header is present "
-                        f"(SIMPLE, MEDIUM, or COMPLEX). Summarize what was captured "
-                        f"and confirm the document is saved."
-                    )
-                    await client.query(finalize_msg)
-                    assistant_text = ""
-                    async for msg in client.receive_response():
-                        if isinstance(msg, AssistantMessage):
-                            for block in msg.content:
-                                if isinstance(block, TextBlock):
-                                    print_agent_response(block.text)
-                                    assistant_text += block.text + "\n"
-                                elif isinstance(block, ToolUseBlock):
-                                    if config.display.verbose:
-                                        print_info(f"[tool] {block.name}")
-                        elif isinstance(msg, ResultMessage):
-                            if msg.total_cost_usd:
-                                total_cost += msg.total_cost_usd
-                    if assistant_text:
-                        transcript.append({"role": "assistant", "content": assistant_text.strip()})
-                    break
+                # --- Three-tier exit handling ---
 
-                # Normal exchange — relay the user's message to the interviewer
+                # Tier 1: Pending confirmation — user already saw summary
+                if pending_exit:
+                    if user_input.lower().strip() in ("yes", "y", "yeah", "yep", "confirm"):
+                        # Finalize
+                        print_info("Finalizing interview...")
+                        finalize_prompt = (
+                            "The user has confirmed. Write the INTERVIEW.md document now.\n"
+                            "Include all requirements, constraints, scope assessment, "
+                            "and proposed approach discussed during the interview."
+                        )
+                        await client.query(finalize_prompt)
+                        transcript.append({"role": "user", "content": user_input})
+                        total_cost += await _process_interview_response(client, config.display.verbose)
+                        transcript.append({"role": "assistant", "content": "(finalized)"})
+                        break
+                    else:
+                        # User wants to continue
+                        pending_exit = False
+                        if _is_interview_exit(user_input):
+                            # Re-trigger exit flow instead of swallowing
+                            pending_exit = True
+                            confirmation = _build_exit_confirmation_prompt()
+                            await client.query(confirmation)
+                            transcript.append({"role": "user", "content": user_input})
+                            total_cost += await _process_interview_response(client, config.display.verbose)
+                            transcript.append({"role": "assistant", "content": "(exit confirmation re-triggered)"})
+                            continue
+                        # Normal exchange processing...
+                        phase = _get_interview_phase(exchange_count, min_ex)
+                        augmented = _build_exchange_prompt(
+                            user_input, exchange_count, min_ex, phase,
+                            require_understanding=config.interview.require_understanding_summary,
+                            require_exploration=config.interview.require_codebase_exploration,
+                        )
+                        await client.query(augmented)
+                        transcript.append({"role": "user", "content": user_input})
+                        total_cost += await _process_interview_response(client, config.display.verbose)
+                        transcript.append({"role": "assistant", "content": "(response processed)"})
+                        continue
+
+                # Tier 2: Early exit redirect — before min_exchanges
+                if _is_interview_exit(user_input) and exchange_count < min_ex:
+                    print_interview_min_not_reached(exchange_count, min_ex)
+                    continuation = _build_continuation_prompt(exchange_count, min_ex)
+                    await client.query(continuation)
+                    transcript.append({"role": "user", "content": user_input})
+                    total_cost += await _process_interview_response(client, config.display.verbose)
+                    transcript.append({"role": "assistant", "content": "(continuation prompted)"})
+                    continue
+
+                # Tier 3a: Exit after min — trigger confirmation
+                if _is_interview_exit(user_input) and exchange_count >= min_ex:
+                    pending_exit = True
+                    print_interview_pending_exit()
+                    confirmation = _build_exit_confirmation_prompt()
+                    await client.query(confirmation)
+                    transcript.append({"role": "user", "content": user_input})
+                    total_cost += await _process_interview_response(client, config.display.verbose)
+                    transcript.append({"role": "assistant", "content": "(exit confirmation)"})
+                    continue
+
+                # Tier 4: Normal exchange — augment with phase requirements
+                phase = _get_interview_phase(exchange_count, min_ex)
+                augmented = _build_exchange_prompt(
+                    user_input, exchange_count, min_ex, phase,
+                    require_understanding=config.interview.require_understanding_summary,
+                    require_exploration=config.interview.require_codebase_exploration,
+                )
+                await client.query(augmented)
                 transcript.append({"role": "user", "content": user_input})
-                await client.query(user_input)
-                assistant_text = ""
-                async for msg in client.receive_response():
-                    if isinstance(msg, AssistantMessage):
-                        for block in msg.content:
-                            if isinstance(block, TextBlock):
-                                print_agent_response(block.text)
-                                assistant_text += block.text + "\n"
-                            elif isinstance(block, ToolUseBlock):
-                                if config.display.verbose:
-                                    print_info(f"[tool] {block.name}")
-                    elif isinstance(msg, ResultMessage):
-                        if msg.total_cost_usd:
-                            total_cost += msg.total_cost_usd
-                if assistant_text:
-                    transcript.append({"role": "assistant", "content": assistant_text.strip()})
+                total_cost += await _process_interview_response(client, config.display.verbose)
+                transcript.append({"role": "assistant", "content": "(response processed)"})
+
             else:
-                # max_exchanges reached — force finalization
-                print_info(
-                    f"Maximum exchange limit ({config.interview.max_exchanges}) "
-                    f"reached. Finalizing interview document..."
+                # Max exchanges reached — force finalization
+                print_warning(
+                    f"Maximum exchanges ({config.interview.max_exchanges}) reached. "
+                    "Finalizing interview..."
                 )
-                finalize_msg = (
-                    f"The interview has reached the maximum exchange limit. "
-                    f"Write the FINAL version of the interview document to "
-                    f"{doc_path} with all information gathered so far. "
-                    f"Make sure the Scope: header is present "
-                    f"(SIMPLE, MEDIUM, or COMPLEX)."
+                finalize_prompt = (
+                    f"We have reached the maximum of {config.interview.max_exchanges} exchanges. "
+                    "Write the INTERVIEW.md document now with everything discussed so far."
                 )
-                await client.query(finalize_msg)
-                assistant_text = ""
-                async for msg in client.receive_response():
-                    if isinstance(msg, AssistantMessage):
-                        for block in msg.content:
-                            if isinstance(block, TextBlock):
-                                print_agent_response(block.text)
-                                assistant_text += block.text + "\n"
-                            elif isinstance(block, ToolUseBlock):
-                                if config.display.verbose:
-                                    print_info(f"[tool] {block.name}")
-                    elif isinstance(msg, ResultMessage):
-                        if msg.total_cost_usd:
-                            total_cost += msg.total_cost_usd
-                if assistant_text:
-                    transcript.append({"role": "assistant", "content": assistant_text.strip(), "action": "max_exchanges_finalization"})
+                await client.query(finalize_prompt)
+                total_cost += await _process_interview_response(client, config.display.verbose)
+                transcript.append({"role": "assistant", "content": "(max exchanges finalized)"})
 
     except KeyboardInterrupt:
         print_info("Interview interrupted by user.")
+    except SystemExit:
+        raise
     except Exception as exc:
         print_info(f"Interview session error: {exc}")
         if doc_path.is_file():

@@ -18,7 +18,7 @@ from agent_team.agents import (
     build_agent_definitions,
     build_orchestrator_prompt,
 )
-from agent_team.config import AgentConfig, AgentTeamConfig, SchedulerConfig, VerificationConfig
+from agent_team.config import AgentConfig, AgentTeamConfig, ConstraintEntry, SchedulerConfig, VerificationConfig
 
 
 # ===================================================================
@@ -118,6 +118,29 @@ class TestPromptConstants:
 
     def test_orchestrator_has_contract_generator_step(self):
         assert "CONTRACT GENERATOR" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_orchestrator_has_convergence_gates(self):
+        assert "GATE 1" in ORCHESTRATOR_SYSTEM_PROMPT
+        assert "GATE 2" in ORCHESTRATOR_SYSTEM_PROMPT
+        assert "GATE 3" in ORCHESTRATOR_SYSTEM_PROMPT
+        assert "GATE 4" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_orchestrator_has_section_8(self):
+        assert "SECTION 8" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_orchestrator_has_constraint_enforcement(self):
+        assert "CONSTRAINT ENFORCEMENT" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_orchestrator_has_intervention_awareness(self):
+        assert "USER INTERVENTION" in ORCHESTRATOR_SYSTEM_PROMPT or "INTERVENTION" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_code_reviewer_has_review_authority(self):
+        assert "ONLY" in CODE_REVIEWER_PROMPT
+        assert "authorized" in CODE_REVIEWER_PROMPT
+
+    def test_debugger_has_review_boundary(self):
+        assert "CANNOT" in DEBUGGER_PROMPT
+        assert "mark" in DEBUGGER_PROMPT.lower()
 
 
 # ===================================================================
@@ -437,3 +460,97 @@ class TestTemplateSubstitution:
         """Prompt should not contain {variable} style templates."""
         assert "{escalation_threshold}" not in ORCHESTRATOR_SYSTEM_PROMPT
         assert "{max_escalation_depth}" not in ORCHESTRATOR_SYSTEM_PROMPT
+
+
+# ===================================================================
+# Constraint injection
+# ===================================================================
+
+class TestConstraintInjection:
+    """Tests for constraint injection into agent prompts."""
+
+    def test_constraints_appear_in_agent_prompts(self, default_config):
+        constraints = [ConstraintEntry("no library swaps", "prohibition", "task", 2)]
+        agents = build_agent_definitions(default_config, {}, constraints=constraints)
+        for name, defn in agents.items():
+            assert "no library swaps" in defn["prompt"], f"{name} missing constraint"
+
+    def test_none_constraints_no_change(self, default_config):
+        agents_without = build_agent_definitions(default_config, {})
+        agents_with_none = build_agent_definitions(default_config, {}, constraints=None)
+        for name in agents_without:
+            assert agents_without[name]["prompt"] == agents_with_none[name]["prompt"]
+
+    def test_empty_constraints_no_change(self, default_config):
+        agents_without = build_agent_definitions(default_config, {})
+        agents_with_empty = build_agent_definitions(default_config, {}, constraints=[])
+        for name in agents_without:
+            assert agents_without[name]["prompt"] == agents_with_empty[name]["prompt"]
+
+    def test_constraint_block_format(self):
+        constraints = [ConstraintEntry("no changes", "prohibition", "task", 2)]
+        agents = build_agent_definitions(AgentTeamConfig(), {}, constraints=constraints)
+        # Check that the constraint block header is present
+        for name, defn in agents.items():
+            assert "USER CONSTRAINTS" in defn["prompt"]
+
+    def test_constraints_in_orchestrator_prompt(self, default_config):
+        constraints = [ConstraintEntry("only restyle SCSS", "scope", "task", 1)]
+        prompt = build_orchestrator_prompt(
+            "restyle the app", "thorough", default_config,
+            constraints=constraints,
+        )
+        assert "only restyle SCSS" in prompt
+
+
+# ===================================================================
+# Convergence gates
+# ===================================================================
+
+class TestConvergenceGates:
+    """Tests for convergence gate content in prompts."""
+
+    def test_gate_1_review_authority(self):
+        assert "REVIEW" in ORCHESTRATOR_SYSTEM_PROMPT
+        assert "GATE 1" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_gate_2_mandatory_re_review(self):
+        assert "GATE 2" in ORCHESTRATOR_SYSTEM_PROMPT
+        assert "Re-Review" in ORCHESTRATOR_SYSTEM_PROMPT or "re-review" in ORCHESTRATOR_SYSTEM_PROMPT.lower()
+
+    def test_gate_3_cycle_reporting(self):
+        assert "GATE 3" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_gate_4_depth_thoroughness(self):
+        assert "GATE 4" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_reviewer_exclusive_authority(self):
+        assert "ONLY" in CODE_REVIEWER_PROMPT
+        assert "[x]" in CODE_REVIEWER_PROMPT
+
+    def test_debugger_cannot_mark(self):
+        assert "CANNOT" in DEBUGGER_PROMPT
+        assert "code-reviewer" in DEBUGGER_PROMPT.lower() or "reviewer" in DEBUGGER_PROMPT.lower()
+
+
+# ===================================================================
+# build_orchestrator_prompt depth handling
+# ===================================================================
+
+class TestBuildOrchestratorPromptDepthHandling:
+    """Test that build_orchestrator_prompt handles both str and DepthDetection."""
+
+    def test_string_depth_works(self, default_config):
+        prompt = build_orchestrator_prompt("test", "thorough", default_config)
+        assert "[DEPTH: THOROUGH]" in prompt
+
+    def test_depth_detection_works(self, default_config):
+        from agent_team.config import DepthDetection
+        det = DepthDetection("exhaustive", "keyword", ["exhaustive"], "test")
+        prompt = build_orchestrator_prompt("test", det, default_config)
+        assert "[DEPTH: EXHAUSTIVE]" in prompt
+
+    def test_constraints_param_default_none(self, default_config):
+        # Should work without constraints parameter
+        prompt = build_orchestrator_prompt("test", "standard", default_config)
+        assert "[DEPTH: STANDARD]" in prompt

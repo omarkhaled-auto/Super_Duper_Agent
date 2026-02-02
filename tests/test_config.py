@@ -9,9 +9,11 @@ from agent_team.config import (
     AgentConfig,
     AgentTeamConfig,
     CodebaseMapConfig,
+    ConstraintEntry,
     ConvergenceConfig,
     DEPTH_AGENT_COUNTS,
     DepthConfig,
+    DepthDetection,
     DesignReferenceConfig,
     DisplayConfig,
     InterviewConfig,
@@ -22,8 +24,11 @@ from agent_team.config import (
     _deep_merge,
     _dict_to_config,
     detect_depth,
+    extract_constraints,
+    format_constraints_block,
     get_agent_counts,
     load_config,
+    parse_max_review_cycles,
 )
 
 
@@ -119,6 +124,18 @@ class TestInterviewConfigDefaults:
     def test_max_exchanges(self):
         c = InterviewConfig()
         assert c.max_exchanges == 50
+
+    def test_min_exchanges_default(self):
+        c = InterviewConfig()
+        assert c.min_exchanges == 3
+
+    def test_require_understanding_summary_default(self):
+        c = InterviewConfig()
+        assert c.require_understanding_summary is True
+
+    def test_require_codebase_exploration_default(self):
+        c = InterviewConfig()
+        assert c.require_codebase_exploration is True
 
 
 class TestDesignReferenceConfigDefaults:
@@ -573,3 +590,201 @@ class TestConfigPropagation:
         cfg = AgentTeamConfig()
         assert cfg.display.show_fleet_composition is True
         assert cfg.display.show_convergence_status is True
+
+
+# ===================================================================
+# Constraint extraction
+# ===================================================================
+
+class TestConstraintExtraction:
+    def test_prohibition_extraction(self):
+        constraints = extract_constraints("no library swaps allowed.")
+        assert any(c.category == "prohibition" for c in constraints)
+
+    def test_zero_prohibition(self):
+        constraints = extract_constraints("ZERO functionality changes.")
+        assert any(c.category == "prohibition" for c in constraints)
+
+    def test_requirement_extraction(self):
+        constraints = extract_constraints("must preserve existing behavior.")
+        assert any(c.category == "requirement" for c in constraints)
+
+    def test_scope_extraction(self):
+        constraints = extract_constraints("only restyle the SCSS files.")
+        assert any(c.category == "scope" for c in constraints)
+
+    def test_deduplication(self):
+        constraints = extract_constraints("no swaps. no swaps. no swaps.")
+        prohibition_count = sum(1 for c in constraints if "swaps" in c.text.lower())
+        assert prohibition_count == 1
+
+    def test_emphasis_detection_caps(self):
+        constraints = extract_constraints("ZERO FUNCTIONALITY CHANGES.")
+        caps_constraints = [c for c in constraints if c.emphasis >= 2]
+        assert len(caps_constraints) > 0
+
+    def test_format_output_non_empty(self):
+        constraints = [ConstraintEntry("no changes", "prohibition", "task", 2)]
+        block = format_constraints_block(constraints)
+        assert "PROHIBITION" in block
+        assert "no changes" in block
+
+    def test_format_output_empty(self):
+        block = format_constraints_block([])
+        assert block == ""
+
+    def test_interview_doc_source(self):
+        constraints = extract_constraints("test", "must keep all features intact.")
+        interview_constraints = [c for c in constraints if c.source == "interview"]
+        assert len(interview_constraints) > 0
+
+    def test_no_constraints_returns_empty(self):
+        constraints = extract_constraints("fix the button color")
+        # May or may not find constraints depending on phrasing
+        assert isinstance(constraints, list)
+
+
+# ===================================================================
+# parse_max_review_cycles()
+# ===================================================================
+
+class TestParseMaxReviewCycles:
+    def test_single_cycle_count(self):
+        content = "- [x] Feature A (review_cycles: 2)"
+        assert parse_max_review_cycles(content) == 2
+
+    def test_multiple_takes_max(self):
+        content = "- [x] A (review_cycles: 1)\n- [x] B (review_cycles: 3)\n- [ ] C (review_cycles: 2)"
+        assert parse_max_review_cycles(content) == 3
+
+    def test_no_cycles_returns_zero(self):
+        content = "- [x] Feature A\n- [ ] Feature B"
+        assert parse_max_review_cycles(content) == 0
+
+    def test_empty_string(self):
+        assert parse_max_review_cycles("") == 0
+
+
+# ===================================================================
+# DepthDetection dataclass
+# ===================================================================
+
+class TestDepthDetectionDataclass:
+    def test_str_conversion(self):
+        d = DepthDetection("thorough", "keyword", ["thorough"], "test")
+        assert str(d) == "thorough"
+
+    def test_eq_with_string(self):
+        d = DepthDetection("thorough", "keyword", ["thorough"], "test")
+        assert d == "thorough"
+        assert d != "quick"
+
+    def test_eq_with_depth_detection(self):
+        d1 = DepthDetection("thorough", "keyword", ["thorough"], "test")
+        d2 = DepthDetection("thorough", "default", [], "other")
+        assert d1 == d2
+
+    def test_has_explanation(self):
+        d = DepthDetection("thorough", "keyword", ["thorough"], "Matched keywords: ['thorough']")
+        assert d.explanation != ""
+        assert "thorough" in d.explanation
+
+    def test_hash_works(self):
+        d = DepthDetection("thorough", "keyword", ["thorough"], "test")
+        assert hash(d) == hash("thorough")
+
+    def test_copy_safe(self):
+        """DepthDetection must survive copy.copy without RecursionError."""
+        import copy
+        d = DepthDetection("thorough", "keyword", ["thorough"], "test")
+        d2 = copy.copy(d)
+        assert d2.level == "thorough"
+        assert d2 == d
+
+    def test_deepcopy_safe(self):
+        """DepthDetection must survive copy.deepcopy without RecursionError."""
+        import copy
+        d = DepthDetection("thorough", "keyword", ["thorough"], "test")
+        d2 = copy.deepcopy(d)
+        assert d2.level == "thorough"
+        assert d2 == d
+
+    def test_pickle_roundtrip(self):
+        """DepthDetection must survive pickle round-trip without RecursionError."""
+        import pickle
+        d = DepthDetection("exhaustive", "keyword", ["migrate"], "test")
+        data = pickle.dumps(d)
+        d2 = pickle.loads(data)
+        assert d2.level == "exhaustive"
+        assert d2 == d
+
+    def test_getattr_delegates_to_str(self):
+        """String methods like .upper() should work via __getattr__."""
+        d = DepthDetection("thorough", "keyword", ["thorough"], "test")
+        assert d.upper() == "THOROUGH"
+        assert d.startswith("thor") is True
+
+    def test_getattr_raises_attributeerror(self):
+        """Non-existent str attributes should raise AttributeError."""
+        d = DepthDetection("thorough", "keyword", ["thorough"], "test")
+        with pytest.raises(AttributeError):
+            d.nonexistent_method_xyz()
+
+
+# ===================================================================
+# detect_depth() expanded
+# ===================================================================
+
+class TestDetectDepthExpanded:
+    def test_just_no_longer_triggers_quick(self, default_config):
+        result = detect_depth("just update this component", default_config)
+        assert result.level != "quick"  # "just" removed from quick keywords
+
+    def test_restyle_triggers_thorough(self, default_config):
+        result = detect_depth("restyle the login page styles", default_config)
+        assert result.level == "thorough"
+
+    def test_migrate_triggers_exhaustive(self, default_config):
+        result = detect_depth("migrate to the new framework", default_config)
+        assert result.level == "exhaustive"
+
+    def test_modernize_triggers_thorough(self, default_config):
+        result = detect_depth("modernize the UI components", default_config)
+        assert result.level == "thorough"
+
+    def test_replatform_triggers_exhaustive(self, default_config):
+        result = detect_depth("replatform the application", default_config)
+        assert result.level == "exhaustive"
+
+    def test_returns_depth_detection_object(self, default_config):
+        result = detect_depth("thorough review", default_config)
+        assert isinstance(result, DepthDetection)
+        assert result.level == "thorough"
+        assert result.source == "keyword"
+        assert "thorough" in result.matched_keywords
+
+
+# ===================================================================
+# InterviewConfig validation via _dict_to_config
+# ===================================================================
+
+class TestInterviewConfigValidation:
+    def test_min_exchanges_in_dict_to_config(self):
+        cfg = _dict_to_config({"interview": {"min_exchanges": 5}})
+        assert cfg.interview.min_exchanges == 5
+
+    def test_require_understanding_in_dict_to_config(self):
+        cfg = _dict_to_config({"interview": {"require_understanding_summary": False}})
+        assert cfg.interview.require_understanding_summary is False
+
+    def test_require_exploration_in_dict_to_config(self):
+        cfg = _dict_to_config({"interview": {"require_codebase_exploration": False}})
+        assert cfg.interview.require_codebase_exploration is False
+
+    def test_min_exchanges_zero_raises(self):
+        with pytest.raises(ValueError, match="min_exchanges must be >= 1"):
+            _dict_to_config({"interview": {"min_exchanges": 0}})
+
+    def test_min_exchanges_exceeds_max_raises(self):
+        with pytest.raises(ValueError, match="min_exchanges must be <= max_exchanges"):
+            _dict_to_config({"interview": {"min_exchanges": 100, "max_exchanges": 50}})

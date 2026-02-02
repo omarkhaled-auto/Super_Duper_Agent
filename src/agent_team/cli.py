@@ -9,10 +9,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import queue
 import re
 import signal
 import string
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +34,7 @@ from .agents import (
     build_agent_definitions,
     build_orchestrator_prompt,
 )
-from .config import AgentTeamConfig, detect_depth, load_config
+from .config import AgentTeamConfig, detect_depth, extract_constraints, load_config, parse_max_review_cycles
 from .display import (
     console,
     print_agent_response,
@@ -40,6 +42,7 @@ from .display import (
     print_completion,
     print_contract_violation,
     print_cost_summary,
+    print_depth_detection,
     print_error,
     print_info,
     print_interactive_prompt,
@@ -47,16 +50,65 @@ from .display import (
     print_map_complete,
     print_map_start,
     print_prd_mode,
+    print_run_summary,
     print_schedule_summary,
     print_task_start,
-    print_verification_result,
     print_verification_summary,
     print_warning,
-    print_wave_complete,
-    print_wave_start,
 )
 from .interviewer import _detect_scope, run_interview
 from .mcp_servers import get_mcp_servers
+
+
+# ---------------------------------------------------------------------------
+# Intervention queue for background stdin reading
+# ---------------------------------------------------------------------------
+
+class InterventionQueue:
+    """Background stdin reader that queues messages prefixed with '!!'."""
+
+    _PREFIX = "!!"
+
+    def __init__(self) -> None:
+        self._queue: queue.Queue[str] = queue.Queue()
+        self._active = False
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        """Start background thread if stdin is a TTY."""
+        if not sys.stdin.isatty():
+            return
+        self._active = True
+        self._thread = threading.Thread(target=self._reader, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        """Stop background thread."""
+        self._active = False
+
+    def has_intervention(self) -> bool:
+        """Check if there's a pending intervention."""
+        return not self._queue.empty()
+
+    def get_intervention(self) -> str | None:
+        """Get the next intervention message, or None."""
+        try:
+            return self._queue.get_nowait()
+        except queue.Empty:
+            return None
+
+    def _reader(self) -> None:
+        """Background reader thread."""
+        while self._active:
+            try:
+                line = sys.stdin.readline()
+                if not line:
+                    break
+                line = line.strip()
+                if line.startswith(self._PREFIX):
+                    self._queue.put(line[len(self._PREFIX):].strip())
+            except (EOFError, OSError):
+                break
 
 
 # ---------------------------------------------------------------------------
@@ -114,10 +166,11 @@ def _detect_prd_from_task(task: str) -> bool:
 def _build_options(
     config: AgentTeamConfig,
     cwd: str | None = None,
+    constraints: list | None = None,
 ) -> ClaudeAgentOptions:
     """Build ClaudeAgentOptions with all agents and MCP servers."""
     mcp_servers = get_mcp_servers(config)
-    agent_defs_raw = build_agent_definitions(config, mcp_servers)
+    agent_defs_raw = build_agent_definitions(config, mcp_servers, constraints=constraints)
 
     # Convert raw dicts to AgentDefinition objects
     agent_defs = {
@@ -198,11 +251,13 @@ async def _run_interactive(
     interview_scope: str | None = None,
     design_reference_urls: list[str] | None = None,
     codebase_map_summary: str | None = None,
-) -> None:
-    """Run the interactive multi-turn conversation loop."""
-    options = _build_options(config, cwd)
+    constraints: list | None = None,
+) -> float:
+    """Run the interactive multi-turn conversation loop. Returns total cost."""
+    options = _build_options(config, cwd, constraints=constraints)
     phase_costs: dict[str, float] = {}
     total_cost = 0.0
+    last_depth = depth_override or "standard"
 
     async with ClaudeSDKClient(options=options) as client:
         # If a PRD or task was provided on the CLI, send it first
@@ -211,6 +266,7 @@ async def _run_interactive(
             prd_content = Path(prd_path).read_text(encoding="utf-8")
             task = f"Build this application from the following PRD:\n\n{prd_content}"
             depth = depth_override or "exhaustive"
+            last_depth = depth
             agent_count = agent_count_override
             prompt = build_orchestrator_prompt(
                 task=task,
@@ -223,6 +279,7 @@ async def _run_interactive(
                 interview_scope=interview_scope,
                 design_reference_urls=design_reference_urls,
                 codebase_map_summary=codebase_map_summary,
+                constraints=constraints,
             )
             print_task_start(task[:200], depth, agent_count)
             await client.query(prompt)
@@ -237,13 +294,20 @@ async def _run_interactive(
             if user_input.lower() in ("exit", "quit", "q"):
                 break
 
-            depth = depth_override or detect_depth(user_input, config)
+            if depth_override:
+                depth = depth_override
+            else:
+                detection = detect_depth(user_input, config)
+                depth = detection.level
+                print_depth_detection(detection)
+            last_depth = depth
             agent_count = _detect_agent_count(user_input, agent_count_override)
             is_prd = _detect_prd_from_task(user_input)
 
             # I4 fix: inline PRD detection forces exhaustive depth
             if is_prd and not depth_override:
                 depth = "exhaustive"
+                last_depth = depth
 
             prompt = build_orchestrator_prompt(
                 task=user_input,
@@ -256,6 +320,7 @@ async def _run_interactive(
                 interview_scope=interview_scope,
                 design_reference_urls=design_reference_urls,
                 codebase_map_summary=codebase_map_summary,
+                constraints=constraints,
             )
             # Clear interview doc after first query -- the orchestrator has
             # already received it. Re-injecting on every interactive query
@@ -273,6 +338,13 @@ async def _run_interactive(
     if config.display.show_cost and total_cost > 0:
         print_cost_summary(phase_costs)
 
+    # Run summary (always shown, not gated behind show_cost)
+    from .state import RunSummary
+    summary = RunSummary(task="(interactive session)", depth=last_depth, total_cost=total_cost)
+    print_run_summary(summary)
+
+    return total_cost
+
 
 # ---------------------------------------------------------------------------
 # Single-shot mode
@@ -289,9 +361,10 @@ async def _run_single(
     interview_scope: str | None = None,
     design_reference_urls: list[str] | None = None,
     codebase_map_summary: str | None = None,
-) -> None:
-    """Run a single task to completion."""
-    options = _build_options(config, cwd)
+    constraints: list | None = None,
+) -> float:
+    """Run a single task to completion. Returns total cost."""
+    options = _build_options(config, cwd, constraints=constraints)
     phase_costs: dict[str, float] = {}
 
     if prd_path:
@@ -310,6 +383,7 @@ async def _run_single(
         interview_scope=interview_scope,
         design_reference_urls=design_reference_urls,
         codebase_map_summary=codebase_map_summary,
+        constraints=constraints,
     )
 
     print_task_start(task, depth, agent_count)
@@ -318,9 +392,28 @@ async def _run_single(
         await client.query(prompt)
         total_cost = await _process_response(client, config, phase_costs)
 
+    # Cost breakdown (gated behind show_cost)
+    cycle_count = 0
     if config.display.show_cost:
         print_cost_summary(phase_costs)
-        print_completion(task[:100], 0, total_cost)
+
+    # Read REQUIREMENTS.md for actual cycle count (always, for RunSummary)
+    req_path = Path(cwd or ".") / config.convergence.requirements_dir / config.convergence.requirements_file
+    if req_path.exists():
+        try:
+            cycle_count = parse_max_review_cycles(req_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            print_warning(f"Could not parse review cycles: {exc}")
+
+    if config.display.show_cost:
+        print_completion(task[:100], cycle_count, total_cost)
+
+    # Run summary (always shown, not gated behind show_cost)
+    from .state import RunSummary
+    summary = RunSummary(task=task[:100], depth=depth, total_cost=total_cost, cycle_count=cycle_count)
+    print_run_summary(summary)
+
+    return total_cost
 
 
 # ---------------------------------------------------------------------------
@@ -333,16 +426,25 @@ async def _run_single(
 # event loop also runs in the main thread, so there is no concurrent
 # modification from other threads.
 _interrupt_count = 0
+_current_state = None  # Module-level for state saving
 
 
 def _handle_interrupt(signum: int, frame: Any) -> None:
-    """Handle Ctrl+C: first press interrupts current operation, second exits."""
-    global _interrupt_count
+    """Handle Ctrl+C: first press warns, second saves state and exits."""
+    global _interrupt_count, _current_state
     _interrupt_count += 1
     if _interrupt_count >= 2:
-        print_warning("Double interrupt — exiting immediately.")
+        if _current_state is not None:
+            try:
+                from .state import save_state
+                save_state(_current_state)
+                print_warning("Double interrupt — state saved. Run 'agent-team resume' to continue.")
+            except Exception:
+                print_warning("Double interrupt — state save failed. Exiting.")
+        else:
+            print_warning("Double interrupt — exiting immediately.")
         sys.exit(130)
-    print_warning("Interrupt received. Press Ctrl+C again to exit.")
+    print_warning("Interrupt received. Press Ctrl+C again to save state and exit.")
 
 
 # ---------------------------------------------------------------------------
@@ -418,6 +520,11 @@ def _parse_args() -> argparse.Namespace:
         help="Skip the interview phase and go straight to the orchestrator",
     )
     parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show task analysis without making API calls",
+    )
+    parser.add_argument(
         "--interview-doc",
         metavar="FILE",
         default=None,
@@ -462,8 +569,143 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+# ---------------------------------------------------------------------------
+# Subcommands
+# ---------------------------------------------------------------------------
+
+def _handle_subcommand(cmd: str) -> None:
+    """Handle agent-team subcommands."""
+    if cmd == "init":
+        _subcommand_init()
+    elif cmd == "status":
+        _subcommand_status()
+    elif cmd == "resume":
+        _subcommand_resume()
+    elif cmd == "clean":
+        _subcommand_clean()
+    elif cmd == "guide":
+        _subcommand_guide()
+
+
+def _subcommand_init() -> None:
+    """Generate a starter config.yaml with comments."""
+    config_path = Path("config.yaml")
+    if config_path.exists():
+        print_warning("config.yaml already exists. Delete it first or use a different name.")
+        return
+    config_path.write_text(
+        "# Agent Team Configuration\n"
+        "# See: https://github.com/omar-agent-team/docs\n\n"
+        "orchestrator:\n"
+        "  model: opus\n"
+        "  max_turns: 500\n\n"
+        "depth:\n"
+        "  default: standard\n"
+        "  auto_detect: true\n\n"
+        "convergence:\n"
+        "  max_cycles: 10\n\n"
+        "interview:\n"
+        "  enabled: true\n"
+        "  min_exchanges: 3\n\n"
+        "display:\n"
+        "  show_cost: true\n"
+        "  verbose: false\n",
+        encoding="utf-8",
+    )
+    print_info("Created config.yaml with default settings.")
+
+
+def _subcommand_status() -> None:
+    """Show .agent-team/ contents and state."""
+    agent_dir = Path(".agent-team")
+    if not agent_dir.exists():
+        print_info("No .agent-team/ directory found.")
+        return
+    print_info(f"Agent Team directory: {agent_dir.resolve()}")
+    for f in sorted(agent_dir.iterdir()):
+        size = f.stat().st_size
+        print_info(f"  {f.name} ({size} bytes)")
+    # Check for state
+    from .state import load_state
+    state = load_state(str(agent_dir))
+    if state:
+        print_info(f"  Run ID: {state.run_id}")
+        print_info(f"  Task: {state.task[:80]}")
+        print_info(f"  Phase: {state.current_phase}")
+        print_info(f"  Interrupted: {state.interrupted}")
+
+
+def _subcommand_resume() -> None:
+    """Resume from STATE.json."""
+    from .state import load_state
+    state = load_state()
+    if not state:
+        print_error("No saved state found. Nothing to resume.")
+        return
+    print_info(f"Resuming run {state.run_id} — task: {state.task[:80]}")
+    print_info(f"Last phase: {state.current_phase}")
+    print_warning("Resume is not yet fully implemented. Please re-run with the same task.")
+
+
+def _subcommand_clean() -> None:
+    """Delete .agent-team/ with confirmation."""
+    import shutil
+    agent_dir = Path(".agent-team")
+    if not agent_dir.exists():
+        print_info("No .agent-team/ directory to clean.")
+        return
+    try:
+        response = input("Delete .agent-team/ directory? [y/N] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return
+    if response in ("y", "yes"):
+        shutil.rmtree(agent_dir)
+        print_info("Cleaned .agent-team/ directory.")
+    else:
+        print_info("Cancelled.")
+
+
+def _subcommand_guide() -> None:
+    """Print built-in usage guide."""
+    guide = (
+        "Agent Team — Usage Guide\n"
+        "========================\n\n"
+        "Quick Start:\n"
+        "  agent-team 'fix the login bug'     # Single task\n"
+        "  agent-team -i                       # Interactive mode\n"
+        "  agent-team --prd spec.md            # Build from PRD\n\n"
+        "Flags:\n"
+        "  --depth LEVEL    Override depth (quick/standard/thorough/exhaustive)\n"
+        "  --agents N       Override agent count\n"
+        "  --no-interview   Skip interview phase\n"
+        "  --dry-run        Preview without API calls\n"
+        "  --design-ref URL Reference website(s) for design\n\n"
+        "Subcommands:\n"
+        "  agent-team init     Create starter config.yaml\n"
+        "  agent-team status   Show current state\n"
+        "  agent-team resume   Resume interrupted run\n"
+        "  agent-team clean    Delete .agent-team/ directory\n"
+        "  agent-team guide    Show this guide\n"
+    )
+    console.print(guide)
+
+
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
+
 def main() -> None:
     """CLI entry point."""
+    # Reset globals at start to prevent stale state across multiple invocations
+    global _interrupt_count, _current_state
+    _interrupt_count = 0
+    _current_state = None
+
+    # Check for subcommands before argparse
+    if len(sys.argv) > 1 and sys.argv[1] in {"init", "status", "resume", "clean", "guide"}:
+        _handle_subcommand(sys.argv[1])
+        return
+
     args = _parse_args()
 
     # Signal handling
@@ -480,7 +722,14 @@ def main() -> None:
         cli_overrides.setdefault("display", {})["show_tools"] = True
 
     # Load config
-    config = load_config(config_path=args.config, cli_overrides=cli_overrides)
+    try:
+        config = load_config(config_path=args.config, cli_overrides=cli_overrides)
+    except ValueError as exc:
+        print_error(f"Configuration error: {exc}")
+        sys.exit(1)
+    except Exception as exc:
+        print_error(f"Failed to load configuration: {exc}")
+        sys.exit(1)
 
     # Apply progressive verification flags
     if args.progressive:
@@ -514,8 +763,33 @@ def main() -> None:
     # Check for API key
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print_error("ANTHROPIC_API_KEY environment variable not set.")
-        print_info("Set it in your environment or create a .env file.")
+        print_info("Get your key at: https://console.anthropic.com/settings/keys")
+        print_info("Then set it:")
+        if sys.platform == "win32":
+            print_info('  PowerShell: $env:ANTHROPIC_API_KEY = "sk-..."')
+            print_info('  CMD: set ANTHROPIC_API_KEY=sk-...')
+        else:
+            print_info('  export ANTHROPIC_API_KEY="sk-..."')
         sys.exit(1)
+
+    # -------------------------------------------------------------------
+    # C4: Dry-run mode (early gate before interview)
+    # -------------------------------------------------------------------
+    if args.dry_run:
+        task = args.task or "(interactive mode)"
+        if args.task:
+            detection = detect_depth(task, config)
+            depth = detection.level
+        else:
+            depth = args.depth or "standard"
+        print_info("DRY RUN — no API calls will be made")
+        print_info(f"Task: {task[:200]}")
+        print_info(f"Depth: {depth}")
+        print_info(f"Interview: {'enabled' if config.interview.enabled else 'disabled'}")
+        print_info(f"Min exchanges: {config.interview.min_exchanges}")
+        print_info(f"Model: {config.orchestrator.model}")
+        print_info(f"Max turns: {config.orchestrator.max_turns}")
+        return
 
     # -------------------------------------------------------------------
     # Phase 0: Interview
@@ -564,6 +838,26 @@ def main() -> None:
         except Exception as exc:
             print_error(f"Interview failed: {exc}")
             print_info("Proceeding without interview context.")
+
+    # -------------------------------------------------------------------
+    # Phase 0.25: Constraint Extraction
+    # -------------------------------------------------------------------
+    constraints: list | None = None
+    task_for_constraints = args.task or ""
+    try:
+        extracted = extract_constraints(task_for_constraints, interview_doc)
+        if extracted:
+            constraints = extracted
+            print_info(f"Extracted {len(constraints)} user constraint(s)")
+    except Exception as exc:
+        print_warning(f"Constraint extraction failed: {exc}")
+
+    # -------------------------------------------------------------------
+    # C2: Initialize RunState after task is known
+    # -------------------------------------------------------------------
+    from .state import RunState
+    _current_state = RunState(task=task_for_constraints or "", depth="pending")
+    _current_state.current_phase = "post-interview"
 
     # -------------------------------------------------------------------
     # Phase 0.5: Codebase Map
@@ -621,52 +915,90 @@ def main() -> None:
             print_warning(f"Scheduler failed: {exc}")
 
     # -------------------------------------------------------------------
-    # Determine orchestrator mode
+    # C5: Initialize and start InterventionQueue
     # -------------------------------------------------------------------
-    # If interview produced a document, we have enough context for single-shot,
-    # unless the user explicitly asked for interactive mode with -i.
-    has_interview = interview_doc is not None
-    interactive = args.interactive or (
-        args.task is None and args.prd is None and not has_interview
-    )
+    intervention = InterventionQueue()
 
-    # Auto-override depth based on interview scope or PRD mode when user didn't set --depth
-    depth_override = args.depth
-    if not depth_override and (interview_scope == "COMPLEX" or args.prd):
-        depth_override = "exhaustive"
+    try:
+        # -------------------------------------------------------------------
+        # Determine orchestrator mode
+        # -------------------------------------------------------------------
+        # If interview produced a document, we have enough context for single-shot,
+        # unless the user explicitly asked for interactive mode with -i.
+        has_interview = interview_doc is not None
+        interactive = args.interactive or (
+            args.task is None and args.prd is None and not has_interview
+        )
 
-    if interactive:
-        asyncio.run(_run_interactive(
-            config=config,
-            cwd=cwd,
-            depth_override=depth_override,
-            agent_count_override=args.agents,
-            prd_path=args.prd,
-            interview_doc=interview_doc,
-            interview_scope=interview_scope,
-            design_reference_urls=design_ref_urls or None,
-            codebase_map_summary=codebase_map_summary,
-        ))
-    else:
-        # Use the interview doc as the task if no explicit task was given
-        task = args.task or ""
-        if has_interview and not task:
-            task = "Implement the requirements from the interview document."
-        depth = depth_override or detect_depth(task, config)
-        agent_count = _detect_agent_count(task, args.agents)
+        # Auto-override depth based on interview scope or PRD mode when user didn't set --depth
+        depth_override = args.depth
+        if not depth_override and (interview_scope == "COMPLEX" or args.prd):
+            depth_override = "exhaustive"
 
-        asyncio.run(_run_single(
-            task=task,
-            config=config,
-            cwd=cwd,
-            depth=depth,
-            agent_count=agent_count,
-            prd_path=args.prd,
-            interview_doc=interview_doc,
-            interview_scope=interview_scope,
-            design_reference_urls=design_ref_urls or None,
-            codebase_map_summary=codebase_map_summary,
-        ))
+        # Start intervention queue (infrastructure ready for future SDK
+        # mid-stream injection support; hint suppressed until polling is wired)
+        intervention.start()
+
+        # Update phase to orchestration
+        if _current_state:
+            _current_state.current_phase = "orchestration"
+
+        run_cost = 0.0
+        if interactive:
+            run_cost = asyncio.run(_run_interactive(
+                config=config,
+                cwd=cwd,
+                depth_override=depth_override,
+                agent_count_override=args.agents,
+                prd_path=args.prd,
+                interview_doc=interview_doc,
+                interview_scope=interview_scope,
+                design_reference_urls=design_ref_urls or None,
+                codebase_map_summary=codebase_map_summary,
+                constraints=constraints,
+            ))
+        else:
+            # Use the interview doc as the task if no explicit task was given
+            task = args.task or ""
+            if has_interview and not task:
+                task = "Implement the requirements from the interview document."
+            if depth_override:
+                depth = depth_override
+            else:
+                detection = detect_depth(task, config)
+                depth = detection.level
+                print_depth_detection(detection)
+            agent_count = _detect_agent_count(task, args.agents)
+
+            # Update RunState with resolved depth
+            if _current_state:
+                _current_state.depth = depth
+
+            run_cost = asyncio.run(_run_single(
+                task=task,
+                config=config,
+                cwd=cwd,
+                depth=depth,
+                agent_count=agent_count,
+                prd_path=args.prd,
+                interview_doc=interview_doc,
+                interview_scope=interview_scope,
+                design_reference_urls=design_ref_urls or None,
+                codebase_map_summary=codebase_map_summary,
+                constraints=constraints,
+            ))
+
+        # Update RunState with actual cost from orchestration
+        if _current_state:
+            _current_state.total_cost = run_cost or 0.0
+
+        # Update phase to complete after orchestration
+        if _current_state:
+            _current_state.current_phase = "complete"
+
+    finally:
+        # Stop intervention queue
+        intervention.stop()
 
     # -------------------------------------------------------------------
     # Post-orchestration: Update TASKS.md statuses

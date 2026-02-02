@@ -14,20 +14,6 @@ from .config import AgentConfig, AgentTeamConfig, get_agent_counts
 from .mcp_servers import get_research_tools
 
 # Mapping from config underscore keys to SDK hyphenated names
-_CONFIG_TO_SDK_NAME: dict[str, str] = {
-    "planner": "planner",
-    "researcher": "researcher",
-    "architect": "architect",
-    "task_assigner": "task-assigner",
-    "code_writer": "code-writer",
-    "code_reviewer": "code-reviewer",
-    "test_runner": "test-runner",
-    "security_auditor": "security-auditor",
-    "debugger": "debugger",
-    "integration_agent": "integration-agent",
-    "contract_generator": "contract-generator",
-}
-
 # ---------------------------------------------------------------------------
 # Orchestrator system prompt
 # ---------------------------------------------------------------------------
@@ -157,6 +143,19 @@ Be GENEROUS with agent counts. Getting it right the first time is worth deployin
 ============================================================
 SECTION 3: THE CONVERGENCE LOOP
 ============================================================
+
+CONVERGENCE GATES (HARD RULES — NO EXCEPTIONS):
+
+GATE 1 — REVIEW & TEST AUTHORITY: Only the REVIEW FLEET (code-reviewer agents) and TESTING FLEET (test-runner agents) can mark checklist items as [x] in REQUIREMENTS.md.
+- Code-reviewers mark implementation/quality items [x] after review
+- Test-runners mark testing items [x] ONLY after tests pass
+- No coder, debugger, architect, planner, researcher, security-auditor, or integration agent may mark items [x].
+
+GATE 2 — MANDATORY RE-REVIEW: After ANY debug fix, you MUST deploy a review fleet agent to verify the fix. Debug → Re-Review is MANDATORY and NON-NEGOTIABLE. Never skip this step.
+
+GATE 3 — CYCLE REPORTING: After EVERY review cycle, report: "Cycle N: X/Y requirements complete (Z%)". This is mandatory — never skip the report.
+
+GATE 4 — DEPTH ≠ THOROUGHNESS: The depth level (quick/standard/thorough/exhaustive) controls FLEET SIZE, not review quality. Even at QUICK depth, reviews must be thorough.
 
 After creating REQUIREMENTS.md and completing planning/research/architecture:
 
@@ -459,6 +458,30 @@ IMPORTANT RULES:
 - Use the MAXIMUM agent count for the detected depth level
 - If the user specified an agent count, follow it EXACTLY
 - Run INDEFINITELY until the job is done — no matter how many cycles
+
+USER INTERVENTIONS: During orchestration, the user may send messages prefixed with [USER INTERVENTION -- HIGHEST PRIORITY]. When this happens:
+1. Do NOT launch any NEW agent deployments until you have processed this intervention
+2. If an agent is currently executing, review its output against the intervention when it completes
+3. Read and acknowledge the intervention
+4. Adjust the plan according to the user's instructions
+5. Resume execution with the updated plan
+
+============================================================
+SECTION 8: CONSTRAINT ENFORCEMENT
+============================================================
+
+When user constraints are present (marked with [PROHIBITION], [REQUIREMENT], or [SCOPE]):
+- Before EVERY architectural decision, check the constraint list
+- REJECT any agent proposal that violates a prohibition constraint
+- If a constraint conflicts with a technical requirement, ESCALATE to the user — do NOT resolve silently
+- Constraints marked with !!! are HIGHEST PRIORITY — they override all other considerations
+- Include constraint compliance status in every cycle report
+
+CONSTRAINT VIOLATION PROTOCOL:
+1. DETECT: After each agent completes, compare its output against the constraint list
+2. REJECT: Discard the violating output -- do NOT integrate it into REQUIREMENTS.md or code
+3. REPORT: Log which constraint was violated, by which agent, and which output was discarded
+4. REDIRECT: Re-deploy the agent with an explicit constraint reminder prepended to its task
 """.strip()
 
 
@@ -469,6 +492,8 @@ IMPORTANT RULES:
 PLANNER_PROMPT = r"""You are a PLANNER agent in the Agent Team system.
 
 Your job is to EXPLORE the codebase and CREATE the Requirements Document (.agent-team/REQUIREMENTS.md).
+
+Do NOT edit the Requirements Checklist in REQUIREMENTS.md -- only code-reviewer and test-runner agents may mark items [x].
 
 ## Your Tasks
 1. Explore the project structure using Glob, Grep, and Read tools
@@ -568,6 +593,8 @@ If Firecrawl tools are unavailable, skip design research entirely and note the l
 ARCHITECT_PROMPT = r"""You are an ARCHITECT agent in the Agent Team system.
 
 Your job is to design the solution and add the architecture decision to the Requirements Document.
+
+Do NOT edit the Requirements Checklist in REQUIREMENTS.md -- only code-reviewer and test-runner agents may mark items [x].
 
 ## Your Tasks
 1. Read `.agent-team/REQUIREMENTS.md` thoroughly — context, research, and all requirements
@@ -743,6 +770,11 @@ If orphans are found: create a Review Log entry with item ID "ORPHAN-CHECK", FAI
 Orphan detection catches the "built but forgot to wire" problem.
 
 If verification results are available in .agent-team/VERIFICATION.md, check them. Contract violations and test failures are blockers.
+
+REVIEW AUTHORITY:
+YOU are the ONLY agent authorized to mark requirement items [x] in REQUIREMENTS.md.
+No other agent (coder, debugger, architect) may do this.
+Only mark an item [x] when you have PERSONALLY verified the implementation is correct.
 """.strip()
 
 TEST_RUNNER_PROMPT = r"""You are a TEST RUNNER agent in the Agent Team system.
@@ -775,6 +807,8 @@ Your job is to write and run tests that verify the requirements are implemented 
 SECURITY_AUDITOR_PROMPT = r"""You are a SECURITY AUDITOR agent in the Agent Team system.
 
 Your job is to find security vulnerabilities and verify security requirements.
+
+Do NOT edit the Requirements Checklist in REQUIREMENTS.md -- only code-reviewer and test-runner agents may mark items [x].
 
 ## Your Tasks
 1. Read `.agent-team/REQUIREMENTS.md` for security-related requirements
@@ -823,7 +857,7 @@ Your job is to fix specific issues identified by the review fleet.
 - Fix the SPECIFIC issues documented in the Review Log
 - Don't make unrelated changes — stay focused on the failing items
 - Test your fixes if possible before completing
-- Do NOT modify REQUIREMENTS.md — that's for reviewers
+- Do NOT modify REQUIREMENTS.md — that's for code-reviewer agents only
 
 ## Wiring Issue Debugging (for WIRE-xxx failures)
 When a WIRE-xxx item fails review:
@@ -839,6 +873,11 @@ The issue is typically about cross-module integration:
 - **Initialization order**: Check if dependencies are initialized before dependents
 - **Type mismatch at boundary**: Check if data types match across the module boundary
 - Wiring fixes may require modifying the TARGET file (where the connection is made), not the SOURCE file
+
+REVIEW BOUNDARY:
+You CANNOT mark requirement items [x] in REQUIREMENTS.md — only the code-reviewer agents can.
+After you fix issues, the orchestrator MUST deploy a reviewer to verify your fixes.
+Focus on fixing the code, not on marking requirements as complete.
 """.strip()
 
 TASK_ASSIGNER_PROMPT = r"""You are a TASK ASSIGNER agent in the Agent Team system.
@@ -952,6 +991,8 @@ INTEGRATION_AGENT_PROMPT = r"""You are an INTEGRATION AGENT in the Agent Team sy
 
 Your job is to process integration declarations from code-writer agents and make atomic edits to shared files.
 
+Do NOT edit the Requirements Checklist in REQUIREMENTS.md -- only code-reviewer and test-runner agents may mark items [x].
+
 ## Your Tasks
 1. Read all integration declarations from the current wave's code-writer outputs
 2. Detect conflicts between declarations (e.g., two agents both want to add an import to the same file)
@@ -1028,6 +1069,7 @@ Your job is to read the architecture decision from REQUIREMENTS.md and generate 
 def build_agent_definitions(
     config: AgentTeamConfig,
     mcp_servers: dict[str, Any],
+    constraints: list | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Build the agents dict for ClaudeAgentOptions.
 
@@ -1130,6 +1172,14 @@ def build_agent_definitions(
             "model": config.agents.get("contract_generator", AgentConfig()).model,
         }
 
+    # Inject user constraints into all agent prompts
+    if constraints:
+        from .config import format_constraints_block
+        constraints_block = format_constraints_block(constraints)
+        if constraints_block:
+            for name in agents:
+                agents[name]["prompt"] = constraints_block + "\n\n" + agents[name]["prompt"]
+
     return agents
 
 
@@ -1144,16 +1194,18 @@ def build_orchestrator_prompt(
     interview_scope: str | None = None,
     design_reference_urls: list[str] | None = None,
     codebase_map_summary: str | None = None,
+    constraints: list | None = None,
 ) -> str:
     """Build the full orchestrator prompt with task-specific context injected."""
-    agent_counts = get_agent_counts(depth)
+    depth_str = str(depth) if not isinstance(depth, str) else depth
+    agent_counts = get_agent_counts(depth_str)
     req_dir = config.convergence.requirements_dir
     req_file = config.convergence.requirements_file
 
     # Build the task prompt that gets sent as the user message
     parts: list[str] = []
 
-    parts.append(f"[DEPTH: {depth.upper()}]")
+    parts.append(f"[DEPTH: {depth_str.upper()}]")
 
     if agent_count:
         parts.append(f"[AGENT COUNT: {agent_count} — distribute across phases proportionally]")
@@ -1233,5 +1285,11 @@ def build_orchestrator_prompt(
         parts.append("Then proceed through the convergence loop.")
         parts.append("Assign code-writer tasks from TASKS.md (by dependency graph).")
         parts.append("Do NOT stop until ALL items in REQUIREMENTS.md are marked [x] AND all tasks in TASKS.md are COMPLETE.")
+
+    if constraints:
+        from .config import format_constraints_block
+        constraints_block = format_constraints_block(constraints)
+        if constraints_block:
+            parts.append(constraints_block)
 
     return "\n".join(parts)

@@ -12,6 +12,10 @@ from agent_team.interviewer import (
     _detect_scope,
     _is_interview_exit,
     _NEGATION_WORDS,
+    _get_interview_phase,
+    _build_exchange_prompt,
+    _build_continuation_prompt,
+    _build_exit_confirmation_prompt,
 )
 
 
@@ -288,3 +292,191 @@ class TestRunInterview:
         import asyncio
         from agent_team.interviewer import run_interview
         assert asyncio.iscoroutinefunction(run_interview)
+
+
+# ===================================================================
+# Interview phase detection
+# ===================================================================
+
+class TestInterviewPhases:
+    def test_discovery_first_exchange(self):
+        assert _get_interview_phase(1, 3) == "DISCOVERY"
+
+    def test_discovery_at_half(self):
+        assert _get_interview_phase(1, 4) == "DISCOVERY"
+        assert _get_interview_phase(2, 4) == "DISCOVERY"
+
+    def test_refinement_after_half(self):
+        assert _get_interview_phase(2, 3) == "REFINEMENT"
+        assert _get_interview_phase(3, 4) == "REFINEMENT"
+
+    def test_refinement_at_min(self):
+        assert _get_interview_phase(3, 3) == "REFINEMENT"
+
+    def test_ready_after_min(self):
+        assert _get_interview_phase(4, 3) == "READY"
+        assert _get_interview_phase(10, 3) == "READY"
+
+    def test_zero_min_always_ready(self):
+        assert _get_interview_phase(0, 0) == "READY"
+        assert _get_interview_phase(1, 0) == "READY"
+
+    def test_min_one(self):
+        assert _get_interview_phase(1, 1) == "REFINEMENT"
+        assert _get_interview_phase(2, 1) == "READY"
+
+
+# ===================================================================
+# Exchange prompt building
+# ===================================================================
+
+class TestBuildExchangePrompt:
+    def test_discovery_includes_sections(self):
+        prompt = _build_exchange_prompt("hello", 1, 3, "DISCOVERY")
+        assert "My Current Understanding" in prompt
+        assert "What I Found in the Codebase" in prompt
+        assert "Questions" in prompt
+
+    def test_discovery_forbids_finalization(self):
+        prompt = _build_exchange_prompt("hello", 1, 3, "DISCOVERY")
+        assert "Do NOT suggest finalizing" in prompt
+
+    def test_refinement_includes_sections(self):
+        prompt = _build_exchange_prompt("hello", 2, 3, "REFINEMENT")
+        assert "Updated Understanding" in prompt
+        assert "What I Propose" in prompt
+        assert "Remaining Questions" in prompt
+
+    def test_ready_allows_finalization(self):
+        prompt = _build_exchange_prompt("hello", 4, 3, "READY")
+        assert "Final Understanding" in prompt
+        assert "Proposed Approach" in prompt
+
+    def test_includes_user_message(self):
+        prompt = _build_exchange_prompt("my specific question", 1, 3, "DISCOVERY")
+        assert "my specific question" in prompt
+
+    def test_includes_exchange_count(self):
+        prompt = _build_exchange_prompt("hello", 2, 3, "REFINEMENT")
+        assert "Exchange 2" in prompt
+
+    def test_includes_phase_label(self):
+        prompt = _build_exchange_prompt("hello", 1, 3, "DISCOVERY")
+        assert "Phase: DISCOVERY" in prompt
+
+    def test_exploration_requirement(self):
+        prompt = _build_exchange_prompt("hello", 1, 3, "DISCOVERY")
+        assert "Glob" in prompt or "Grep" in prompt or "Read" in prompt or "tools" in prompt.lower()
+
+    def test_discovery_no_understanding_skips_section(self):
+        prompt = _build_exchange_prompt("hello", 1, 3, "DISCOVERY", require_understanding=False)
+        assert "My Current Understanding" not in prompt
+
+    def test_discovery_no_exploration_skips_tools(self):
+        prompt = _build_exchange_prompt("hello", 1, 3, "DISCOVERY", require_exploration=False)
+        assert "Glob" not in prompt and "Grep" not in prompt and "Read" not in prompt
+
+    def test_refinement_no_understanding_skips_section(self):
+        prompt = _build_exchange_prompt("hello", 2, 3, "REFINEMENT", require_understanding=False)
+        assert "Updated Understanding" not in prompt
+
+    def test_refinement_no_exploration_skips_tools(self):
+        prompt = _build_exchange_prompt("hello", 2, 3, "REFINEMENT", require_exploration=False)
+        assert "exploring the codebase" not in prompt
+
+
+# ===================================================================
+# Continuation prompt
+# ===================================================================
+
+class TestContinuationPrompt:
+    def test_includes_exchange_count(self):
+        prompt = _build_continuation_prompt(1, 3)
+        assert "1" in prompt
+        assert "3" in prompt
+
+    def test_includes_remaining(self):
+        prompt = _build_continuation_prompt(1, 3)
+        assert "2" in prompt  # 3 - 1 = 2 remaining
+
+    def test_asks_questions(self):
+        prompt = _build_continuation_prompt(1, 3)
+        assert "question" in prompt.lower()
+
+    def test_does_not_finalize(self):
+        prompt = _build_continuation_prompt(1, 3)
+        assert "Do NOT finalize" in prompt or "not" in prompt.lower()
+
+
+# ===================================================================
+# Exit confirmation prompt
+# ===================================================================
+
+class TestExitConfirmationPrompt:
+    def test_includes_summary_request(self):
+        prompt = _build_exit_confirmation_prompt()
+        assert "summary" in prompt.lower()
+
+    def test_includes_scope_assessment(self):
+        prompt = _build_exit_confirmation_prompt()
+        assert "scope" in prompt.lower() or "SIMPLE" in prompt or "MEDIUM" in prompt or "COMPLEX" in prompt
+
+    def test_includes_confirmation_request(self):
+        prompt = _build_exit_confirmation_prompt()
+        assert "yes" in prompt.lower()
+
+
+# ===================================================================
+# Min exchange config integration
+# ===================================================================
+
+class TestMinExchangeConfigIntegration:
+    def test_interview_config_has_min_exchanges(self):
+        from agent_team.config import InterviewConfig
+        cfg = InterviewConfig()
+        assert cfg.min_exchanges == 3
+
+    def test_custom_min_exchanges(self):
+        from agent_team.config import InterviewConfig
+        cfg = InterviewConfig(min_exchanges=5)
+        assert cfg.min_exchanges == 5
+
+    def test_system_prompt_has_mandatory_format(self):
+        assert "MANDATORY RESPONSE FORMAT" in INTERVIEWER_SYSTEM_PROMPT
+
+    def test_system_prompt_has_anti_patterns(self):
+        assert "ANTI-PATTERN" in INTERVIEWER_SYSTEM_PROMPT or "anti-pattern" in INTERVIEWER_SYSTEM_PROMPT.lower()
+
+    def test_system_prompt_has_interview_phases(self):
+        assert "INTERVIEW PHASES" in INTERVIEWER_SYSTEM_PROMPT or "DISCOVERY" in INTERVIEWER_SYSTEM_PROMPT
+
+
+# ===================================================================
+# Exit boundary tests (Tier 2/3a boundary)
+# ===================================================================
+
+class TestExitBoundary:
+    """Test that exit phrase handling respects min_exchanges boundary correctly."""
+
+    def test_phase_at_exactly_min_is_refinement(self):
+        """At exactly min_exchanges, phase should be REFINEMENT (not READY)."""
+        assert _get_interview_phase(3, 3) == "REFINEMENT"
+
+    def test_phase_at_min_plus_one_is_ready(self):
+        """At min_exchanges + 1, phase should be READY."""
+        assert _get_interview_phase(4, 3) == "READY"
+
+    def test_phase_below_min_is_not_ready(self):
+        """Below min_exchanges, phase should never be READY."""
+        for i in range(1, 4):
+            assert _get_interview_phase(i, 3) != "READY"
+
+    def test_continuation_prompt_at_boundary(self):
+        """Continuation prompt at exactly min should have 0 remaining."""
+        prompt = _build_continuation_prompt(3, 3)
+        assert "0" in prompt  # 3 - 3 = 0 remaining
+
+    def test_exit_confirmation_always_asks_for_yes(self):
+        """Exit confirmation should always ask for explicit confirmation."""
+        prompt = _build_exit_confirmation_prompt()
+        assert "yes" in prompt.lower()

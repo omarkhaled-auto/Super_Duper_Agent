@@ -8,10 +8,13 @@ import yaml
 from agent_team.agents import build_agent_definitions, build_orchestrator_prompt
 from agent_team.config import (
     AgentTeamConfig,
+    ConstraintEntry,
+    DepthDetection,
     DesignReferenceConfig,
     SchedulerConfig,
     VerificationConfig,
     detect_depth,
+    extract_constraints,
     get_agent_counts,
     load_config,
 )
@@ -374,3 +377,33 @@ class TestRuntimeWiring:
         assert result.passed is True
         assert result.checked_modules == 0
         assert result.checked_wirings == 0
+
+
+class TestConstraintPipelineIntegration:
+    """Test constraint extraction flows into orchestrator prompt."""
+
+    def test_constraints_flow_into_prompt(self, default_config):
+        task = "ZERO functionality changes. only restyle the SCSS."
+        constraints = extract_constraints(task)
+        assert len(constraints) > 0
+        prompt = build_orchestrator_prompt(
+            task=task,
+            depth="thorough",
+            config=default_config,
+            constraints=constraints,
+        )
+        # At least one constraint text should appear in prompt
+        found = any(c.text in prompt for c in constraints)
+        assert found, "No constraints found in orchestrator prompt"
+
+    def test_depth_detection_object_in_pipeline(self, default_config):
+        detection = detect_depth("restyle the dashboard", default_config)
+        assert isinstance(detection, DepthDetection)
+        assert detection.level == "thorough"
+        # Can be passed to build_orchestrator_prompt
+        prompt = build_orchestrator_prompt(
+            task="restyle the dashboard",
+            depth=detection,
+            config=default_config,
+        )
+        assert "[DEPTH: THOROUGH]" in prompt

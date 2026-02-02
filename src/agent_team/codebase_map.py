@@ -22,7 +22,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ._lang import _LANGUAGE_MAP as _CORE_LANGUAGE_MAP, detect_language as _detect_language_core
+from ._lang import _LANGUAGE_MAP as _CORE_LANGUAGE_MAP
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -326,8 +326,7 @@ _TS_EXPORT_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"module\.exports\s*=\s*\{([^}]+)\}"),
 ]
 
-# Star re-export — no named symbol, captured separately.
-_TS_EXPORT_STAR_RE = re.compile(r"export\s+\*\s+from\s+['\"]([^'\"]+)['\"]")
+# Star re-exports are intentionally omitted from the dependency graph.
 
 
 def _extract_exports_ts(content: str) -> list[str]:

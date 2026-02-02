@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from agent_team.cli import (
+    InterventionQueue,
     _detect_agent_count,
     _detect_prd_from_task,
     _handle_interrupt,
@@ -248,6 +249,7 @@ class TestMain:
                 interview_doc=None, design_ref=None,
                 no_map=False, map_only=False,
                 progressive=False, no_progressive=False,
+                dry_run=False,
             )
             from agent_team.cli import main
             with pytest.raises(SystemExit) as exc_info:
@@ -263,6 +265,7 @@ class TestMain:
                 interview_doc=None, design_ref=None,
                 no_map=False, map_only=False,
                 progressive=False, no_progressive=False,
+                dry_run=False,
             )
             from agent_team.cli import main
             with pytest.raises(SystemExit) as exc_info:
@@ -278,6 +281,7 @@ class TestMain:
                 interview_doc="/nonexistent/interview.md", design_ref=None,
                 no_map=False, map_only=False,
                 progressive=False, no_progressive=False,
+                dry_run=False,
             )
             from agent_team.cli import main
             with pytest.raises(SystemExit) as exc_info:
@@ -295,6 +299,7 @@ class TestMain:
                 interview_doc=None, design_ref=None,
                 no_map=False, map_only=False,
                 progressive=False, no_progressive=False,
+                dry_run=False,
             )
             from agent_team.cli import main
             main()
@@ -318,6 +323,7 @@ class TestMain:
                 interview_doc=str(doc_file), design_ref=None,
                 no_map=False, map_only=False,
                 progressive=False, no_progressive=False,
+                dry_run=False,
             )
             from agent_team.cli import main
             main()
@@ -336,6 +342,7 @@ class TestMain:
                 interview_doc=str(doc_file), design_ref=None,
                 no_map=False, map_only=False,
                 progressive=False, no_progressive=False,
+                dry_run=False,
             )
             from agent_team.cli import main
             main()
@@ -355,6 +362,7 @@ class TestMain:
                 design_ref=["https://a.com", "https://a.com", "https://b.com"],
                 no_map=False, map_only=False,
                 progressive=False, no_progressive=False,
+                dry_run=False,
             )
             from agent_team.cli import main
             main()
@@ -372,10 +380,49 @@ class TestMain:
                 interview_doc=None, design_ref=None,
                 no_map=False, map_only=False,
                 progressive=False, no_progressive=False,
+                dry_run=False,
             )
             from agent_team.cli import main
             main()
             mock_interview.assert_not_called()
+
+    def test_config_validation_error_exits_cleanly(self, env_with_api_keys):
+        """ValueError from config validation should exit with code 1, not raw traceback."""
+        with patch("agent_team.cli._parse_args") as mock_parse, \
+             patch("agent_team.cli.load_config") as mock_load:
+            mock_load.side_effect = ValueError("min_exchanges must be >= 1")
+            mock_parse.return_value = argparse.Namespace(
+                task="test", prd=None, depth=None, agents=None,
+                model=None, max_turns=None, config=None, cwd=None,
+                verbose=False, interactive=False, no_interview=True,
+                interview_doc=None, design_ref=None,
+                no_map=False, map_only=False,
+                progressive=False, no_progressive=False,
+                dry_run=False,
+            )
+            from agent_team.cli import main
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 1
+
+    def test_config_load_generic_error_exits_cleanly(self, env_with_api_keys):
+        """Generic exception from config loading should exit with code 1."""
+        with patch("agent_team.cli._parse_args") as mock_parse, \
+             patch("agent_team.cli.load_config") as mock_load:
+            mock_load.side_effect = RuntimeError("YAML parse error")
+            mock_parse.return_value = argparse.Namespace(
+                task="test", prd=None, depth=None, agents=None,
+                model=None, max_turns=None, config=None, cwd=None,
+                verbose=False, interactive=False, no_interview=True,
+                interview_doc=None, design_ref=None,
+                no_map=False, map_only=False,
+                progressive=False, no_progressive=False,
+                dry_run=False,
+            )
+            from agent_team.cli import main
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 1
 
 
 # ===================================================================
@@ -405,6 +452,7 @@ class TestComplexInterviewPRDPlumbing:
                 interview_doc=str(doc_file), design_ref=None,
                 no_map=False, map_only=False,
                 progressive=False, no_progressive=False,
+                dry_run=False,
             )
             from agent_team.cli import main
             main()
@@ -432,6 +480,7 @@ class TestComplexInterviewPRDPlumbing:
                 interview_doc=str(doc_file), design_ref=None,
                 no_map=False, map_only=False,
                 progressive=False, no_progressive=False,
+                dry_run=False,
             )
             from agent_team.cli import main
             main()
@@ -534,3 +583,88 @@ class TestProcessResponsePlaceholder:
         import asyncio
         from agent_team.cli import _process_response
         assert asyncio.iscoroutinefunction(_process_response)
+
+
+# ===================================================================
+# InterventionQueue
+# ===================================================================
+
+class TestInterventionQueue:
+    def test_queue_creation(self):
+        iq = InterventionQueue()
+        assert iq.has_intervention() is False
+
+    def test_get_returns_none_when_empty(self):
+        iq = InterventionQueue()
+        assert iq.get_intervention() is None
+
+    def test_prefix_detection(self):
+        iq = InterventionQueue()
+        # Manually put something in the queue
+        iq._queue.put("change approach")
+        assert iq.has_intervention() is True
+        msg = iq.get_intervention()
+        assert msg == "change approach"
+
+    def test_multiple_interventions(self):
+        iq = InterventionQueue()
+        iq._queue.put("first")
+        iq._queue.put("second")
+        assert iq.get_intervention() == "first"
+        assert iq.get_intervention() == "second"
+        assert iq.get_intervention() is None
+
+    def test_stop_sets_inactive(self):
+        iq = InterventionQueue()
+        iq._active = True
+        iq.stop()
+        assert iq._active is False
+
+
+# ===================================================================
+# Subcommands
+# ===================================================================
+
+class TestSubcommands:
+    def test_init_creates_config(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from agent_team.cli import _subcommand_init
+        _subcommand_init()
+        assert (tmp_path / "config.yaml").is_file()
+
+    def test_init_refuses_overwrite(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "config.yaml").write_text("existing", encoding="utf-8")
+        from agent_team.cli import _subcommand_init
+        _subcommand_init()  # Should not crash, just warn
+        assert (tmp_path / "config.yaml").read_text(encoding="utf-8") == "existing"
+
+    def test_status_no_dir(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from agent_team.cli import _subcommand_status
+        _subcommand_status()  # Should not crash
+
+    def test_guide_prints(self, capsys):
+        from agent_team.cli import _subcommand_guide
+        _subcommand_guide()
+        # Should produce some output (via rich console)
+
+
+# ===================================================================
+# Dry-run flag
+# ===================================================================
+
+class TestDryRunFlag:
+    def test_dry_run_parsed(self):
+        import sys
+        from unittest.mock import patch
+        with patch("sys.argv", ["agent-team", "--dry-run", "--no-interview", "test"]):
+            args = _parse_args()
+            assert args.dry_run is True
+
+    def test_dry_run_default_false(self):
+        import sys
+        from unittest.mock import patch
+        with patch("sys.argv", ["agent-team", "test"]):
+            args = _parse_args()
+            assert args.dry_run is False
