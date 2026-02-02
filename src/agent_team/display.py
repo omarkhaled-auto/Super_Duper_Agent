@@ -290,6 +290,36 @@ def print_interview_skip(reason: str) -> None:
     console.print()
 
 
+def print_resume_banner(state: object) -> None:
+    """Print the resume mode banner with run info.
+
+    Args:
+        state: A RunState-like object with run_id, task, current_phase,
+               completed_phases, and total_cost attributes.
+    """
+    run_id = getattr(state, "run_id", "unknown")
+    task = getattr(state, "task", "")
+    phase = getattr(state, "current_phase", "unknown")
+    completed = getattr(state, "completed_phases", [])
+    cost = getattr(state, "total_cost", 0.0)
+
+    content = Text()
+    content.append("RESUME MODE\n\n", style="bold yellow")
+    content.append(f"Run ID: {run_id}\n", style="white")
+    content.append(f"Task: {task[:120]}\n", style="white")
+    content.append(f"Interrupted at: {phase}\n", style="white")
+    if completed:
+        content.append(f"Completed phases: {', '.join(completed)}\n", style="green")
+    if cost > 0:
+        content.append(f"Previous cost: ${cost:.4f}\n", style="white")
+    content.append(
+        "\nSkipping completed phases. Orchestration will restart with existing artifacts.",
+        style="dim",
+    )
+    console.print()
+    console.print(Panel(content, border_style="yellow", title="Resuming"))
+
+
 def print_interview_min_not_reached(exchange_count: int, min_exchanges: int) -> None:
     """Print when user tries to exit before minimum exchanges."""
     console.print(
@@ -428,6 +458,26 @@ def print_verification_summary(state: dict) -> None:
 def print_contract_violation(violation: str) -> None:
     """Print a contract violation."""
     console.print(f"  [red]VIOLATION:[/] {violation}")
+
+
+# ---------------------------------------------------------------------------
+# User interventions
+# ---------------------------------------------------------------------------
+
+def print_intervention(message: str) -> None:
+    """Print an intervention message being sent to the orchestrator."""
+    console.print()
+    console.print(Panel(
+        f"[bold yellow]USER INTERVENTION[/]\n\n{message}",
+        border_style="yellow",
+        title="Intervention",
+    ))
+
+
+def print_intervention_hint() -> None:
+    """Print a hint about how to intervene during execution."""
+    console.print("[dim]Tip: Type [bold]!! your message[/bold] and press Enter to intervene mid-run[/]")
+    console.print()
 
 
 # ---------------------------------------------------------------------------

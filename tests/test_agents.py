@@ -572,3 +572,22 @@ class TestBuildOrchestratorPromptDepthHandling:
         # Should work without constraints parameter
         prompt = build_orchestrator_prompt("test", "standard", default_config)
         assert "[DEPTH: STANDARD]" in prompt
+
+    def test_orchestrator_prompt_has_resume_context_placeholder(self, default_config):
+        """resume_context param is accepted without error."""
+        prompt = build_orchestrator_prompt(
+            "test", "standard", default_config,
+            resume_context="[RESUME MODE -- test]",
+        )
+        assert "[RESUME MODE -- test]" in prompt
+
+    def test_resume_context_injected_before_task(self, default_config):
+        """resume_context should appear before [TASK] in the prompt."""
+        ctx = "[RESUME MODE -- Continuing from an interrupted run]"
+        prompt = build_orchestrator_prompt(
+            "fix the bug", "standard", default_config,
+            resume_context=ctx,
+        )
+        ctx_pos = prompt.index(ctx)
+        task_pos = prompt.index("[TASK]")
+        assert ctx_pos < task_pos

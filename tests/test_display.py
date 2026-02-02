@@ -16,10 +16,13 @@ from agent_team.display import (
     print_escalation,
     print_fleet_deployment,
     print_info,
+    print_intervention,
+    print_intervention_hint,
     print_interview_end,
     print_interview_skip,
     print_interview_start,
     print_prd_mode,
+    print_resume_banner,
     print_review_results,
     print_schedule_summary,
     print_task_start,
@@ -185,5 +188,47 @@ class TestSchedulerVerificationDisplay:
 
     def test_print_contract_violation(self, capsys):
         print_contract_violation("Missing return type on foo()")
+        captured = capsys.readouterr()
+        assert captured.out
+
+
+class TestInterventionDisplay:
+    """Tests for the user intervention display functions."""
+
+    def test_print_intervention_smoke(self):
+        """Should not raise."""
+        print_intervention("stop changing CSS, focus on API")
+
+    def test_print_intervention_hint_smoke(self):
+        """Should not raise."""
+        print_intervention_hint()
+
+    def test_print_intervention_produces_output(self, capsys):
+        print_intervention("redirect to backend work")
+        captured = capsys.readouterr()
+        assert captured.out
+
+    def test_print_intervention_hint_produces_output(self, capsys):
+        print_intervention_hint()
+        captured = capsys.readouterr()
+        assert captured.out
+
+
+class TestResumeBannerDisplay:
+    """Tests for the resume banner display function."""
+
+    def test_print_resume_banner_smoke(self):
+        """Should not raise."""
+        from agent_team.state import RunState
+        state = RunState(task="fix the bug", current_phase="orchestration")
+        state.completed_phases = ["interview", "constraints"]
+        print_resume_banner(state)
+
+    def test_print_resume_banner_produces_output(self, capsys):
+        from agent_team.state import RunState
+        state = RunState(task="fix the bug", current_phase="orchestration")
+        state.completed_phases = ["interview", "constraints"]
+        state.total_cost = 1.23
+        print_resume_banner(state)
         captured = capsys.readouterr()
         assert captured.out

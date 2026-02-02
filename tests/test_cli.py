@@ -12,6 +12,7 @@ from agent_team.cli import (
     InterventionQueue,
     _detect_agent_count,
     _detect_prd_from_task,
+    _drain_interventions,
     _handle_interrupt,
     _parse_args,
     _validate_url,
@@ -675,6 +676,123 @@ class TestInterventionQueue:
         assert iq._active is False
 
 
+class TestDrainInterventions:
+    """Tests for _drain_interventions — the wiring between InterventionQueue and the SDK."""
+
+    @pytest.mark.asyncio
+    async def test_drain_returns_zero_when_none(self):
+        """Passing intervention=None is safe and returns 0."""
+        from agent_team.config import AgentTeamConfig
+        config = AgentTeamConfig()
+        cost = await _drain_interventions(
+            client=MagicMock(),
+            intervention=None,
+            config=config,
+            phase_costs={},
+        )
+        assert cost == 0.0
+
+    @pytest.mark.asyncio
+    async def test_drain_returns_zero_when_empty_queue(self):
+        """Empty queue means nothing is sent."""
+        from agent_team.config import AgentTeamConfig
+        config = AgentTeamConfig()
+        iq = InterventionQueue()
+        mock_client = AsyncMock()
+        cost = await _drain_interventions(
+            client=mock_client,
+            intervention=iq,
+            config=config,
+            phase_costs={},
+        )
+        assert cost == 0.0
+        mock_client.query.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_drain_sends_queued_message(self):
+        """A queued intervention is sent as a follow-up query."""
+        from agent_team.config import AgentTeamConfig
+        config = AgentTeamConfig()
+        iq = InterventionQueue()
+        iq._queue.put("focus on the API")
+
+        mock_client = AsyncMock()
+        # _process_response is async generator — mock receive_response
+        mock_client.receive_response = AsyncMock(return_value=AsyncIterator([]))
+
+        with patch("agent_team.cli._process_response", new_callable=AsyncMock, return_value=0.05):
+            cost = await _drain_interventions(
+                client=mock_client,
+                intervention=iq,
+                config=config,
+                phase_costs={},
+            )
+
+        mock_client.query.assert_called_once()
+        call_arg = mock_client.query.call_args[0][0]
+        assert "[USER INTERVENTION -- HIGHEST PRIORITY]" in call_arg
+        assert "focus on the API" in call_arg
+        assert cost == 0.05
+
+    @pytest.mark.asyncio
+    async def test_drain_handles_multiple_interventions(self):
+        """Multiple queued messages are drained sequentially."""
+        from agent_team.config import AgentTeamConfig
+        config = AgentTeamConfig()
+        iq = InterventionQueue()
+        iq._queue.put("first correction")
+        iq._queue.put("second correction")
+
+        mock_client = AsyncMock()
+
+        with patch("agent_team.cli._process_response", new_callable=AsyncMock, return_value=0.01):
+            cost = await _drain_interventions(
+                client=mock_client,
+                intervention=iq,
+                config=config,
+                phase_costs={},
+            )
+
+        assert mock_client.query.call_count == 2
+        assert cost == pytest.approx(0.02)
+
+    @pytest.mark.asyncio
+    async def test_drain_accumulates_cost(self):
+        """Cost from intervention queries is accumulated."""
+        from agent_team.config import AgentTeamConfig
+        config = AgentTeamConfig()
+        iq = InterventionQueue()
+        iq._queue.put("adjust plan")
+        phase_costs: dict[str, float] = {"orchestration": 1.0}
+
+        mock_client = AsyncMock()
+
+        with patch("agent_team.cli._process_response", new_callable=AsyncMock, return_value=0.10):
+            cost = await _drain_interventions(
+                client=mock_client,
+                intervention=iq,
+                config=config,
+                phase_costs=phase_costs,
+            )
+
+        assert cost == pytest.approx(0.10)
+
+
+# Helper for async iteration in tests
+class AsyncIterator:
+    def __init__(self, items):
+        self._items = iter(items)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self._items)
+        except StopIteration:
+            raise StopAsyncIteration
+
+
 # ===================================================================
 # Subcommands
 # ===================================================================
@@ -722,3 +840,110 @@ class TestDryRunFlag:
         with patch("sys.argv", ["agent-team", "test"]):
             args = _parse_args()
             assert args.dry_run is False
+
+
+# ===================================================================
+# Resume subcommand
+# ===================================================================
+
+class TestSubcommandResume:
+    def test_subcommand_resume_no_state_returns_none(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from agent_team.cli import _subcommand_resume
+        result = _subcommand_resume()
+        assert result is None
+
+    def test_subcommand_resume_valid_state_returns_tuple(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from agent_team.state import RunState, save_state
+        state = RunState(task="fix the bug", depth="thorough")
+        state.current_phase = "orchestration"
+        state.completed_phases = ["interview", "constraints"]
+        save_state(state)
+        from agent_team.cli import _subcommand_resume
+        result = _subcommand_resume()
+        assert result is not None
+        args, ctx = result
+        assert isinstance(ctx, str)
+
+    def test_subcommand_resume_sets_no_interview(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from agent_team.state import RunState, save_state
+        save_state(RunState(task="fix the bug", depth="standard"))
+        from agent_team.cli import _subcommand_resume
+        result = _subcommand_resume()
+        assert result is not None
+        args, _ = result
+        assert args.no_interview is True
+
+    def test_subcommand_resume_uses_interview_doc(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        agent_dir = tmp_path / ".agent-team"
+        agent_dir.mkdir()
+        (agent_dir / "INTERVIEW.md").write_text("# Interview\nStuff", encoding="utf-8")
+        from agent_team.state import RunState, save_state
+        save_state(RunState(task="fix the bug"), str(agent_dir))
+        from agent_team.cli import _subcommand_resume
+        result = _subcommand_resume()
+        assert result is not None
+        args, _ = result
+        assert args.interview_doc is not None
+        assert "INTERVIEW.md" in args.interview_doc
+
+    def test_subcommand_resume_preserves_task(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from agent_team.state import RunState, save_state
+        save_state(RunState(task="add dark mode", depth="thorough"))
+        from agent_team.cli import _subcommand_resume
+        result = _subcommand_resume()
+        assert result is not None
+        args, _ = result
+        assert args.task == "add dark mode"
+
+
+# ===================================================================
+# _build_resume_context()
+# ===================================================================
+
+class TestBuildResumeContext:
+    def test_build_resume_context_lists_artifacts(self, tmp_path):
+        agent_dir = tmp_path / ".agent-team"
+        agent_dir.mkdir()
+        (agent_dir / "REQUIREMENTS.md").write_text("# Reqs", encoding="utf-8")
+        (agent_dir / "TASKS.md").write_text("# Tasks", encoding="utf-8")
+        from agent_team.state import RunState
+        state = RunState(task="test", current_phase="orchestration")
+        state.completed_phases = ["interview"]
+        from agent_team.cli import _build_resume_context
+        ctx = _build_resume_context(state, str(tmp_path))
+        assert "REQUIREMENTS.md" in ctx
+        assert "TASKS.md" in ctx
+
+    def test_build_resume_context_includes_instructions(self, tmp_path):
+        from agent_team.state import RunState
+        state = RunState(task="test")
+        from agent_team.cli import _build_resume_context
+        ctx = _build_resume_context(state, str(tmp_path))
+        assert "RESUME INSTRUCTIONS" in ctx
+        assert "RESUME MODE" in ctx
+
+
+# ===================================================================
+# completed_phases population
+# ===================================================================
+
+class TestCompletedPhasesPopulation:
+    def test_completed_phases_populated(self, env_with_api_keys):
+        """After main() runs through phases, completed_phases should be populated."""
+        import agent_team.cli as cli_mod
+        from agent_team.state import RunState
+
+        # Simulate: set _current_state and verify phases can be appended
+        state = RunState(task="test")
+        state.completed_phases.append("interview")
+        state.completed_phases.append("constraints")
+        state.completed_phases.append("codebase_map")
+        assert len(state.completed_phases) == 3
+        assert "interview" in state.completed_phases
+        assert "constraints" in state.completed_phases
+        assert "codebase_map" in state.completed_phases

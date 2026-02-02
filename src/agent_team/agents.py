@@ -1212,6 +1212,7 @@ def build_orchestrator_prompt(
     design_reference_urls: list[str] | None = None,
     codebase_map_summary: str | None = None,
     constraints: list | None = None,
+    resume_context: str | None = None,
 ) -> str:
     """Build the full orchestrator prompt with task-specific context injected."""
     depth_str = str(depth) if not isinstance(depth, str) else depth
@@ -1280,6 +1281,9 @@ def build_orchestrator_prompt(
         parts.append("Read the PRD file and enter PRD Mode as described in your instructions.")
         parts.append(f"Create {master_plan} in {req_dir}/ with milestones.")
         parts.append(f"Create per-milestone REQUIREMENTS.md files in {req_dir}/milestone-N/")
+
+    if resume_context:
+        parts.append(resume_context)
 
     parts.append(f"\n[TASK]\n{task}")
 

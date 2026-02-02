@@ -46,6 +46,8 @@ from .display import (
     print_error,
     print_info,
     print_interactive_prompt,
+    print_intervention,
+    print_intervention_hint,
     print_interview_skip,
     print_map_complete,
     print_map_start,
@@ -252,6 +254,36 @@ async def _process_response(
     return cost
 
 
+async def _drain_interventions(
+    client: ClaudeSDKClient,
+    intervention: "InterventionQueue | None",
+    config: AgentTeamConfig,
+    phase_costs: dict[str, float],
+) -> float:
+    """Send any queued !! intervention messages to the orchestrator.
+
+    Called after each _process_response() to check whether the user typed
+    an intervention while the orchestrator was working.  Each queued
+    message is sent as a follow-up query with the highest-priority tag
+    that the orchestrator prompt already knows how to handle.
+
+    Returns the cumulative cost of all intervention queries.
+    """
+    if intervention is None:
+        return 0.0
+    cost = 0.0
+    while intervention.has_intervention():
+        msg = intervention.get_intervention()
+        if not msg:
+            continue
+        print_intervention(msg)
+        prompt = f"[USER INTERVENTION -- HIGHEST PRIORITY]\n\n{msg}"
+        await client.query(prompt)
+        c = await _process_response(client, config, phase_costs, current_phase="intervention")
+        cost += c
+    return cost
+
+
 # ---------------------------------------------------------------------------
 # Interactive mode
 # ---------------------------------------------------------------------------
@@ -267,6 +299,8 @@ async def _run_interactive(
     design_reference_urls: list[str] | None = None,
     codebase_map_summary: str | None = None,
     constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    resume_context: str | None = None,
 ) -> float:
     """Run the interactive multi-turn conversation loop. Returns total cost."""
     options = _build_options(config, cwd, constraints=constraints)
@@ -295,11 +329,15 @@ async def _run_interactive(
                 design_reference_urls=design_reference_urls,
                 codebase_map_summary=codebase_map_summary,
                 constraints=constraints,
+                resume_context=resume_context,
             )
+            # Clear resume_context after first use
+            resume_context = None
             print_task_start(task[:200], depth, agent_count)
             await client.query(prompt)
             cost = await _process_response(client, config, phase_costs)
             total_cost += cost
+            total_cost += await _drain_interventions(client, intervention, config, phase_costs)
 
         # Interactive loop
         while True:
@@ -349,6 +387,7 @@ async def _run_interactive(
             await client.query(prompt)
             cost = await _process_response(client, config, phase_costs)
             total_cost += cost
+            total_cost += await _drain_interventions(client, intervention, config, phase_costs)
 
     if config.display.show_cost and total_cost > 0:
         print_cost_summary(phase_costs)
@@ -377,6 +416,8 @@ async def _run_single(
     design_reference_urls: list[str] | None = None,
     codebase_map_summary: str | None = None,
     constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    resume_context: str | None = None,
 ) -> float:
     """Run a single task to completion. Returns total cost."""
     options = _build_options(config, cwd, constraints=constraints)
@@ -399,6 +440,7 @@ async def _run_single(
         design_reference_urls=design_reference_urls,
         codebase_map_summary=codebase_map_summary,
         constraints=constraints,
+        resume_context=resume_context,
     )
 
     print_task_start(task, depth, agent_count)
@@ -406,6 +448,7 @@ async def _run_single(
     async with ClaudeSDKClient(options=options) as client:
         await client.query(prompt)
         total_cost = await _process_response(client, config, phase_costs)
+        total_cost += await _drain_interventions(client, intervention, config, phase_costs)
 
     # Cost breakdown (gated behind show_cost)
     cycle_count = 0
@@ -589,13 +632,11 @@ def _parse_args() -> argparse.Namespace:
 # ---------------------------------------------------------------------------
 
 def _handle_subcommand(cmd: str) -> None:
-    """Handle agent-team subcommands."""
+    """Handle agent-team subcommands (except 'resume', which is handled in main)."""
     if cmd == "init":
         _subcommand_init()
     elif cmd == "status":
         _subcommand_status()
-    elif cmd == "resume":
-        _subcommand_resume()
     elif cmd == "clean":
         _subcommand_clean()
     elif cmd == "guide":
@@ -650,21 +691,112 @@ def _subcommand_status() -> None:
         print_info(f"  Interrupted: {state.interrupted}")
 
 
-def _subcommand_resume() -> None:
-    """Resume from STATE.json."""
-    from .state import is_stale, load_state
+def _subcommand_resume() -> tuple[argparse.Namespace, str] | None:
+    """Resume from STATE.json.
+
+    Returns (args_namespace, resume_context) on success, or None if
+    resume is not possible.
+    """
+    from types import SimpleNamespace
+
+    from .display import print_resume_banner
+    from .state import load_state, validate_for_resume
+
     state = load_state()
     if not state:
         print_error("No saved state found. Nothing to resume.")
-        return
-    if is_stale(state, ""):
-        print_warning(
-            f"Saved state is from a different task: {state.task[:80]}\n"
-            "Run 'agent-team clean' to clear stale state, or re-run with the same task."
-        )
-    print_info(f"Resuming run {state.run_id} — task: {state.task[:80]}")
-    print_info(f"Last phase: {state.current_phase}")
-    print_warning("Resume is not yet fully implemented. Please re-run with the same task.")
+        return None
+
+    issues = validate_for_resume(state)
+    for issue in issues:
+        if issue.startswith("ERROR"):
+            print_error(issue)
+        else:
+            print_warning(issue)
+    if any(i.startswith("ERROR") for i in issues):
+        return None
+
+    print_resume_banner(state)
+
+    # Check for existing INTERVIEW.md
+    interview_path = Path(".agent-team") / "INTERVIEW.md"
+    interview_doc_path: str | None = str(interview_path) if interview_path.is_file() else None
+
+    # Recover design_ref from saved artifacts
+    design_ref: list[str] | None = None
+    saved_urls = state.artifacts.get("design_ref_urls", "")
+    if saved_urls:
+        design_ref = [u for u in saved_urls.split(",") if u.strip()]
+
+    args = SimpleNamespace(
+        task=state.task,
+        depth=state.depth if state.depth != "pending" else None,
+        interview_doc=interview_doc_path,
+        no_interview=True,
+        prd=state.artifacts.get("prd_path"),
+        config=state.artifacts.get("config_path"),
+        cwd=state.artifacts.get("cwd"),
+        design_ref=design_ref,
+        model=None,
+        max_turns=None,
+        agents=None,
+        verbose=False,
+        interactive=False,
+        dry_run=False,
+        no_map=False,
+        map_only=False,
+        progressive=False,
+        no_progressive=False,
+    )
+
+    resume_ctx = _build_resume_context(state, args.cwd or os.getcwd())
+    return (args, resume_ctx)
+
+
+def _build_resume_context(state: object, cwd: str) -> str:
+    """Build a context string for the orchestrator about the interrupted run.
+
+    Scans .agent-team/ for existing artifacts and produces instructions
+    for the orchestrator to continue from where it left off.
+    """
+    run_id = getattr(state, "run_id", "unknown")
+    current_phase = getattr(state, "current_phase", "unknown")
+    completed_phases = getattr(state, "completed_phases", [])
+
+    lines: list[str] = [
+        "\n[RESUME MODE -- Continuing from an interrupted run]",
+        f"Run ID: {run_id}",
+        f"Interrupted at phase: {current_phase}",
+        f"Completed phases: {', '.join(completed_phases) if completed_phases else 'none'}",
+    ]
+
+    # List existing artifacts in .agent-team/
+    agent_dir = Path(cwd) / ".agent-team"
+    known_artifacts = [
+        "INTERVIEW.md", "REQUIREMENTS.md", "TASKS.md",
+        "MASTER_PLAN.md", "CONTRACTS.json", "VERIFICATION.md",
+    ]
+    found_artifacts: list[str] = []
+    if agent_dir.is_dir():
+        for name in known_artifacts:
+            artifact_path = agent_dir / name
+            if artifact_path.is_file():
+                size = artifact_path.stat().st_size
+                found_artifacts.append(f"  - {name} ({size} bytes)")
+
+    if found_artifacts:
+        lines.append("Existing artifacts in .agent-team/:")
+        lines.extend(found_artifacts)
+
+    lines.append("")
+    lines.append("[RESUME INSTRUCTIONS]")
+    lines.append("- Read ALL existing artifacts in .agent-team/ FIRST before planning.")
+    lines.append("- Do NOT recreate REQUIREMENTS.md or TASKS.md if they already exist.")
+    lines.append("- Continue convergence from the first PENDING task in TASKS.md.")
+    lines.append("- If REQUIREMENTS.md has unchecked items, resume the convergence loop.")
+    lines.append("- Treat existing [x] items as already verified.")
+
+    return "\n".join(lines)
 
 
 def _subcommand_clean() -> None:
@@ -722,11 +854,18 @@ def main() -> None:
     _current_state = None
 
     # Check for subcommands before argparse
+    _resume_ctx: str | None = None
     if len(sys.argv) > 1 and sys.argv[1] in {"init", "status", "resume", "clean", "guide"}:
-        _handle_subcommand(sys.argv[1])
-        return
-
-    args = _parse_args()
+        if sys.argv[1] == "resume":
+            resume_result = _subcommand_resume()
+            if resume_result is None:
+                return
+            args, _resume_ctx = resume_result
+        else:
+            _handle_subcommand(sys.argv[1])
+            return
+    else:
+        args = _parse_args()
 
     # Signal handling
     signal.signal(signal.SIGINT, _handle_interrupt)
@@ -812,6 +951,21 @@ def main() -> None:
         return
 
     # -------------------------------------------------------------------
+    # C2: Initialize RunState early (before interview) so interrupted
+    # interviews also get state saved.
+    # -------------------------------------------------------------------
+    from .state import RunState
+    _current_state = RunState(task=args.task or "", depth=args.depth or "pending")
+    _current_state.current_phase = "init"
+    _current_state.artifacts["cwd"] = cwd
+    if args.config:
+        _current_state.artifacts["config_path"] = args.config
+    if args.prd:
+        _current_state.artifacts["prd_path"] = args.prd
+    if getattr(args, "design_ref", None):
+        _current_state.artifacts["design_ref_urls"] = ",".join(args.design_ref)
+
+    # -------------------------------------------------------------------
     # Phase 0: Interview
     # -------------------------------------------------------------------
     interview_doc: str | None = None
@@ -859,6 +1013,9 @@ def main() -> None:
             print_error(f"Interview failed: {exc}")
             print_info("Proceeding without interview context.")
 
+    _current_state.completed_phases.append("interview")
+    _current_state.current_phase = "constraints"
+
     # -------------------------------------------------------------------
     # Phase 0.25: Constraint Extraction
     # -------------------------------------------------------------------
@@ -872,12 +1029,8 @@ def main() -> None:
     except Exception as exc:
         print_warning(f"Constraint extraction failed: {exc}")
 
-    # -------------------------------------------------------------------
-    # C2: Initialize RunState after task is known
-    # -------------------------------------------------------------------
-    from .state import RunState
-    _current_state = RunState(task=task_for_constraints or "", depth="pending")
-    _current_state.current_phase = "post-interview"
+    _current_state.completed_phases.append("constraints")
+    _current_state.current_phase = "codebase_map"
 
     # -------------------------------------------------------------------
     # Phase 0.5: Codebase Map
@@ -903,6 +1056,9 @@ def main() -> None:
         except Exception as exc:
             print_warning(f"Codebase mapping failed: {exc}")
             print_info("Proceeding without codebase map.")
+
+    _current_state.completed_phases.append("codebase_map")
+    _current_state.current_phase = "pre_orchestration"
 
     # -------------------------------------------------------------------
     # Phase 0.75: Contract Loading + Scheduling
@@ -941,6 +1097,9 @@ def main() -> None:
         except Exception as exc:
             print_warning(f"Scheduler failed: {exc}")
 
+    _current_state.completed_phases.append("pre_orchestration")
+    _current_state.current_phase = "orchestration"
+
     # -------------------------------------------------------------------
     # C5: Initialize and start InterventionQueue
     # -------------------------------------------------------------------
@@ -962,9 +1121,12 @@ def main() -> None:
         if not depth_override and (interview_scope == "COMPLEX" or args.prd):
             depth_override = "exhaustive"
 
-        # Start intervention queue (infrastructure ready for future SDK
-        # mid-stream injection support; hint suppressed until polling is wired)
+        # Start intervention queue — reads stdin in a daemon thread and
+        # queues lines prefixed with "!!".  Queued messages are drained
+        # after each orchestrator turn via _drain_interventions().
         intervention.start()
+        if sys.stdin.isatty():
+            print_intervention_hint()
 
         # Update phase to orchestration
         if _current_state:
@@ -983,6 +1145,8 @@ def main() -> None:
                 design_reference_urls=design_ref_urls or None,
                 codebase_map_summary=codebase_map_summary,
                 constraints=constraints,
+                intervention=intervention,
+                resume_context=_resume_ctx,
             ))
         else:
             # Use the interview doc as the task if no explicit task was given
@@ -1013,15 +1177,18 @@ def main() -> None:
                 design_reference_urls=design_ref_urls or None,
                 codebase_map_summary=codebase_map_summary,
                 constraints=constraints,
+                intervention=intervention,
+                resume_context=_resume_ctx,
             ))
 
         # Update RunState with actual cost from orchestration
         if _current_state:
             _current_state.total_cost = run_cost or 0.0
 
-        # Update phase to complete after orchestration
+        # Update phase after orchestration
         if _current_state:
-            _current_state.current_phase = "complete"
+            _current_state.completed_phases.append("orchestration")
+            _current_state.current_phase = "post_orchestration"
 
     finally:
         # Stop intervention queue
@@ -1044,6 +1211,10 @@ def main() -> None:
                 print_info("TASKS.md statuses updated to COMPLETE.")
         except Exception as exc:
             print_warning(f"Task status update failed: {exc}")
+
+    if _current_state:
+        _current_state.completed_phases.append("post_orchestration")
+        _current_state.current_phase = "verification"
 
     # -------------------------------------------------------------------
     # Post-orchestration: Verification (if enabled)
@@ -1094,3 +1265,13 @@ def main() -> None:
             })
         except Exception as exc:
             print_warning(f"Post-orchestration verification failed: {exc}")
+
+    if _current_state:
+        _current_state.completed_phases.append("verification")
+        _current_state.current_phase = "complete"
+
+    # -------------------------------------------------------------------
+    # Clear STATE.json on successful completion
+    # -------------------------------------------------------------------
+    from .state import clear_state
+    clear_state()

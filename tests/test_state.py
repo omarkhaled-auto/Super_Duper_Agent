@@ -6,7 +6,15 @@ import json
 
 import pytest
 
-from agent_team.state import RunState, RunSummary, is_stale, load_state, save_state
+from agent_team.state import (
+    RunState,
+    RunSummary,
+    clear_state,
+    is_stale,
+    load_state,
+    save_state,
+    validate_for_resume,
+)
 
 
 # ===================================================================
@@ -166,3 +174,43 @@ class TestIsStale:
     def test_empty_current_task_is_stale(self):
         state = RunState(task="something")
         assert is_stale(state, "") is True
+
+
+# ===================================================================
+# clear_state()
+# ===================================================================
+
+class TestClearState:
+    def test_clear_state_deletes_file(self, tmp_path):
+        state = RunState(task="test")
+        save_state(state, str(tmp_path))
+        assert (tmp_path / "STATE.json").is_file()
+        clear_state(str(tmp_path))
+        assert not (tmp_path / "STATE.json").exists()
+
+    def test_clear_state_missing_file_no_error(self, tmp_path):
+        """No crash if STATE.json doesn't exist."""
+        clear_state(str(tmp_path))  # should not raise
+
+
+# ===================================================================
+# validate_for_resume()
+# ===================================================================
+
+class TestValidateForResume:
+    def test_validate_no_task_returns_error(self):
+        state = RunState(task="")
+        issues = validate_for_resume(state)
+        assert any("ERROR" in i for i in issues)
+
+    def test_validate_old_state_returns_warning(self):
+        from datetime import datetime, timedelta, timezone
+        old_time = datetime.now(timezone.utc) - timedelta(hours=48)
+        state = RunState(task="some task", timestamp=old_time.isoformat())
+        issues = validate_for_resume(state)
+        assert any("WARNING" in i for i in issues)
+
+    def test_validate_fresh_state_no_issues(self):
+        state = RunState(task="some task")
+        issues = validate_for_resume(state)
+        assert issues == []

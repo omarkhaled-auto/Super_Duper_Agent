@@ -115,6 +115,29 @@ def load_state(directory: str = ".agent-team") -> RunState | None:
         return None
 
 
+def clear_state(directory: str = ".agent-team") -> None:
+    """Delete the state file after a successful run."""
+    state_path = Path(directory) / _STATE_FILE
+    with contextlib.suppress(OSError):
+        state_path.unlink(missing_ok=True)
+
+
+def validate_for_resume(state: RunState) -> list[str]:
+    """Validate saved state for resume. Returns warning/error messages."""
+    issues: list[str] = []
+    if not state.task:
+        issues.append("ERROR: No task recorded in saved state.")
+    if state.timestamp:
+        try:
+            saved = datetime.fromisoformat(state.timestamp)
+            age_h = (datetime.now(timezone.utc) - saved).total_seconds() / 3600
+            if age_h > 24:
+                issues.append(f"WARNING: State is {int(age_h)}h old. Files may have changed.")
+        except (ValueError, TypeError):
+            pass
+    return issues
+
+
 def is_stale(state: RunState, current_task: str) -> bool:
     """Check if a saved state is stale (from a different task).
 
