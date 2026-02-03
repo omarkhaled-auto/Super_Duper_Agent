@@ -70,6 +70,11 @@ def get_mcp_servers(config: AgentTeamConfig) -> dict[str, Any]:
     return servers
 
 
+def get_orchestrator_st_tool_name() -> str:
+    """Return the MCP tool name for Sequential Thinking."""
+    return "mcp__sequential-thinking__sequentialthinking"
+
+
 def get_research_tools(servers: dict[str, Any]) -> list[str]:
     """Return the list of allowed MCP tool names for research agents."""
     tools: list[str] = []

@@ -14,6 +14,7 @@ from .config import AgentConfig, AgentTeamConfig, get_agent_counts
 from .mcp_servers import get_research_tools
 from .code_quality_standards import get_standards_for_agent
 from .investigation_protocol import build_investigation_protocol
+from .orchestrator_reasoning import build_orchestrator_st_instructions
 from .sequential_thinking import build_sequential_thinking_protocol
 from .ui_standards import load_ui_standards
 
@@ -555,6 +556,8 @@ CONSTRAINT VIOLATION PROTOCOL:
 2. REJECT: Discard the violating output -- do NOT integrate it into REQUIREMENTS.md or code
 3. REPORT: Log which constraint was violated, by which agent, and which output was discarded
 4. REDIRECT: Re-deploy the agent with an explicit constraint reminder prepended to its task
+
+$orchestrator_st_instructions
 """.strip()
 
 

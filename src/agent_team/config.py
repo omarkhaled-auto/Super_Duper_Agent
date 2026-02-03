@@ -118,6 +118,24 @@ def _validate_investigation_config(cfg: InvestigationConfig) -> None:
 
 
 @dataclass
+class OrchestratorSTConfig:
+    """Sequential Thinking at the orchestrator level — depth-gated decision points."""
+    enabled: bool = True                    # On by default (depth-gated anyway)
+    depth_gate: dict[str, list[int]] = field(default_factory=lambda: {
+        "quick": [],                        # No ST points
+        "standard": [3],                    # Convergence reasoning only
+        "thorough": [1, 3, 4],             # Strategy + convergence + completion
+        "exhaustive": [1, 2, 3, 4],        # All 4 points
+    })
+    thought_budgets: dict[int, int] = field(default_factory=lambda: {
+        1: 8,    # Pre-run strategy: max 8 thoughts
+        2: 10,   # Architecture checkpoint: max 10 thoughts
+        3: 12,   # Convergence reasoning: max 12 thoughts
+        4: 8,    # Completion verification: max 8 thoughts
+    })
+
+
+@dataclass
 class DesignReferenceConfig:
     urls: list[str] = field(default_factory=list)
     depth: str = "full"  # "branding" | "screenshots" | "full"
@@ -222,6 +240,7 @@ class AgentTeamConfig:
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
     verification: VerificationConfig = field(default_factory=VerificationConfig)
     investigation: InvestigationConfig = field(default_factory=InvestigationConfig)
+    orchestrator_st: OrchestratorSTConfig = field(default_factory=OrchestratorSTConfig)
     # Agent keys use underscores (Python convention) in config files.
     # The SDK uses hyphens (e.g., "code-writer"). See agents.py for the mapping.
     agents: dict[str, AgentConfig] = field(default_factory=lambda: {
@@ -286,6 +305,30 @@ def detect_depth(task: str, config: AgentTeamConfig) -> DepthDetection:
 def get_agent_counts(depth: str) -> dict[str, tuple[int, int]]:
     """Return (min, max) agent counts per phase for the given depth."""
     return DEPTH_AGENT_COUNTS.get(depth, DEPTH_AGENT_COUNTS["standard"])
+
+
+def get_active_st_points(depth: str, config: OrchestratorSTConfig) -> list[int]:
+    """Return which ST decision points are active for this depth level."""
+    if not config.enabled:
+        return []
+    return config.depth_gate.get(depth, [])
+
+
+def _validate_orchestrator_st_config(cfg: OrchestratorSTConfig) -> None:
+    """Validate OrchestratorSTConfig fields."""
+    valid_depths = ("quick", "standard", "thorough", "exhaustive")
+    for depth, points in cfg.depth_gate.items():
+        if depth not in valid_depths:
+            raise ValueError(f"orchestrator_st.depth_gate has invalid depth: {depth}")
+        for p in points:
+            if p not in (1, 2, 3, 4):
+                raise ValueError(f"orchestrator_st.depth_gate[{depth}] has invalid point: {p}")
+    valid_points = (1, 2, 3, 4)
+    for point, budget in cfg.thought_budgets.items():
+        if point not in valid_points:
+            raise ValueError(f"orchestrator_st.thought_budgets has invalid point: {point}")
+        if budget < 3 or budget > 30:
+            raise ValueError(f"orchestrator_st.thought_budgets[{point}] must be 3-30")
 
 
 # ---------------------------------------------------------------------------
@@ -621,6 +664,23 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
             enable_hypothesis_loop=inv.get("enable_hypothesis_loop", cfg.investigation.enable_hypothesis_loop),
         )
         _validate_investigation_config(cfg.investigation)
+
+    if "orchestrator_st" in data and isinstance(data["orchestrator_st"], dict):
+        ost = data["orchestrator_st"]
+        depth_gate_raw = ost.get("depth_gate", None)
+        depth_gate = cfg.orchestrator_st.depth_gate
+        if depth_gate_raw and isinstance(depth_gate_raw, dict):
+            depth_gate = {k: list(v) for k, v in depth_gate_raw.items()}
+        thought_budgets_raw = ost.get("thought_budgets", None)
+        thought_budgets = cfg.orchestrator_st.thought_budgets
+        if thought_budgets_raw and isinstance(thought_budgets_raw, dict):
+            thought_budgets = {int(k): int(v) for k, v in thought_budgets_raw.items()}
+        cfg.orchestrator_st = OrchestratorSTConfig(
+            enabled=ost.get("enabled", cfg.orchestrator_st.enabled),
+            depth_gate=depth_gate,
+            thought_budgets=thought_budgets,
+        )
+        _validate_orchestrator_st_config(cfg.orchestrator_st)
 
     if "agents" in data:
         for name, agent_data in data["agents"].items():

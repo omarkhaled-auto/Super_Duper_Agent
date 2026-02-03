@@ -193,9 +193,26 @@ def _build_options(
     cwd: str | None = None,
     constraints: list | None = None,
     task_text: str | None = None,
+    depth: str | None = None,
 ) -> ClaudeAgentOptions:
     """Build ClaudeAgentOptions with all agents and MCP servers."""
+    # Auto-enable ST MCP server if orchestrator ST is active for this depth.
+    # We build a local MCP server override dict instead of mutating config,
+    # so that the caller's AgentTeamConfig is never modified as a side effect.
+    _st_auto_enabled = False
+    if depth:
+        from .config import get_active_st_points
+        active_points = get_active_st_points(depth, config.orchestrator_st)
+        if active_points:
+            st_cfg = config.mcp_servers.get("sequential_thinking")
+            if not st_cfg or not st_cfg.enabled:
+                _st_auto_enabled = True
+
     mcp_servers = get_mcp_servers(config)
+    if _st_auto_enabled and "sequential_thinking" not in mcp_servers:
+        from .mcp_servers import _sequential_thinking_server
+        mcp_servers["sequential_thinking"] = _sequential_thinking_server()
+
     agent_defs_raw = build_agent_definitions(
         config, mcp_servers, constraints=constraints, task_text=task_text,
         gemini_available=_gemini_available,
@@ -213,6 +230,10 @@ def _build_options(
     # int-typed config fields converted to str -- no user-controlled template
     # syntax can reach here because yaml.safe_load produces Python ints, not
     # arbitrary strings containing $ placeholders.
+    from .orchestrator_reasoning import build_orchestrator_st_instructions
+    st_instructions = build_orchestrator_st_instructions(
+        depth or "standard", config.orchestrator_st,
+    )
     system_prompt = string.Template(ORCHESTRATOR_SYSTEM_PROMPT).safe_substitute(
         escalation_threshold=str(config.convergence.escalation_threshold),
         max_escalation_depth=str(config.convergence.max_escalation_depth),
@@ -221,6 +242,7 @@ def _build_options(
         max_cycles=str(config.convergence.max_cycles),
         master_plan_file=config.convergence.master_plan_file,
         max_budget_usd=str(config.orchestrator.max_budget_usd),
+        orchestrator_st_instructions=st_instructions,
     )
 
     opts_kwargs: dict[str, Any] = {
@@ -331,7 +353,10 @@ async def _run_interactive(
     task_text: str | None = None,
 ) -> float:
     """Run the interactive multi-turn conversation loop. Returns total cost."""
-    options = _build_options(config, cwd, constraints=constraints, task_text=task_text)
+    options = _build_options(
+        config, cwd, constraints=constraints, task_text=task_text,
+        depth=depth_override or "standard",
+    )
     phase_costs: dict[str, float] = {}
     total_cost = 0.0
     last_depth = depth_override or "standard"
@@ -449,7 +474,7 @@ async def _run_single(
     task_text: str | None = None,
 ) -> float:
     """Run a single task to completion. Returns total cost."""
-    options = _build_options(config, cwd, constraints=constraints, task_text=task_text or task)
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text or task, depth=depth)
     phase_costs: dict[str, float] = {}
 
     if prd_path:
