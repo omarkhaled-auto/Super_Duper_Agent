@@ -64,6 +64,7 @@ class TaskVerificationResult:
     tests_passed: bool | None = None
     security_passed: bool | None = None
     test_quality_score: float | None = None
+    quality_health: str = "clean"  # "clean" | "minor" | "needs-attention"
     overall: str = "pass"  # "pass" | "fail" | "partial"
     issues: list[str] = field(default_factory=list)
 
@@ -220,6 +221,16 @@ async def verify_task_completion(
             if violations:
                 for v in violations[:10]:  # Cap advisory output
                     issues.append(f"Quality: [{v.check}] {v.message} ({v.file_path}:{v.line})")
+                # Compute quality health from violation count
+                quality_violations_count = len(
+                    [v for v in violations if v.severity in ("error", "warning")]
+                )
+                if quality_violations_count == 0:
+                    result.quality_health = "clean"
+                elif quality_violations_count <= 3:
+                    result.quality_health = "minor"
+                else:
+                    result.quality_health = "needs-attention"
         except Exception:
             pass  # quality_checks unavailable or failed — non-blocking
 

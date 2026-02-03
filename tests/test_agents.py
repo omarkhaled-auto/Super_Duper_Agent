@@ -1120,3 +1120,85 @@ class TestSequentialThinkingInjection:
         assert "Hypothesis-Verification Cycle" not in agents["code-reviewer"]["prompt"]
         # ST core should still be present
         assert "SEQUENTIAL THINKING METHODOLOGY" in agents["code-reviewer"]["prompt"]
+
+
+# ===================================================================
+# Quality Optimization: Production Readiness & Code Craft
+# ===================================================================
+
+class TestProductionReadinessDefaults:
+    def test_planner_has_production_defaults(self):
+        assert "PRODUCTION READINESS DEFAULTS" in PLANNER_PROMPT
+
+    def test_planner_mentions_gitignore(self):
+        assert ".gitignore" in PLANNER_PROMPT
+
+    def test_planner_mentions_pagination(self):
+        assert "pagination" in PLANNER_PROMPT.lower()
+
+    def test_planner_mentions_nan(self):
+        assert "NaN" in PLANNER_PROMPT
+
+    def test_planner_mentions_transaction(self):
+        assert "transaction" in PLANNER_PROMPT.lower()
+
+
+class TestArchitectSharedUtilities:
+    def test_architect_has_shared_utilities_map(self):
+        assert "Shared Utilities Map" in ARCHITECT_PROMPT
+
+
+class TestWriterQualitySections:
+    def test_writer_has_validation_pattern(self):
+        assert "Validation Middleware" in CODE_WRITER_PROMPT
+
+    def test_writer_has_transaction_safety(self):
+        assert "Transaction Safety" in CODE_WRITER_PROMPT
+
+    def test_writer_has_param_validation(self):
+        assert "Route Parameter Validation" in CODE_WRITER_PROMPT
+
+
+class TestReviewerCraftReview:
+    def test_reviewer_has_craft_review(self):
+        assert "CODE CRAFT REVIEW" in CODE_REVIEWER_PROMPT
+
+    def test_reviewer_has_all_craft_checks(self):
+        craft_checks = [
+            "CRAFT-DRY",
+            "CRAFT-TYPES",
+            "CRAFT-PARAMS",
+            "CRAFT-TXN",
+            "CRAFT-VALIDATION",
+            "CRAFT-FK",
+        ]
+        for check in craft_checks:
+            assert check in CODE_REVIEWER_PROMPT, f"Missing {check} in reviewer prompt"
+
+
+class TestQualityConfigGating:
+    """Verify config.quality flags control prompt content in build_agent_definitions."""
+
+    def test_quick_depth_strips_production_defaults(self):
+        from agent_team.config import QualityConfig
+        cfg = AgentTeamConfig()
+        cfg.quality = QualityConfig(production_defaults=False)
+        agents = build_agent_definitions(cfg, {}, gemini_available=False)
+        assert "PRODUCTION READINESS DEFAULTS" not in agents["planner"]["prompt"]
+
+    def test_standard_depth_keeps_production_defaults(self):
+        cfg = AgentTeamConfig()
+        agents = build_agent_definitions(cfg, {}, gemini_available=False)
+        assert "PRODUCTION READINESS DEFAULTS" in agents["planner"]["prompt"]
+
+    def test_quick_depth_strips_craft_review(self):
+        from agent_team.config import QualityConfig
+        cfg = AgentTeamConfig()
+        cfg.quality = QualityConfig(craft_review=False)
+        agents = build_agent_definitions(cfg, {}, gemini_available=False)
+        assert "CODE CRAFT REVIEW" not in agents["code-reviewer"]["prompt"]
+
+    def test_standard_depth_keeps_craft_review(self):
+        cfg = AgentTeamConfig()
+        agents = build_agent_definitions(cfg, {}, gemini_available=False)
+        assert "CODE CRAFT REVIEW" in agents["code-reviewer"]["prompt"]

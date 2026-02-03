@@ -36,7 +36,7 @@ from .agents import (
     build_agent_definitions,
     build_orchestrator_prompt,
 )
-from .config import AgentTeamConfig, detect_depth, extract_constraints, load_config, parse_max_review_cycles, parse_per_item_review_cycles
+from .config import AgentTeamConfig, apply_depth_quality_gating, detect_depth, extract_constraints, load_config, parse_max_review_cycles, parse_per_item_review_cycles
 from .state import ConvergenceReport
 from .display import (
     console,
@@ -353,6 +353,8 @@ async def _run_interactive(
     task_text: str | None = None,
 ) -> float:
     """Run the interactive multi-turn conversation loop. Returns total cost."""
+    # Apply depth-based quality gating for initial depth
+    apply_depth_quality_gating(depth_override or "standard", config)
     options = _build_options(
         config, cwd, constraints=constraints, task_text=task_text,
         depth=depth_override or "standard",
@@ -1605,6 +1607,9 @@ def main() -> None:
                 if _current_state:
                     _current_state.depth = depth
 
+                # Apply depth-based quality gating (QUICK disables quality features)
+                apply_depth_quality_gating(depth, config)
+
                 run_cost = asyncio.run(_run_single(
                     task=task,
                     config=config,
@@ -1855,6 +1860,17 @@ def main() -> None:
                     result.task_id: result.overall,
                 },
             })
+
+            # Quality feedback reloop: if quality_health is needs-attention
+            # and quality_triggers_reloop is enabled, trigger a quality fix pass
+            if (
+                config.quality.quality_triggers_reloop
+                and result.quality_health == "needs-attention"
+            ):
+                print_warning(
+                    f"Quality health: {result.quality_health} — "
+                    "4+ quality violations detected. Consider running a quality fix pass."
+                )
         except Exception as exc:
             print_warning(f"Post-orchestration verification failed: {exc}")
 

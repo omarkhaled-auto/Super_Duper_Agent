@@ -20,10 +20,12 @@ from agent_team.config import (
     InvestigationConfig,
     MCPServerConfig,
     OrchestratorConfig,
+    QualityConfig,
     SchedulerConfig,
     VerificationConfig,
     _deep_merge,
     _dict_to_config,
+    apply_depth_quality_gating,
     detect_depth,
     extract_constraints,
     format_constraints_block,
@@ -1201,3 +1203,32 @@ class TestInvestigationConfigValidation:
     def test_max_thoughts_zero_raises(self):
         with pytest.raises(ValueError, match="max_thoughts_per_item"):
             _dict_to_config({"investigation": {"max_thoughts_per_item": 0}})
+
+
+# ===================================================================
+# QualityConfig
+# ===================================================================
+
+class TestQualityConfig:
+    def test_quality_config_defaults(self):
+        qc = QualityConfig()
+        assert qc.production_defaults is True
+        assert qc.craft_review is True
+        assert qc.quality_triggers_reloop is True
+
+    def test_quality_config_from_yaml(self):
+        cfg = _dict_to_config({"quality": {"craft_review": False}})
+        assert cfg.quality.craft_review is False
+        # Other defaults unchanged
+        assert cfg.quality.production_defaults is True
+        assert cfg.quality.quality_triggers_reloop is True
+
+    def test_quick_depth_disables_quality(self):
+        cfg = AgentTeamConfig()
+        assert cfg.quality.production_defaults is True
+        assert cfg.quality.craft_review is True
+        apply_depth_quality_gating("quick", cfg)
+        assert cfg.quality.production_defaults is False
+        assert cfg.quality.craft_review is False
+        # quality_triggers_reloop unchanged
+        assert cfg.quality.quality_triggers_reloop is True

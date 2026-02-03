@@ -279,3 +279,40 @@ class TestEdgeCases:
         for agent in ["code-writer", "code-reviewer", "test-runner", "debugger", "architect"]:
             result = get_standards_for_agent(agent)
             assert len(result) > 100, f"{agent} standards too short"
+
+
+# ===================================================================
+# New Anti-Patterns (Quality Optimization)
+# ===================================================================
+
+class TestNewBackendAntiPatterns:
+    def test_back_016_exists(self):
+        assert "BACK-016" in BACKEND_STANDARDS
+
+    def test_back_017_exists(self):
+        assert "BACK-017" in BACKEND_STANDARDS
+
+    def test_back_018_exists(self):
+        assert "BACK-018" in BACKEND_STANDARDS
+
+    def test_back_019_exists(self):
+        assert "BACK-019" in BACKEND_STANDARDS
+
+    def test_back_020_exists(self):
+        assert "BACK-020" in BACKEND_STANDARDS
+
+
+class TestNewFrontendAntiPatterns:
+    def test_front_016_exists(self):
+        assert "FRONT-016" in FRONTEND_STANDARDS
+
+    def test_front_017_exists(self):
+        assert "FRONT-017" in FRONTEND_STANDARDS
+
+    def test_front_018_exists(self):
+        assert "FRONT-018" in FRONTEND_STANDARDS
+
+
+class TestSharedUtilitiesArchRule:
+    def test_shared_utilities_in_arch(self):
+        assert "Shared Utilities" in ARCHITECTURE_QUALITY_STANDARDS

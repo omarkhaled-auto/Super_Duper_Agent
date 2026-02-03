@@ -192,6 +192,14 @@ class SchedulerConfig:
 
 
 @dataclass
+class QualityConfig:
+    """Controls production-readiness and code craft quality features."""
+    production_defaults: bool = True       # Inject production-readiness TECH-xxx into planner
+    craft_review: bool = True              # Enable CODE CRAFT review pass in reviewers
+    quality_triggers_reloop: bool = True   # Quality violations feed back into convergence
+
+
+@dataclass
 class VerificationConfig:
     enabled: bool = True              # enabled by default
     contract_file: str = "CONTRACTS.json"
@@ -256,6 +264,7 @@ class AgentTeamConfig:
     codebase_map: CodebaseMapConfig = field(default_factory=CodebaseMapConfig)
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
     verification: VerificationConfig = field(default_factory=VerificationConfig)
+    quality: QualityConfig = field(default_factory=QualityConfig)
     investigation: InvestigationConfig = field(default_factory=InvestigationConfig)
     orchestrator_st: OrchestratorSTConfig = field(default_factory=OrchestratorSTConfig)
     # Agent keys use underscores (Python convention) in config files.
@@ -317,6 +326,17 @@ def detect_depth(task: str, config: AgentTeamConfig) -> DepthDetection:
         if matched:
             return DepthDetection(level, "keyword", matched, f"Matched keywords: {matched}")
     return DepthDetection(config.depth.default, "default", [], "No keyword matches")
+
+
+def apply_depth_quality_gating(depth: str, config: AgentTeamConfig) -> None:
+    """Apply depth-based gating to QualityConfig.
+
+    QUICK depth disables production_defaults and craft_review to keep
+    runs fast. STANDARD and above keep the defaults (all True).
+    """
+    if depth == "quick":
+        config.quality.production_defaults = False
+        config.quality.craft_review = False
 
 
 def get_agent_counts(depth: str) -> dict[str, tuple[int, int]]:
@@ -691,6 +711,14 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
             run_security=vr.get("run_security", cfg.verification.run_security),
             run_quality_checks=vr.get("run_quality_checks", cfg.verification.run_quality_checks),
             min_test_count=vr.get("min_test_count", cfg.verification.min_test_count),
+        )
+
+    if "quality" in data and isinstance(data["quality"], dict):
+        q = data["quality"]
+        cfg.quality = QualityConfig(
+            production_defaults=q.get("production_defaults", cfg.quality.production_defaults),
+            craft_review=q.get("craft_review", cfg.quality.craft_review),
+            quality_triggers_reloop=q.get("quality_triggers_reloop", cfg.quality.quality_triggers_reloop),
         )
 
     if "investigation" in data and isinstance(data["investigation"], dict):

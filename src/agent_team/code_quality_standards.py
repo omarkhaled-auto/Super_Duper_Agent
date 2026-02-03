@@ -73,6 +73,19 @@ LLMs produce tutorial-quality frontend code by default. These standards enforce 
 - NEVER use `<div onClick>` when `<button>` exists. Never use `<div>` for navigation.
 - FIX: Use semantic elements: button, a, nav, main, section, article, header, footer.
 
+**FRONT-016: Duplicated Helper Functions**
+- NEVER define the same helper function in two or more files.
+- FIX: Extract to a shared `src/lib/` or `src/utils/` module and import from there.
+
+**FRONT-017: No Max-Length on String Inputs**
+- NEVER validate strings with only `z.string().min(1)` without a `.max()` constraint.
+- FIX: Add `.max(500)` for short fields, `.max(2048)` for URLs/descriptions, appropriate limits for each field.
+
+**FRONT-018: No URL Protocol Restriction**
+- NEVER accept URLs with `z.string().url()` without restricting the protocol.
+- `z.string().url()` accepts `file://`, `javascript:`, and other dangerous schemes.
+- FIX: `.refine(url => url.startsWith('http'))` or use a custom URL validator that only allows http/https.
+
 ### Quality Rules
 
 **State Management:**
@@ -158,6 +171,27 @@ LLMs generate tutorial-quality backend code by default. These standards enforce 
 **BACK-015: SSRF Vulnerability**
 - NEVER fetch user-supplied URLs without validation and allowlisting.
 - FIX: Validate URL scheme and host. Block internal network ranges. Use allowlists.
+
+**BACK-016: Non-transactional Multi-Step Writes**
+- NEVER perform sequential deleteMany + createMany (or delete + create) without wrapping in a transaction.
+- FIX: Use `$transaction()` (Prisma), `db.session` (SQLAlchemy), or equivalent atomic wrapper.
+
+**BACK-017: Validation Result Discarded**
+- NEVER call `schema.parse(body)` or `schema.validate(body)` without assigning the result.
+- The parsed result contains sanitized data; ignoring it means raw input flows downstream.
+- FIX: `req.body = schema.parse(req.body)` — always use the parsed/sanitized output.
+
+**BACK-018: Unvalidated Route Parameters**
+- NEVER use `Number(req.params.id)` or `parseInt(req.params.id)` without checking for NaN.
+- FIX: Validate immediately after parsing; return 400 on invalid (e.g., `if (isNaN(id)) return res.status(400)...`).
+
+**BACK-019: Unvalidated FK References**
+- NEVER accept foreign key IDs from client input without verifying the referenced entity exists.
+- FIX: Query the referenced entity first; return 404 if not found before proceeding with the operation.
+
+**BACK-020: Manual Partial Schema**
+- NEVER manually make each field optional when creating an update/patch schema.
+- FIX: Use `createSchema.partial()` (Zod), `schema.copy(update=...)` (Pydantic), or equivalent.
 
 ### Quality Rules
 
@@ -426,6 +460,11 @@ AI architects reproduce tutorial-level architecture. These standards enforce pro
 - Breaking changes require versioning and migration path.
 - Database migrations should be reversible where possible; use multi-step migrations for destructive changes.
 - Feature flags for gradual rollouts.
+
+**Shared Utilities:**
+- Identify helpers needed by 2+ files at architecture time — place in /lib/ or /utils/.
+- Every route/component file that duplicates a helper is an architecture failure.
+- Shared module created in first coding wave; consumers import from it.
 """.strip()
 
 _AGENT_STANDARDS_MAP: dict[str, list[str]] = {

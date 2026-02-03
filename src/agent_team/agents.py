@@ -222,6 +222,12 @@ CONVERGENCE LOOP:
    - ONLY when ALL items are [x]: report COMPLETION
 ```
 
+QUALITY FEEDBACK: After verification Phase 6 (quality checks), review violations.
+If quality_health = "needs-attention" (4+ violations):
+- Deploy DEBUGGER FLEET to fix quality violations before declaring completion
+- Then RE-REVIEW affected files
+Quality violations are not build-blocking but SHOULD be fixed.
+
 NOTHING is left half-done. NOTHING is marked complete without proof.
 
 ============================================================
@@ -603,6 +609,25 @@ Do NOT edit the Requirements Checklist in REQUIREMENTS.md -- only code-reviewer 
   "Testing Requirements" section with those exact specifications.
 - Number all requirements with prefixed IDs (REQ-001, TECH-001, INT-001)
 - Add `(review_cycles: 0)` after each requirement for tracking
+
+## PRODUCTION READINESS DEFAULTS (depth: STANDARD+)
+When creating REQUIREMENTS.md, ALWAYS include these TECH-xxx requirements
+UNLESS the user explicitly says to skip them or the project type makes them irrelevant:
+
+For ALL projects:
+- TECH-xxx: .gitignore excluding node_modules/, dist/, build/, .env, *.db, __pycache__/, coverage/
+- TECH-xxx: All route parameter parsing validates format (NaN check on numeric IDs, UUID format check)
+
+For backend/API projects:
+- TECH-xxx: List endpoints support pagination (limit/offset or cursor, default limit=20, max=100)
+- TECH-xxx: Validation middleware uses parsed/sanitized data downstream (not raw request body)
+- TECH-xxx: Multi-step DB operations that must be atomic use transactions
+- TECH-xxx: Graceful shutdown handler closes DB connections on SIGTERM/SIGINT
+- TECH-xxx: Health check endpoint (GET /health)
+
+For TypeScript projects:
+- TECH-xxx: Zero usage of `any` type — use unknown, generics, or framework-generated types
+- TECH-xxx: Shared utility functions in a common module (no function duplication across files)
 - For each functional requirement, consider: HOW will this feature connect to the rest of the app?
 - Flag high-level integration needs (e.g., "feature X must connect to system Y") with INT-xxx IDs
   (The Architect will later create specific WIRE-xxx entries with exact mechanisms for each INT-xxx)
@@ -758,6 +783,16 @@ Do NOT edit the Requirements Checklist in REQUIREMENTS.md -- only code-reviewer 
    d. **Initialization Order**: If order matters, document the required sequence
 4. Add the **Architecture Decision** section to REQUIREMENTS.md
 5. Add the **Integration Roadmap** section to REQUIREMENTS.md (AFTER Architecture Decision)
+5b. Add a **Shared Utilities Map** to the Integration Roadmap:
+    Before assigning file ownership, identify helpers needed by 2+ files:
+
+    | Utility | Purpose | Used By | Location |
+    |---------|---------|---------|----------|
+
+    Rules:
+    - If a helper will be used by 2+ route/component files → it MUST go in a shared module
+    - Add a WIRE-xxx requirement for each shared utility import
+    - Assign the shared utility file to ONE writer in the first coding wave
 6. Add **WIRE-xxx** requirements to the ### Wiring Requirements subsection — one per wiring point
 7. Add any TECH-xxx requirements you identify
 8. Update existing requirements if the architecture reveals they need refinement
@@ -864,6 +899,31 @@ Your job is to implement requirements from the Requirements Document, guided by 
     structured per the standards' color/typography architecture.
   - Implement DESIGN-xxx requirements like any other requirement.
   - Apply framework-adaptive patterns from Section 12 of the standards.
+- **Validation Middleware Best Practices** (ALWAYS for API/backend code):
+  - When using validation schemas (Zod, Joi, Pydantic), ALWAYS assign the parsed result back:
+    `req.body = schema.parse(req.body)` — never discard the sanitized output.
+  - Use the parsed/sanitized data downstream, not the raw request body.
+  - The parsed result has the correct types and sanitized values; the raw body may not.
+- **DRY: Shared Utilities** (ALWAYS):
+  - Before writing a helper function, check if a shared module already defines it.
+  - If REQUIREMENTS.md or the Shared Utilities Map lists a utility in a shared location,
+    import it — NEVER duplicate it in your file.
+  - If you need a helper that doesn't exist in a shared module yet AND your task doesn't
+    include creating that shared module, define it locally and add a comment:
+    `// TODO-DRY: Move to shared module`
+- **Transaction Safety** (ALWAYS for DB operations):
+  - If your code performs 2+ sequential DB writes that must succeed or fail together
+    (e.g., deleteMany + createMany, delete + insert), wrap them in a transaction.
+  - Prisma: `prisma.$transaction([...])` or `prisma.$transaction(async (tx) => {...})`
+  - SQLAlchemy: `with db.session.begin():`
+  - Knex: `knex.transaction(async (trx) => {...})`
+  - NEVER leave delete+create pairs un-wrapped — partial writes corrupt data.
+- **Route Parameter Validation** (ALWAYS for request handlers):
+  - After parsing route parameters (Number(), parseInt(), parseFloat()), IMMEDIATELY
+    check for NaN and return 400 if invalid. Do NOT pass unparsed/invalid IDs to DB queries.
+  - Pattern: `const id = Number(req.params.id); if (isNaN(id)) return res.status(400).json({...});`
+  - For UUID params: validate format before querying.
+  - For FK references: verify the referenced entity exists before using the ID.
 - **Code Quality Standards** (ALWAYS):
   - Frontend and backend quality standards are appended to this prompt. Follow them.
   - BEFORE writing code, check against the anti-patterns list for your domain.
@@ -1023,6 +1083,18 @@ After reviewing functional requirements and design quality, perform a code quali
 
 If code quality issues found: Review Log entry with "CODE-QUALITY" item ID,
 FAIL verdict, list specific FRONT-xxx or BACK-xxx violations. BLOCKING for CRITICAL/HIGH.
+
+### CODE CRAFT REVIEW (MANDATORY)
+After verifying all REQ/TECH/WIRE items, perform 6 targeted scans:
+
+1. CRAFT-DRY: Grep for function names across all source files. Flag any function defined in 2+ files.
+2. CRAFT-TYPES: Grep for `: any` in .ts/.tsx files. Flag all instances (except test mocks with justifying comments).
+3. CRAFT-PARAMS: For every route parsing params (Number(), parseInt()), check NaN/format validation exists.
+4. CRAFT-TXN: For every endpoint with 2+ sequential DB writes, check transaction wrapper exists.
+5. CRAFT-VALIDATION: For validation middleware, check parsed data is used downstream (not raw req.body).
+6. CRAFT-FK: For endpoints accepting FK IDs, check referenced entity existence is verified before the DB operation.
+
+Add CRAFT entries to Review Log. CRAFT FAILs trigger debugger fleet.
 
 REVIEW AUTHORITY:
 YOU are the ONLY agent authorized to mark requirement items [x] in REQUIREMENTS.md.
@@ -1385,9 +1457,16 @@ def build_agent_definitions(
     agents: dict[str, dict[str, Any]] = {}
 
     if config.agents.get("planner", AgentConfig()).enabled:
+        planner_prompt = PLANNER_PROMPT
+        if not config.quality.production_defaults:
+            # Strip the production readiness defaults section for QUICK depth
+            start = planner_prompt.find("## PRODUCTION READINESS DEFAULTS")
+            end = planner_prompt.find("- For each functional requirement, consider:")
+            if start != -1 and end != -1:
+                planner_prompt = planner_prompt[:start] + planner_prompt[end:]
         agents["planner"] = {
             "description": "Explores codebase and creates the Requirements Document",
-            "prompt": PLANNER_PROMPT,
+            "prompt": planner_prompt,
             "tools": ["Read", "Glob", "Grep", "Bash", "Write"],
             "model": config.agents.get("planner", AgentConfig()).model,
         }
@@ -1432,6 +1511,12 @@ def build_agent_definitions(
 
     if config.agents.get("code_reviewer", AgentConfig()).enabled:
         reviewer_prompt = CODE_REVIEWER_PROMPT
+        if not config.quality.craft_review:
+            # Strip the CODE CRAFT REVIEW section for QUICK depth
+            start = reviewer_prompt.find("### CODE CRAFT REVIEW (MANDATORY)")
+            end = reviewer_prompt.find("\nREVIEW AUTHORITY:")
+            if start != -1 and end != -1:
+                reviewer_prompt = reviewer_prompt[:start] + reviewer_prompt[end:]
         if task_text:
             reviewer_prompt = (
                 f"[ORIGINAL USER REQUEST]\n{task_text}\n\n" + reviewer_prompt

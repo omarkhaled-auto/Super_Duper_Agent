@@ -102,6 +102,27 @@ _RE_TEST_FILE = re.compile(
     r"(?:\.test\.|\.spec\.|__tests__|\.stories\.|test_)", re.IGNORECASE
 )
 
+# BACK-016: Non-transactional multi-step writes
+_RE_DELETE_MANY = re.compile(r"\.(?:deleteMany|delete)\s*\(", re.IGNORECASE)
+_RE_CREATE_MANY = re.compile(r"\.(?:createMany|create)\s*\(", re.IGNORECASE)
+_RE_TRANSACTION = re.compile(r"\$transaction|\btransaction\b|\.atomic\b|db\.session", re.IGNORECASE)
+
+# BACK-018: Unvalidated route parameters
+_RE_PARAM_PARSE = re.compile(r"(?:Number|parseInt|parseFloat)\s*\(\s*req\.params")
+_RE_ISNAN = re.compile(r"\bisNaN\b")
+
+# BACK-017: Validation result discarded
+_RE_SCHEMA_PARSE_ASSIGNED = re.compile(
+    r"(?:const|let|var|return|=)\s*.*(?:parse|safeParse|validate)\s*\(", re.IGNORECASE,
+)
+
+# Function definition patterns for duplicate detection
+_RE_FUNC_DEF_JS = re.compile(
+    r"(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(|"
+    r"(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s+)?(?:\(|=>)",
+)
+_RE_FUNC_DEF_PY = re.compile(r"^(?:async\s+)?def\s+(\w+)\s*\(", re.MULTILINE)
+
 
 # ---------------------------------------------------------------------------
 # File extension sets for each check
@@ -285,6 +306,197 @@ def _check_default_tailwind_colors(
     return violations
 
 
+def _check_transaction_safety(
+    content: str,
+    rel_path: str,
+    extension: str,
+) -> list[Violation]:
+    """BACK-016: Detect deleteMany followed by createMany without transaction wrapper.
+
+    Scans for delete+create pairs within the same file and checks whether a
+    $transaction or equivalent wrapper is present in the surrounding scope.
+    """
+    if extension not in _EXT_BACKEND:
+        return []
+
+    lines = content.splitlines()
+    violations: list[Violation] = []
+
+    for i, line in enumerate(lines):
+        if _RE_DELETE_MANY.search(line):
+            # Look ahead up to 20 lines for a create pattern
+            window = "\n".join(lines[i:i + 20])
+            if _RE_CREATE_MANY.search(window):
+                # Check broader scope for transaction wrapper
+                scope_start = max(0, i - 10)
+                scope = "\n".join(lines[scope_start:i + 20])
+                if not _RE_TRANSACTION.search(scope):
+                    violations.append(Violation(
+                        check="BACK-016",
+                        message="Sequential delete + create without transaction — wrap in $transaction()",
+                        file_path=rel_path,
+                        line=i + 1,
+                        severity="warning",
+                    ))
+    return violations
+
+
+def _check_param_validation(
+    content: str,
+    rel_path: str,
+    extension: str,
+) -> list[Violation]:
+    """BACK-018: Detect Number(req.params) or parseInt(req.params) without NaN check.
+
+    Two-pass: find param parsing, then check next 5 lines for isNaN guard.
+    """
+    if extension not in _EXT_BACKEND:
+        return []
+
+    lines = content.splitlines()
+    violations: list[Violation] = []
+
+    for i, line in enumerate(lines):
+        if _RE_PARAM_PARSE.search(line):
+            # Check next 5 lines for isNaN guard
+            window = "\n".join(lines[i:i + 6])
+            if not _RE_ISNAN.search(window):
+                violations.append(Violation(
+                    check="BACK-018",
+                    message="Route parameter parsed without NaN check — validate and return 400 on invalid",
+                    file_path=rel_path,
+                    line=i + 1,
+                    severity="warning",
+                ))
+    return violations
+
+
+def _check_validation_data_flow(
+    content: str,
+    rel_path: str,
+    extension: str,
+) -> list[Violation]:
+    """BACK-017: Detect schema.parse(req.body) where result is not assigned.
+
+    Flags statement-level calls to .parse() / .validate() that discard the
+    return value (the sanitized/parsed data is not used downstream).
+    """
+    if extension not in _EXT_BACKEND:
+        return []
+
+    violations: list[Violation] = []
+    for lineno, line in enumerate(content.splitlines(), start=1):
+        stripped = line.strip()
+        # Check for parse/validate calls that are not assigned
+        if ("parse(" in stripped or "validate(" in stripped) and "req." in stripped:
+            if not _RE_SCHEMA_PARSE_ASSIGNED.search(stripped):
+                if stripped.endswith(";") or stripped.endswith(")"):
+                    violations.append(Violation(
+                        check="BACK-017",
+                        message="Validation result discarded — assign parsed data: `req.body = schema.parse(req.body)`",
+                        file_path=rel_path,
+                        line=lineno,
+                        severity="warning",
+                    ))
+    return violations
+
+
+def _check_gitignore(
+    project_root: Path,
+) -> list[Violation]:
+    """Check for missing .gitignore or missing critical entries.
+
+    This is a PROJECT-LEVEL check (not per-file). It checks:
+    1. Whether .gitignore exists
+    2. If so, whether it contains critical entries (node_modules, dist, .env)
+    """
+    violations: list[Violation] = []
+    gitignore_path = project_root / ".gitignore"
+
+    if not gitignore_path.is_file():
+        violations.append(Violation(
+            check="PROJ-001",
+            message="Missing .gitignore file — add one with node_modules, dist, .env entries",
+            file_path=".gitignore",
+            line=0,
+            severity="warning",
+        ))
+        return violations
+
+    try:
+        content = gitignore_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return violations
+
+    critical_entries = ["node_modules", "dist", ".env"]
+    for entry in critical_entries:
+        if entry not in content:
+            violations.append(Violation(
+                check="PROJ-001",
+                message=f".gitignore missing critical entry: {entry}",
+                file_path=".gitignore",
+                line=0,
+                severity="warning",
+            ))
+
+    return violations
+
+
+def _check_duplicate_functions(
+    project_root: Path,
+    source_files: list[Path],
+) -> list[Violation]:
+    """FRONT-016: Detect same function name defined in 2+ non-test files.
+
+    This is a PROJECT-LEVEL check. Builds a function_name → [files] map
+    and flags names that appear in 2+ files.
+    """
+    func_map: dict[str, list[str]] = {}
+
+    for file_path in source_files:
+        try:
+            rel_path = file_path.relative_to(project_root).as_posix()
+        except ValueError:
+            rel_path = file_path.name
+
+        if _RE_TEST_FILE.search(rel_path):
+            continue
+
+        try:
+            content = file_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        extension = file_path.suffix
+        found_names: set[str] = set()
+
+        if extension in (".ts", ".tsx", ".js", ".jsx"):
+            for match in _RE_FUNC_DEF_JS.finditer(content):
+                name = match.group(1) or match.group(2)
+                if name and len(name) > 2:  # Skip very short names
+                    found_names.add(name)
+        elif extension == ".py":
+            for match in _RE_FUNC_DEF_PY.finditer(content):
+                name = match.group(1)
+                if name and not name.startswith("_") and len(name) > 2:
+                    found_names.add(name)
+
+        for name in found_names:
+            func_map.setdefault(name, []).append(rel_path)
+
+    violations: list[Violation] = []
+    for name, files in sorted(func_map.items()):
+        if len(files) >= 2:
+            violations.append(Violation(
+                check="FRONT-016",
+                message=f"Duplicate function '{name}' defined in {len(files)} files: {', '.join(files[:3])}",
+                file_path=files[0],
+                line=0,
+                severity="warning",
+            ))
+
+    return violations
+
+
 # ---------------------------------------------------------------------------
 # All checks registry (order does not matter — output is sorted by severity)
 # ---------------------------------------------------------------------------
@@ -296,6 +508,9 @@ _ALL_CHECKS = [
     _check_console_log,
     _check_generic_fonts,
     _check_default_tailwind_colors,
+    _check_transaction_safety,
+    _check_param_validation,
+    _check_validation_data_flow,
 ]
 
 # Union of all file extensions any check cares about (for fast pre-filter)
@@ -369,6 +584,9 @@ def run_spot_checks(project_root: Path) -> list[Violation]:
     ``__pycache__``, ``dist``, ``build``, ``.next``, ``venv``), reads
     each relevant source file, and runs all registered checks.
 
+    Also runs project-level checks (gitignore, duplicate functions) that
+    operate across files rather than per-file.
+
     Returns violations sorted by severity (error > warning > info), then
     by file path, then by line number.  The list is capped at
     ``_MAX_VIOLATIONS`` (100) to avoid flooding downstream consumers.
@@ -376,6 +594,11 @@ def run_spot_checks(project_root: Path) -> list[Violation]:
     violations: list[Violation] = []
     source_files = _iter_source_files(project_root)
 
+    # --- Project-level checks ---
+    violations.extend(_check_gitignore(project_root))
+    violations.extend(_check_duplicate_functions(project_root, source_files))
+
+    # --- Per-file checks ---
     for file_path in source_files:
         # Early exit if we already have enough violations
         if len(violations) >= _MAX_VIOLATIONS:

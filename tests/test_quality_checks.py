@@ -13,6 +13,11 @@ from agent_team.quality_checks import (
     _check_n_plus_1,
     _check_generic_fonts,
     _check_default_tailwind_colors,
+    _check_transaction_safety,
+    _check_param_validation,
+    _check_validation_data_flow,
+    _check_gitignore,
+    _check_duplicate_functions,
 )
 
 
@@ -101,6 +106,8 @@ class TestCheckDefaultTailwindColors:
 
 class TestRunSpotChecks:
     def test_empty_project(self, tmp_path):
+        # Provide .gitignore so the project-level check doesn't fire
+        (tmp_path / ".gitignore").write_text("node_modules\ndist\n.env\n", encoding="utf-8")
         violations = run_spot_checks(tmp_path)
         assert violations == []
 
@@ -143,3 +150,146 @@ class TestRunSpotChecks:
                 severity_order.get(severities[i], 99) <= severity_order.get(severities[i + 1], 99)
                 for i in range(len(severities) - 1)
             )
+
+
+# ===================================================================
+# New Spot Checks (Quality Optimization)
+# ===================================================================
+
+class TestCheckDuplicateFunctions:
+    def test_duplicate_functions_detected(self, tmp_path):
+        f1 = tmp_path / "routes.ts"
+        f1.write_text("function formatDate(d: Date) { return d.toISOString(); }\n", encoding="utf-8")
+        f2 = tmp_path / "utils.ts"
+        f2.write_text("function formatDate(d: Date) { return d.toLocaleDateString(); }\n", encoding="utf-8")
+        source_files = [f1, f2]
+        violations = _check_duplicate_functions(tmp_path, source_files)
+        assert len(violations) >= 1
+        assert any("FRONT-016" in v.check for v in violations)
+
+    def test_no_duplicate_false_positive(self, tmp_path):
+        f1 = tmp_path / "routes.ts"
+        f1.write_text("function formatDate(d: Date) { return d.toISOString(); }\n", encoding="utf-8")
+        f2 = tmp_path / "utils.ts"
+        f2.write_text("function parseInput(s: string) { return s.trim(); }\n", encoding="utf-8")
+        source_files = [f1, f2]
+        violations = _check_duplicate_functions(tmp_path, source_files)
+        assert len(violations) == 0
+
+    def test_const_non_function_not_flagged(self, tmp_path):
+        """const config = {...} should NOT be detected as a function."""
+        f1 = tmp_path / "a.ts"
+        f1.write_text("const config = { port: 3000 };\n", encoding="utf-8")
+        f2 = tmp_path / "b.ts"
+        f2.write_text("const config = { port: 8080 };\n", encoding="utf-8")
+        source_files = [f1, f2]
+        violations = _check_duplicate_functions(tmp_path, source_files)
+        assert len(violations) == 0
+
+    def test_const_arrow_function_detected(self, tmp_path):
+        """const formatDate = () => ... SHOULD be detected as a function."""
+        f1 = tmp_path / "a.ts"
+        f1.write_text("const formatDate = (d: Date) => d.toISOString();\n", encoding="utf-8")
+        f2 = tmp_path / "b.ts"
+        f2.write_text("const formatDate = (d: Date) => d.toLocaleDateString();\n", encoding="utf-8")
+        source_files = [f1, f2]
+        violations = _check_duplicate_functions(tmp_path, source_files)
+        assert len(violations) >= 1
+
+
+class TestCheckTransactionSafety:
+    def test_transaction_safety_flagged(self):
+        content = (
+            "async function replaceItems(userId: string) {\n"
+            "  await prisma.item.deleteMany({ where: { userId } });\n"
+            "  await prisma.item.createMany({ data: newItems });\n"
+            "}\n"
+        )
+        violations = _check_transaction_safety(content, "items.ts", ".ts")
+        assert len(violations) >= 1
+        assert violations[0].check == "BACK-016"
+
+    def test_transaction_safety_passes(self):
+        content = (
+            "async function replaceItems(userId: string) {\n"
+            "  await prisma.$transaction(async (tx) => {\n"
+            "    await tx.item.deleteMany({ where: { userId } });\n"
+            "    await tx.item.createMany({ data: newItems });\n"
+            "  });\n"
+            "}\n"
+        )
+        violations = _check_transaction_safety(content, "items.ts", ".ts")
+        assert len(violations) == 0
+
+
+class TestCheckParamValidation:
+    def test_param_validation_flagged(self):
+        content = (
+            "app.get('/users/:id', (req, res) => {\n"
+            "  const id = Number(req.params.id);\n"
+            "  const user = db.getUser(id);\n"
+            "  res.json(user);\n"
+            "});\n"
+        )
+        violations = _check_param_validation(content, "routes.ts", ".ts")
+        assert len(violations) >= 1
+        assert violations[0].check == "BACK-018"
+
+    def test_param_validation_passes(self):
+        content = (
+            "app.get('/users/:id', (req, res) => {\n"
+            "  const id = Number(req.params.id);\n"
+            "  if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });\n"
+            "  const user = db.getUser(id);\n"
+            "  res.json(user);\n"
+            "});\n"
+        )
+        violations = _check_param_validation(content, "routes.ts", ".ts")
+        assert len(violations) == 0
+
+
+class TestCheckValidationDataFlow:
+    def test_validation_flow_flagged(self):
+        content = (
+            "app.post('/users', (req, res) => {\n"
+            "  schema.parse(req.body);\n"
+            "  const user = createUser(req.body);\n"
+            "  res.json(user);\n"
+            "});\n"
+        )
+        violations = _check_validation_data_flow(content, "routes.ts", ".ts")
+        assert len(violations) >= 1
+        assert violations[0].check == "BACK-017"
+
+    def test_validation_flow_passes(self):
+        content = (
+            "app.post('/users', (req, res) => {\n"
+            "  const data = schema.parse(req.body);\n"
+            "  const user = createUser(data);\n"
+            "  res.json(user);\n"
+            "});\n"
+        )
+        violations = _check_validation_data_flow(content, "routes.ts", ".ts")
+        assert len(violations) == 0
+
+    def test_validation_flow_return_not_flagged(self):
+        """return schema.parse(req.body) should NOT be flagged — result is used."""
+        content = (
+            "function validate(req: Request) {\n"
+            "  return schema.parse(req.body);\n"
+            "}\n"
+        )
+        violations = _check_validation_data_flow(content, "middleware.ts", ".ts")
+        assert len(violations) == 0
+
+
+class TestCheckGitignore:
+    def test_gitignore_missing(self, tmp_path):
+        violations = _check_gitignore(tmp_path)
+        assert len(violations) >= 1
+
+    def test_gitignore_present(self, tmp_path):
+        gi = tmp_path / ".gitignore"
+        gi.write_text("node_modules\ndist\n.env\n", encoding="utf-8")
+        violations = _check_gitignore(tmp_path)
+        assert len(violations) == 0
