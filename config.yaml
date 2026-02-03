@@ -62,6 +62,11 @@ mcp_servers:
     enabled: true
   context7:
     enabled: true
+  # Sequential Thinking MCP server — orchestrator-level tool-based ST
+  # Only needed if you want the orchestrator itself to use ST MCP calls.
+  # Sub-agents get prompt-engineered ST via investigation.sequential_thinking.
+  sequential_thinking:
+    enabled: false
 
 display:
   show_cost: true
@@ -85,6 +90,20 @@ scheduler:
   conflict_strategy: "artificial-dependency"
   enable_context_scoping: true
   enable_critical_path: true
+
+# Deep Investigation — Gemini CLI + Sequential Thinking for review agents
+# investigation:
+#   enabled: false                    # Requires Gemini CLI install
+#   gemini_model: ""                  # Empty = default model
+#   max_queries_per_agent: 8          # Gemini query budget per agent
+#   timeout_seconds: 120              # Max seconds per Gemini query
+#   agents:                           # Agents that get investigation protocol
+#     - code-reviewer
+#     - security-auditor
+#     - debugger
+#   sequential_thinking: true         # Prompt-engineered ST for sub-agents
+#   max_thoughts_per_item: 15         # Thought step budget (min 3)
+#   enable_hypothesis_loop: true      # Require hypothesis-verification cycles
 
 # Progressive Verification — contract-based checks after each task
 verification:

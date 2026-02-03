@@ -89,6 +89,9 @@ class InvestigationConfig:
     agents: list[str] = field(default_factory=lambda: [
         "code-reviewer", "security-auditor", "debugger",
     ])
+    sequential_thinking: bool = True          # Enable ST when investigation enabled
+    max_thoughts_per_item: int = 15           # Thought step budget per item
+    enable_hypothesis_loop: bool = True       # Require hypothesis-verification cycles
 
 
 _VALID_INVESTIGATION_AGENTS = frozenset({
@@ -104,6 +107,8 @@ def _validate_investigation_config(cfg: InvestigationConfig) -> None:
         raise ValueError("investigation.max_queries_per_agent must be >= 1")
     if cfg.timeout_seconds < 1:
         raise ValueError("investigation.timeout_seconds must be >= 1")
+    if cfg.max_thoughts_per_item < 3:
+        raise ValueError("investigation.max_thoughts_per_item must be >= 3")
     for agent in cfg.agents:
         if agent not in _VALID_INVESTIGATION_AGENTS:
             raise ValueError(
@@ -231,6 +236,7 @@ class AgentTeamConfig:
     mcp_servers: dict[str, MCPServerConfig] = field(default_factory=lambda: {
         "firecrawl": MCPServerConfig(),
         "context7": MCPServerConfig(),
+        "sequential_thinking": MCPServerConfig(enabled=False),
     })
     display: DisplayConfig = field(default_factory=DisplayConfig)
 
@@ -610,6 +616,9 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
             max_queries_per_agent=inv.get("max_queries_per_agent", cfg.investigation.max_queries_per_agent),
             timeout_seconds=inv.get("timeout_seconds", cfg.investigation.timeout_seconds),
             agents=inv.get("agents", cfg.investigation.agents),
+            sequential_thinking=inv.get("sequential_thinking", cfg.investigation.sequential_thinking),
+            max_thoughts_per_item=inv.get("max_thoughts_per_item", cfg.investigation.max_thoughts_per_item),
+            enable_hypothesis_loop=inv.get("enable_hypothesis_loop", cfg.investigation.enable_hypothesis_loop),
         )
         _validate_investigation_config(cfg.investigation)
 

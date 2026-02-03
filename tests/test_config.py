@@ -265,11 +265,13 @@ class TestAgentTeamConfigDefaults:
         }
         assert set(c.agents.keys()) == expected
 
-    def test_has_2_mcp_servers(self):
+    def test_has_3_mcp_servers(self):
         c = AgentTeamConfig()
-        assert len(c.mcp_servers) == 2
+        assert len(c.mcp_servers) == 3
         assert "firecrawl" in c.mcp_servers
         assert "context7" in c.mcp_servers
+        assert "sequential_thinking" in c.mcp_servers
+        assert c.mcp_servers["sequential_thinking"].enabled is False
 
     def test_has_codebase_map_config(self):
         c = AgentTeamConfig()
@@ -1079,6 +1081,18 @@ class TestInvestigationConfigDefaults:
         c = InvestigationConfig()
         assert c.agents == ["code-reviewer", "security-auditor", "debugger"]
 
+    def test_sequential_thinking_true_by_default(self):
+        c = InvestigationConfig()
+        assert c.sequential_thinking is True
+
+    def test_max_thoughts_per_item_default(self):
+        c = InvestigationConfig()
+        assert c.max_thoughts_per_item == 15
+
+    def test_enable_hypothesis_loop_true_by_default(self):
+        c = InvestigationConfig()
+        assert c.enable_hypothesis_loop is True
+
 
 class TestInvestigationConfigInAgentTeamConfig:
     def test_has_investigation_config(self):
@@ -1102,6 +1116,18 @@ class TestInvestigationConfigInAgentTeamConfig:
         assert cfg.investigation.timeout_seconds == 60
         assert cfg.investigation.agents == ["code-reviewer", "debugger"]
 
+    def test_investigation_st_fields_from_yaml(self):
+        cfg = _dict_to_config({
+            "investigation": {
+                "sequential_thinking": False,
+                "max_thoughts_per_item": 10,
+                "enable_hypothesis_loop": False,
+            }
+        })
+        assert cfg.investigation.sequential_thinking is False
+        assert cfg.investigation.max_thoughts_per_item == 10
+        assert cfg.investigation.enable_hypothesis_loop is False
+
     def test_investigation_partial_yaml(self):
         cfg = _dict_to_config({"investigation": {"enabled": True}})
         assert cfg.investigation.enabled is True
@@ -1114,6 +1140,21 @@ class TestInvestigationConfigInAgentTeamConfig:
     def test_investigation_non_dict_ignored(self):
         cfg = _dict_to_config({"investigation": "invalid"})
         assert cfg.investigation.enabled is False  # default unchanged
+
+    def test_investigation_old_config_without_st_fields(self):
+        """Backward compat: old config with investigation but no ST fields."""
+        cfg = _dict_to_config({
+            "investigation": {
+                "enabled": True,
+                "gemini_model": "gemini-2.5-pro",
+                "max_queries_per_agent": 5,
+                "agents": ["code-reviewer"],
+            }
+        })
+        # ST fields should get their defaults
+        assert cfg.investigation.sequential_thinking is True
+        assert cfg.investigation.max_thoughts_per_item == 15
+        assert cfg.investigation.enable_hypothesis_loop is True
 
 
 class TestInvestigationConfigValidation:
@@ -1148,3 +1189,15 @@ class TestInvestigationConfigValidation:
     def test_valid_timeout_accepted(self):
         cfg = _dict_to_config({"investigation": {"timeout_seconds": 1}})
         assert cfg.investigation.timeout_seconds == 1
+
+    def test_max_thoughts_below_minimum_raises(self):
+        with pytest.raises(ValueError, match="max_thoughts_per_item must be >= 3"):
+            _dict_to_config({"investigation": {"max_thoughts_per_item": 2}})
+
+    def test_max_thoughts_at_minimum_accepted(self):
+        cfg = _dict_to_config({"investigation": {"max_thoughts_per_item": 3}})
+        assert cfg.investigation.max_thoughts_per_item == 3
+
+    def test_max_thoughts_zero_raises(self):
+        with pytest.raises(ValueError, match="max_thoughts_per_item"):
+            _dict_to_config({"investigation": {"max_thoughts_per_item": 0}})

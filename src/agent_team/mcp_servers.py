@@ -36,6 +36,15 @@ def _context7_server() -> dict[str, Any]:
     }
 
 
+def _sequential_thinking_server() -> dict[str, Any]:
+    """Return Sequential Thinking MCP server config (orchestrator only)."""
+    return {
+        "type": "stdio",
+        "command": "npx",
+        "args": ["-y", "@anthropic-ai/sequential-thinking-mcp"],
+    }
+
+
 def get_mcp_servers(config: AgentTeamConfig) -> dict[str, Any]:
     """Build the MCP servers dict based on config.
 
@@ -53,6 +62,10 @@ def get_mcp_servers(config: AgentTeamConfig) -> dict[str, Any]:
     context7_cfg = config.mcp_servers.get("context7")
     if context7_cfg and context7_cfg.enabled:
         servers["context7"] = _context7_server()
+
+    st_cfg = config.mcp_servers.get("sequential_thinking")
+    if st_cfg and st_cfg.enabled:
+        servers["sequential_thinking"] = _sequential_thinking_server()
 
     return servers
 

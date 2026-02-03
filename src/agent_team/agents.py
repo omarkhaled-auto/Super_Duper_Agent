@@ -14,6 +14,7 @@ from .config import AgentConfig, AgentTeamConfig, get_agent_counts
 from .mcp_servers import get_research_tools
 from .code_quality_standards import get_standards_for_agent
 from .investigation_protocol import build_investigation_protocol
+from .sequential_thinking import build_sequential_thinking_protocol
 from .ui_standards import load_ui_standards
 
 # ---------------------------------------------------------------------------
@@ -1514,6 +1515,13 @@ def build_agent_definitions(
                 if name == "code-reviewer" and gemini_available:
                     if "Bash" not in agents[name]["tools"]:
                         agents[name]["tools"].append("Bash")
+
+    # Inject Sequential Thinking methodology into investigation agents
+    if config.investigation.enabled and config.investigation.sequential_thinking:
+        for name in list(agents.keys()):
+            st_protocol = build_sequential_thinking_protocol(name, config.investigation)
+            if st_protocol:
+                agents[name]["prompt"] = agents[name]["prompt"] + st_protocol
 
     return agents
 

@@ -1052,3 +1052,71 @@ class TestInvestigationInjection:
         # Investigation protocol should also be present
         assert "DEEP INVESTIGATION PROTOCOL" in agents["code-reviewer"]["prompt"]
         assert "DEEP INVESTIGATION PROTOCOL" in agents["debugger"]["prompt"]
+
+
+class TestSequentialThinkingInjection:
+    """Tests that ST methodology is injected into the right agents."""
+
+    def test_st_injected_when_investigation_and_st_enabled(self):
+        from agent_team.config import InvestigationConfig
+        cfg = AgentTeamConfig()
+        cfg.investigation = InvestigationConfig(enabled=True, sequential_thinking=True)
+        agents = build_agent_definitions(cfg, {}, gemini_available=False)
+        assert "SEQUENTIAL THINKING METHODOLOGY" in agents["code-reviewer"]["prompt"]
+        assert "SEQUENTIAL THINKING METHODOLOGY" in agents["security-auditor"]["prompt"]
+        assert "SEQUENTIAL THINKING METHODOLOGY" in agents["debugger"]["prompt"]
+
+    def test_st_not_injected_when_investigation_disabled(self):
+        cfg = AgentTeamConfig()
+        # Default: investigation.enabled = False
+        agents = build_agent_definitions(cfg, {}, gemini_available=False)
+        assert "SEQUENTIAL THINKING METHODOLOGY" not in agents["code-reviewer"]["prompt"]
+
+    def test_st_not_injected_when_st_disabled(self):
+        from agent_team.config import InvestigationConfig
+        cfg = AgentTeamConfig()
+        cfg.investigation = InvestigationConfig(enabled=True, sequential_thinking=False)
+        agents = build_agent_definitions(cfg, {}, gemini_available=False)
+        assert "SEQUENTIAL THINKING METHODOLOGY" not in agents["code-reviewer"]["prompt"]
+        # Investigation protocol should still be present
+        assert "DEEP INVESTIGATION PROTOCOL" in agents["code-reviewer"]["prompt"]
+
+    def test_st_not_injected_for_planner(self):
+        from agent_team.config import InvestigationConfig
+        cfg = AgentTeamConfig()
+        cfg.investigation = InvestigationConfig(enabled=True)
+        agents = build_agent_definitions(cfg, {}, gemini_available=False)
+        assert "SEQUENTIAL THINKING METHODOLOGY" not in agents["planner"]["prompt"]
+
+    def test_st_not_injected_for_code_writer(self):
+        from agent_team.config import InvestigationConfig
+        cfg = AgentTeamConfig()
+        cfg.investigation = InvestigationConfig(enabled=True)
+        agents = build_agent_definitions(cfg, {}, gemini_available=False)
+        assert "SEQUENTIAL THINKING METHODOLOGY" not in agents["code-writer"]["prompt"]
+
+    def test_st_appears_after_investigation_protocol(self):
+        from agent_team.config import InvestigationConfig
+        cfg = AgentTeamConfig()
+        cfg.investigation = InvestigationConfig(enabled=True)
+        agents = build_agent_definitions(cfg, {}, gemini_available=False)
+        prompt = agents["code-reviewer"]["prompt"]
+        ip_idx = prompt.index("DEEP INVESTIGATION PROTOCOL")
+        st_idx = prompt.index("SEQUENTIAL THINKING METHODOLOGY")
+        assert ip_idx < st_idx, "ST must appear after Investigation Protocol"
+
+    def test_hypothesis_loop_present_by_default(self):
+        from agent_team.config import InvestigationConfig
+        cfg = AgentTeamConfig()
+        cfg.investigation = InvestigationConfig(enabled=True)
+        agents = build_agent_definitions(cfg, {}, gemini_available=False)
+        assert "Hypothesis-Verification Cycle" in agents["code-reviewer"]["prompt"]
+
+    def test_hypothesis_loop_absent_when_disabled(self):
+        from agent_team.config import InvestigationConfig
+        cfg = AgentTeamConfig()
+        cfg.investigation = InvestigationConfig(enabled=True, enable_hypothesis_loop=False)
+        agents = build_agent_definitions(cfg, {}, gemini_available=False)
+        assert "Hypothesis-Verification Cycle" not in agents["code-reviewer"]["prompt"]
+        # ST core should still be present
+        assert "SEQUENTIAL THINKING METHODOLOGY" in agents["code-reviewer"]["prompt"]

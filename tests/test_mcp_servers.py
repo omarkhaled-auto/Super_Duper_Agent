@@ -6,6 +6,7 @@ from agent_team.config import AgentTeamConfig, MCPServerConfig
 from agent_team.mcp_servers import (
     _context7_server,
     _firecrawl_server,
+    _sequential_thinking_server,
     get_mcp_servers,
     get_research_tools,
     is_firecrawl_available,
@@ -59,6 +60,32 @@ class TestContext7Server:
 
 
 # ===================================================================
+# _sequential_thinking_server()
+# ===================================================================
+
+class TestSequentialThinkingServer:
+    def test_returns_dict(self):
+        result = _sequential_thinking_server()
+        assert isinstance(result, dict)
+
+    def test_no_env_key_needed(self):
+        result = _sequential_thinking_server()
+        assert "env" not in result
+
+    def test_uses_npx(self):
+        result = _sequential_thinking_server()
+        assert result["command"] == "npx"
+
+    def test_correct_package(self):
+        result = _sequential_thinking_server()
+        assert "@anthropic-ai/sequential-thinking-mcp" in result["args"]
+
+    def test_type_is_stdio(self):
+        result = _sequential_thinking_server()
+        assert result["type"] == "stdio"
+
+
+# ===================================================================
 # get_mcp_servers()
 # ===================================================================
 
@@ -100,6 +127,25 @@ class TestGetMcpServers:
         servers = get_mcp_servers(cfg)
         # Should still work, just without firecrawl
         assert "firecrawl" not in servers
+
+    def test_sequential_thinking_included_when_enabled(self, env_with_api_keys):
+        cfg = AgentTeamConfig()
+        cfg.mcp_servers["sequential_thinking"] = MCPServerConfig(enabled=True)
+        servers = get_mcp_servers(cfg)
+        assert "sequential_thinking" in servers
+        assert servers["sequential_thinking"]["command"] == "npx"
+
+    def test_sequential_thinking_excluded_when_disabled(self, env_with_api_keys):
+        cfg = AgentTeamConfig()
+        cfg.mcp_servers["sequential_thinking"] = MCPServerConfig(enabled=False)
+        servers = get_mcp_servers(cfg)
+        assert "sequential_thinking" not in servers
+
+    def test_sequential_thinking_excluded_when_absent(self, env_with_api_keys):
+        cfg = AgentTeamConfig()
+        # ST not in default mcp_servers, so should be absent
+        servers = get_mcp_servers(cfg)
+        assert "sequential_thinking" not in servers
 
 
 # ===================================================================
