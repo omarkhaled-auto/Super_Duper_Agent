@@ -1242,8 +1242,8 @@ class TestSchedulerConfigWiring:
         result = compute_schedule(nodes, scheduler_config=cfg)
         assert len(result.critical_path.path) > 0
 
-    def test_integration_agent_strategy_logs_warning(self, caplog):
-        """integration-agent strategy should log a warning."""
+    def test_integration_agent_strategy_logs_info(self, caplog):
+        """integration-agent strategy should log an info message."""
         import logging
         from agent_team.config import SchedulerConfig
 
@@ -1252,9 +1252,41 @@ class TestSchedulerConfigWiring:
             enabled=True,
             conflict_strategy="integration-agent",
         )
-        with caplog.at_level(logging.WARNING, logger="agent_team.scheduler"):
+        with caplog.at_level(logging.INFO, logger="agent_team.scheduler"):
             compute_schedule(nodes, scheduler_config=cfg)
         assert "integration-agent" in caplog.text
+
+    def test_schedule_result_includes_tasks_field(self):
+        """Fix 1: ScheduleResult.tasks field is populated with full task list."""
+        tasks = parse_tasks_md(SAMPLE_TASKS_MD)
+        result = compute_schedule(tasks)
+        assert hasattr(result, "tasks")
+        assert len(result.tasks) == len(tasks)
+        result_ids = {t.id for t in result.tasks}
+        input_ids = {t.id for t in tasks}
+        assert result_ids == input_ids
+
+    def test_integration_tasks_in_schedule_result(self):
+        """Fix 1: When conflict_strategy='integration-agent', integration tasks appear
+        in both result.integration_tasks and result.tasks."""
+        from agent_team.config import SchedulerConfig
+
+        # Two tasks sharing a file to trigger conflict
+        nodes = [
+            _make_node("TASK-001", files=["shared.py"]),
+            _make_node("TASK-002", files=["shared.py"]),
+        ]
+        cfg = SchedulerConfig(
+            enabled=True,
+            conflict_strategy="integration-agent",
+        )
+        result = compute_schedule(nodes, scheduler_config=cfg)
+        # Should have created an integration task
+        assert len(result.integration_tasks) >= 1
+        # Integration task should be in result.tasks
+        integration_ids = set(result.integration_tasks)
+        result_ids = {t.id for t in result.tasks}
+        assert integration_ids.issubset(result_ids)
 
     def test_compute_schedule_none_config_backwards_compat(self):
         """No config param should work identically to previous behavior."""

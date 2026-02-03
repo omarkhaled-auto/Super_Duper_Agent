@@ -29,6 +29,12 @@ class RunState:
     artifacts: dict[str, str] = field(default_factory=dict)  # name -> path
     interrupted: bool = False
     timestamp: str = ""
+    # Granular convergence tracking (Root Cause #2, #3)
+    convergence_cycles: int = 0
+    requirements_checked: int = 0
+    requirements_total: int = 0
+    error_context: str = ""
+    milestone_progress: dict[str, dict] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.run_id:
@@ -48,6 +54,18 @@ class RunSummary:
     requirements_passed: int = 0
     requirements_total: int = 0
     files_changed: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ConvergenceReport:
+    """Result of a convergence health check after orchestration."""
+
+    total_requirements: int = 0
+    checked_requirements: int = 0
+    review_cycles: int = 0
+    convergence_ratio: float = 0.0  # checked/total
+    review_fleet_deployed: bool = False  # cycles > 0
+    health: str = "unknown"  # "healthy" | "degraded" | "failed"
 
 
 _STATE_FILE = "STATE.json"
@@ -110,6 +128,11 @@ def load_state(directory: str = ".agent-team") -> RunState | None:
             artifacts=_expect(data.get("artifacts", {}), dict, {}),
             interrupted=_expect(data.get("interrupted", False), bool, False),
             timestamp=_expect(data.get("timestamp", ""), str, ""),
+            convergence_cycles=_expect(data.get("convergence_cycles", 0), (int, float), 0),
+            requirements_checked=_expect(data.get("requirements_checked", 0), (int, float), 0),
+            requirements_total=_expect(data.get("requirements_total", 0), (int, float), 0),
+            error_context=_expect(data.get("error_context", ""), str, ""),
+            milestone_progress=_expect(data.get("milestone_progress", {}), dict, {}),
         )
     except (json.JSONDecodeError, KeyError, TypeError, ValueError, OSError, UnicodeDecodeError):
         return None

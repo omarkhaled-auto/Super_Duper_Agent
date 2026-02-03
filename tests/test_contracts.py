@@ -368,7 +368,8 @@ class TestVerifyWiringContract:
         source.parent.mkdir(parents=True, exist_ok=True)
         source.write_text(
             "from lib.db import Database, connect\n\n"
-            "db = Database()\n",
+            "db = Database()\n"
+            "conn = connect()\n",
             encoding="utf-8",
         )
 

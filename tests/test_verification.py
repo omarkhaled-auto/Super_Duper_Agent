@@ -97,6 +97,14 @@ class TestComputeOverallStatus:
         )
         assert compute_overall_status(result) == "partial"
 
+    def test_contracts_passed_none_default(self):
+        """Fix 7: contracts_passed defaults to None, not False.
+        A fresh result should NOT report contracts as failed."""
+        result = TaskVerificationResult(task_id="T-DEFAULT")
+        assert result.contracts_passed is None
+        # compute_overall_status should treat None as 'not run' (partial)
+        assert compute_overall_status(result) == "partial"
+
     def test_mix_pass_none(self):
         """Some phases pass, others not run -> depends on implementation.
         If only contracts ran and passed, the other None phases mean partial."""

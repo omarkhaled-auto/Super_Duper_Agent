@@ -57,10 +57,13 @@ class TaskVerificationResult:
     """Aggregated verification result for a single task."""
 
     task_id: str
-    contracts_passed: bool = False
+    contracts_passed: bool | None = None  # None = not run, False = failed, True = passed
+    build_passed: bool | None = None  # None = not applicable / not run
     lint_passed: bool | None = None  # None = not applicable / not run
     type_check_passed: bool | None = None
     tests_passed: bool | None = None
+    security_passed: bool | None = None
+    test_quality_score: float | None = None
     overall: str = "pass"  # "pass" | "fail" | "partial"
     issues: list[str] = field(default_factory=list)
 
@@ -83,19 +86,29 @@ async def verify_task_completion(
     task_id: str,
     project_root: Path,
     registry: ContractRegistry,
+    run_build: bool = True,
     run_lint: bool = True,
     run_type_check: bool = True,
     run_tests: bool = True,
+    run_security: bool = True,
+    run_quality_checks: bool = True,
     *,
     blocking: bool = True,
+    min_test_count: int = 0,
 ) -> TaskVerificationResult:
-    """Run the 4-phase verification pipeline for a completed task.
+    """Run the 7-phase verification pipeline for a completed task.
 
     Phase order (fastest first):
+        0. Requirements compliance -- deterministic.
+        0b. Test file existence gate -- deterministic.
         1. Contract check  -- BLOCKING. Deterministic, no LLM.
+        1.5. Build check   -- BLOCKING. Runs build command.
         2. Lint/format     -- BLOCKING for errors, ADVISORY for warnings.
         3. Type check      -- BLOCKING.
         4. Test subset     -- BLOCKING.
+        4.5. Test quality  -- ADVISORY. Checks assertion depth.
+        5. Security audit  -- ADVISORY. Dependency/secret checks.
+        6. Spot checks     -- ADVISORY. Anti-pattern regex checks.
 
     Returns a ``TaskVerificationResult`` with an overall status computed
     from all phases that were executed.
@@ -131,6 +144,19 @@ async def verify_task_completion(
                     f"Contract: {violation.description} ({violation.file_path})"
                 )
 
+    # Phase 1.5: Build check (Root Cause #4) ------------------------------
+    if run_build:
+        try:
+            build_cmd = _detect_build_command(project_root)
+            if build_cmd:
+                returncode, stdout, stderr = await _run_command(build_cmd, project_root)
+                result.build_passed = returncode == 0
+                if not result.build_passed:
+                    output = (stderr[:_MAX_OUTPUT_PREVIEW] or stdout[:_MAX_OUTPUT_PREVIEW]).strip()
+                    issues.append(f"Build failed: {output}")
+        except Exception as exc:
+            issues.append(f"Build check failed: {exc}")
+
     # Phase 2: Lint (if enabled) ------------------------------------------
     if run_lint:
         lint_cmd = _detect_lint_command(project_root)
@@ -160,6 +186,42 @@ async def verify_task_completion(
             if not result.tests_passed:
                 output = (stderr[:_MAX_OUTPUT_PREVIEW] or stdout[:_MAX_OUTPUT_PREVIEW]).strip()
                 issues.append(f"Tests failed: {output}")
+
+    # Phase 4.5: Test quality gate (Root Cause #6) -------------------------
+    if run_tests:
+        try:
+            quality_result = _check_test_quality(project_root, min_test_count=min_test_count)
+            if quality_result:
+                result.test_quality_score = quality_result.get("score", 0.0)
+                if quality_result.get("issues"):
+                    for qi in quality_result["issues"]:
+                        issues.append(f"Test quality: {qi}")
+        except Exception as exc:
+            issues.append(f"Test quality check failed: {exc}")
+
+    # Phase 5: Security audit (Root Cause #5) ------------------------------
+    if run_security:
+        try:
+            security_issues = await _run_security_checks(project_root)
+            if security_issues:
+                result.security_passed = False
+                for si in security_issues:
+                    issues.append(f"Security: {si}")
+            else:
+                result.security_passed = True
+        except Exception as exc:
+            issues.append(f"Security check failed: {exc}")
+
+    # Phase 6: Anti-pattern spot checks (Root Cause #11) -------------------
+    if run_quality_checks:
+        try:
+            from .quality_checks import run_spot_checks
+            violations = run_spot_checks(project_root)
+            if violations:
+                for v in violations[:10]:  # Cap advisory output
+                    issues.append(f"Quality: [{v.check}] {v.message} ({v.file_path}:{v.line})")
+        except Exception:
+            pass  # quality_checks unavailable or failed — non-blocking
 
     result.issues = issues
     result.overall = compute_overall_status(result, blocking=blocking)
@@ -191,16 +253,21 @@ def compute_overall_status(result: TaskVerificationResult, *, blocking: bool = T
     # Check blocking failures first.
     if result.contracts_passed is False:
         return fail_status
+    if result.build_passed is False:
+        return fail_status
     if result.tests_passed is False:
         return fail_status  # contracts pass + tests fail = FAIL (RED) when blocking
     if result.lint_passed is False:
         return fail_status
     if result.type_check_passed is False:
         return fail_status
+    # Security is advisory — does not block (only downgrades to partial)
+    # if result.security_passed is False: treated as partial, not fail
 
     # Determine how many phases actually ran.
     phases = [
         result.contracts_passed,
+        result.build_passed,
         result.lint_passed,
         result.type_check_passed,
         result.tests_passed,
@@ -520,6 +587,230 @@ def _check_test_files_exist(project_root: Path) -> StructuredReviewResult | None
 # ---------------------------------------------------------------------------
 
 
+def _detect_build_command(project_root: Path) -> list[str] | None:
+    """Detect build command from project configuration.
+
+    Checks (in order):
+        1. ``package.json`` ``scripts.build``
+        2. ``package.json`` ``scripts.tsc`` (explicit TypeScript build)
+        3. ``pyproject.toml`` ``[build-system]``
+
+    Note: ``tsconfig.json`` alone is NOT enough — ``tsc --noEmit``
+    is already handled by the type-check phase. Build means producing
+    output artifacts, which requires an explicit build script.
+    """
+    # Node / npm projects
+    pkg_json = project_root / "package.json"
+    if pkg_json.is_file():
+        try:
+            data = json.loads(pkg_json.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                scripts = data.get("scripts")
+                if isinstance(scripts, dict):
+                    if "build" in scripts:
+                        return ["npm", "run", "build"]
+                    if "tsc" in scripts:
+                        return ["npm", "run", "tsc"]
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # Python build (pyproject.toml with build-system)
+    pyproject = project_root / "pyproject.toml"
+    if pyproject.is_file():
+        try:
+            content = pyproject.read_text(encoding="utf-8")
+            if "[build-system]" in content:
+                return ["python", "-m", "build", "--no-isolation"]
+        except OSError:
+            pass
+
+    return None
+
+
+def _check_test_quality(
+    project_root: Path,
+    *,
+    min_test_count: int = 0,
+) -> dict | None:
+    """Check test quality beyond mere existence (Root Cause #6).
+
+    Parses test files and checks:
+    - At least 1 expect()/assert per test function (not empty tests)
+    - No test.skip / xit / xdescribe (skipped tests)
+    - Minimum test count threshold
+    Returns dict with 'score' and 'issues' list, or None if no test files found.
+    """
+    test_dirs = ["tests", "test", "__tests__", "spec"]
+    test_patterns = ["*.test.*", "*.spec.*", "test_*.py"]
+
+    test_files: list[Path] = []
+    for d in test_dirs:
+        test_dir = project_root / d
+        if test_dir.is_dir():
+            for pattern in ["**/*.py", "**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"]:
+                test_files.extend(test_dir.glob(pattern))
+
+    for pattern in test_patterns:
+        test_files.extend(project_root.rglob(pattern))
+
+    # Deduplicate
+    test_files = list({f.resolve(): f for f in test_files if f.is_file()}.values())
+
+    if not test_files:
+        return None
+
+    issues: list[str] = []
+    total_tests = 0
+    empty_tests = 0
+    skipped_tests = 0
+
+    # Patterns for detecting test functions/assertions
+    py_test_func = re.compile(r"^\s*(?:def|async\s+def)\s+(test_\w+)", re.MULTILINE)
+    py_assert = re.compile(r"\b(?:assert|assertEqual|assertTrue|assertFalse|assertRaises|assertIn)\b")
+    js_test_func = re.compile(r"(?<!\w)(?:it|test)\s*\(", re.MULTILINE)
+    js_assert = re.compile(r"\b(?:expect|assert|should)\s*\(")
+    skip_pattern = re.compile(r"(?:\btest\.skip\b|\bxit\b|\bxdescribe\b|\bxtest\b|@pytest\.mark\.skip|@skip)")
+
+    for test_file in test_files[:50]:  # Cap to avoid excessive scanning
+        try:
+            content = test_file.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+
+        is_python = test_file.suffix == ".py"
+
+        if is_python:
+            funcs = py_test_func.findall(content)
+            total_tests += len(funcs)
+            for func_name in funcs:
+                # Extract function body (simple heuristic: lines until next def or end)
+                func_start = content.find(f"def {func_name}")
+                if func_start == -1:
+                    func_start = content.find(f"async def {func_name}")
+                if func_start >= 0:
+                    next_def_sync = content.find("\ndef ", func_start + 10)
+                    next_def_async = content.find("\nasync def ", func_start + 10)
+                    candidates = [p for p in (next_def_sync, next_def_async) if p > 0]
+                    next_def = min(candidates) if candidates else -1
+                    body = content[func_start:next_def] if next_def > 0 else content[func_start:]
+                    if not py_assert.search(body):
+                        empty_tests += 1
+        else:
+            funcs = js_test_func.findall(content)
+            total_tests += len(funcs)
+            if funcs and not js_assert.search(content):
+                empty_tests += len(funcs)
+
+        skips = skip_pattern.findall(content)
+        skipped_tests += len(skips)
+
+    if empty_tests > 0:
+        issues.append(f"{empty_tests} test(s) have no assertions (empty/shallow tests)")
+    if skipped_tests > 0:
+        issues.append(f"{skipped_tests} test(s) are skipped (test.skip/xit/xdescribe)")
+    if min_test_count > 0 and total_tests < min_test_count:
+        issues.append(f"Only {total_tests} tests found, minimum required: {min_test_count}")
+
+    # Compute score: 1.0 = perfect, 0.0 = no tests
+    if total_tests > 0:
+        effective = total_tests - empty_tests - skipped_tests
+        score = max(0.0, effective / total_tests)
+    else:
+        score = 0.0
+
+    return {"score": score, "issues": issues, "total": total_tests, "empty": empty_tests, "skipped": skipped_tests}
+
+
+async def _run_security_checks(project_root: Path) -> list[str]:
+    """Run security checks on the project (Root Cause #5).
+
+    Checks:
+    1. npm audit / pip audit for dependency vulnerabilities
+    2. .env files committed (should be in .gitignore)
+    3. Hardcoded secrets (regex for API keys, passwords)
+    """
+    issues: list[str] = []
+
+    # Check for .env files that might be committed
+    env_files = list(project_root.glob("**/.env"))
+    env_files += list(project_root.glob("**/.env.*"))
+    # Filter out node_modules, .git, etc.
+    env_files = [
+        f for f in env_files
+        if "node_modules" not in str(f) and ".git" not in str(f)
+    ]
+    if env_files:
+        gitignore = project_root / ".gitignore"
+        gitignore_content = ""
+        if gitignore.is_file():
+            try:
+                gitignore_content = gitignore.read_text(encoding="utf-8")
+            except OSError:
+                pass
+        if ".env" not in gitignore_content:
+            issues.append(
+                f"Found {len(env_files)} .env file(s) and .env is not in .gitignore"
+            )
+
+    # Check for hardcoded secrets in source files
+    secret_patterns = [
+        (re.compile(r'(?:api[_-]?key|apikey)\s*[:=]\s*["\'][a-zA-Z0-9_-]{20,}["\']', re.IGNORECASE), "API key"),
+        (re.compile(r'(?:password|passwd|secret)\s*[:=]\s*["\'][^"\']{8,}["\']', re.IGNORECASE), "password/secret"),
+        (re.compile(r'(?:sk-|pk_live_|sk_live_|rk_live_)[a-zA-Z0-9]{20,}'), "Stripe/OpenAI key"),
+        (re.compile(r'ghp_[a-zA-Z0-9]{36}'), "GitHub personal access token"),
+        (re.compile(r'(?:AWS_SECRET_ACCESS_KEY|aws_secret_access_key)\s*[:=]\s*["\'][A-Za-z0-9/+=]{40}["\']'), "AWS secret"),
+    ]
+
+    source_extensions = {".py", ".js", ".ts", ".tsx", ".jsx", ".json", ".yaml", ".yml", ".toml"}
+    skip_dirs = {"node_modules", ".git", "__pycache__", "dist", "build", ".next", "venv", ".env"}
+
+    for dirpath, dirnames, filenames in os.walk(project_root):
+        # Prune skip directories in-place (prevents descent)
+        dirnames[:] = [d for d in dirnames if d not in skip_dirs]
+
+        for filename in filenames:
+            file_path = Path(dirpath) / filename
+            if file_path.suffix not in source_extensions:
+                continue
+            try:
+                if file_path.stat().st_size > 100_000:  # Skip large files
+                    continue
+            except OSError:
+                continue
+            try:
+                content = file_path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            for pattern, label in secret_patterns:
+                if pattern.search(content):
+                    rel = file_path.relative_to(project_root)
+                    issues.append(f"Possible hardcoded {label} in {rel}")
+                    break  # One issue per file is enough
+
+    # Run npm audit if applicable
+    if (project_root / "package-lock.json").is_file() or (project_root / "package.json").is_file():
+        try:
+            returncode, stdout, stderr = await _run_command(
+                ["npm", "audit", "--audit-level=high", "--json"],
+                project_root,
+                timeout=60,
+            )
+            if returncode != 0 and stdout:
+                try:
+                    audit_data = json.loads(stdout)
+                    vulns = audit_data.get("metadata", {}).get("vulnerabilities", {})
+                    high = vulns.get("high", 0)
+                    critical = vulns.get("critical", 0)
+                    if high + critical > 0:
+                        issues.append(f"npm audit: {critical} critical, {high} high vulnerabilities")
+                except (json.JSONDecodeError, KeyError):
+                    pass
+        except Exception:
+            pass  # npm audit is best-effort
+
+    return issues
+
+
 def _detect_lint_command(project_root: Path) -> list[str] | None:
     """Detect lint command from project configuration.
 
@@ -777,17 +1068,19 @@ def write_verification_summary(
     # Completed tasks table ------------------------------------------------
     lines.append("## Completed Tasks")
     lines.append("")
-    lines.append("| Task | Contracts | Lint | Types | Tests | Overall |")
-    lines.append("|------|-----------|------|-------|-------|---------|")
+    lines.append("| Task | Contracts | Build | Lint | Types | Tests | Security | Overall |")
+    lines.append("|------|-----------|-------|------|-------|-------|----------|---------|")
 
     for task_id in sorted(state.completed_tasks.keys()):
         result = state.completed_tasks[task_id]
         lines.append(
             f"| {task_id} "
             f"| {_fmt_phase(result.contracts_passed)} "
+            f"| {_fmt_phase(result.build_passed)} "
             f"| {_fmt_phase(result.lint_passed)} "
             f"| {_fmt_phase(result.type_check_passed)} "
             f"| {_fmt_phase(result.tests_passed)} "
+            f"| {_fmt_phase(result.security_passed)} "
             f"| {result.overall.upper()} |"
         )
 

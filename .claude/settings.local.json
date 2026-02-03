@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git push)",
+      "Bash(cd:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(fi)",
+      "Bash(done)"
+    ]
+  }
+}

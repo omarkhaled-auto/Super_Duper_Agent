@@ -78,6 +78,7 @@ class ScheduleResult:
     conflict_summary: dict[str, int]
     integration_tasks: list[str]
     critical_path: CriticalPathInfo
+    tasks: list[TaskNode] = field(default_factory=list)
 
 
 @dataclass
@@ -636,6 +637,64 @@ def detect_file_conflicts(
 # ---------------------------------------------------------------------------
 
 
+def create_integration_tasks(
+    tasks: list[TaskNode], conflicts: list[FileConflict]
+) -> list[TaskNode]:
+    """Create explicit integration tasks for file conflicts (Root Cause #9).
+
+    When the scheduler detects file conflicts (multiple tasks touching the
+    same file), creates an explicit integration task that:
+    1. Runs AFTER all conflicting tasks complete
+    2. Has a prompt to merge changes and resolve conflicts
+    3. Gets its own entry with depends_on set to all conflicting tasks
+
+    Returns the task list with new integration tasks appended.
+    """
+    task_map = {t.id: t for t in tasks}
+    # Group conflicts by file — one integration task per conflicted file
+    file_conflicts: dict[str, list[str]] = {}
+    for conflict in conflicts:
+        fp = conflict.file_path
+        if fp not in file_conflicts:
+            file_conflicts[fp] = []
+        for tid in conflict.task_ids:
+            if tid not in file_conflicts[fp]:
+                file_conflicts[fp].append(tid)
+
+    def _safe_task_num(tid: str) -> int:
+        try:
+            return int(tid.split("-")[1])
+        except (ValueError, IndexError):
+            return 0
+
+    next_id = max(
+        (_safe_task_num(t.id) for t in tasks if t.id.startswith("TASK-")),
+        default=0,
+    ) + 1
+
+    new_tasks: list[TaskNode] = []
+    for file_path, conflicting_ids in sorted(file_conflicts.items()):
+        integration_id = f"TASK-{next_id:03d}"
+        next_id += 1
+        new_tasks.append(
+            TaskNode(
+                id=integration_id,
+                title=f"Integrate changes to {file_path}",
+                description=(
+                    f"Merge changes to `{file_path}` from tasks "
+                    f"[{', '.join(sorted(conflicting_ids))}]. "
+                    f"Resolve conflicts. Verify all features still work."
+                ),
+                files=[file_path],
+                depends_on=sorted(conflicting_ids),
+                status="PENDING",
+                assigned_agent="integration-agent",
+            )
+        )
+
+    return tasks + new_tasks
+
+
 def resolve_conflicts_via_dependency(
     tasks: list[TaskNode], conflicts: list[FileConflict]
 ) -> list[TaskNode]:
@@ -819,9 +878,9 @@ def compute_schedule(
             _logger.info("Context scoping disabled via config.")
 
     if conflict_strat == "integration-agent":
-        _logger.warning(
-            "conflict_strategy='integration-agent' is not fully implemented; "
-            "falling back to 'artificial-dependency' for conflict resolution."
+        _logger.info(
+            "conflict_strategy='integration-agent' enabled; "
+            "creating explicit integration tasks for file conflicts."
         )
 
     # Step 1: Build graph and validate
@@ -849,7 +908,10 @@ def compute_schedule(
 
     # Step 4: Resolve conflicts if any were found
     if all_conflicts:
-        tasks = resolve_conflicts_via_dependency(tasks, all_conflicts)
+        if conflict_strat == "integration-agent":
+            tasks = create_integration_tasks(tasks, all_conflicts)
+        else:
+            tasks = resolve_conflicts_via_dependency(tasks, all_conflicts)
 
         # Rebuild graph and recompute waves after resolution
         graph = build_dependency_graph(tasks)
@@ -873,9 +935,11 @@ def compute_schedule(
         ctype = conflict.conflict_type
         conflict_summary[ctype] = conflict_summary.get(ctype, 0) + 1
 
-    # Step 7: Identify integration tasks (tasks with integration_declares)
+    # Step 7: Identify integration tasks (either via integration_declares
+    # or auto-created by create_integration_tasks with assigned_agent)
     integration_tasks = [
-        t.id for t in tasks if t.integration_declares
+        t.id for t in tasks
+        if t.integration_declares or t.assigned_agent == "integration-agent"
     ]
 
     return ScheduleResult(
@@ -884,6 +948,7 @@ def compute_schedule(
         conflict_summary=conflict_summary,
         integration_tasks=integration_tasks,
         critical_path=critical_path,
+        tasks=tasks,
     )
 
 

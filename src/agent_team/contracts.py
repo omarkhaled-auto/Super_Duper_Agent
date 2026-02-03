@@ -54,11 +54,21 @@ class WiringContract:
 
 
 @dataclass
+class MiddlewareContract:
+    """Declares middleware registration order for Express/Next.js apps."""
+
+    entry_file: str  # e.g. "src/server.ts", "src/app.ts"
+    middleware_order: list[str]  # ordered list of middleware names
+    created_by_task: str = ""
+
+
+@dataclass
 class ContractRegistry:
     """Top-level container for all module and wiring contracts."""
 
     modules: dict[str, ModuleContract] = field(default_factory=dict)  # path -> contract
     wirings: list[WiringContract] = field(default_factory=list)
+    middlewares: list[MiddlewareContract] = field(default_factory=list)
     file_missing: bool = False  # True when no CONTRACTS.json was found on disk
 
 
@@ -211,6 +221,14 @@ def _registry_to_dict(registry: ContractRegistry) -> dict[str, Any]:
             }
             for w in registry.wirings
         ],
+        "middlewares": [
+            {
+                "entry_file": m.entry_file,
+                "middleware_order": m.middleware_order,
+                "created_by_task": m.created_by_task,
+            }
+            for m in registry.middlewares
+        ],
     }
 
 
@@ -240,6 +258,15 @@ def _dict_to_registry(data: dict[str, Any]) -> ContractRegistry:
                 target_module=w_data["target_module"],
                 imports=w_data.get("imports", []),
                 created_by_task=w_data.get("created_by_task", ""),
+            )
+        )
+
+    for m_data in data.get("middlewares", []):
+        registry.middlewares.append(
+            MiddlewareContract(
+                entry_file=m_data["entry_file"],
+                middleware_order=m_data.get("middleware_order", []),
+                created_by_task=m_data.get("created_by_task", ""),
             )
         )
 
@@ -491,6 +518,103 @@ def verify_wiring_contract(
                     severity="error",
                 )
             )
+            continue  # Skip usage check if import is missing
+
+        # -- Check symbol is actually USED (Root Cause #7) ------------------
+        # The symbol must appear at least once outside of import statements.
+        usage_lines = [
+            line for line in source_content.split("\n")
+            if re.search(rf"\b{escaped}\b", line) and not re.match(r"\s*(from\s+|import\s+)", line)
+        ]
+        if not usage_lines:
+            violations.append(
+                ContractViolation(
+                    contract_type="wiring",
+                    description=(
+                        f"'{symbol_name}' imported but never used in "
+                        f"'{contract.source_module}'"
+                    ),
+                    file_path=contract.source_module,
+                    expected=f"uses {symbol_name}",
+                    actual="imported but unused",
+                    severity="warning",
+                )
+            )
+
+    return violations
+
+
+def verify_middleware_contract(
+    contract: MiddlewareContract,
+    project_root: Path,
+) -> list[ContractViolation]:
+    """Verify a middleware contract (Agent 11 — Root Cause #7 extension).
+
+    Checks that middleware is registered in the correct order in the
+    entry file by looking for ``app.use()`` calls (Express) or
+    middleware array patterns (Next.js).
+
+    Returns a :class:`ContractViolation` for order violations.
+    """
+    violations: list[ContractViolation] = []
+    file_path = project_root / contract.entry_file
+    content = _read_file_safe(file_path)
+
+    if content is None:
+        violations.append(
+            ContractViolation(
+                contract_type="middleware",
+                description=f"Middleware entry file not found: {contract.entry_file}",
+                file_path=contract.entry_file,
+                expected="file exists",
+                actual="file not found",
+                severity="error",
+            )
+        )
+        return violations
+
+    # Find app.use() calls and their positions
+    use_pattern = re.compile(r"app\.use\s*\(\s*(\w+)", re.MULTILINE)
+    found_order: list[str] = []
+    for match in use_pattern.finditer(content):
+        mw_name = match.group(1)
+        if mw_name in contract.middleware_order:
+            found_order.append(mw_name)
+
+    # Check that found middleware appears in the declared order
+    expected_filtered = [mw for mw in contract.middleware_order if mw in found_order]
+    if found_order != expected_filtered:
+        violations.append(
+            ContractViolation(
+                contract_type="middleware",
+                description=(
+                    f"Middleware order violation in '{contract.entry_file}': "
+                    f"expected [{', '.join(expected_filtered)}], "
+                    f"found [{', '.join(found_order)}]"
+                ),
+                file_path=contract.entry_file,
+                expected=f"order: {', '.join(expected_filtered)}",
+                actual=f"order: {', '.join(found_order)}",
+                severity="warning",
+            )
+        )
+
+    # Check for missing middleware registrations
+    for mw_name in contract.middleware_order:
+        if mw_name not in found_order:
+            violations.append(
+                ContractViolation(
+                    contract_type="middleware",
+                    description=(
+                        f"Middleware '{mw_name}' declared but not registered "
+                        f"via app.use() in '{contract.entry_file}'"
+                    ),
+                    file_path=contract.entry_file,
+                    expected=f"app.use({mw_name})",
+                    actual="not registered",
+                    severity="warning",
+                )
+            )
 
     return violations
 
@@ -499,7 +623,7 @@ def verify_all_contracts(
     registry: ContractRegistry,
     project_root: Path,
 ) -> VerificationResult:
-    """Verify every module and wiring contract in *registry*.
+    """Verify every module, wiring, and middleware contract in *registry*.
 
     Returns a :class:`VerificationResult` summarising all violations found.
     """
@@ -514,6 +638,9 @@ def verify_all_contracts(
     for wiring in registry.wirings:
         all_violations.extend(verify_wiring_contract(wiring, project_root))
         checked_wirings += 1
+
+    for middleware in registry.middlewares:
+        all_violations.extend(verify_middleware_contract(middleware, project_root))
 
     return VerificationResult(
         passed=len(all_violations) == 0,

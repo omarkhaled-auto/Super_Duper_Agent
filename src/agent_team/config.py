@@ -128,6 +128,10 @@ class VerificationConfig:
     run_lint: bool = True
     run_type_check: bool = True
     run_tests: bool = True
+    run_build: bool = True
+    run_security: bool = True
+    run_quality_checks: bool = True
+    min_test_count: int = 0
 
 
 @dataclass
@@ -268,17 +272,30 @@ _TECHNOLOGY_RE = re.compile(
     r'Node\.js|Django|Flask|FastAPI|Spring\s*Boot|Rails|Laravel|'
     r'MongoDB|PostgreSQL|MySQL|SQLite|Redis|Supabase|Firebase|'
     r'TypeScript|GraphQL|REST\s*API|gRPC|WebSocket|'
-    r'Docker|Kubernetes|AWS|GCP|Azure|Vercel|'
+    r'Docker|Kubernetes|AWS|GCP|Azure|Vercel|Netlify|Render|'
     r'Jest|Vitest|Pytest|Mocha|Cypress|Playwright|'
     r'Tailwind(?:\s*CSS)?|Sass|SCSS|Styled[\s-]?Components|'
-    r'Zustand|Redux|MobX|Jotai|Recoil|'
-    r'Prisma|Drizzle|Sequelize|TypeORM|Mongoose|'
+    r'Zustand|Redux|MobX|Jotai|Recoil|Tanstack[\s-]?Query|'
+    r'Prisma|Drizzle|Sequelize|TypeORM|Mongoose|Knex|'
+    r'pnpm|bun|yarn|npm|'
     r'monorepo|microservices?|serverless|full[\s-]?stack)\b',
+    re.IGNORECASE,
+)
+
+_TEST_FRAMEWORK_RE = re.compile(
+    r'\b(jest|vitest|pytest|mocha|cypress|playwright|jasmine|ava|tap|uvu)\b',
     re.IGNORECASE,
 )
 
 _TEST_REQUIREMENT_RE = re.compile(
     r'(\d+)\+?\s*(?:unit\s+)?tests?',
+    re.IGNORECASE,
+)
+
+_DESIGN_URL_RE = re.compile(
+    r'(?:\[([^\]]*)\]\()?'   # optional markdown link text
+    r'(https?://[^\s\)]+)'   # URL itself
+    r'\)?',                   # optional closing paren
     re.IGNORECASE,
 )
 
@@ -375,6 +392,30 @@ def extract_constraints(task: str, interview_doc: str | None = None) -> list[Con
             if normalized not in seen_texts:
                 seen_texts.add(normalized)
                 constraints.append(ConstraintEntry(text, "requirement", source_label, 2))
+
+    # Extract test framework preferences (Root Cause #12)
+    for source_text, source_label in [(task, "task"), (interview_doc or "", "interview")]:
+        for match in _TEST_FRAMEWORK_RE.finditer(source_text):
+            framework = match.group(1).strip()
+            normalized = f"must use {framework.lower()} for testing"
+            if normalized not in seen_texts:
+                seen_texts.add(normalized)
+                constraints.append(ConstraintEntry(
+                    f"must use {framework} for testing", "requirement", source_label, 2
+                ))
+
+    # Extract design reference URLs (Root Cause #12)
+    for source_text, source_label in [(task, "task"), (interview_doc or "", "interview")]:
+        for match in _DESIGN_URL_RE.finditer(source_text):
+            url = match.group(2).strip()
+            # Only include design-relevant URLs (not generic docs)
+            if any(kw in url.lower() for kw in ("figma", "dribbble", "behance", "design", "prototype", "sketch")):
+                normalized = f"design reference: {url.lower()}"
+                if normalized not in seen_texts:
+                    seen_texts.add(normalized)
+                    constraints.append(ConstraintEntry(
+                        f"design reference: {url}", "requirement", source_label, 1
+                    ))
 
     return constraints
 
@@ -522,6 +563,10 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
             run_lint=vr.get("run_lint", cfg.verification.run_lint),
             run_type_check=vr.get("run_type_check", cfg.verification.run_type_check),
             run_tests=vr.get("run_tests", cfg.verification.run_tests),
+            run_build=vr.get("run_build", cfg.verification.run_build),
+            run_security=vr.get("run_security", cfg.verification.run_security),
+            run_quality_checks=vr.get("run_quality_checks", cfg.verification.run_quality_checks),
+            min_test_count=vr.get("min_test_count", cfg.verification.min_test_count),
         )
 
     if "agents" in data:

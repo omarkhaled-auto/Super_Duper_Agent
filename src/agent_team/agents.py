@@ -160,6 +160,8 @@ GATE 3 — CYCLE REPORTING: After EVERY review cycle, report: "Cycle N: X/Y requ
 
 GATE 4 — DEPTH ≠ THOROUGHNESS: The depth level (quick/standard/thorough/exhaustive) controls FLEET SIZE, not review quality. Even at QUICK depth, reviews must be thorough.
 
+GATE 5 — PYTHON ENFORCEMENT: After you complete orchestration, the system will automatically verify that you deployed the review fleet. If convergence_cycles == 0, the system WILL force a review-only recovery pass. You cannot skip the review fleet — the system enforces it. This is not a suggestion. The Python runtime checks your work. If the system detects 0 review cycles and >0 requirements, it will REJECT the run and automatically trigger a recovery pass that deploys the review fleet.
+
 After creating REQUIREMENTS.md and completing planning/research/architecture:
 
 ```
@@ -318,6 +320,14 @@ When the user provides a PRD (via --prd flag or a large task describing a full a
       - Only mark milestone COMPLETE after cross-milestone wiring passes
 
 5. Cross-milestone context: Later milestones receive context from completed ones.
+
+MILESTONE COMPLETION GATE:
+Before proceeding to milestone N+1:
+1. Run convergence health check on milestone N
+2. Verify milestone N's exports match what milestone N+1 expects to import
+3. If convergence_cycles == 0 for milestone N → STOP and run review fleet
+4. Cross-milestone wiring verification must pass
+Only proceed when milestone N is HEALTHY.
 
 PRD MODE NEVER STOPS until every milestone in $master_plan_file is COMPLETE and every REQUIREMENTS.md has all items [x].
 
@@ -816,6 +826,12 @@ Your job is to implement requirements from the Requirements Document, guided by 
 - If implementing a feature (not a wiring task): ensure your code EXPORTS what the Wiring Map says other files will import
 - If your feature creates new exports, verify a WIRE-xxx requirement exists for them — if not, add a code comment: `// TODO-WIRE: Missing WIRE-xxx for <export name>`
 - NEVER create a file that isn't imported/used anywhere unless a subsequent wiring task will connect it
+- WIRE-CHECK: Before marking your task as done, verify EVERY export you created is listed
+  in a WIRE-xxx task's Wiring Map. If an export has no consumer, you have created an orphan.
+  Either: (a) add the wiring yourself if the consumer file is in your task, or (b) add a
+  comment: `// ORPHAN-RISK: <ExportName> — needs WIRE-xxx task`
+- IMPORT-CHECK: Every file you create must be imported by at least one other file, OR be
+  an entry point (page, route, middleware). Standalone utility files with zero importers are bugs.
 - REQUIREMENTS.md is READ-ONLY for code-writers — only reviewers may edit it
 - Do NOT modify TASKS.md — the orchestrator manages task status
 - When done, your task will be marked COMPLETE in TASKS.md by the orchestrator
@@ -1028,6 +1044,13 @@ Your job is to write and run tests that verify the requirements are implemented 
 4. Mark testing-related items [x] in REQUIREMENTS.md ONLY if tests pass
 5. If tests fail, document the failures in the Review Log
 
+## Minimum Standards
+- Write at least 3 tests per API endpoint (happy path, validation error, auth error)
+- Write at least 1 integration test per WIRE-xxx requirement (verify the connection works end-to-end)
+- Every test MUST have at least one meaningful assertion — `expect(result).toBeDefined()` alone is NOT sufficient
+- Run ALL tests and report the count: "X tests passed, Y failed, Z skipped"
+- If total tests < MIN_TESTS (from REQUIREMENTS.md or default 20): flag as INSUFFICIENT
+
 ## Rules
 - Match the project's existing test framework and conventions
 - Write meaningful tests — not just "does it not crash"
@@ -1077,6 +1100,13 @@ Do NOT edit the Requirements Checklist in REQUIREMENTS.md -- only code-reviewer 
    - Trust boundary violations at WIRE-xxx integration points
 4. Run `npm audit` / `pip audit` or equivalent for dependency vulnerabilities
 5. Document findings in the Review Log of REQUIREMENTS.md
+
+## Output Requirements
+- Write findings to `.agent-team/SECURITY_AUDIT.md` (not just Review Log)
+- Format: `| Severity | Finding | File:Line | Remediation |`
+- For CRITICAL/HIGH findings: create a new requirement in REQUIREMENTS.md prefixed SEC-xxx
+- These SEC-xxx items enter the convergence loop like any other requirement
+- The orchestrator MUST deploy debugger fleet to fix CRITICAL findings before completion
 
 ## Rules
 - Be thorough — missed vulnerabilities have real consequences

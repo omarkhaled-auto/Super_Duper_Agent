@@ -36,6 +36,7 @@ from .agents import (
     build_orchestrator_prompt,
 )
 from .config import AgentTeamConfig, detect_depth, extract_constraints, load_config, parse_max_review_cycles
+from .state import ConvergenceReport
 from .display import (
     console,
     print_agent_response,
@@ -778,7 +779,7 @@ def _subcommand_resume() -> tuple[argparse.Namespace, str] | None:
         verbose=False,
         interactive=False,
         dry_run=False,
-        no_map=False,
+        no_map="codebase_map" in state.completed_phases,
         map_only=False,
         progressive=False,
         no_progressive=False,
@@ -823,12 +824,46 @@ def _build_resume_context(state: object, cwd: str) -> str:
         lines.append("Existing artifacts in .agent-team/:")
         lines.extend(found_artifacts)
 
+    # Phase-specific resume context (Root Cause #3, Agent 6)
+    cycles = getattr(state, "convergence_cycles", 0)
+    req_checked = getattr(state, "requirements_checked", 0)
+    req_total = getattr(state, "requirements_total", 0)
+    error_ctx = getattr(state, "error_context", "")
+
+    if cycles or req_checked or req_total:
+        lines.append(f"Convergence state: {req_checked}/{req_total} requirements, {cycles} review cycles")
+    if error_ctx:
+        lines.append(f"Error that caused interruption: {error_ctx}")
+
+    milestone_progress = getattr(state, "milestone_progress", {})
+    if milestone_progress:
+        lines.append("Milestone progress:")
+        for mid, mdata in milestone_progress.items():
+            checked = mdata.get("checked", 0)
+            total = mdata.get("total", 0)
+            mc = mdata.get("cycles", 0)
+            lines.append(f"  - {mid}: {checked}/{total} requirements, {mc} cycles")
+
     lines.append("")
     lines.append("[RESUME INSTRUCTIONS]")
-    lines.append("- Read ALL existing artifacts in .agent-team/ FIRST before planning.")
-    lines.append("- Do NOT recreate REQUIREMENTS.md or TASKS.md if they already exist.")
-    lines.append("- Continue convergence from the first PENDING task in TASKS.md.")
-    lines.append("- If REQUIREMENTS.md has unchecked items, resume the convergence loop.")
+
+    # Phase-specific resume strategies
+    if current_phase == "orchestration" and cycles == 0 and req_total > 0:
+        lines.append("- CRITICAL: Previous run interrupted during orchestration with 0 review cycles.")
+        lines.append("- You MUST deploy the review fleet FIRST before any new coding.")
+        lines.append("- Read REQUIREMENTS.md and run code-reviewer on each unchecked item.")
+    elif current_phase == "post_orchestration":
+        lines.append("- Previous run interrupted during post-orchestration.")
+        lines.append("- Skip to verification: run build, lint, type check, and tests.")
+    elif current_phase == "verification":
+        lines.append("- Previous run interrupted during verification.")
+        lines.append("- Re-run verification only: build, lint, type check, tests.")
+    else:
+        lines.append("- Read ALL existing artifacts in .agent-team/ FIRST before planning.")
+        lines.append("- Do NOT recreate REQUIREMENTS.md or TASKS.md if they already exist.")
+        lines.append("- Continue convergence from the first PENDING task in TASKS.md.")
+        lines.append("- If REQUIREMENTS.md has unchecked items, resume the convergence loop.")
+
     lines.append("- Treat existing [x] items as already verified.")
 
     artifacts = getattr(state, "artifacts", {})
@@ -837,6 +872,98 @@ def _build_resume_context(state: object, cwd: str) -> str:
         lines.append("  Use the existing Design Reference section in REQUIREMENTS.md as-is.")
 
     return "\n".join(lines)
+
+
+def _check_convergence_health(cwd: str, config: AgentTeamConfig) -> ConvergenceReport:
+    """Check convergence health after orchestration completes.
+
+    Reads REQUIREMENTS.md, counts [x] vs [ ], parses review cycle info.
+    Returns a ConvergenceReport with health assessment.
+    """
+    report = ConvergenceReport()
+    req_path = (
+        Path(cwd) / config.convergence.requirements_dir
+        / config.convergence.requirements_file
+    )
+    if not req_path.is_file():
+        report.health = "unknown"
+        return report
+
+    try:
+        content = req_path.read_text(encoding="utf-8")
+    except OSError:
+        report.health = "unknown"
+        return report
+
+    # Count checked vs unchecked requirements
+    checked = len(re.findall(r"^\s*-\s*\[x\]", content, re.MULTILINE | re.IGNORECASE))
+    unchecked = len(re.findall(r"^\s*-\s*\[ \]", content, re.MULTILINE))
+    report.total_requirements = checked + unchecked
+    report.checked_requirements = checked
+
+    # Parse review cycles from Review Log or review_cycles markers
+    report.review_cycles = parse_max_review_cycles(content)
+
+    # Compute convergence ratio
+    if report.total_requirements > 0:
+        report.convergence_ratio = report.checked_requirements / report.total_requirements
+    else:
+        report.convergence_ratio = 0.0
+
+    report.review_fleet_deployed = report.review_cycles > 0
+
+    # Determine health
+    if report.total_requirements == 0:
+        report.health = "unknown"
+    elif report.convergence_ratio >= 0.9:
+        report.health = "healthy"
+    elif report.review_fleet_deployed and report.convergence_ratio >= 0.5:
+        report.health = "degraded"
+    else:
+        report.health = "failed"
+
+    return report
+
+
+def _run_review_only(
+    cwd: str,
+    config: AgentTeamConfig,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    task_text: str | None = None,
+) -> float:
+    """Run a review-only recovery pass when convergence health check detects 0 cycles.
+
+    Creates a focused orchestrator prompt that forces the review fleet deployment.
+    Returns cost of the recovery pass.
+    """
+    review_prompt = (
+        "CRITICAL RECOVERY: The previous orchestration run completed with ZERO review cycles. "
+        "The review fleet was NEVER deployed. This is a convergence failure.\n\n"
+        "You MUST do the following NOW:\n"
+        f"1. Read {config.convergence.requirements_dir}/{config.convergence.requirements_file}\n"
+        "2. Deploy the REVIEW FLEET (code-reviewer agents) to verify EACH unchecked item\n"
+        "3. For each item, find the implementation and verify correctness\n"
+        "4. Mark items [x] ONLY if fully implemented, or document issues in Review Log\n"
+        "5. Deploy TEST RUNNER agents to run tests\n"
+        "6. Report final convergence status: X/Y requirements checked\n\n"
+        "This is NOT optional. The system has detected a convergence failure and this "
+        "review pass is MANDATORY."
+    )
+
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text)
+    phase_costs: dict[str, float] = {}
+
+    async def _recovery() -> float:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(review_prompt)
+            cost = await _process_response(client, config, phase_costs, current_phase="review_recovery")
+            cost += await _drain_interventions(client, intervention, config, phase_costs)
+        return cost
+
+    print_warning("Convergence health check FAILED: 0 review cycles detected.")
+    print_info("Launching review-only recovery pass...")
+    return asyncio.run(_recovery())
 
 
 def _subcommand_clean() -> None:
@@ -1227,6 +1354,28 @@ def main() -> None:
                     waves=schedule_info.total_waves,
                     conflicts=total_conflicts,
                 )
+                # Persist integration tasks back to TASKS.md
+                if schedule_info.integration_tasks and schedule_info.tasks:
+                    task_map = {t.id: t for t in schedule_info.tasks}
+                    integration_blocks: list[str] = []
+                    for tid in schedule_info.integration_tasks:
+                        t = task_map.get(tid)
+                        if t:
+                            block = (
+                                f"\n### {t.id}: {t.title}\n"
+                                f"- Status: {t.status}\n"
+                                f"- Dependencies: {', '.join(t.depends_on)}\n"
+                                f"- Files: {', '.join(t.files)}\n"
+                                f"- Agent: {t.assigned_agent or 'integration-agent'}\n\n"
+                                f"{t.description}\n"
+                            )
+                            integration_blocks.append(block)
+                    if integration_blocks:
+                        tasks_path.write_text(
+                            tasks_content + "\n" + "\n".join(integration_blocks),
+                            encoding="utf-8",
+                        )
+                        print_info(f"Appended {len(integration_blocks)} integration task(s) to TASKS.md.")
             else:
                 print_info("No TASKS.md found -- scheduler will be used post-orchestration.")
         except Exception as exc:
@@ -1268,59 +1417,77 @@ def main() -> None:
             _current_state.current_phase = "orchestration"
 
         run_cost = 0.0
-        if interactive:
-            run_cost = asyncio.run(_run_interactive(
-                config=config,
-                cwd=cwd,
-                depth_override=depth_override,
-                agent_count_override=args.agents,
-                prd_path=args.prd,
-                interview_doc=interview_doc,
-                interview_scope=interview_scope,
-                design_reference_urls=design_ref_urls or None,
-                codebase_map_summary=codebase_map_summary,
-                constraints=constraints,
-                intervention=intervention,
-                resume_context=_resume_ctx,
-                task_text=args.task,
-            ))
-        else:
-            # Use the interview doc as the task if no explicit task was given
-            task = args.task or ""
-            if has_interview and not task:
-                task = "Implement the requirements from the interview document."
-            if depth_override:
-                depth = depth_override
+        try:
+            if interactive:
+                run_cost = asyncio.run(_run_interactive(
+                    config=config,
+                    cwd=cwd,
+                    depth_override=depth_override,
+                    agent_count_override=args.agents,
+                    prd_path=args.prd,
+                    interview_doc=interview_doc,
+                    interview_scope=interview_scope,
+                    design_reference_urls=design_ref_urls or None,
+                    codebase_map_summary=codebase_map_summary,
+                    constraints=constraints,
+                    intervention=intervention,
+                    resume_context=_resume_ctx,
+                    task_text=args.task,
+                ))
             else:
-                detection = detect_depth(task, config)
-                depth = detection.level
-                print_depth_detection(detection)
-            agent_count = _detect_agent_count(task, args.agents)
+                # Use the interview doc as the task if no explicit task was given
+                task = args.task or ""
+                if has_interview and not task:
+                    task = "Implement the requirements from the interview document."
+                if depth_override:
+                    depth = depth_override
+                else:
+                    detection = detect_depth(task, config)
+                    depth = detection.level
+                    print_depth_detection(detection)
+                agent_count = _detect_agent_count(task, args.agents)
 
-            # Update RunState with resolved depth
+                # Update RunState with resolved depth
+                if _current_state:
+                    _current_state.depth = depth
+
+                run_cost = asyncio.run(_run_single(
+                    task=task,
+                    config=config,
+                    cwd=cwd,
+                    depth=depth,
+                    agent_count=agent_count,
+                    prd_path=args.prd,
+                    interview_doc=interview_doc,
+                    interview_scope=interview_scope,
+                    design_reference_urls=design_ref_urls or None,
+                    codebase_map_summary=codebase_map_summary,
+                    constraints=constraints,
+                    intervention=intervention,
+                    resume_context=_resume_ctx,
+                    task_text=args.task,
+                ))
+        except Exception as exc:
+            # Root Cause #1: ProcessError (or any exception) during orchestration
+            # must NOT prevent post-orchestration (verification, state cleanup)
+            # from running. Catch and record the error, then continue.
+            print_warning(f"Orchestration interrupted: {exc}")
             if _current_state:
-                _current_state.depth = depth
-
-            run_cost = asyncio.run(_run_single(
-                task=task,
-                config=config,
-                cwd=cwd,
-                depth=depth,
-                agent_count=agent_count,
-                prd_path=args.prd,
-                interview_doc=interview_doc,
-                interview_scope=interview_scope,
-                design_reference_urls=design_ref_urls or None,
-                codebase_map_summary=codebase_map_summary,
-                constraints=constraints,
-                intervention=intervention,
-                resume_context=_resume_ctx,
-                task_text=args.task,
-            ))
+                _current_state.interrupted = True
+                _current_state.error_context = str(exc)
+                run_cost = _current_state.total_cost
 
         # Update RunState with actual cost from orchestration
         if _current_state:
             _current_state.total_cost = run_cost or 0.0
+
+        # Persist state to disk after orchestration (success or failure)
+        if _current_state:
+            try:
+                from .state import save_state
+                save_state(_current_state, directory=str(Path(cwd) / ".agent-team"))
+            except Exception:
+                pass  # Best-effort state save
 
         # Update phase after orchestration
         if _current_state:
@@ -1352,6 +1519,52 @@ def main() -> None:
                 print_info("TASKS.md statuses updated to COMPLETE.")
         except Exception as exc:
             print_warning(f"Task status update failed: {exc}")
+
+    # -------------------------------------------------------------------
+    # Post-orchestration: Convergence health check (Root Cause #2)
+    # -------------------------------------------------------------------
+    convergence_report = _check_convergence_health(cwd, config)
+    if _current_state:
+        _current_state.convergence_cycles = convergence_report.review_cycles
+        _current_state.requirements_checked = convergence_report.checked_requirements
+        _current_state.requirements_total = convergence_report.total_requirements
+
+    if convergence_report.health == "failed":
+        if convergence_report.review_cycles == 0 and convergence_report.total_requirements > 0:
+            print_warning(
+                f"CONVERGENCE FAILURE: {convergence_report.checked_requirements}/"
+                f"{convergence_report.total_requirements} requirements checked, "
+                f"0 review cycles. Launching recovery pass."
+            )
+            try:
+                recovery_cost = _run_review_only(
+                    cwd=cwd,
+                    config=config,
+                    constraints=constraints,
+                    intervention=intervention,
+                    task_text=args.task,
+                )
+                if _current_state:
+                    _current_state.total_cost += recovery_cost
+                # Re-check health after recovery
+                convergence_report = _check_convergence_health(cwd, config)
+                if _current_state:
+                    _current_state.convergence_cycles = convergence_report.review_cycles
+                    _current_state.requirements_checked = convergence_report.checked_requirements
+            except Exception as exc:
+                print_warning(f"Review recovery pass failed: {exc}")
+        else:
+            print_warning(
+                f"Convergence degraded: {convergence_report.checked_requirements}/"
+                f"{convergence_report.total_requirements} requirements checked "
+                f"({convergence_report.review_cycles} review cycles)."
+            )
+    elif convergence_report.health == "degraded":
+        print_info(
+            f"Convergence partial: {convergence_report.checked_requirements}/"
+            f"{convergence_report.total_requirements} requirements checked "
+            f"({convergence_report.review_cycles} review cycles)."
+        )
 
     if _current_state:
         _current_state.completed_phases.append("post_orchestration")
@@ -1387,10 +1600,14 @@ def main() -> None:
                 task_id="post-orchestration",
                 project_root=Path(cwd),
                 registry=contract_registry,
+                run_build=config.verification.run_build,
                 run_lint=config.verification.run_lint,
                 run_type_check=config.verification.run_type_check,
                 run_tests=config.verification.run_tests,
+                run_security=config.verification.run_security,
+                run_quality_checks=config.verification.run_quality_checks,
                 blocking=config.verification.blocking,
+                min_test_count=config.verification.min_test_count,
             ))
 
             # Build state and write summary
