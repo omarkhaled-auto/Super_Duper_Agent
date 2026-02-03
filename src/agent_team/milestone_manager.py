@@ -198,7 +198,12 @@ class MilestoneManager:
     # Public API
     # ------------------------------------------------------------------
 
-    def check_milestone_health(self, milestone_id: str) -> ConvergenceReport:
+    def check_milestone_health(
+        self,
+        milestone_id: str,
+        min_convergence_ratio: float = 0.9,
+        degraded_threshold: float = 0.5,
+    ) -> ConvergenceReport:
         """Check the convergence health of a single milestone.
 
         Reads ``milestones/{milestone_id}/REQUIREMENTS.md``, counts
@@ -208,6 +213,14 @@ class MilestoneManager:
         ----------
         milestone_id : str
             The milestone directory name (e.g. ``"milestone-1"``).
+        min_convergence_ratio : float
+            Ratio at or above which health is considered ``"healthy"``.
+            Defaults to ``0.9`` for backward compatibility; callers with
+            access to :class:`ConvergenceConfig` should pass
+            ``config.convergence.min_convergence_ratio``.
+        degraded_threshold : float
+            Ratio at or above which health is ``"degraded"`` (vs ``"failed"``),
+            when the review fleet has been deployed.  Defaults to ``0.5``.
 
         Returns
         -------
@@ -243,12 +256,12 @@ class MilestoneManager:
         # Compute convergence ratio
         ratio = checked / total if total > 0 else 0.0
 
-        # Determine health status
+        # Determine health status using configurable thresholds
         if total == 0:
             health = "unknown"
-        elif ratio >= 0.9:
+        elif ratio >= min_convergence_ratio:
             health = "healthy"
-        elif cycles > 0 and ratio >= 0.5:
+        elif cycles > 0 and ratio >= degraded_threshold:
             health = "degraded"
         else:
             health = "failed"

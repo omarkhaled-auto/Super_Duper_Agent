@@ -17,6 +17,9 @@ convergence:
   requirements_dir: ".agent-team"
   requirements_file: "REQUIREMENTS.md"
   master_plan_file: "MASTER_PLAN.md"
+  min_convergence_ratio: 0.9
+  recovery_threshold: 0.8
+  degraded_threshold: 0.5
 
 interview:
   enabled: true

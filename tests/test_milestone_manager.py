@@ -71,6 +71,32 @@ class TestCheckMilestoneHealth:
         assert report.review_cycles == 0
         assert report.health == "failed"
 
+    def test_configurable_min_convergence_ratio(self, tmp_path):
+        # ratio = 2/3 = 0.67 — with default 0.9 this is "degraded", but with 0.6 it's "healthy"
+        content = "# Requirements\n- [x] Feature A\n- [x] Feature B\n- [ ] Feature C\n(review_cycles: 1)\n"
+        _setup_milestone(tmp_path, "M1", content)
+        mgr = MilestoneManager(tmp_path)
+        report = mgr.check_milestone_health("M1", min_convergence_ratio=0.6)
+        assert report.health == "healthy"
+
+    def test_default_threshold_backward_compatible(self, tmp_path):
+        # ratio = 2/3 = 0.67, cycles > 0 → "degraded" with default 0.9
+        content = "# Requirements\n- [x] Feature A\n- [x] Feature B\n- [ ] Feature C\n(review_cycles: 1)\n"
+        _setup_milestone(tmp_path, "M1", content)
+        mgr = MilestoneManager(tmp_path)
+        report_default = mgr.check_milestone_health("M1")
+        report_explicit = mgr.check_milestone_health("M1", min_convergence_ratio=0.9)
+        assert report_default.health == report_explicit.health == "degraded"
+
+    def test_configurable_degraded_threshold(self, tmp_path):
+        # ratio = 2/3 = 0.67, cycles > 0. Default degraded_threshold=0.5 → "degraded".
+        # With degraded_threshold=0.7 → "failed" (0.67 < 0.7).
+        content = "# Requirements\n- [x] Feature A\n- [x] Feature B\n- [ ] Feature C\n(review_cycles: 1)\n"
+        _setup_milestone(tmp_path, "M1", content)
+        mgr = MilestoneManager(tmp_path)
+        report = mgr.check_milestone_health("M1", degraded_threshold=0.7)
+        assert report.health == "failed"
+
 
 class TestCrossMilestoneWiring:
     def test_no_milestones(self, tmp_path):

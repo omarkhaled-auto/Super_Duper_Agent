@@ -36,7 +36,7 @@ from .agents import (
     build_agent_definitions,
     build_orchestrator_prompt,
 )
-from .config import AgentTeamConfig, detect_depth, extract_constraints, load_config, parse_max_review_cycles
+from .config import AgentTeamConfig, detect_depth, extract_constraints, load_config, parse_max_review_cycles, parse_per_item_review_cycles
 from .state import ConvergenceReport
 from .display import (
     console,
@@ -916,6 +916,7 @@ def _check_convergence_health(cwd: str, config: AgentTeamConfig) -> ConvergenceR
     """Check convergence health after orchestration completes.
 
     Reads REQUIREMENTS.md, counts [x] vs [ ], parses review cycle info.
+    Detects items stuck at or above escalation_threshold still unchecked.
     Returns a ConvergenceReport with health assessment.
     """
     report = ConvergenceReport()
@@ -942,6 +943,12 @@ def _check_convergence_health(cwd: str, config: AgentTeamConfig) -> ConvergenceR
     # Parse review cycles from Review Log or review_cycles markers
     report.review_cycles = parse_max_review_cycles(content)
 
+    # Detect per-item escalation: unchecked items with cycles >= threshold
+    escalation_threshold = config.convergence.escalation_threshold
+    for item_id, is_checked, cycles in parse_per_item_review_cycles(content):
+        if not is_checked and cycles >= escalation_threshold:
+            report.escalated_items.append(f"{item_id} (cycles: {cycles})")
+
     # Compute convergence ratio
     if report.total_requirements > 0:
         report.convergence_ratio = report.checked_requirements / report.total_requirements
@@ -950,12 +957,14 @@ def _check_convergence_health(cwd: str, config: AgentTeamConfig) -> ConvergenceR
 
     report.review_fleet_deployed = report.review_cycles > 0
 
-    # Determine health
+    # Determine health using configurable thresholds
+    min_ratio = config.convergence.min_convergence_ratio
+    degraded_ratio = config.convergence.degraded_threshold
     if report.total_requirements == 0:
         report.health = "unknown"
-    elif report.convergence_ratio >= 0.9:
+    elif report.convergence_ratio >= min_ratio:
         report.health = "healthy"
-    elif report.review_fleet_deployed and report.convergence_ratio >= 0.5:
+    elif report.review_fleet_deployed and report.convergence_ratio >= degraded_ratio:
         report.health = "degraded"
     else:
         report.health = "failed"
@@ -969,22 +978,41 @@ def _run_review_only(
     constraints: list | None = None,
     intervention: "InterventionQueue | None" = None,
     task_text: str | None = None,
+    checked: int = 0,
+    total: int = 0,
+    review_cycles: int = 0,
 ) -> float:
-    """Run a review-only recovery pass when convergence health check detects 0 cycles.
+    """Run a review-only recovery pass when convergence health check detects failures.
 
     Creates a focused orchestrator prompt that forces the review fleet deployment.
+    Adapts the prompt based on whether this is a zero-cycle failure or a partial-review
+    failure (review fleet deployed but did not cover enough items).
     Returns cost of the recovery pass.
     """
+    is_zero_cycle = checked == 0 and total > 0
+    unchecked_count = total - checked
+
+    if is_zero_cycle:
+        situation = (
+            "CRITICAL RECOVERY: The previous orchestration run completed with ZERO review cycles. "
+            "The review fleet was NEVER deployed. This is a convergence failure."
+        )
+    else:
+        situation = (
+            f"CRITICAL RECOVERY: The previous orchestration run left {unchecked_count}/{total} "
+            f"requirements UNCHECKED ({checked}/{total} checked). "
+            "The review fleet was deployed but did not achieve sufficient coverage."
+        )
+
     review_prompt = (
-        "CRITICAL RECOVERY: The previous orchestration run completed with ZERO review cycles. "
-        "The review fleet was NEVER deployed. This is a convergence failure.\n\n"
+        f"{situation}\n\n"
         "You MUST do the following NOW:\n"
         f"1. Read {config.convergence.requirements_dir}/{config.convergence.requirements_file}\n"
         "2. Deploy the REVIEW FLEET (code-reviewer agents) to verify EACH unchecked item\n"
         "3. For each item, find the implementation and verify correctness\n"
         "4. Mark items [x] ONLY if fully implemented, or document issues in Review Log\n"
         "5. Deploy TEST RUNNER agents to run tests\n"
-        "6. Report final convergence status: X/Y requirements checked\n\n"
+        f"6. Report final convergence status: target {total}/{total} requirements checked\n\n"
         "This is NOT optional. The system has detected a convergence failure and this "
         "review pass is MANDATORY."
     )
@@ -999,7 +1027,13 @@ def _run_review_only(
             cost += await _drain_interventions(client, intervention, config, phase_costs)
         return cost
 
-    print_warning("Convergence health check FAILED: 0 review cycles detected.")
+    if is_zero_cycle:
+        print_warning("Convergence health check FAILED: 0 review cycles detected.")
+    else:
+        print_warning(
+            f"Convergence health check FAILED: {unchecked_count}/{total} "
+            f"requirements still unchecked after {review_cycles} review cycles."
+        )
     print_info("Launching review-only recovery pass...")
     return asyncio.run(_recovery())
 
@@ -1683,42 +1717,73 @@ def main() -> None:
         _current_state.requirements_checked = convergence_report.checked_requirements
         _current_state.requirements_total = convergence_report.total_requirements
 
+    # Log escalated items if any
+    if convergence_report.escalated_items:
+        print_warning(
+            f"Escalation-worthy items still unchecked ({len(convergence_report.escalated_items)}): "
+            + ", ".join(convergence_report.escalated_items)
+        )
+
+    recovery_threshold = config.convergence.recovery_threshold
+    needs_recovery = False
+
     if convergence_report.health == "failed":
         if convergence_report.review_cycles == 0 and convergence_report.total_requirements > 0:
-            print_warning(
-                f"CONVERGENCE FAILURE: {convergence_report.checked_requirements}/"
-                f"{convergence_report.total_requirements} requirements checked, "
-                f"0 review cycles. Launching recovery pass."
-            )
-            try:
-                recovery_cost = _run_review_only(
-                    cwd=cwd,
-                    config=config,
-                    constraints=constraints,
-                    intervention=intervention,
-                    task_text=args.task,
-                )
-                if _current_state:
-                    _current_state.total_cost += recovery_cost
-                # Re-check health after recovery
-                convergence_report = _check_convergence_health(cwd, config)
-                if _current_state:
-                    _current_state.convergence_cycles = convergence_report.review_cycles
-                    _current_state.requirements_checked = convergence_report.checked_requirements
-            except Exception as exc:
-                print_warning(f"Review recovery pass failed: {exc}")
+            # Zero-cycle failure: review fleet was never deployed
+            needs_recovery = True
+        elif (
+            convergence_report.review_cycles > 0
+            and convergence_report.total_requirements > 0
+            and convergence_report.convergence_ratio < recovery_threshold
+        ):
+            # Partial-review failure: deployed but insufficient coverage
+            needs_recovery = True
         else:
             print_warning(
-                f"Convergence degraded: {convergence_report.checked_requirements}/"
+                f"Convergence failed: {convergence_report.checked_requirements}/"
                 f"{convergence_report.total_requirements} requirements checked "
                 f"({convergence_report.review_cycles} review cycles)."
             )
     elif convergence_report.health == "degraded":
-        print_info(
-            f"Convergence partial: {convergence_report.checked_requirements}/"
+        if (
+            convergence_report.total_requirements > 0
+            and convergence_report.convergence_ratio < recovery_threshold
+        ):
+            # Degraded but below recovery threshold — trigger recovery
+            needs_recovery = True
+        else:
+            print_info(
+                f"Convergence partial: {convergence_report.checked_requirements}/"
+                f"{convergence_report.total_requirements} requirements checked "
+                f"({convergence_report.review_cycles} review cycles)."
+            )
+
+    if needs_recovery:
+        print_warning(
+            f"CONVERGENCE FAILURE: {convergence_report.checked_requirements}/"
             f"{convergence_report.total_requirements} requirements checked "
-            f"({convergence_report.review_cycles} review cycles)."
+            f"({convergence_report.review_cycles} review cycles). Launching recovery pass."
         )
+        try:
+            recovery_cost = _run_review_only(
+                cwd=cwd,
+                config=config,
+                constraints=constraints,
+                intervention=intervention,
+                task_text=args.task,
+                checked=convergence_report.checked_requirements,
+                total=convergence_report.total_requirements,
+                review_cycles=convergence_report.review_cycles,
+            )
+            if _current_state:
+                _current_state.total_cost += recovery_cost
+            # Re-check health after recovery
+            convergence_report = _check_convergence_health(cwd, config)
+            if _current_state:
+                _current_state.convergence_cycles = convergence_report.review_cycles
+                _current_state.requirements_checked = convergence_report.checked_requirements
+        except Exception as exc:
+            print_warning(f"Review recovery pass failed: {exc}")
 
     if _current_state:
         _current_state.completed_phases.append("post_orchestration")

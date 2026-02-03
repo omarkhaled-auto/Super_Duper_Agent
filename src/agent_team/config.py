@@ -50,6 +50,23 @@ class ConvergenceConfig:
     requirements_dir: str = ".agent-team"
     requirements_file: str = "REQUIREMENTS.md"
     master_plan_file: str = "MASTER_PLAN.md"
+    min_convergence_ratio: float = 0.9
+    recovery_threshold: float = 0.8
+    degraded_threshold: float = 0.5
+
+
+def _validate_convergence_config(cfg: ConvergenceConfig) -> None:
+    """Validate ConvergenceConfig threshold values and relationships."""
+    if not (0.0 <= cfg.min_convergence_ratio <= 1.0):
+        raise ValueError("convergence.min_convergence_ratio must be between 0.0 and 1.0")
+    if not (0.0 <= cfg.recovery_threshold <= 1.0):
+        raise ValueError("convergence.recovery_threshold must be between 0.0 and 1.0")
+    if not (0.0 <= cfg.degraded_threshold <= 1.0):
+        raise ValueError("convergence.degraded_threshold must be between 0.0 and 1.0")
+    if cfg.recovery_threshold > cfg.min_convergence_ratio:
+        raise ValueError(
+            "convergence.recovery_threshold must be <= min_convergence_ratio"
+        )
 
 
 @dataclass
@@ -523,6 +540,27 @@ def parse_max_review_cycles(requirements_content: str) -> int:
     return max((int(m) for m in matches), default=0)
 
 
+def parse_per_item_review_cycles(
+    requirements_content: str,
+) -> list[tuple[str, bool, int]]:
+    """Parse per-item review cycle data from REQUIREMENTS.md.
+
+    Returns list of (item_id, is_checked, review_cycles) tuples.
+    """
+    pattern = (
+        r'^\s*-\s*\[([ xX])\]\s*'
+        r'((?:REQ|TECH|INT|WIRE|DESIGN|TEST)-\d+):'
+        r'.*?\(review_cycles:\s*(\d+)\)'
+    )
+    results: list[tuple[str, bool, int]] = []
+    for match in re.finditer(pattern, requirements_content, re.MULTILINE):
+        is_checked = match.group(1).lower() == 'x'
+        item_id = match.group(2)
+        cycles = int(match.group(3))
+        results.append((item_id, is_checked, cycles))
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Config loading
 # ---------------------------------------------------------------------------
@@ -575,7 +613,11 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
             requirements_dir=c.get("requirements_dir", cfg.convergence.requirements_dir),
             requirements_file=c.get("requirements_file", cfg.convergence.requirements_file),
             master_plan_file=c.get("master_plan_file", cfg.convergence.master_plan_file),
+            min_convergence_ratio=float(c.get("min_convergence_ratio", cfg.convergence.min_convergence_ratio)),
+            recovery_threshold=float(c.get("recovery_threshold", cfg.convergence.recovery_threshold)),
+            degraded_threshold=float(c.get("degraded_threshold", cfg.convergence.degraded_threshold)),
         )
+        _validate_convergence_config(cfg.convergence)
 
     if "interview" in data:
         iv = data["interview"]

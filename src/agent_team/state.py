@@ -66,6 +66,7 @@ class ConvergenceReport:
     convergence_ratio: float = 0.0  # checked/total
     review_fleet_deployed: bool = False  # cycles > 0
     health: str = "unknown"  # "healthy" | "degraded" | "failed"
+    escalated_items: list[str] = field(default_factory=list)  # items at escalation threshold still unchecked
 
 
 _STATE_FILE = "STATE.json"
