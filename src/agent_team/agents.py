@@ -327,6 +327,9 @@ SECTION 5: ADVERSARIAL REVIEW PROTOCOL
 
 Review agents are instructed to be HARSH CRITICS. When deploying review agents, use the code-reviewer agent and ensure they understand:
 
+IMPORTANT: When deploying review agents, include the [ORIGINAL USER REQUEST] in their context
+so they can verify the implementation against the user's original intent, not just REQUIREMENTS.md.
+
 - Your job is to FIND PROBLEMS, not confirm success
 - For EACH unchecked checklist item in REQUIREMENTS.md:
   1. Read the requirement carefully
@@ -467,6 +470,10 @@ Execute this workflow for every task:
    c. Check completion → if not done, DEBUGGER FLEET → loop
    d. ESCALATION if items stuck 3+ cycles
 6. TESTING FLEET → write/run tests
+   MANDATORY TEST RULE: If the original user request OR REQUIREMENTS.md mentions
+   "tests", "testing", "test suite", or specifies a test count, the task-assigner
+   MUST create dedicated test tasks, and the TESTING FLEET (step 6) is MANDATORY
+   and BLOCKING — the project CANNOT be marked complete without tests passing.
 7. SECURITY AUDIT (if applicable)
 8. FINAL CHECK → confirm all [x] in REQUIREMENTS.md AND all COMPLETE in TASKS.md
 9. COMPLETION REPORT with summary
@@ -539,6 +546,13 @@ Do NOT edit the Requirements Checklist in REQUIREMENTS.md -- only code-reviewer 
 - Requirements should be granular enough that a single developer can implement each one
 - Include edge cases, error handling, and validation requirements
 - Think about what could go wrong — add requirements to prevent it
+- CRITICAL: If the user's original request mentions specific technologies (e.g., Express.js,
+  React, MongoDB), those technologies MUST appear in REQUIREMENTS.md. You may NOT
+  simplify the architecture by removing technologies the user explicitly requested.
+- If the user requests a monorepo, multi-package, or full-stack structure, REQUIREMENTS.md
+  MUST reflect that structure — do NOT reduce to a single-package frontend-only app.
+- If the user specifies a test count or testing requirements, include a dedicated
+  "Testing Requirements" section with those exact specifications.
 - Number all requirements with prefixed IDs (REQ-001, TECH-001, INT-001)
 - Add `(review_cycles: 0)` after each requirement for tracking
 - For each functional requirement, consider: HOW will this feature connect to the rest of the app?
@@ -551,6 +565,52 @@ Write the REQUIREMENTS.md file to `.agent-team/REQUIREMENTS.md` in the project d
 If REQUIREMENTS.md already exists, READ it first and ADD your findings to the Context section.
 
 If a codebase map is provided, use it to understand existing modules and their relationships when breaking down tasks.
+""".strip()
+
+SPEC_VALIDATOR_PROMPT = r"""You are a SPEC FIDELITY VALIDATOR agent in the Agent Team system.
+
+Your job is to compare the ORIGINAL USER REQUEST against the generated REQUIREMENTS.md
+and flag any discrepancies, omissions, or scope reductions.
+
+## Your Tasks
+1. Read the [ORIGINAL USER REQUEST] provided in your context
+2. Read `.agent-team/REQUIREMENTS.md`
+3. Compare them systematically:
+   a. **Missing Technologies**: If the user requested specific technologies (e.g., Express.js,
+      React, MongoDB), verify they appear in REQUIREMENTS.md's architecture/tech requirements.
+   b. **Missing Architecture Layers**: If the user requested a full-stack app, monorepo, or
+      multi-service architecture, verify REQUIREMENTS.md reflects that structure.
+   c. **Missing Features**: Every feature mentioned in the original request must have at least
+      one REQ-xxx item in REQUIREMENTS.md.
+   d. **Scope Reduction**: Flag if REQUIREMENTS.md simplifies the user's request (e.g., user
+      asked for a full-stack app but REQUIREMENTS.md only describes a frontend).
+   e. **Test Requirements**: If the user specified test counts or testing requirements, verify
+      they appear in REQUIREMENTS.md.
+
+## Output Format
+Write your findings to stdout (do NOT modify any files). Use this format:
+
+```
+SPEC FIDELITY CHECK
+===================
+Original Request Summary: <1-2 sentence summary of what user asked for>
+Requirements Summary: <1-2 sentence summary of what REQUIREMENTS.md describes>
+
+VERDICT: PASS | FAIL
+
+DISCREPANCIES (if FAIL):
+- [MISSING_TECH] <technology> requested but not in requirements
+- [MISSING_FEATURE] <feature> requested but no REQ-xxx covers it
+- [SCOPE_REDUCTION] <what was reduced and how>
+- [MISSING_TESTS] <test requirement> specified but not in requirements
+- [ARCHITECTURE_MISMATCH] <expected vs actual architecture>
+```
+
+## Rules
+- You are READ-ONLY — do NOT modify any files
+- Be thorough — a missed discrepancy means the entire pipeline builds the wrong thing
+- When in doubt, flag it — false positives are better than false negatives
+- Focus on WHAT the user asked for vs WHAT the requirements describe
 """.strip()
 
 RESEARCHER_PROMPT = r"""You are a RESEARCHER agent in the Agent Team system.
@@ -772,6 +832,9 @@ YOUR JOB IS NOT TO CONFIRM WHAT WORKS. Your job is to FIND GAPS, BUGS, ISSUES, a
 
 ## Your Tasks
 1. Read `.agent-team/REQUIREMENTS.md` to see what was required
+1b. If an [ORIGINAL USER REQUEST] section is provided in your context, ALSO check
+    the codebase against the ORIGINAL request — not just REQUIREMENTS.md.
+    If REQUIREMENTS.md contradicts or omits items from the original request, flag it as CRITICAL.
 2. For EACH unchecked item `- [ ]` in the Requirements Checklist:
    a. Read the requirement carefully
    b. Find the implementation in the codebase using Read, Glob, Grep
@@ -1334,6 +1397,14 @@ def build_agent_definitions(
             "model": config.agents.get("contract_generator", AgentConfig()).model,
         }
 
+    # Spec validator — always enabled (safety feature, read-only)
+    agents["spec-validator"] = {
+        "description": "Validates REQUIREMENTS.md against original user request for spec fidelity",
+        "prompt": SPEC_VALIDATOR_PROMPT,
+        "tools": ["Read", "Glob", "Grep"],
+        "model": config.agents.get("planner", AgentConfig()).model,
+    }
+
     # Inject user constraints into all agent prompts
     if constraints:
         from .config import format_constraints_block
@@ -1454,6 +1525,7 @@ def build_orchestrator_prompt(
     if resume_context:
         parts.append(resume_context)
 
+    parts.append(f"\n[ORIGINAL USER REQUEST]\n{task}")
     parts.append(f"\n[TASK]\n{task}")
 
     is_prd_mode = bool(prd_path) or (interview_scope == "COMPLEX" and interview_doc is not None)

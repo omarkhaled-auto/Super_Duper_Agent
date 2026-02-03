@@ -112,7 +112,7 @@ class CodebaseMapConfig:
 
 @dataclass
 class SchedulerConfig:
-    enabled: bool = False             # opt-in
+    enabled: bool = True              # enabled by default
     max_parallel_tasks: int = 5
     conflict_strategy: str = "artificial-dependency"
     enable_context_scoping: bool = True
@@ -121,7 +121,7 @@ class SchedulerConfig:
 
 @dataclass
 class VerificationConfig:
-    enabled: bool = False             # opt-in
+    enabled: bool = True              # enabled by default
     contract_file: str = "CONTRACTS.json"
     verification_file: str = "VERIFICATION.md"
     blocking: bool = True
@@ -263,6 +263,25 @@ _SCOPE_RE_CONSTRAINT = re.compile(
 )
 _EMPHASIS_WORDS = {"zero", "never", "absolutely", "strictly", "critical", "crucial", "must"}
 
+_TECHNOLOGY_RE = re.compile(
+    r'\b(Express(?:\.js)?|React(?:\.js)?|Next\.js|Vue(?:\.js)?|Angular|'
+    r'Node\.js|Django|Flask|FastAPI|Spring\s*Boot|Rails|Laravel|'
+    r'MongoDB|PostgreSQL|MySQL|SQLite|Redis|Supabase|Firebase|'
+    r'TypeScript|GraphQL|REST\s*API|gRPC|WebSocket|'
+    r'Docker|Kubernetes|AWS|GCP|Azure|Vercel|'
+    r'Jest|Vitest|Pytest|Mocha|Cypress|Playwright|'
+    r'Tailwind(?:\s*CSS)?|Sass|SCSS|Styled[\s-]?Components|'
+    r'Zustand|Redux|MobX|Jotai|Recoil|'
+    r'Prisma|Drizzle|Sequelize|TypeORM|Mongoose|'
+    r'monorepo|microservices?|serverless|full[\s-]?stack)\b',
+    re.IGNORECASE,
+)
+
+_TEST_REQUIREMENT_RE = re.compile(
+    r'(\d+)\+?\s*(?:unit\s+)?tests?',
+    re.IGNORECASE,
+)
+
 _FALSE_POSITIVE_PHRASES = frozenset({
     "cannot be overstated", "cannot thank", "cannot emphasize enough",
     "cannot stress enough", "cannot overstate", "must have seen",
@@ -335,6 +354,27 @@ def extract_constraints(task: str, interview_doc: str | None = None) -> list[Con
     _add_constraints(task, "task")
     if interview_doc:
         _add_constraints(interview_doc, "interview")
+
+    # Extract technology stack requirements
+    for source_text, source_label in [(task, "task"), (interview_doc or "", "interview")]:
+        for match in _TECHNOLOGY_RE.finditer(source_text):
+            tech = match.group(1).strip()
+            normalized = f"must use {tech.lower()}"
+            if normalized not in seen_texts:
+                seen_texts.add(normalized)
+                constraints.append(ConstraintEntry(
+                    f"must use {tech}", "requirement", source_label, 2
+                ))
+
+    # Extract test count requirements
+    for source_text, source_label in [(task, "task"), (interview_doc or "", "interview")]:
+        for match in _TEST_REQUIREMENT_RE.finditer(source_text):
+            count = match.group(1)
+            text = f"must have {count}+ tests"
+            normalized = text.lower()
+            if normalized not in seen_texts:
+                seen_texts.add(normalized)
+                constraints.append(ConstraintEntry(text, "requirement", source_label, 2))
 
     return constraints
 

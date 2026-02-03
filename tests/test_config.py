@@ -198,9 +198,9 @@ class TestCodebaseMapConfigDefaults:
 
 
 class TestSchedulerConfigDefaults:
-    def test_enabled_false_by_default(self):
+    def test_enabled_true_by_default(self):
         c = SchedulerConfig()
-        assert c.enabled is False
+        assert c.enabled is True
 
     def test_max_parallel_tasks_default(self):
         c = SchedulerConfig()
@@ -220,9 +220,9 @@ class TestSchedulerConfigDefaults:
 
 
 class TestVerificationConfigDefaults:
-    def test_enabled_false_by_default(self):
+    def test_enabled_true_by_default(self):
         c = VerificationConfig()
-        assert c.enabled is False
+        assert c.enabled is True
 
     def test_blocking_true_by_default(self):
         c = VerificationConfig()
@@ -278,12 +278,12 @@ class TestAgentTeamConfigDefaults:
     def test_has_scheduler_config(self):
         c = AgentTeamConfig()
         assert isinstance(c.scheduler, SchedulerConfig)
-        assert c.scheduler.enabled is False
+        assert c.scheduler.enabled is True
 
     def test_has_verification_config(self):
         c = AgentTeamConfig()
         assert isinstance(c.verification, VerificationConfig)
-        assert c.verification.enabled is False
+        assert c.verification.enabled is True
 
 
 # ===================================================================
@@ -910,3 +910,144 @@ class TestDesignReferenceStandardsFile:
     def test_standards_file_empty_string_preserved(self):
         cfg = _dict_to_config({"design_reference": {"standards_file": ""}})
         assert cfg.design_reference.standards_file == ""
+
+
+# ===================================================================
+# Enhanced constraint extraction (technology + test count)
+# ===================================================================
+
+class TestTechnologyRegex:
+    """Tests for _TECHNOLOGY_RE pattern matching."""
+
+    def test_matches_expressjs(self):
+        from agent_team.config import _TECHNOLOGY_RE
+        assert _TECHNOLOGY_RE.search("Use Express.js for the backend")
+
+    def test_matches_react(self):
+        from agent_team.config import _TECHNOLOGY_RE
+        assert _TECHNOLOGY_RE.search("Build with React")
+
+    def test_matches_nextjs(self):
+        from agent_team.config import _TECHNOLOGY_RE
+        assert _TECHNOLOGY_RE.search("Deploy on Next.js")
+
+    def test_matches_mongodb(self):
+        from agent_team.config import _TECHNOLOGY_RE
+        assert _TECHNOLOGY_RE.search("Store data in MongoDB")
+
+    def test_matches_monorepo(self):
+        from agent_team.config import _TECHNOLOGY_RE
+        assert _TECHNOLOGY_RE.search("Use a monorepo structure")
+
+    def test_matches_typescript(self):
+        from agent_team.config import _TECHNOLOGY_RE
+        assert _TECHNOLOGY_RE.search("Written in TypeScript")
+
+    def test_matches_tailwind(self):
+        from agent_team.config import _TECHNOLOGY_RE
+        assert _TECHNOLOGY_RE.search("Style with Tailwind CSS")
+
+    def test_case_insensitive(self):
+        from agent_team.config import _TECHNOLOGY_RE
+        assert _TECHNOLOGY_RE.search("use MONGODB for storage")
+
+    def test_no_match_on_generic_text(self):
+        from agent_team.config import _TECHNOLOGY_RE
+        assert not _TECHNOLOGY_RE.search("build a simple calculator")
+
+
+class TestTestRequirementRegex:
+    """Tests for _TEST_REQUIREMENT_RE pattern matching."""
+
+    def test_matches_20_plus_tests(self):
+        from agent_team.config import _TEST_REQUIREMENT_RE
+        m = _TEST_REQUIREMENT_RE.search("Must have 20+ tests")
+        assert m is not None
+        assert m.group(1) == "20"
+
+    def test_matches_10_unit_tests(self):
+        from agent_team.config import _TEST_REQUIREMENT_RE
+        m = _TEST_REQUIREMENT_RE.search("Write 10 unit tests")
+        assert m is not None
+        assert m.group(1) == "10"
+
+    def test_matches_5_tests(self):
+        from agent_team.config import _TEST_REQUIREMENT_RE
+        m = _TEST_REQUIREMENT_RE.search("at least 5 tests")
+        assert m is not None
+        assert m.group(1) == "5"
+
+    def test_no_match_without_number(self):
+        from agent_team.config import _TEST_REQUIREMENT_RE
+        assert not _TEST_REQUIREMENT_RE.search("write some tests")
+
+
+class TestEnhancedConstraintExtraction:
+    """Tests for technology and test count extraction in extract_constraints."""
+
+    def test_extracts_technology_from_task(self):
+        constraints = extract_constraints("Build a REST API with Express.js and MongoDB")
+        tech_constraints = [c for c in constraints if "express" in c.text.lower()]
+        assert len(tech_constraints) >= 1
+        assert tech_constraints[0].category == "requirement"
+
+    def test_extracts_multiple_technologies(self):
+        constraints = extract_constraints("Use React, Express.js, and MongoDB for a full-stack app")
+        tech_names = {c.text.lower() for c in constraints if c.text.startswith("must use")}
+        assert any("react" in t for t in tech_names)
+        assert any("express" in t for t in tech_names)
+        assert any("mongodb" in t for t in tech_names)
+
+    def test_extracts_test_count(self):
+        constraints = extract_constraints("Build an app with 20+ tests")
+        test_constraints = [c for c in constraints if "20+ tests" in c.text]
+        assert len(test_constraints) == 1
+        assert test_constraints[0].category == "requirement"
+
+    def test_deduplicates_technologies(self):
+        constraints = extract_constraints("Use React. Also use React for the UI.")
+        react_constraints = [c for c in constraints if "react" in c.text.lower() and c.text.startswith("must use")]
+        assert len(react_constraints) == 1
+
+    def test_extracts_from_interview_doc(self):
+        constraints = extract_constraints("test task", "Build with Next.js and PostgreSQL")
+        tech_constraints = [c for c in constraints if c.text.startswith("must use")]
+        assert any("next.js" in c.text.lower() for c in tech_constraints)
+        assert any("postgresql" in c.text.lower() for c in tech_constraints)
+
+    def test_technology_constraints_have_emphasis_2(self):
+        constraints = extract_constraints("Use Express.js for the API")
+        express_constraints = [c for c in constraints if "express" in c.text.lower()]
+        assert len(express_constraints) >= 1
+        assert express_constraints[0].emphasis == 2
+
+    def test_combined_tech_and_test_extraction(self):
+        constraints = extract_constraints("Build a React app with Express.js backend and 15+ tests")
+        tech_texts = [c.text for c in constraints if c.text.startswith("must use")]
+        test_texts = [c.text for c in constraints if "tests" in c.text]
+        assert len(tech_texts) >= 2
+        assert len(test_texts) >= 1
+
+
+class TestDefaultConfigEnabledByDefault:
+    """Tests verifying scheduler and verification are enabled by default."""
+
+    def test_scheduler_enabled_in_default_config(self):
+        cfg = AgentTeamConfig()
+        assert cfg.scheduler.enabled is True
+
+    def test_verification_enabled_in_default_config(self):
+        cfg = AgentTeamConfig()
+        assert cfg.verification.enabled is True
+
+    def test_explicit_false_overrides_default(self):
+        """YAML with enabled: false must still work (backward compat)."""
+        from agent_team.config import _dict_to_config
+        cfg = _dict_to_config({"scheduler": {"enabled": False}})
+        assert cfg.scheduler.enabled is False
+
+    def test_explicit_false_verification_overrides_default(self):
+        """YAML with verification.enabled: false must still work."""
+        from agent_team.config import _dict_to_config
+        cfg = _dict_to_config({"verification": {"enabled": False}})
+        assert cfg.verification.enabled is False

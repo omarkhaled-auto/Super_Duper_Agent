@@ -92,20 +92,21 @@ Interview → Codebase Map → Plan → Research → Architect → Contract → 
 | Phase | Agent | What It Does |
 |-------|-------|-------------|
 | 0 | **Interviewer** | Talks to you through 3 phases (Discovery → Refinement → Ready), writes `.agent-team/INTERVIEW.md` |
-| 0.25 | **Constraint Extractor** | Scans your task and interview for prohibitions, requirements, and scope limits — injects them into every agent |
+| 0.25 | **Constraint Extractor** | Scans your task and interview for prohibitions, requirements, scope limits, technology stack mentions, and test count requirements — injects them into every agent |
 | 0.5 | **Codebase Map** | Analyzes project structure, detects languages/frameworks, maps dependencies |
 | 0.75 | **Contract Loading** | Loads `CONTRACTS.json` for interface verification (if enabled) |
-| 1 | **Planner** | Explores codebase, creates `.agent-team/REQUIREMENTS.md` with checklist |
+| 0.9 | **Spec Validator** | Compares original user request against REQUIREMENTS.md — flags missing technologies, features, scope reductions (read-only, always active) |
+| 1 | **Planner** | Explores codebase, creates `.agent-team/REQUIREMENTS.md` with checklist. Guardrails enforce: technology preservation, monorepo structure, test requirements |
 | 2 | **Researcher** | Queries docs (Context7) and web (Firecrawl), scrapes design references, adds findings to requirements |
 | 3 | **Architect** | Designs solution, file ownership map, wiring map, interface contracts |
 | 4 | **Task Assigner** | Decomposes requirements into atomic tasks in `.agent-team/TASKS.md` |
 | 4.5 | **Smart Scheduler** | Builds dependency DAG, detects file conflicts, computes parallel execution waves |
 | 5 | **Code Writer** | Implements assigned tasks (non-overlapping files, reads from TASKS.md). Has 30 frontend + backend anti-patterns injected |
-| 6 | **Code Reviewer** | Adversarial review — tries to break everything, marks items pass/fail. Has 15 review anti-patterns injected |
+| 6 | **Code Reviewer** | Adversarial review — tries to break everything, marks items pass/fail. Anchored to original user request to catch spec drift. Has 15 review anti-patterns injected |
 | 7 | **Debugger** | Fixes specific issues flagged by reviewers. Has 10 debugging anti-patterns + methodology injected |
 | 8 | **Test Runner** | Writes and runs tests for each requirement. Has 15 testing anti-patterns injected |
 | 9 | **Security Auditor** | OWASP checks, dependency audit, credential scanning |
-| 10 | **Progressive Verification** | 4-phase pipeline: contracts → lint → type check → tests |
+| 10 | **Progressive Verification** | 5-phase pipeline: requirements compliance → contracts → lint → type check → tests |
 
 Steps 5-7 repeat in a **convergence loop** until every `- [ ]` in REQUIREMENTS.md becomes `- [x]`.
 
@@ -390,8 +391,10 @@ When you write things like "never change the database schema" or "must use TypeS
 | **Prohibition** | "never", "don't", "zero", "must not" | "Don't modify the API contract" |
 | **Requirement** | "must", "always", "required" | "Must use the existing auth middleware" |
 | **Scope limit** | "only", "just the", "limited to" | "Only change files in src/components/" |
+| **Technology** | Express.js, React, Next.js, MongoDB, TypeScript, Tailwind CSS, Docker, etc. (50+ patterns) | "Build with Express.js and MongoDB" → `must use Express.js`, `must use MongoDB` |
+| **Test count** | `N+ tests`, `N unit tests` | "Include 20+ tests" → `must have 20+ tests` |
 
-Constraints written in ALL CAPS or with emphasis words like "absolutely" or "critical" get higher priority. The system deduplicates across task text and interview document.
+Constraints written in ALL CAPS or with emphasis words like "absolutely" or "critical" get higher priority. The system deduplicates across task text and interview document. Technology names and test counts are auto-extracted from both task text and interview documents.
 
 ### How to use
 
@@ -476,12 +479,13 @@ The core mechanism that ensures quality:
 
 ### Convergence Gates
 
-Four hard rules are enforced during the convergence loop to prevent quality shortcuts:
+Five hard rules are enforced during the convergence loop to prevent quality shortcuts:
 
 | Gate | Rule |
 |------|------|
 | **Review authority** | Only code-reviewer and test-runner agents can mark checklist items `[x]`. Coders, debuggers, and architects cannot. |
 | **Mandatory re-review** | After every debug fix, a reviewer must verify the fix. Debug → Re-Review is non-negotiable. |
+| **Mandatory test wave** | If the user's task or REQUIREMENTS.md mentions tests/testing/test suite/test count, the testing fleet is MANDATORY and BLOCKING — the project cannot be marked complete without tests passing. |
 | **Cycle reporting** | After every review cycle, the orchestrator reports "Cycle N: X/Y requirements complete (Z%)". |
 | **Depth ≠ thoroughness** | The depth level controls fleet size, not review quality. Even at Quick depth, reviews are thorough. |
 
@@ -922,6 +926,8 @@ The system now shows you exactly which keywords were matched and why a depth was
 | Interrupted mid-run | State is auto-saved on Ctrl+C. Run `agent-team status` to see saved state |
 | `agent-team` command not found | Run `pip install -e .` again, or use `python -m agent_team` instead |
 | Wrong project directory | Use `--cwd /absolute/path/to/project` |
+| npm/npx not found on Windows | Fixed: verification now resolves `.cmd` suffixes automatically via `shutil.which()` |
+| REQUIREMENTS.md doesn't match task | spec-validator agent (always active) compares requirements against your original request and flags discrepancies |
 
 ---
 
@@ -954,13 +960,17 @@ tests/
 ├── test_config.py        # Dataclass defaults, detect_depth, get_agent_counts,
 │                         #   _deep_merge, _dict_to_config, enum validation,
 │                         #   falsy-value preservation, config propagation,
-│                         #   constraint extraction, DepthDetection (161 tests)
+│                         #   constraint extraction, technology regex,
+│                         #   test requirement regex, enhanced constraint
+│                         #   extraction, DepthDetection (185 tests)
 ├── test_agents.py        # Prompt constants, build_agent_definitions,
 │                         #   build_orchestrator_prompt, per-agent model config,
 │                         #   naming consistency, template substitution,
 │                         #   convergence gates, constraint injection,
 │                         #   code quality standards injection, UI standards
-│                         #   injection, prompt strengthening (133 tests)
+│                         #   injection, prompt strengthening, spec validator,
+│                         #   reviewer anchoring, planner guardrails,
+│                         #   mandatory test wave (155 tests)
 ├── test_cli.py           # _detect_agent_count, _detect_prd_from_task, _parse_args,
 │                         #   _handle_interrupt, main(), mutual exclusion,
 │                         #   URL validation, build options, template vars,
@@ -985,7 +995,9 @@ tests/
 │                         #   config wiring (max_parallel, conflict_strategy) (106 tests)
 ├── test_verification.py  # Subprocess runner, verify_task_completion, automated
 │                         #   review phases, health computation, verification
-│                         #   summary output, blocking config wiring (46 tests)
+│                         #   summary output, blocking config wiring,
+│                         #   requirements compliance, Windows PATH
+│                         #   resolution (63 tests)
 ├── test_state.py         # RunState, RunSummary, save/load state, atomic writes,
 │                         #   staleness detection (29 tests)
 ├── test_integration.py   # Cross-module pipelines: config→agents, depth→prompt,
@@ -1004,7 +1016,7 @@ tests/
                           #   SDK client lifecycle, Firecrawl config (5 tests)
 ```
 
-**Total: 1057 tests** — 1052 unit/integration (always run) + 5 E2E (require `--run-e2e`).
+**Total: 1120 tests** — 1115 unit/integration (always run) + 5 E2E (require `--run-e2e`).
 
 ### Known Bug Verification
 
@@ -1026,6 +1038,13 @@ The test suite explicitly verifies fixes for known bugs:
 | #20: Template injection | `TestTemplateSubstitution` | `safe_substitute` handles missing vars gracefully |
 | Tier 3a: Off-by-one exit | `TestInterviewPhases` | Exit at exactly `min_exchanges` triggers confirmation, not redirect |
 | DepthDetection recursion | `TestDepthDetection` | `__getattr__` doesn't loop during `copy.deepcopy` or `pickle` |
+| Trust gap: spec drift | `TestSpecValidatorPrompt` | spec-validator always active, read-only, catches missing tech/features |
+| Trust gap: reviewer not anchored | `TestReviewerAnchoring` | CODE_REVIEWER_PROMPT references ORIGINAL USER REQUEST |
+| Trust gap: planner simplifies | `TestPlannerGuardrails` | PLANNER_PROMPT preserves technologies, monorepo, test counts |
+| Trust gap: tests skipped | `TestMandatoryTestWave` | ORCHESTRATOR_SYSTEM_PROMPT has MANDATORY TEST RULE |
+| Trust gap: missing deps | `TestCheckRequirementsCompliance` | Phase 0 checks tech in package.json/pyproject.toml |
+| Windows PATH failure | `TestResolveCommand` | `_resolve_command` tries .cmd suffix on Windows |
+| Constraint: tech not extracted | `TestEnhancedConstraintExtraction` | Technology mentions auto-extracted as constraints |
 | O(n²) cost counting | `TestCostAccumulation` | Each `ResultMessage.total_cost_usd` counted exactly once |
 | Config validation crash | `TestDictToConfig` | `min_exchanges > max_exchanges` raises clean `ValueError` |
 
@@ -1038,8 +1057,8 @@ src/agent_team/
 ├── __init__.py          # Package entry, version
 ├── __main__.py          # python -m agent_team support
 ├── cli.py               # CLI parsing, subcommands, interview/orchestrator dispatch, budget tracking
-├── config.py            # YAML config loading, depth detection, constraint extraction, fleet scaling
-├── agents.py            # 9 agent system prompts + orchestrator prompt builder + constraint/quality-standards injection
+├── config.py            # YAML config loading, depth detection, constraint extraction (incl. tech stack + test count), fleet scaling
+├── agents.py            # 10 agent system prompts (+ spec-validator) + orchestrator prompt builder + constraint/quality-standards injection
 ├── code_quality_standards.py  # Non-configurable code quality standards (70 anti-patterns across 5 domains)
 ├── ui_standards.py      # Built-in UI design standards (SLOP-001→015) + custom standards file support
 ├── interviewer.py       # Phase 0: 3-phase interactive interview with min-exchange enforcement
@@ -1051,7 +1070,7 @@ src/agent_team/
 ├── codebase_map.py      # Phase 0.5: project structure analysis, dependency mapping
 ├── contracts.py         # Interface contracts: module exports + wiring verification
 ├── scheduler.py         # Smart task scheduler: DAG, conflict detection, wave computation
-└── verification.py      # Progressive verification: contracts → lint → types → tests
+└── verification.py      # Progressive verification: requirements compliance → contracts → lint → types → tests, Windows PATH resolution
 ```
 
 ### Key Design Decisions
@@ -1061,15 +1080,19 @@ src/agent_team/
 - **Task atomicity**: TASKS.md decomposes work into tasks targeting 1-3 files max, with explicit dependency DAGs. Code writers get non-overlapping file assignments.
 - **Wiring verification**: Architects produce a Wiring Map (WIRE-xxx entries) documenting every cross-file connection. Reviewers trace each connection from entry point to feature, flagging orphaned code.
 - **Contract verification**: Interface contracts (`CONTRACTS.json`) declare which symbols each module must export and how modules import from each other. Verification is deterministic and runs without LLM involvement.
-- **Progressive verification**: A 4-phase pipeline (contracts → lint → type check → tests) validates each completed task. Health is tracked as green/yellow/red across the project.
-- **Constraint propagation**: User constraints ("never", "must", "only") are extracted from task text and interview, then injected into every agent's system prompt with emphasis levels.
+- **Progressive verification**: A 5-phase pipeline (requirements compliance → contracts → lint → type check → tests) validates each completed task. Phase 0 is deterministic — it checks declared technologies against `package.json`/`pyproject.toml` dependencies, validates monorepo structure, and verifies test files exist when testing is mentioned. Health is tracked as green/yellow/red across the project.
+- **Constraint propagation**: User constraints ("never", "must", "only") are extracted from task text and interview, then injected into every agent's system prompt with emphasis levels. Technology mentions (Express.js, React, MongoDB, etc.) and test count requirements ("20+ tests") are also auto-extracted as constraints.
+- **Spec fidelity validation**: A dedicated spec-validator agent (read-only, always active) compares the original user request against REQUIREMENTS.md to catch scope reductions, missing technologies, and missing features before code is written.
+- **Original request anchoring**: The reviewer is anchored to the original user request — not just REQUIREMENTS.md — so spec drift (where the planner simplifies the user's intent) is caught at review time.
+- **Planner guardrails**: The planner is explicitly instructed to preserve user-specified technologies, monorepo/full-stack structure, and test requirements. These guardrails prevent the most common cause of the "trust gap" (planner simplifying what the user asked for).
+- **Mandatory test wave**: When the user's task or REQUIREMENTS.md mentions tests, the testing fleet is mandatory and blocking — the project cannot be marked complete without tests passing.
 - **Code quality standards**: 70 anti-patterns across 5 domains (Frontend, Backend, Code Review, Testing, Debugging) plus Architecture quality rules are automatically injected into relevant agent prompts. Non-configurable — always on, zero setup. Each agent receives only its domain-specific standards (e.g., code-writer gets Frontend + Backend, test-runner gets Testing).
 - **Convergence gates**: Only code-reviewer and test-runner agents can mark items `[x]`. Debug fixes require mandatory re-review. These rules are embedded in each agent's prompt.
 - **Smart scheduling**: Tasks are parsed into a DAG, file conflicts are detected and resolved via configurable strategies, execution waves are capped by `max_parallel_tasks`, and critical path analysis identifies bottleneck tasks.
 - **Type-safe enums**: Categorical config values (`depth`, `conflict_strategy`, `severity`, etc.) use `str, Enum` classes for both type safety and JSON/YAML serialization compatibility.
 - **State persistence**: Run state (task, depth, phase, cost) is saved to `STATE.json` on interrupt via atomic file writes (`tempfile` + `os.replace`), preventing corruption if the process dies mid-write.
 - **Template safety**: Orchestrator prompt variables use `string.Template.safe_substitute()` — unmatched `$vars` are left intact instead of crashing.
-- **Subprocess security**: All external commands (`lint`, `type check`, `test`) use `asyncio.create_subprocess_exec` (not `shell`), preventing shell injection. Command lists are constructed from hardcoded strings only.
+- **Subprocess security**: All external commands (`lint`, `type check`, `test`) use `asyncio.create_subprocess_exec` (not `shell`), preventing shell injection. Command lists are constructed from hardcoded strings only. On Windows, commands are resolved to full paths via `shutil.which()` with `.cmd` suffix fallback to handle npm/npx PATH issues.
 - **Path traversal protection**: Import path resolution in codebase mapping validates resolved paths stay within the project root.
 - **Transcript backup**: Interview exchanges are saved to `INTERVIEW_BACKUP.json` independently of Claude's file writes, so context is never lost.
 - **Word-boundary matching**: Depth detection and scope detection use `\b` regex boundaries to prevent false positives ("adjustment" won't match "just").
@@ -1105,6 +1128,7 @@ The following security properties are maintained:
 | Template variables | `string.Template.safe_substitute` — no crash on missing vars |
 | File path resolution | `Path.resolve()` + `startswith()` bounds checking |
 | API key handling | Keys read from environment only, never logged or included in prompts |
+| Command resolution | `shutil.which()` resolves commands to full paths; `.cmd` fallback on Windows for npm/npx |
 | Signal handling | Thread-safe under CPython GIL, first Ctrl+C warns, second saves state and exits |
 | State file writes | Atomic via `tempfile.mkstemp` + `os.replace` — no corruption on crash |
 

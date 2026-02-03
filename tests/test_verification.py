@@ -10,10 +10,12 @@ from agent_team.verification import (
     ProgressiveVerificationState,
     StructuredReviewResult,
     TaskVerificationResult,
+    _check_requirements_compliance,
     _detect_lint_command,
     _detect_test_command,
     _detect_type_check_command,
     _health_from_results,
+    _resolve_command,
     compute_overall_status,
     update_verification_state,
     write_verification_summary,
@@ -609,3 +611,241 @@ class TestBlockingConfigWiring:
             tests_passed=True,
         )
         assert compute_overall_status(result, blocking=False) == "pass"
+
+
+# ===================================================================
+# Requirements Compliance Phase
+# ===================================================================
+
+
+class TestCheckRequirementsCompliance:
+    """Tests for _check_requirements_compliance deterministic phase."""
+
+    def test_returns_none_when_no_requirements(self, tmp_path):
+        """No REQUIREMENTS.md → None (nothing to check)."""
+        result = _check_requirements_compliance(tmp_path)
+        assert result is None
+
+    def test_returns_none_when_empty_requirements(self, tmp_path):
+        """Empty REQUIREMENTS.md → None."""
+        agent_dir = tmp_path / ".agent-team"
+        agent_dir.mkdir()
+        (agent_dir / "REQUIREMENTS.md").write_text("", encoding="utf-8")
+        result = _check_requirements_compliance(tmp_path)
+        assert result is None
+
+    def test_passes_when_no_technologies_declared(self, tmp_path):
+        """REQUIREMENTS.md without technology mentions → pass."""
+        agent_dir = tmp_path / ".agent-team"
+        agent_dir.mkdir()
+        (agent_dir / "REQUIREMENTS.md").write_text(
+            "# Requirements\n## Context\nBuild a simple app.\n",
+            encoding="utf-8",
+        )
+        result = _check_requirements_compliance(tmp_path)
+        assert result is not None
+        assert result.passed is True
+        assert result.phase == "requirements"
+
+    def test_detects_missing_technology(self, tmp_path):
+        """REQUIREMENTS.md declares Express.js but package.json lacks it → fail."""
+        agent_dir = tmp_path / ".agent-team"
+        agent_dir.mkdir()
+        (agent_dir / "REQUIREMENTS.md").write_text(
+            "# Requirements\n## Architecture\nUse Express.js for the backend.\n",
+            encoding="utf-8",
+        )
+        # package.json without express
+        (tmp_path / "package.json").write_text(
+            '{"dependencies": {"react": "^18.0.0"}}',
+            encoding="utf-8",
+        )
+        result = _check_requirements_compliance(tmp_path)
+        assert result is not None
+        assert result.passed is False
+        assert "express" in result.details.lower()
+
+    def test_passes_when_technology_present(self, tmp_path):
+        """REQUIREMENTS.md declares React and package.json has it → pass."""
+        agent_dir = tmp_path / ".agent-team"
+        agent_dir.mkdir()
+        (agent_dir / "REQUIREMENTS.md").write_text(
+            "# Requirements\n## Architecture\nUse React for the frontend.\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "package.json").write_text(
+            '{"dependencies": {"react": "^18.0.0"}}',
+            encoding="utf-8",
+        )
+        result = _check_requirements_compliance(tmp_path)
+        assert result is not None
+        assert result.passed is True
+
+    def test_detects_missing_test_files(self, tmp_path):
+        """REQUIREMENTS.md mentions testing but no test files exist → fail."""
+        agent_dir = tmp_path / ".agent-team"
+        agent_dir.mkdir()
+        (agent_dir / "REQUIREMENTS.md").write_text(
+            "# Requirements\n## Testing\nMust have a test suite with 20+ tests.\n",
+            encoding="utf-8",
+        )
+        result = _check_requirements_compliance(tmp_path)
+        assert result is not None
+        assert result.passed is False
+        assert "test" in result.details.lower()
+
+    def test_passes_when_test_dir_exists(self, tmp_path):
+        """REQUIREMENTS.md mentions testing and tests/ dir exists → pass."""
+        agent_dir = tmp_path / ".agent-team"
+        agent_dir.mkdir()
+        (agent_dir / "REQUIREMENTS.md").write_text(
+            "# Requirements\n## Testing\nMust have a test suite.\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "tests" / "test_app.py").write_text("def test_x(): pass", encoding="utf-8")
+        result = _check_requirements_compliance(tmp_path)
+        assert result is not None
+        assert result.passed is True
+
+    def test_detects_missing_monorepo_structure(self, tmp_path):
+        """REQUIREMENTS.md mentions monorepo but no client/server dirs → fail."""
+        agent_dir = tmp_path / ".agent-team"
+        agent_dir.mkdir()
+        (agent_dir / "REQUIREMENTS.md").write_text(
+            "# Requirements\n## Architecture\nUse a monorepo structure.\n",
+            encoding="utf-8",
+        )
+        result = _check_requirements_compliance(tmp_path)
+        assert result is not None
+        assert result.passed is False
+        assert "monorepo" in result.details.lower()
+
+    def test_passes_monorepo_with_packages_dir(self, tmp_path):
+        """REQUIREMENTS.md mentions monorepo and packages/ exists → pass."""
+        agent_dir = tmp_path / ".agent-team"
+        agent_dir.mkdir()
+        (agent_dir / "REQUIREMENTS.md").write_text(
+            "# Requirements\n## Architecture\nMonorepo structure.\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "packages").mkdir()
+        result = _check_requirements_compliance(tmp_path)
+        assert result is not None
+        assert result.passed is True
+
+    def test_result_phase_is_requirements(self, tmp_path):
+        """Phase field is always 'requirements'."""
+        agent_dir = tmp_path / ".agent-team"
+        agent_dir.mkdir()
+        (agent_dir / "REQUIREMENTS.md").write_text(
+            "# Requirements\nSimple project.\n",
+            encoding="utf-8",
+        )
+        result = _check_requirements_compliance(tmp_path)
+        assert result is not None
+        assert result.phase == "requirements"
+
+
+class TestPhase0Integration:
+    """Tests that Phase 0 runs in verify_task_completion."""
+
+    @pytest.mark.asyncio
+    async def test_phase0_runs_before_contracts(self, tmp_path):
+        """Phase 0 requirements compliance runs and adds issues."""
+        from agent_team.verification import verify_task_completion
+        from agent_team.contracts import ContractRegistry
+
+        agent_dir = tmp_path / ".agent-team"
+        agent_dir.mkdir()
+        (agent_dir / "REQUIREMENTS.md").write_text(
+            "# Requirements\n## Architecture\nUse Express.js backend.\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "package.json").write_text(
+            '{"dependencies": {}}',
+            encoding="utf-8",
+        )
+
+        registry = ContractRegistry()
+        result = await verify_task_completion(
+            "T-PHASE0", tmp_path, registry,
+            run_lint=False, run_type_check=False, run_tests=False,
+        )
+        assert any("Requirements:" in issue for issue in result.issues)
+
+
+# ===================================================================
+# Windows PATH Resolution
+# ===================================================================
+
+
+class TestResolveCommand:
+    """Tests for _resolve_command Windows PATH resolution."""
+
+    def test_resolves_known_command(self):
+        """Known command (python) resolves to full path."""
+        result = _resolve_command(["python", "--version"])
+        # python should be resolvable in the test environment
+        assert len(result) == 2
+        assert result[1] == "--version"
+        # First element should be a full path (not just 'python')
+        assert len(result[0]) > len("python")
+
+    def test_unknown_command_returns_original(self):
+        """Unknown command returns the original list unchanged."""
+        result = _resolve_command(["nonexistent_cmd_xyz_123", "--flag"])
+        assert result == ["nonexistent_cmd_xyz_123", "--flag"]
+
+    def test_preserves_arguments(self):
+        """All arguments after the command are preserved."""
+        result = _resolve_command(["python", "-c", "print('hello')"])
+        assert result[1] == "-c"
+        assert result[2] == "print('hello')"
+
+    def test_empty_args_after_command(self):
+        """Command with no extra args works."""
+        result = _resolve_command(["python"])
+        assert len(result) == 1
+
+    def test_windows_cmd_fallback(self, monkeypatch):
+        """On Windows, tries .cmd suffix when base command not found."""
+        import shutil as _shutil
+
+        call_count = {"n": 0}
+        original_which = _shutil.which
+
+        def mock_which(name):
+            call_count["n"] += 1
+            if name == "npm":
+                return None  # npm not found
+            if name == "npm.cmd":
+                return "C:\\nodejs\\npm.cmd"
+            return original_which(name)
+
+        monkeypatch.setattr("agent_team.verification.shutil.which", mock_which)
+        monkeypatch.setattr("agent_team.verification.sys.platform", "win32")
+
+        result = _resolve_command(["npm", "install"])
+        assert result[0] == "C:\\nodejs\\npm.cmd"
+        assert result[1] == "install"
+
+    def test_non_windows_no_cmd_fallback(self, monkeypatch):
+        """On non-Windows, does NOT try .cmd suffix."""
+        import shutil as _shutil
+
+        original_which = _shutil.which
+
+        def mock_which(name):
+            if name == "npm":
+                return None
+            if name == "npm.cmd":
+                return "/usr/local/bin/npm.cmd"  # should NOT be reached
+            return original_which(name)
+
+        monkeypatch.setattr("agent_team.verification.shutil.which", mock_which)
+        monkeypatch.setattr("agent_team.verification.sys.platform", "linux")
+
+        result = _resolve_command(["npm", "install"])
+        # Should return original since npm not found and .cmd not tried
+        assert result == ["npm", "install"]

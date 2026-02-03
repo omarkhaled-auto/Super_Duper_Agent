@@ -13,6 +13,7 @@ from agent_team.agents import (
     PLANNER_PROMPT,
     RESEARCHER_PROMPT,
     SECURITY_AUDITOR_PROMPT,
+    SPEC_VALIDATOR_PROMPT,
     TASK_ASSIGNER_PROMPT,
     TEST_RUNNER_PROMPT,
     build_agent_definitions,
@@ -148,36 +149,42 @@ class TestPromptConstants:
 # ===================================================================
 
 class TestBuildAgentDefinitions:
-    def test_returns_9_agents_default(self, default_config):
-        """Default config (scheduler/verification disabled) returns 9 agents."""
+    def test_returns_12_agents_default(self, default_config):
+        """Default config (scheduler+verification enabled) returns 12 agents."""
         agents = build_agent_definitions(default_config, {})
-        assert len(agents) == 9
+        assert len(agents) == 12
 
-    def test_returns_10_agents_with_scheduler(self):
-        cfg = AgentTeamConfig(scheduler=SchedulerConfig(enabled=True))
+    def test_returns_11_without_scheduler(self):
+        """Disabling scheduler removes integration-agent: 11 agents."""
+        cfg = AgentTeamConfig(scheduler=SchedulerConfig(enabled=False))
         agents = build_agent_definitions(cfg, {})
-        assert len(agents) == 10
-        assert "integration-agent" in agents
-
-    def test_returns_10_agents_with_verification(self):
-        cfg = AgentTeamConfig(verification=VerificationConfig(enabled=True))
-        agents = build_agent_definitions(cfg, {})
-        assert len(agents) == 10
-        assert "contract-generator" in agents
-
-    def test_returns_11_agents_with_both(self, full_config_with_new_features):
-        agents = build_agent_definitions(full_config_with_new_features, {})
         assert len(agents) == 11
-        assert "integration-agent" in agents
-        assert "contract-generator" in agents
-
-    def test_integration_agent_not_present_by_default(self, default_config):
-        agents = build_agent_definitions(default_config, {})
         assert "integration-agent" not in agents
 
-    def test_contract_generator_not_present_by_default(self, default_config):
-        agents = build_agent_definitions(default_config, {})
+    def test_returns_11_without_verification(self):
+        """Disabling verification removes contract-generator: 11 agents."""
+        cfg = AgentTeamConfig(verification=VerificationConfig(enabled=False))
+        agents = build_agent_definitions(cfg, {})
+        assert len(agents) == 11
         assert "contract-generator" not in agents
+
+    def test_returns_12_agents_with_both(self, full_config_with_new_features):
+        """All features enabled returns 12 agents (includes spec-validator)."""
+        agents = build_agent_definitions(full_config_with_new_features, {})
+        assert len(agents) == 12
+        assert "integration-agent" in agents
+        assert "contract-generator" in agents
+        assert "spec-validator" in agents
+
+    def test_integration_agent_present_by_default(self, default_config):
+        """Scheduler enabled by default → integration-agent present."""
+        agents = build_agent_definitions(default_config, {})
+        assert "integration-agent" in agents
+
+    def test_contract_generator_present_by_default(self, default_config):
+        """Verification enabled by default → contract-generator present."""
+        agents = build_agent_definitions(default_config, {})
+        assert "contract-generator" in agents
 
     def test_agent_names_are_hyphenated(self, default_config):
         agents = build_agent_definitions(default_config, {})
@@ -185,6 +192,7 @@ class TestBuildAgentDefinitions:
             "planner", "researcher", "architect", "task-assigner",
             "code-writer", "code-reviewer", "test-runner",
             "security-auditor", "debugger",
+            "integration-agent", "contract-generator", "spec-validator",
         }
         assert set(agents.keys()) == expected
 
@@ -194,12 +202,14 @@ class TestBuildAgentDefinitions:
         assert "researcher" not in agents
         assert "debugger" not in agents
 
-    def test_all_disabled_returns_empty(self):
+    def test_all_disabled_returns_spec_validator_only(self):
+        """spec-validator is always present even when all config agents disabled."""
         cfg = AgentTeamConfig()
         for name in cfg.agents:
             cfg.agents[name] = AgentConfig(enabled=False)
         agents = build_agent_definitions(cfg, {})
-        assert agents == {}
+        assert len(agents) == 1
+        assert "spec-validator" in agents
 
     def test_researcher_includes_mcp_tools(self, default_config):
         servers = {"firecrawl": {"type": "stdio"}, "context7": {"type": "stdio"}}
@@ -252,11 +262,12 @@ class TestAgentNamingConsistency:
         """Every default config agent key should produce an agent in the output."""
         cfg = AgentTeamConfig()
         agents = build_agent_definitions(cfg, {})
-        # All 9 default agents should be present
+        # All 12 default agents should be present (scheduler+verification enabled by default)
         expected_sdk_names = {
             "planner", "researcher", "architect", "task-assigner",
             "code-writer", "code-reviewer", "test-runner",
             "security-auditor", "debugger",
+            "integration-agent", "contract-generator", "spec-validator",
         }
         assert expected_sdk_names.issubset(set(agents.keys()))
 
@@ -772,23 +783,23 @@ class TestCodeQualityInjection:
         assert "TEST-001" not in agents["contract-generator"]["prompt"]
 
     def test_quality_standards_with_scheduler_enabled(self):
-        """Quality standards still injected when scheduler is enabled (10 agents)."""
+        """Quality standards still injected when scheduler is enabled (12 agents)."""
         from agent_team.config import SchedulerConfig
         cfg = AgentTeamConfig(scheduler=SchedulerConfig(enabled=True))
         agents = build_agent_definitions(cfg, {})
-        assert len(agents) == 10
+        assert len(agents) == 12
         assert "FRONT-001" in agents["code-writer"]["prompt"]
         assert "REVIEW-001" in agents["code-reviewer"]["prompt"]
 
     def test_quality_standards_with_both_enabled(self):
-        """Quality standards injected correctly with scheduler + verification (11 agents)."""
+        """Quality standards injected correctly with scheduler + verification (12 agents)."""
         from agent_team.config import SchedulerConfig, VerificationConfig
         cfg = AgentTeamConfig(
             scheduler=SchedulerConfig(enabled=True),
             verification=VerificationConfig(enabled=True),
         )
         agents = build_agent_definitions(cfg, {})
-        assert len(agents) == 11
+        assert len(agents) == 12
         # Quality agents still get standards
         assert "FRONT-001" in agents["code-writer"]["prompt"]
         assert "DEBUG-001" in agents["debugger"]["prompt"]
@@ -797,12 +808,13 @@ class TestCodeQualityInjection:
         assert "FRONT-001" not in agents["contract-generator"]["prompt"]
 
     def test_all_disabled_no_crash_from_injection(self):
-        """When all agents disabled, injection loop runs on empty dict without crash."""
+        """When all agents disabled, injection loop still includes spec-validator."""
         cfg = AgentTeamConfig()
         for name in cfg.agents:
             cfg.agents[name] = AgentConfig(enabled=False)
         agents = build_agent_definitions(cfg, {})
-        assert agents == {}
+        assert len(agents) == 1
+        assert "spec-validator" in agents
 
     def test_empty_constraints_plus_standards(self):
         """Empty constraints + standards: standards still injected, no constraints prefix."""
@@ -842,3 +854,105 @@ class TestPromptStrengthening:
 
     def test_debugger_has_debugging_methodology(self):
         assert "Debugging Methodology" in DEBUGGER_PROMPT
+
+
+# ===================================================================
+# SPEC_VALIDATOR_PROMPT
+# ===================================================================
+
+class TestSpecValidatorPrompt:
+    def test_prompt_exists_and_non_empty(self):
+        assert len(SPEC_VALIDATOR_PROMPT) > 100
+
+    def test_contains_spec_fidelity(self):
+        assert "SPEC FIDELITY" in SPEC_VALIDATOR_PROMPT
+
+    def test_contains_original_user_request(self):
+        assert "ORIGINAL USER REQUEST" in SPEC_VALIDATOR_PROMPT
+
+    def test_contains_pass_fail(self):
+        assert "PASS" in SPEC_VALIDATOR_PROMPT
+        assert "FAIL" in SPEC_VALIDATOR_PROMPT
+
+    def test_checks_missing_technologies(self):
+        assert "Missing Technologies" in SPEC_VALIDATOR_PROMPT or "MISSING_TECH" in SPEC_VALIDATOR_PROMPT
+
+    def test_checks_scope_reduction(self):
+        assert "Scope Reduction" in SPEC_VALIDATOR_PROMPT or "SCOPE_REDUCTION" in SPEC_VALIDATOR_PROMPT
+
+    def test_checks_missing_architecture(self):
+        assert "Architecture" in SPEC_VALIDATOR_PROMPT or "ARCHITECTURE" in SPEC_VALIDATOR_PROMPT
+
+    def test_spec_validator_in_agent_definitions(self):
+        cfg = AgentTeamConfig()
+        agents = build_agent_definitions(cfg, {})
+        assert "spec-validator" in agents
+
+    def test_spec_validator_read_only_tools(self):
+        cfg = AgentTeamConfig()
+        agents = build_agent_definitions(cfg, {})
+        tools = agents["spec-validator"]["tools"]
+        assert "Read" in tools
+        assert "Glob" in tools
+        assert "Grep" in tools
+        assert "Write" not in tools
+        assert "Edit" not in tools
+        assert "Bash" not in tools
+
+    def test_spec_validator_has_description(self):
+        cfg = AgentTeamConfig()
+        agents = build_agent_definitions(cfg, {})
+        assert len(agents["spec-validator"]["description"]) > 0
+
+
+# ===================================================================
+# Reviewer anchoring to original request
+# ===================================================================
+
+class TestReviewerAnchoring:
+    def test_reviewer_has_original_request_check(self):
+        assert "ORIGINAL USER REQUEST" in CODE_REVIEWER_PROMPT
+
+    def test_reviewer_has_step_1b(self):
+        assert "1b." in CODE_REVIEWER_PROMPT
+
+    def test_reviewer_flags_critical(self):
+        assert "CRITICAL" in CODE_REVIEWER_PROMPT
+
+    def test_orchestrator_passes_original_request_to_reviewers(self):
+        assert "ORIGINAL USER REQUEST" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_build_orchestrator_prompt_has_original_request_section(self):
+        cfg = AgentTeamConfig()
+        prompt = build_orchestrator_prompt("build a REST API", "standard", cfg)
+        assert "[ORIGINAL USER REQUEST]" in prompt
+        assert "build a REST API" in prompt
+
+
+# ===================================================================
+# Planner guardrails + mandatory test wave
+# ===================================================================
+
+class TestPlannerGuardrails:
+    def test_planner_has_technology_preservation(self):
+        assert "MUST appear in REQUIREMENTS.md" in PLANNER_PROMPT
+
+    def test_planner_has_monorepo_preservation(self):
+        assert "monorepo" in PLANNER_PROMPT.lower()
+
+    def test_planner_has_test_requirements(self):
+        assert "Testing Requirements" in PLANNER_PROMPT
+
+    def test_planner_prevents_architecture_simplification(self):
+        assert "may NOT" in PLANNER_PROMPT or "may not" in PLANNER_PROMPT.lower()
+
+
+class TestMandatoryTestWave:
+    def test_orchestrator_has_mandatory_test_rule(self):
+        assert "MANDATORY TEST RULE" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_orchestrator_mentions_test_keywords(self):
+        assert "test suite" in ORCHESTRATOR_SYSTEM_PROMPT.lower() or "tests" in ORCHESTRATOR_SYSTEM_PROMPT.lower()
+
+    def test_orchestrator_test_rule_is_blocking(self):
+        assert "BLOCKING" in ORCHESTRATOR_SYSTEM_PROMPT

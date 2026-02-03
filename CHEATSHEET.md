@@ -184,8 +184,12 @@ Write rules in your task or during the interview. The system picks them up autom
 | "always validate user input" | Requirement |
 | "only change files in src/components/" | Scope limit |
 | "just the frontend, nothing else" | Scope limit |
+| "Build with Express.js and MongoDB" | Technology requirements (auto-extracted) |
+| "Include 20+ tests" | Test count requirement (auto-extracted) |
 
 **ALL CAPS and emphasis words** ("absolutely", "critical", "strictly") give constraints higher priority.
+
+**Technology names** (Express.js, React, Next.js, MongoDB, TypeScript, Tailwind CSS, Docker, etc.) are automatically extracted as `must use X` constraints. **Test counts** ("20+ tests", "10 unit tests") are extracted as `must have N+ tests` constraints.
 
 **How:** Just write naturally in your task — `agent-team "add search, but NEVER change the database schema"`.
 **When:** You have non-negotiable rules the agents must follow.
@@ -321,6 +325,8 @@ agents:
 ```
 
 Available agents: `planner`, `researcher`, `architect`, `task_assigner`, `code_writer`, `code_reviewer`, `test_runner`, `security_auditor`, `debugger`
+
+The `spec-validator` agent is always active (read-only, non-configurable) — it compares your original request against REQUIREMENTS.md to catch spec drift. `integration-agent` and `contract-generator` are enabled by default via `scheduler.enabled` and `verification.enabled`.
 
 ### Built-in Quality Standards
 

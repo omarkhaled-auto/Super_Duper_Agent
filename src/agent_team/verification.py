@@ -19,6 +19,9 @@ import asyncio
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
+import shutil
+import sys
 
 from .contracts import (
     ContractRegistry,
@@ -98,6 +101,11 @@ async def verify_task_completion(
     """
     result = TaskVerificationResult(task_id=task_id)
     issues: list[str] = []
+
+    # Phase 0: Requirements compliance (always runs, deterministic) -------
+    req_result = _check_requirements_compliance(project_root)
+    if req_result and not req_result.passed:
+        issues.append(f"Requirements: {req_result.details}")
 
     # Phase 1: Contract check (always runs, deterministic) ----------------
     contract_result = verify_all_contracts(registry, project_root)
@@ -301,6 +309,105 @@ async def run_automated_review_phases(
 
 
 # ---------------------------------------------------------------------------
+# Requirements compliance check
+# ---------------------------------------------------------------------------
+
+
+def _check_requirements_compliance(project_root: Path) -> StructuredReviewResult | None:
+    """Check if the project satisfies declared technologies in REQUIREMENTS.md.
+
+    Returns ``None`` if no REQUIREMENTS.md exists (nothing to check).
+    Otherwise returns a ``StructuredReviewResult`` with phase="requirements".
+    """
+    req_path = project_root / ".agent-team" / "REQUIREMENTS.md"
+    if not req_path.is_file():
+        return None
+
+    try:
+        req_content = req_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    if not req_content.strip():
+        return None
+
+    issues: list[str] = []
+
+    # --- Technology presence check ---
+    tech_re = re.compile(
+        r'\b(Express(?:\.js)?|React(?:\.js)?|Next\.js|Vue(?:\.js)?|Angular|'
+        r'Node\.js|Django|Flask|FastAPI|Spring\s*Boot|Rails|Laravel|'
+        r'MongoDB|PostgreSQL|MySQL|SQLite|Redis|Supabase|Firebase|'
+        r'TypeScript|GraphQL|REST\s*API|gRPC|WebSocket|'
+        r'Tailwind(?:\s*CSS)?|Prisma|Drizzle|Sequelize|TypeORM|Mongoose)\b',
+        re.IGNORECASE,
+    )
+    declared_techs = set(m.group(1).lower() for m in tech_re.finditer(req_content))
+
+    if declared_techs:
+        pkg_json = project_root / "package.json"
+        pkg_content = ""
+        if pkg_json.is_file():
+            try:
+                pkg_content = pkg_json.read_text(encoding="utf-8").lower()
+            except OSError:
+                pass
+
+        pyproject = project_root / "pyproject.toml"
+        pyproject_content = ""
+        if pyproject.is_file():
+            try:
+                pyproject_content = pyproject.read_text(encoding="utf-8").lower()
+            except OSError:
+                pass
+
+        all_deps = pkg_content + pyproject_content
+        for tech in sorted(declared_techs):
+            # Normalize for dependency lookup
+            lookup = tech.replace(".js", "").replace(" ", "").replace(".", "")
+            if lookup not in all_deps and tech not in all_deps:
+                issues.append(f"Technology '{tech}' declared in REQUIREMENTS.md but not found in dependencies")
+
+    # --- Monorepo structure check ---
+    req_lower = req_content.lower()
+    if "monorepo" in req_lower:
+        has_structure = (
+            (project_root / "client").is_dir()
+            or (project_root / "server").is_dir()
+            or (project_root / "packages").is_dir()
+            or (project_root / "apps").is_dir()
+        )
+        if not has_structure:
+            issues.append("Monorepo declared in REQUIREMENTS.md but no client/, server/, packages/, or apps/ directory found")
+
+    # --- Test files check ---
+    if "testing" in req_lower or "test suite" in req_lower or re.search(r'\d+\+?\s*tests?', req_lower):
+        has_tests = (
+            any((project_root / d).is_dir() for d in ("tests", "test", "__tests__", "spec"))
+            or any(project_root.rglob("*.test.*"))
+            or any(project_root.rglob("*.spec.*"))
+            or any(project_root.rglob("test_*.py"))
+        )
+        if not has_tests:
+            issues.append("Testing mentioned in REQUIREMENTS.md but no test files or test directories found")
+
+    if issues:
+        return StructuredReviewResult(
+            phase="requirements",
+            passed=False,
+            details="; ".join(issues),
+            blocking=True,
+        )
+
+    return StructuredReviewResult(
+        phase="requirements",
+        passed=True,
+        details="All declared requirements satisfied",
+        blocking=False,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Command detection helpers
 # ---------------------------------------------------------------------------
 
@@ -422,6 +529,19 @@ def _detect_test_command(project_root: Path) -> list[str] | None:
 # ---------------------------------------------------------------------------
 
 
+def _resolve_command(cmd: list[str]) -> list[str]:
+    """Resolve command to full path, trying .cmd on Windows."""
+    exe = cmd[0]
+    resolved = shutil.which(exe)
+    if resolved:
+        return [resolved] + cmd[1:]
+    if sys.platform == "win32":
+        resolved = shutil.which(exe + ".cmd")
+        if resolved:
+            return [resolved] + cmd[1:]
+    return cmd
+
+
 async def _run_command(
     cmd: list[str],
     cwd: Path,
@@ -439,9 +559,10 @@ async def _run_command(
     lists are constructed internally from hardcoded strings by the ``_detect_*``
     helpers -- no user-controlled input flows into *cmd*.
     """
+    resolved_cmd = _resolve_command(cmd)
     try:
         process = await asyncio.create_subprocess_exec(
-            *cmd,
+            *resolved_cmd,
             cwd=str(cwd),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
