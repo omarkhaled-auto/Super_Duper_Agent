@@ -211,19 +211,22 @@ class TestBuildAgentDefinitions:
         assert len(agents) == 1
         assert "spec-validator" in agents
 
-    def test_researcher_includes_mcp_tools(self, default_config):
+    def test_researcher_no_mcp_tools_even_with_servers(self, default_config):
+        """MCP tools are NOT in researcher — orchestrator calls them directly."""
         servers = {"firecrawl": {"type": "stdio"}, "context7": {"type": "stdio"}}
         agents = build_agent_definitions(default_config, servers)
         researcher_tools = agents["researcher"]["tools"]
-        # Should contain firecrawl and context7 tool names
-        assert any("firecrawl" in t for t in researcher_tools)
-        assert any("context7" in t for t in researcher_tools)
-
-    def test_researcher_no_mcp_tools(self, default_config):
-        agents = build_agent_definitions(default_config, {})
-        researcher_tools = agents["researcher"]["tools"]
+        # MCP servers aren't propagated to sub-agents, so researcher
+        # should NOT have firecrawl or context7 tool names.
         assert not any("firecrawl" in t for t in researcher_tools)
         assert not any("context7" in t for t in researcher_tools)
+
+    def test_researcher_has_web_tools(self, default_config):
+        """Researcher still has WebSearch and WebFetch for direct use."""
+        agents = build_agent_definitions(default_config, {})
+        researcher_tools = agents["researcher"]["tools"]
+        assert "WebSearch" in researcher_tools
+        assert "WebFetch" in researcher_tools
 
     def test_all_agents_use_opus(self, default_config):
         agents = build_agent_definitions(default_config, {})

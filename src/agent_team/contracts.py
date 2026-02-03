@@ -59,6 +59,7 @@ class ContractRegistry:
 
     modules: dict[str, ModuleContract] = field(default_factory=dict)  # path -> contract
     wirings: list[WiringContract] = field(default_factory=list)
+    file_missing: bool = False  # True when no CONTRACTS.json was found on disk
 
 
 @dataclass
@@ -281,7 +282,9 @@ def load_contracts(path: Path) -> ContractRegistry:
     try:
         raw = path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        return ContractRegistry()
+        registry = ContractRegistry()
+        registry.file_missing = True
+        return registry
 
     data = json.loads(raw)  # JSONDecodeError propagates intentionally
     return _dict_to_registry(data)

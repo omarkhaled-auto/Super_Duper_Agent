@@ -35,10 +35,12 @@ class TestConfigToAgentsPipeline:
         cfg = AgentTeamConfig()
         servers = get_mcp_servers(cfg)
         agents = build_agent_definitions(cfg, servers)
-        assert len(agents) == 9
-        # Researcher should have MCP tools when firecrawl key present
+        # 9 core + spec-validator + integration-agent + contract-generator = 12
+        assert len(agents) == 12
+        # Researcher should NOT have MCP tools (MCP servers aren't propagated
+        # to sub-agents; orchestrator calls MCP tools directly)
         researcher_tools = agents["researcher"]["tools"]
-        assert any("firecrawl" in t for t in researcher_tools)
+        assert not any("firecrawl" in t for t in researcher_tools)
 
     def test_config_to_depth_to_prompt(self, default_config):
         """load_config → detect_depth → build_orchestrator_prompt pipeline."""
@@ -57,15 +59,20 @@ class TestConfigToAgentsPipeline:
 
 
 class TestMCPFlowIntoResearcher:
-    def test_mcp_servers_flow_into_researcher_tools(self, env_with_api_keys):
+    def test_mcp_tools_not_in_researcher(self, env_with_api_keys):
+        """MCP tools should NOT be in researcher — orchestrator calls them directly."""
         cfg = AgentTeamConfig()
         servers = get_mcp_servers(cfg)
         research_tools = get_research_tools(servers)
         agents = build_agent_definitions(cfg, servers)
         researcher_tools = agents["researcher"]["tools"]
-        # All research_tools should appear in researcher's tools list
+        # MCP servers aren't propagated to sub-agents, so research tools
+        # should NOT appear in the researcher's tools list.
         for tool in research_tools:
-            assert tool in researcher_tools
+            assert tool not in researcher_tools
+        # But researcher still has WebSearch/WebFetch
+        assert "WebSearch" in researcher_tools
+        assert "WebFetch" in researcher_tools
 
 
 class TestInterviewScopeForcing:
@@ -290,10 +297,25 @@ class TestNewAgentsConditional:
         agents = build_agent_definitions(cfg, {})
         assert "contract-generator" in agents
 
-    def test_default_config_no_new_agents(self):
+    def test_default_config_includes_all_agents(self):
+        """Default config has scheduler+verification enabled, so all agents are present."""
         cfg = AgentTeamConfig()
         agents = build_agent_definitions(cfg, {})
+        # With defaults (scheduler.enabled=True, verification.enabled=True),
+        # integration-agent and contract-generator are included.
+        assert "integration-agent" in agents
+        assert "contract-generator" in agents
+        # spec-validator is always present
+        assert "spec-validator" in agents
+
+    def test_disabled_scheduler_no_integration_agent(self):
+        cfg = AgentTeamConfig(scheduler=SchedulerConfig(enabled=False))
+        agents = build_agent_definitions(cfg, {})
         assert "integration-agent" not in agents
+
+    def test_disabled_verification_no_contract_generator(self):
+        cfg = AgentTeamConfig(verification=VerificationConfig(enabled=False))
+        agents = build_agent_definitions(cfg, {})
         assert "contract-generator" not in agents
 
 

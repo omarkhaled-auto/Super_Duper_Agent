@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 import re
@@ -107,14 +108,28 @@ async def verify_task_completion(
     if req_result and not req_result.passed:
         issues.append(f"Requirements: {req_result.details}")
 
+    # Phase 0b: Test file existence gate -----------------------------------
+    test_gate = _check_test_files_exist(project_root)
+    if test_gate and not test_gate.passed:
+        issues.append(f"Test gate: {test_gate.details}")
+
     # Phase 1: Contract check (always runs, deterministic) ----------------
-    contract_result = verify_all_contracts(registry, project_root)
-    result.contracts_passed = contract_result.passed
-    if not contract_result.passed:
-        for violation in contract_result.violations:
-            issues.append(
-                f"Contract: {violation.description} ({violation.file_path})"
-            )
+    if registry.file_missing:
+        # No CONTRACTS.json on disk — this is NOT a pass, it's a warning.
+        result.contracts_passed = None  # None = not applicable / skipped
+        issues.append(
+            "Contract: WARNING — No CONTRACTS.json found. "
+            "Contract verification skipped (this is NOT a pass). "
+            "Deploy the contract-generator agent to create CONTRACTS.json."
+        )
+    else:
+        contract_result = verify_all_contracts(registry, project_root)
+        result.contracts_passed = contract_result.passed
+        if not contract_result.passed:
+            for violation in contract_result.violations:
+                issues.append(
+                    f"Contract: {violation.description} ({violation.file_path})"
+                )
 
     # Phase 2: Lint (if enabled) ------------------------------------------
     if run_lint:
@@ -407,6 +422,99 @@ def _check_requirements_compliance(project_root: Path) -> StructuredReviewResult
     )
 
 
+def _load_original_task_text(project_root: Path) -> str | None:
+    """Load the original task text from STATE.json if available."""
+    state_path = project_root / ".agent-team" / "STATE.json"
+    if not state_path.is_file():
+        return None
+    try:
+        data = json.loads(state_path.read_text(encoding="utf-8"))
+        return data.get("task", None)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+_TEST_KEYWORDS_RE = re.compile(
+    r'\b(tests?|testing|test suite|test cases?|unit tests?|integration tests?|'
+    r'e2e tests?|end.to.end tests?|spec files?)\b',
+    re.IGNORECASE,
+)
+
+_TEST_COUNT_RE = re.compile(r'\d+\+?\s*tests?', re.IGNORECASE)
+
+
+def _check_test_files_exist(project_root: Path) -> StructuredReviewResult | None:
+    """Check if tests are required by the original task but no test files exist.
+
+    Reads both the original task text (from STATE.json) and REQUIREMENTS.md
+    to determine if tests were requested. If so, verifies at least one test
+    file exists in the project.
+
+    Returns ``None`` if tests are not required.
+    """
+    # Gather text sources that might mention testing
+    sources: list[str] = []
+
+    # Check original task text
+    task_text = _load_original_task_text(project_root)
+    if task_text:
+        sources.append(task_text)
+
+    # Check REQUIREMENTS.md
+    req_path = project_root / ".agent-team" / "REQUIREMENTS.md"
+    if req_path.is_file():
+        try:
+            sources.append(req_path.read_text(encoding="utf-8"))
+        except OSError:
+            pass
+
+    if not sources:
+        return None
+
+    combined = " ".join(sources).lower()
+
+    # Check for test keywords or test count patterns
+    has_test_keywords = bool(_TEST_KEYWORDS_RE.search(combined))
+    has_test_count = bool(_TEST_COUNT_RE.search(combined))
+
+    if not has_test_keywords and not has_test_count:
+        return None
+
+    # Tests are required — check if any test files exist
+    has_tests = (
+        any((project_root / d).is_dir() for d in ("tests", "test", "__tests__", "spec"))
+        or any(project_root.rglob("*.test.*"))
+        or any(project_root.rglob("*.spec.*"))
+        or any(project_root.rglob("test_*.py"))
+    )
+
+    if has_tests:
+        return StructuredReviewResult(
+            phase="test_gate",
+            passed=True,
+            details="Test files found (test requirement satisfied)",
+            blocking=False,
+        )
+
+    # Determine which source mentioned tests
+    source_hint = "original task and/or REQUIREMENTS.md"
+    if task_text and _TEST_KEYWORDS_RE.search(task_text.lower()):
+        source_hint = "original user request"
+    elif not task_text:
+        source_hint = "REQUIREMENTS.md"
+
+    return StructuredReviewResult(
+        phase="test_gate",
+        passed=False,
+        details=(
+            f"Tests required by {source_hint} but no test files found. "
+            "Expected at least one of: tests/, test/, __tests__/, spec/ directory, "
+            "or files matching *.test.*, *.spec.*, test_*.py"
+        ),
+        blocking=True,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Command detection helpers
 # ---------------------------------------------------------------------------
@@ -530,15 +638,41 @@ def _detect_test_command(project_root: Path) -> list[str] | None:
 
 
 def _resolve_command(cmd: list[str]) -> list[str]:
-    """Resolve command to full path, trying .cmd on Windows."""
+    """Resolve command to full path, trying .cmd and common paths on Windows.
+
+    Resolution order:
+    1. shutil.which(exe) — standard PATH lookup
+    2. shutil.which(exe + ".cmd") — Windows .cmd extension fallback
+    3. Common Windows installation paths for Node.js tools
+    """
+    import os as _os
+
     exe = cmd[0]
     resolved = shutil.which(exe)
     if resolved:
         return [resolved] + cmd[1:]
+
     if sys.platform == "win32":
+        # Try .cmd extension (npm, npx ship as .cmd on Windows)
         resolved = shutil.which(exe + ".cmd")
         if resolved:
             return [resolved] + cmd[1:]
+
+        # Try common Windows installation directories
+        common_paths = [
+            Path(_os.environ.get("ProgramFiles", "")) / "nodejs",
+            Path(_os.environ.get("APPDATA", "")) / "npm",
+            Path(_os.environ.get("LOCALAPPDATA", "")) / "Programs" / "nodejs",
+            Path(_os.environ.get("LOCALAPPDATA", "")) / "fnm_multishells",
+        ]
+        for ext in ("", ".cmd", ".exe"):
+            for p in common_paths:
+                if not p or str(p) == ".":
+                    continue
+                candidate = p / (exe + ext)
+                if candidate.is_file():
+                    return [str(candidate)] + cmd[1:]
+
     return cmd
 
 
@@ -585,7 +719,35 @@ async def _run_command(
             pass
         return (1, "", f"Command timed out after {timeout}s: {' '.join(cmd)}")
     except FileNotFoundError:
-        return (1, "", f"Command not found: {cmd[0]}")
+        # Last-resort fallback on Windows: try shell=True which uses
+        # cmd.exe to resolve PATH differently than shutil.which.
+        if sys.platform == "win32":
+            try:
+                process = await asyncio.create_subprocess_shell(
+                    " ".join(cmd),
+                    cwd=str(cwd),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                    process.communicate(),
+                    timeout=timeout,
+                )
+                returncode = process.returncode if process.returncode is not None else 1
+                return (
+                    returncode,
+                    stdout_bytes.decode("utf-8", errors="replace"),
+                    stderr_bytes.decode("utf-8", errors="replace"),
+                )
+            except (asyncio.TimeoutError, FileNotFoundError, OSError):
+                pass
+        path_info = os.environ.get("PATH", "(empty)")
+        return (
+            1, "",
+            f"Command not found: {cmd[0]}. "
+            f"Tried: {' '.join(resolved_cmd)}. "
+            f"PATH dirs: {path_info[:500]}"
+        )
     except OSError as exc:
         return (1, "", f"OS error running command: {exc}")
 

@@ -358,17 +358,44 @@ Use the `planner` agent. Each planner explores a different aspect:
 - API routes, middleware, handlers
 - Frontend components, state management, routing
 
+### Spec Validation Fleet
+Deploy the `spec-validator` agent AFTER Planning Fleet creates REQUIREMENTS.md.
+Include in agent context:
+- The full [ORIGINAL USER REQUEST] (copy verbatim from the task message)
+- The generated .agent-team/REQUIREMENTS.md (agent reads it directly)
+Agent returns: PASS or FAIL with list of discrepancies.
+If FAIL: re-deploy planner with the spec-validator's discrepancies as constraints.
+Repeat spec validation until PASS. This is MANDATORY and BLOCKING.
+
+### Research Fleet — MCP Tool Usage
+The orchestrator (YOU) has direct access to Firecrawl MCP tools. Sub-agents do NOT have
+MCP server access — MCP servers are only available at the orchestrator level.
+When the research fleet needs web scraping or design reference analysis:
+1. Call firecrawl_scrape / firecrawl_search YOURSELF before deploying researchers
+2. Include the scraped content in each researcher agent's task context
+3. For design references: scrape with format "branding", include results in researcher context
+
+Available Firecrawl tools (call directly as orchestrator):
+- mcp__firecrawl__firecrawl_search — search the web
+- mcp__firecrawl__firecrawl_scrape — scrape a specific URL
+- mcp__firecrawl__firecrawl_map — discover URLs on a site
+- mcp__firecrawl__firecrawl_extract — extract structured data
+
+Context7 tools also require orchestrator-level access. Call resolve-library-id and
+query-docs YOURSELF, then pass the documentation content to researchers.
+
 ### Research Fleet
 Use the `researcher` agent. Each researcher investigates:
-- Library documentation (via Context7)
-- Web tutorials and best practices (via Firecrawl)
+- Library documentation (provided by orchestrator via Context7 lookups)
+- Web research results (provided by orchestrator via Firecrawl scraping)
 - Similar implementations and examples
 - **Design reference analysis** (when reference URLs are provided):
-  - Assign researcher(s) to scrape reference sites using Firecrawl tools:
+  - The orchestrator scrapes reference sites using Firecrawl tools BEFORE deploying researchers:
     - firecrawl_scrape with formats: ["branding"] for design tokens (colors, fonts, spacing)
     - firecrawl_scrape with formats: ["screenshot"] for visual reference (returns cloud URLs)
     - firecrawl_extract or firecrawl_agent for component pattern analysis
     - firecrawl_map to discover key pages on reference site(s)
+  - The orchestrator passes ALL scraped content to researchers in their task context
   - Researchers write ALL findings (including screenshot URLs) to the Design Reference section of REQUIREMENTS.md
   - Researchers add DESIGN-xxx requirements to the ### Design Requirements subsection
 
@@ -455,11 +482,17 @@ Execute this workflow for every task:
    - If scope is COMPLEX, this may be a full PRD — activate PRD mode
 1. DETECT DEPTH from keywords or --depth flag
 2. Deploy PLANNING FLEET → creates .agent-team/REQUIREMENTS.md
+2.5. Deploy SPEC FIDELITY VALIDATOR → compare REQUIREMENTS.md against [ORIGINAL USER REQUEST]
+     - If FAIL: send findings back to PLANNING FLEET for revision. Repeat until PASS.
+     - This step is MANDATORY and BLOCKING — do NOT proceed to Research until spec is validated.
 3. Deploy RESEARCH FLEET (if needed) → adds research findings
    - If design reference URLs are provided, dedicate researcher(s) to design analysis
 3.5. Deploy ARCHITECTURE FLEET → adds architecture decision, Integration Roadmap (entry points, wiring map, anti-patterns, initialization order), tech + wiring requirements
 4. Deploy TASK ASSIGNER → decomposes requirements into .agent-team/TASKS.md (uses architecture decisions)
-4.5. Deploy CONTRACT GENERATOR (if available) → reads architecture decisions + wiring map from REQUIREMENTS.md, writes .agent-team/CONTRACTS.json
+4.5. Deploy CONTRACT GENERATOR → MANDATORY when verification is enabled.
+     Reads architecture decisions + wiring map from REQUIREMENTS.md.
+     Writes .agent-team/CONTRACTS.json.
+     If contract generation fails, report WARNING and continue (but verification will flag this).
 5. Enter CONVERGENCE LOOP:
    a. CODING FLEET (assigned from TASKS.md dependency graph)
       - Read TASKS.md for available tasks (PENDING + all dependencies COMPLETE)
@@ -832,8 +865,7 @@ YOUR JOB IS NOT TO CONFIRM WHAT WORKS. Your job is to FIND GAPS, BUGS, ISSUES, a
 
 ## Your Tasks
 1. Read `.agent-team/REQUIREMENTS.md` to see what was required
-1b. If an [ORIGINAL USER REQUEST] section is provided in your context, ALSO check
-    the codebase against the ORIGINAL request — not just REQUIREMENTS.md.
+1b. Check the codebase against the [ORIGINAL USER REQUEST] section above — not just REQUIREMENTS.md.
     If REQUIREMENTS.md contradicts or omits items from the original request, flag it as CRITICAL.
 2. For EACH unchecked item `- [ ]` in the Requirements Checklist:
    a. Read the requirement carefully
@@ -1209,6 +1241,16 @@ Number tasks sequentially: TASK-001, TASK-002, ...
 There is NO LIMIT on task count. If the project genuinely needs 500 tasks, produce 500 tasks.
 
 If the scheduler is enabled, include dependency and file information in each task to enable automatic wave computation and conflict detection.
+
+## Post-Decomposition Coverage Check (MANDATORY)
+AFTER creating all tasks, perform a coverage verification:
+1. Count: How many REQ-xxx items in REQUIREMENTS.md have at least one task? Report: "REQ coverage: X/Y"
+2. Count: How many TECH-xxx items have at least one task? Report: "TECH coverage: X/Y"
+3. Count: How many WIRE-xxx items have at least one wiring task? Report: "WIRE coverage: X/Y"
+4. Count: How many TEST-xxx items have test tasks? Report: "TEST coverage: X/Y"
+5. If any requirement has ZERO tasks, ADD the missing tasks immediately.
+6. Final report line: "Coverage: X/Y requirements have tasks. Z test tasks created."
+This check catches the "planner wrote it, task-assigner dropped it" failure mode.
 """.strip()
 
 
@@ -1295,6 +1337,7 @@ def build_agent_definitions(
     config: AgentTeamConfig,
     mcp_servers: dict[str, Any],
     constraints: list | None = None,
+    task_text: str | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Build the agents dict for ClaudeAgentOptions.
 
@@ -1314,12 +1357,15 @@ def build_agent_definitions(
         }
 
     if config.agents.get("researcher", AgentConfig()).enabled:
+        # Note: Firecrawl and Context7 MCP tools are NOT included here because
+        # MCP servers are only available at the orchestrator level and are not
+        # propagated to sub-agents. The orchestrator calls MCP tools directly
+        # and passes results to researchers in their task context.
         agents["researcher"] = {
             "description": "Researches libraries, APIs, and best practices via web and docs",
             "prompt": RESEARCHER_PROMPT,
             "tools": [
                 "Read", "Write", "Edit", "WebSearch", "WebFetch",
-                *research_tools,
             ],
             "model": config.agents.get("researcher", AgentConfig()).model,
         }
@@ -1349,9 +1395,14 @@ def build_agent_definitions(
         }
 
     if config.agents.get("code_reviewer", AgentConfig()).enabled:
+        reviewer_prompt = CODE_REVIEWER_PROMPT
+        if task_text:
+            reviewer_prompt = (
+                f"[ORIGINAL USER REQUEST]\n{task_text}\n\n" + reviewer_prompt
+            )
         agents["code-reviewer"] = {
             "description": "Adversarial reviewer that finds bugs, gaps, and issues",
-            "prompt": CODE_REVIEWER_PROMPT,
+            "prompt": reviewer_prompt,
             "tools": ["Read", "Glob", "Grep", "Edit"],
             "model": config.agents.get("code_reviewer", AgentConfig()).model,
         }
@@ -1543,7 +1594,8 @@ def build_orchestrator_prompt(
         parts.append(f"Do NOT stop until every milestone in {master_plan} is COMPLETE and every REQUIREMENTS.md has all items [x].")
     else:
         parts.append("Start by deploying the PLANNING FLEET to create REQUIREMENTS.md.")
-        parts.append("After planning and research, deploy the ARCHITECTURE FLEET for design decisions.")
+        parts.append("Then deploy the SPEC FIDELITY VALIDATOR to verify REQUIREMENTS.md against the original request.")
+        parts.append("After spec validation and research, deploy the ARCHITECTURE FLEET for design decisions.")
         parts.append("Then deploy the TASK ASSIGNER to create TASKS.md (using architecture decisions).")
         parts.append("Then proceed through the convergence loop.")
         parts.append("Assign code-writer tasks from TASKS.md (by dependency graph).")

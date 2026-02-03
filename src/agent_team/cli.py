@@ -190,10 +190,11 @@ def _build_options(
     config: AgentTeamConfig,
     cwd: str | None = None,
     constraints: list | None = None,
+    task_text: str | None = None,
 ) -> ClaudeAgentOptions:
     """Build ClaudeAgentOptions with all agents and MCP servers."""
     mcp_servers = get_mcp_servers(config)
-    agent_defs_raw = build_agent_definitions(config, mcp_servers, constraints=constraints)
+    agent_defs_raw = build_agent_definitions(config, mcp_servers, constraints=constraints, task_text=task_text)
 
     # Convert raw dicts to AgentDefinition objects
     agent_defs = {
@@ -322,9 +323,10 @@ async def _run_interactive(
     constraints: list | None = None,
     intervention: "InterventionQueue | None" = None,
     resume_context: str | None = None,
+    task_text: str | None = None,
 ) -> float:
     """Run the interactive multi-turn conversation loop. Returns total cost."""
-    options = _build_options(config, cwd, constraints=constraints)
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text)
     phase_costs: dict[str, float] = {}
     total_cost = 0.0
     last_depth = depth_override or "standard"
@@ -439,9 +441,10 @@ async def _run_single(
     constraints: list | None = None,
     intervention: "InterventionQueue | None" = None,
     resume_context: str | None = None,
+    task_text: str | None = None,
 ) -> float:
     """Run a single task to completion. Returns total cost."""
-    options = _build_options(config, cwd, constraints=constraints)
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text or task)
     phase_costs: dict[str, float] = {}
 
     if prd_path:
@@ -1072,6 +1075,15 @@ def main() -> None:
     _current_state = RunState(task=args.task or "", depth=args.depth or "pending")
     _current_state.current_phase = "init"
     _current_state.artifacts["cwd"] = cwd
+
+    # Persist the original task text early so verification can access it
+    # even if the run is interrupted before completion.
+    try:
+        from .state import save_state
+        save_state(_current_state, directory=str(Path(cwd) / ".agent-team"))
+    except Exception:
+        pass  # Non-critical — verification falls back to REQUIREMENTS.md only
+
     if args.config:
         _current_state.artifacts["config_path"] = args.config
     if args.prd:
@@ -1270,6 +1282,7 @@ def main() -> None:
                 constraints=constraints,
                 intervention=intervention,
                 resume_context=_resume_ctx,
+                task_text=args.task,
             ))
         else:
             # Use the interview doc as the task if no explicit task was given
@@ -1302,6 +1315,7 @@ def main() -> None:
                 constraints=constraints,
                 intervention=intervention,
                 resume_context=_resume_ctx,
+                task_text=args.task,
             ))
 
         # Update RunState with actual cost from orchestration

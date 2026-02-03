@@ -394,7 +394,11 @@ class TestRunCommand:
             ["nonexistent_command_xyz"], tmp_path
         )
         assert returncode == 1
-        assert "not found" in stderr.lower() or "error" in stderr.lower()
+        # Windows shell fallback may produce "not recognized" instead of "not found"
+        error_text = (stderr + stdout).lower()
+        assert any(phrase in error_text for phrase in [
+            "not found", "not recognized", "error", "command not found",
+        ])
 
     @pytest.mark.asyncio
     async def test_stderr_capture(self, tmp_path):
