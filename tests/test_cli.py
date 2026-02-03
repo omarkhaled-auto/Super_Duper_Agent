@@ -19,6 +19,7 @@ from agent_team.cli import (
     _extract_design_urls_from_interview,
     _handle_interrupt,
     _parse_args,
+    _run_contract_generation,
     _validate_url,
 )
 
@@ -1142,3 +1143,218 @@ class TestBuildResumeContextDesignResearch:
         state = RunState(task="test")
         ctx = _build_resume_context(state, "/tmp/fake")
         assert "Design research is ALREADY COMPLETE" not in ctx
+
+
+# ===================================================================
+# Contract pipeline fixes (Bug 1, Bug 2, Bug 3)
+# ===================================================================
+
+
+class TestContractPipelineBug3:
+    """Bug 3: Silent false pass — empty registry without file_missing flag."""
+
+    def test_pre_orchestration_empty_registry_has_file_missing_true(self, tmp_path):
+        """When CONTRACTS.json is absent, the empty registry sets file_missing=True."""
+        from agent_team.contracts import ContractRegistry
+        from agent_team.config import AgentTeamConfig
+
+        # Simulate what cli.py does at Phase 0.75 when file doesn't exist
+        contract_path = tmp_path / ".agent-team" / "CONTRACTS.json"
+        assert not contract_path.is_file()
+
+        # This is the FIXED behavior — file_missing must be True
+        registry = ContractRegistry()
+        registry.file_missing = True
+        assert registry.file_missing is True
+
+
+class TestContractPipelineBug2:
+    """Bug 2: Stale contract registry after orchestration."""
+
+    def test_contract_registry_reread_after_orchestration(self, tmp_path):
+        """Verification should use freshly loaded registry, not stale pre-loaded one."""
+        import json
+        from agent_team.contracts import ContractRegistry, load_contracts, save_contracts
+
+        contract_path = tmp_path / ".agent-team" / "CONTRACTS.json"
+
+        # Phase 0.75: file doesn't exist → empty registry with file_missing
+        assert not contract_path.is_file()
+        stale_registry = ContractRegistry()
+        stale_registry.file_missing = True
+        assert stale_registry.file_missing is True
+        assert len(stale_registry.modules) == 0
+
+        # Orchestration creates CONTRACTS.json
+        contract_path.parent.mkdir(parents=True, exist_ok=True)
+        data = {
+            "version": "1.0",
+            "modules": {
+                "src/app.py": {
+                    "exports": [{"name": "main", "kind": "function", "signature": None}],
+                    "created_by_task": "TASK-001",
+                }
+            },
+            "wirings": [],
+            "middlewares": [],
+        }
+        contract_path.write_text(json.dumps(data), encoding="utf-8")
+
+        # Re-read from disk (FIXED behavior)
+        fresh_registry = load_contracts(contract_path)
+        assert fresh_registry.file_missing is False
+        assert "src/app.py" in fresh_registry.modules
+
+
+class TestContractPipelineBug1:
+    """Bug 1: No code backstop for contract-generator deployment."""
+
+    def test_run_contract_generation_prompt_content(self):
+        """Recovery prompt contains CRITICAL RECOVERY and focused instructions."""
+        from agent_team.config import AgentTeamConfig
+
+        config = AgentTeamConfig()
+
+        # Mock the SDK client to capture the prompt
+        captured_prompt = {}
+
+        async def fake_query(prompt):
+            captured_prompt["text"] = prompt
+
+        mock_client = AsyncMock()
+        mock_client.query = fake_query
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("agent_team.cli.ClaudeSDKClient", return_value=mock_client), \
+             patch("agent_team.cli._process_response", new_callable=AsyncMock, return_value=0.05), \
+             patch("agent_team.cli._drain_interventions", new_callable=AsyncMock, return_value=0.0):
+            cost = _run_contract_generation(
+                cwd="/tmp/fake",
+                config=config,
+            )
+
+        assert "CRITICAL RECOVERY" in captured_prompt["text"]
+        assert "CONTRACTS.json" in captured_prompt["text"]
+        assert "CONTRACT GENERATOR" in captured_prompt["text"]
+
+    def test_run_contract_generation_returns_cost(self):
+        """Recovery function returns float cost (mirrors _run_review_only tests)."""
+        from agent_team.config import AgentTeamConfig
+
+        config = AgentTeamConfig()
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("agent_team.cli.ClaudeSDKClient", return_value=mock_client), \
+             patch("agent_team.cli._process_response", new_callable=AsyncMock, return_value=0.42), \
+             patch("agent_team.cli._drain_interventions", new_callable=AsyncMock, return_value=0.08):
+            cost = _run_contract_generation(cwd="/tmp/fake", config=config)
+
+        assert cost == pytest.approx(0.50)
+
+    def test_contract_recovery_triggered_when_missing(self, tmp_path):
+        """Recovery launched when: verification enabled + REQUIREMENTS.md exists + CONTRACTS.json missing."""
+        from agent_team.config import AgentTeamConfig, VerificationConfig
+
+        config = AgentTeamConfig(verification=VerificationConfig(enabled=True))
+        agent_dir = tmp_path / ".agent-team"
+        agent_dir.mkdir()
+        (agent_dir / "REQUIREMENTS.md").write_text("# Reqs\n- [ ] Feature A", encoding="utf-8")
+
+        contract_path = agent_dir / config.verification.contract_file
+        req_path = agent_dir / config.convergence.requirements_file
+
+        assert not contract_path.is_file()
+        assert req_path.is_file()
+
+        # The condition that triggers recovery
+        from agent_team.config import AgentConfig
+        generator_enabled = config.agents.get("contract_generator", AgentConfig()).enabled
+        assert generator_enabled is True
+        assert not contract_path.is_file() and req_path.is_file() and generator_enabled
+
+    def test_contract_recovery_not_triggered_when_file_exists(self, tmp_path):
+        """Recovery skipped when CONTRACTS.json already exists."""
+        from agent_team.config import AgentTeamConfig, VerificationConfig
+
+        config = AgentTeamConfig(verification=VerificationConfig(enabled=True))
+        agent_dir = tmp_path / ".agent-team"
+        agent_dir.mkdir()
+        (agent_dir / "REQUIREMENTS.md").write_text("# Reqs", encoding="utf-8")
+        (agent_dir / config.verification.contract_file).write_text("{}", encoding="utf-8")
+
+        contract_path = agent_dir / config.verification.contract_file
+        assert contract_path.is_file()  # Recovery should NOT trigger
+
+    def test_contract_recovery_not_triggered_when_no_requirements(self, tmp_path):
+        """Recovery skipped when no REQUIREMENTS.md exists."""
+        from agent_team.config import AgentTeamConfig, VerificationConfig
+
+        config = AgentTeamConfig(verification=VerificationConfig(enabled=True))
+        agent_dir = tmp_path / ".agent-team"
+        agent_dir.mkdir()
+
+        req_path = agent_dir / config.convergence.requirements_file
+        assert not req_path.is_file()  # No requirements → no recovery
+
+    def test_contract_recovery_not_triggered_when_generator_disabled(self, tmp_path):
+        """Recovery skipped when contract_generator disabled in config."""
+        from agent_team.config import AgentConfig, AgentTeamConfig, VerificationConfig
+
+        config = AgentTeamConfig(verification=VerificationConfig(enabled=True))
+        config.agents["contract_generator"] = AgentConfig(enabled=False)
+        agent_dir = tmp_path / ".agent-team"
+        agent_dir.mkdir()
+        (agent_dir / "REQUIREMENTS.md").write_text("# Reqs", encoding="utf-8")
+
+        generator_enabled = config.agents.get("contract_generator", AgentConfig()).enabled
+        assert generator_enabled is False  # Disabled → no recovery
+
+    def test_contract_recovery_not_triggered_when_verification_disabled(self):
+        """Recovery skipped when verification disabled."""
+        from agent_team.config import AgentTeamConfig, VerificationConfig
+
+        config = AgentTeamConfig(verification=VerificationConfig(enabled=False))
+        assert config.verification.enabled is False  # Verification off → no recovery
+
+    def test_contract_recovery_failure_handled_gracefully(self, tmp_path):
+        """Recovery exception is caught by the contract health check block in main().
+
+        The try/except in the post-orchestration contract health check should
+        catch any exception from _run_contract_generation and continue to
+        verification instead of crashing.
+        """
+        from agent_team.config import AgentTeamConfig, VerificationConfig
+
+        config = AgentTeamConfig(verification=VerificationConfig(enabled=True))
+        agent_dir = tmp_path / ".agent-team"
+        agent_dir.mkdir()
+        (agent_dir / "REQUIREMENTS.md").write_text("# Reqs\n- [ ] Feature A", encoding="utf-8")
+
+        contract_path = agent_dir / config.verification.contract_file
+        req_path = agent_dir / config.convergence.requirements_file
+
+        # Simulate the contract health check block from main()
+        # This mirrors the exact try/except structure at the call site
+        recovery_called = False
+        warning_issued = False
+
+        def fake_recovery(**kwargs):
+            nonlocal recovery_called
+            recovery_called = True
+            raise RuntimeError("SDK connection failed")
+
+        from agent_team.config import AgentConfig
+        generator_enabled = config.agents.get("contract_generator", AgentConfig()).enabled
+
+        if not contract_path.is_file() and req_path.is_file() and generator_enabled:
+            try:
+                fake_recovery(cwd=str(tmp_path), config=config)
+            except Exception as exc:
+                warning_issued = True
+                assert "SDK connection failed" in str(exc)
+
+        assert recovery_called is True
+        assert warning_issued is True

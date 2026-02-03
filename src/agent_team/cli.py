@@ -979,6 +979,47 @@ def _run_review_only(
     return asyncio.run(_recovery())
 
 
+def _run_contract_generation(
+    cwd: str,
+    config: AgentTeamConfig,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    task_text: str | None = None,
+) -> float:
+    """Run a contract-generation recovery pass when CONTRACTS.json is missing.
+
+    Creates a focused orchestrator prompt that forces the contract-generator
+    deployment. Returns cost of the recovery pass.
+    """
+    contract_prompt = (
+        "CRITICAL RECOVERY: The previous orchestration run completed but CONTRACTS.json "
+        "was never generated. The contract-generator agent was NEVER deployed.\n\n"
+        "You MUST do the following NOW:\n"
+        f"1. Read {config.convergence.requirements_dir}/{config.convergence.requirements_file}\n"
+        "2. Focus on the Architecture Decision, Integration Roadmap, and Wiring Map sections\n"
+        "3. Deploy the CONTRACT GENERATOR agent to generate .agent-team/CONTRACTS.json\n"
+        "4. Verify the file was written successfully\n\n"
+        "This is NOT optional. The system detected that CONTRACTS.json is missing and "
+        "contract verification cannot proceed without it."
+    )
+
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text)
+    phase_costs: dict[str, float] = {}
+
+    async def _recovery() -> float:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(contract_prompt)
+            cost = await _process_response(
+                client, config, phase_costs, current_phase="contract_recovery",
+            )
+            cost += await _drain_interventions(client, intervention, config, phase_costs)
+        return cost
+
+    print_warning("Contract health check FAILED: CONTRACTS.json not generated.")
+    print_info("Launching contract-generation recovery pass...")
+    return asyncio.run(_recovery())
+
+
 def _subcommand_clean() -> None:
     """Delete .agent-team/ with confirmation."""
     import shutil
@@ -1391,6 +1432,7 @@ def main() -> None:
             else:
                 print_info("No contract file found -- verification will use empty registry.")
                 contract_registry = ContractRegistry()
+                contract_registry.file_missing = True
         except Exception as exc:
             print_warning(f"Contract loading failed: {exc}")
 
@@ -1574,6 +1616,40 @@ def main() -> None:
             print_warning(f"Task status update failed: {exc}")
 
     # -------------------------------------------------------------------
+    # Post-orchestration: Contract health check
+    # -------------------------------------------------------------------
+    if config.verification.enabled:
+        contract_path = (
+            Path(cwd) / config.convergence.requirements_dir
+            / config.verification.contract_file
+        )
+        req_path = (
+            Path(cwd) / config.convergence.requirements_dir
+            / config.convergence.requirements_file
+        )
+        # Only attempt recovery if REQUIREMENTS.md exists (architecture phase ran)
+        # and contract-generator is enabled in config
+        from .config import AgentConfig as _AgentConfig
+        generator_enabled = config.agents.get(
+            "contract_generator", _AgentConfig()
+        ).enabled
+        has_requirements = req_path.is_file()
+
+        if not contract_path.is_file() and has_requirements and generator_enabled:
+            try:
+                recovery_cost = _run_contract_generation(
+                    cwd=cwd,
+                    config=config,
+                    constraints=constraints,
+                    intervention=intervention,
+                    task_text=args.task,
+                )
+                if _current_state:
+                    _current_state.total_cost += recovery_cost
+            except Exception as exc:
+                print_warning(f"Contract generation recovery failed: {exc}")
+
+    # -------------------------------------------------------------------
     # Post-orchestration: Convergence health check (Root Cause #2)
     # -------------------------------------------------------------------
     convergence_report = _check_convergence_health(cwd, config)
@@ -1626,6 +1702,21 @@ def main() -> None:
     # -------------------------------------------------------------------
     # Post-orchestration: Verification (if enabled)
     # -------------------------------------------------------------------
+    # Re-read contracts from disk — the orchestrator (or recovery pass)
+    # may have created CONTRACTS.json during execution.
+    if config.verification.enabled:
+        try:
+            from .contracts import load_contracts as _load_contracts
+            _contract_path = (
+                Path(cwd) / config.convergence.requirements_dir
+                / config.verification.contract_file
+            )
+            contract_registry = _load_contracts(_contract_path)
+        except Exception:
+            from .contracts import ContractRegistry as _CR
+            contract_registry = _CR()
+            contract_registry.file_missing = True
+
     if config.verification.enabled and contract_registry is not None:
         try:
             from .contracts import verify_all_contracts
