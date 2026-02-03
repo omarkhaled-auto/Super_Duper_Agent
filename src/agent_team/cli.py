@@ -11,6 +11,7 @@ import asyncio
 import os
 import queue
 import re
+import shutil
 import signal
 import string
 import subprocess
@@ -195,7 +196,10 @@ def _build_options(
 ) -> ClaudeAgentOptions:
     """Build ClaudeAgentOptions with all agents and MCP servers."""
     mcp_servers = get_mcp_servers(config)
-    agent_defs_raw = build_agent_definitions(config, mcp_servers, constraints=constraints, task_text=task_text)
+    agent_defs_raw = build_agent_definitions(
+        config, mcp_servers, constraints=constraints, task_text=task_text,
+        gemini_available=_gemini_available,
+    )
 
     # Convert raw dicts to AgentDefinition objects
     agent_defs = {
@@ -700,7 +704,16 @@ def _subcommand_init() -> None:
         "  verbose: false\n"
         "\ndesign_reference:\n"
         "  # standards_file: ./my-design-standards.md  # replace built-in UI standards\n"
-        "  # depth: full  # branding | screenshots | full\n",
+        "  # depth: full  # branding | screenshots | full\n"
+        "\n# investigation:\n"
+        "#   enabled: false          # opt-in: equip review agents with deep investigation\n"
+        "#   gemini_model: ''        # empty = default; e.g. gemini-2.5-pro\n"
+        "#   max_queries_per_agent: 8\n"
+        "#   timeout_seconds: 120\n"
+        "#   agents:\n"
+        "#     - code-reviewer\n"
+        "#     - security-auditor\n"
+        "#     - debugger\n",
         encoding="utf-8",
     )
     print_info("Created config.yaml with default settings.")
@@ -1016,6 +1029,33 @@ def _subcommand_guide() -> None:
 # Module-level backend tracker: set during main() after detection.
 _backend: str = "api"
 
+# Module-level Gemini CLI availability: set during main() when investigation enabled.
+_gemini_available: bool = False
+
+
+def _detect_gemini_cli() -> bool:
+    """Detect whether Gemini CLI is installed and runnable.
+
+    Checks shutil.which first (fast), then falls back to subprocess
+    for Windows .cmd scripts that shutil.which may miss.
+    """
+    # Fast path: shutil.which checks PATH
+    if shutil.which("gemini") is not None:
+        return True
+    # Windows fallback: .cmd extension
+    if sys.platform == "win32" and shutil.which("gemini.cmd") is not None:
+        return True
+    # Subprocess fallback: try running it
+    try:
+        result = subprocess.run(
+            ["gemini", "--version"],
+            capture_output=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return False
+
 
 def _check_claude_cli_auth() -> bool:
     """Check if claude CLI is installed and authenticated."""
@@ -1077,10 +1117,11 @@ def _detect_backend(requested: str) -> str:
 def main() -> None:
     """CLI entry point."""
     # Reset globals at start to prevent stale state across multiple invocations
-    global _interrupt_count, _current_state, _backend
+    global _interrupt_count, _current_state, _backend, _gemini_available
     _interrupt_count = 0
     _current_state = None
     _backend = "api"
+    _gemini_available = False
 
     # Check for subcommands before argparse
     _resume_ctx: str | None = None
@@ -1139,6 +1180,18 @@ def main() -> None:
                 "Design reference URLs provided but Firecrawl is unavailable "
                 "(FIRECRAWL_API_KEY not set or firecrawl disabled). "
                 "Researchers will fall back to WebFetch with less detail."
+            )
+
+    # Detect Gemini CLI when investigation is enabled
+    if config.investigation.enabled:
+        _gemini_available = _detect_gemini_cli()
+        if _gemini_available:
+            print_info("Investigation: Gemini CLI detected -- deep investigation enabled")
+        else:
+            print_warning(
+                "Investigation enabled but Gemini CLI not found. "
+                "Agents will use the structured investigation methodology "
+                "with Read/Glob/Grep only (still valuable, but no cross-file Gemini queries)."
             )
 
     # Validate custom standards file if specified

@@ -17,6 +17,7 @@ from agent_team.config import (
     DesignReferenceConfig,
     DisplayConfig,
     InterviewConfig,
+    InvestigationConfig,
     MCPServerConfig,
     OrchestratorConfig,
     SchedulerConfig,
@@ -1051,3 +1052,99 @@ class TestDefaultConfigEnabledByDefault:
         from agent_team.config import _dict_to_config
         cfg = _dict_to_config({"verification": {"enabled": False}})
         assert cfg.verification.enabled is False
+
+
+# ===================================================================
+# InvestigationConfig
+# ===================================================================
+
+class TestInvestigationConfigDefaults:
+    def test_enabled_false_by_default(self):
+        c = InvestigationConfig()
+        assert c.enabled is False
+
+    def test_gemini_model_empty_by_default(self):
+        c = InvestigationConfig()
+        assert c.gemini_model == ""
+
+    def test_max_queries_default(self):
+        c = InvestigationConfig()
+        assert c.max_queries_per_agent == 8
+
+    def test_timeout_seconds_default(self):
+        c = InvestigationConfig()
+        assert c.timeout_seconds == 120
+
+    def test_agents_default(self):
+        c = InvestigationConfig()
+        assert c.agents == ["code-reviewer", "security-auditor", "debugger"]
+
+
+class TestInvestigationConfigInAgentTeamConfig:
+    def test_has_investigation_config(self):
+        c = AgentTeamConfig()
+        assert isinstance(c.investigation, InvestigationConfig)
+        assert c.investigation.enabled is False
+
+    def test_investigation_from_yaml(self):
+        cfg = _dict_to_config({
+            "investigation": {
+                "enabled": True,
+                "gemini_model": "gemini-2.5-pro",
+                "max_queries_per_agent": 5,
+                "timeout_seconds": 60,
+                "agents": ["code-reviewer", "debugger"],
+            }
+        })
+        assert cfg.investigation.enabled is True
+        assert cfg.investigation.gemini_model == "gemini-2.5-pro"
+        assert cfg.investigation.max_queries_per_agent == 5
+        assert cfg.investigation.timeout_seconds == 60
+        assert cfg.investigation.agents == ["code-reviewer", "debugger"]
+
+    def test_investigation_partial_yaml(self):
+        cfg = _dict_to_config({"investigation": {"enabled": True}})
+        assert cfg.investigation.enabled is True
+        assert cfg.investigation.max_queries_per_agent == 8  # default preserved
+
+    def test_investigation_absent_from_yaml(self):
+        cfg = _dict_to_config({})
+        assert cfg.investigation.enabled is False
+
+    def test_investigation_non_dict_ignored(self):
+        cfg = _dict_to_config({"investigation": "invalid"})
+        assert cfg.investigation.enabled is False  # default unchanged
+
+
+class TestInvestigationConfigValidation:
+    def test_zero_queries_raises(self):
+        with pytest.raises(ValueError, match="max_queries_per_agent"):
+            _dict_to_config({"investigation": {"max_queries_per_agent": 0}})
+
+    def test_negative_queries_raises(self):
+        with pytest.raises(ValueError, match="max_queries_per_agent"):
+            _dict_to_config({"investigation": {"max_queries_per_agent": -1}})
+
+    def test_zero_timeout_raises(self):
+        with pytest.raises(ValueError, match="timeout_seconds"):
+            _dict_to_config({"investigation": {"timeout_seconds": 0}})
+
+    def test_invalid_agent_name_raises(self):
+        with pytest.raises(ValueError, match="invalid agent name"):
+            _dict_to_config({"investigation": {"agents": ["nonexistent-agent"]}})
+
+    def test_valid_non_default_agents_accepted(self):
+        cfg = _dict_to_config({"investigation": {"agents": ["planner", "architect"]}})
+        assert cfg.investigation.agents == ["planner", "architect"]
+
+    def test_empty_agents_list_accepted(self):
+        cfg = _dict_to_config({"investigation": {"agents": []}})
+        assert cfg.investigation.agents == []
+
+    def test_valid_queries_accepted(self):
+        cfg = _dict_to_config({"investigation": {"max_queries_per_agent": 1}})
+        assert cfg.investigation.max_queries_per_agent == 1
+
+    def test_valid_timeout_accepted(self):
+        cfg = _dict_to_config({"investigation": {"timeout_seconds": 1}})
+        assert cfg.investigation.timeout_seconds == 1

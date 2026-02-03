@@ -106,6 +106,7 @@ Interview → Codebase Map → Plan → Research → Architect → Contract → 
 | 7 | **Debugger** | Fixes specific issues flagged by reviewers. Has 10 debugging anti-patterns + methodology injected |
 | 8 | **Test Runner** | Writes and runs tests for each requirement. Has 15 testing anti-patterns injected |
 | 9 | **Security Auditor** | OWASP checks, dependency audit, credential scanning |
+| 9.5 | **Deep Investigation** | Optional: Gemini CLI + structured 4-phase methodology for cross-file tracing (reviewer, auditor, debugger) |
 | 10 | **Progressive Verification** | 5-phase pipeline: requirements compliance → contracts → lint → type check → tests |
 
 Steps 5-7 repeat in a **convergence loop** until every `- [ ]` in REQUIREMENTS.md becomes `- [x]`.
@@ -640,6 +641,16 @@ mcp_servers:
   context7:
     enabled: true         # Library documentation (no key required)
 
+investigation:
+  enabled: false              # Opt-in: deep investigation protocol for review agents
+  gemini_model: ""            # Gemini model (empty = default). e.g. "gemini-2.5-pro"
+  max_queries_per_agent: 8    # Max Gemini queries per agent (agent self-regulates within budget)
+  timeout_seconds: 120        # Max seconds per Gemini query
+  agents:                     # Which agents get the investigation protocol
+    - "code-reviewer"
+    - "security-auditor"
+    - "debugger"
+
 display:
   show_cost: true
   show_tools: true
@@ -702,6 +713,14 @@ agents:
     model: "sonnet"
   debugger:
     model: "opus"
+```
+
+**Deep investigation (Gemini CLI cross-file tracing):**
+```yaml
+investigation:
+  enabled: true               # Requires Gemini CLI installed
+  gemini_model: "gemini-2.5-pro"
+  max_queries_per_agent: 8    # Budget per agent (self-regulated)
 ```
 
 **Backend-only (no design scraping):**
@@ -962,7 +981,8 @@ tests/
 │                         #   falsy-value preservation, config propagation,
 │                         #   constraint extraction, technology regex,
 │                         #   test requirement regex, enhanced constraint
-│                         #   extraction, DepthDetection (185 tests)
+│                         #   extraction, DepthDetection, InvestigationConfig
+│                         #   defaults/validation/YAML loading (202 tests)
 ├── test_agents.py        # Prompt constants, build_agent_definitions,
 │                         #   build_orchestrator_prompt, per-agent model config,
 │                         #   naming consistency, template substitution,
@@ -970,7 +990,7 @@ tests/
 │                         #   code quality standards injection, UI standards
 │                         #   injection, prompt strengthening, spec validator,
 │                         #   reviewer anchoring, planner guardrails,
-│                         #   mandatory test wave (155 tests)
+│                         #   mandatory test wave, investigation injection (166 tests)
 ├── test_cli.py           # _detect_agent_count, _detect_prd_from_task, _parse_args,
 │                         #   _handle_interrupt, main(), mutual exclusion,
 │                         #   URL validation, build options, template vars,
@@ -1007,6 +1027,11 @@ tests/
 ├── test_ui_standards.py  # UI design standards loading, custom standards file,
 │                         #   SLOP anti-pattern validation,
 │                         #   get_ui_design_standards() (25 tests)
+├── test_investigation_protocol.py
+│                         # Template strings, builder basics, Gemini section
+│                         #   inclusion/exclusion, Bash scoping rules, query
+│                         #   budget, model flag, custom agents list,
+│                         #   per-agent focus content (39 tests)
 ├── test_code_quality_standards.py
 │                         # Frontend/backend/review/testing/debugging/architecture
 │                         #   standards validation, anti-pattern completeness,
@@ -1016,7 +1041,7 @@ tests/
                           #   SDK client lifecycle, Firecrawl config (5 tests)
 ```
 
-**Total: 1120 tests** — 1115 unit/integration (always run) + 5 E2E (require `--run-e2e`).
+**Total: 1271 tests** — 1266 unit/integration (always run) + 5 E2E (require `--run-e2e`).
 
 ### Known Bug Verification
 
@@ -1057,8 +1082,9 @@ src/agent_team/
 ├── __init__.py          # Package entry, version
 ├── __main__.py          # python -m agent_team support
 ├── cli.py               # CLI parsing, subcommands, interview/orchestrator dispatch, budget tracking
-├── config.py            # YAML config loading, depth detection, constraint extraction (incl. tech stack + test count), fleet scaling
-├── agents.py            # 10 agent system prompts (+ spec-validator) + orchestrator prompt builder + constraint/quality-standards injection
+├── config.py            # YAML config loading, depth detection, constraint extraction (incl. tech stack + test count), fleet scaling, investigation config
+├── agents.py            # 10 agent system prompts (+ spec-validator) + orchestrator prompt builder + constraint/quality-standards/investigation injection
+├── investigation_protocol.py  # Deep investigation protocol: 4-phase methodology + Gemini CLI integration + per-agent focus
 ├── code_quality_standards.py  # Non-configurable code quality standards (70 anti-patterns across 5 domains)
 ├── ui_standards.py      # Built-in UI design standards (SLOP-001→015) + custom standards file support
 ├── interviewer.py       # Phase 0: 3-phase interactive interview with min-exchange enforcement
@@ -1096,6 +1122,7 @@ src/agent_team/
 - **Path traversal protection**: Import path resolution in codebase mapping validates resolved paths stay within the project root.
 - **Transcript backup**: Interview exchanges are saved to `INTERVIEW_BACKUP.json` independently of Claude's file writes, so context is never lost.
 - **Word-boundary matching**: Depth detection and scope detection use `\b` regex boundaries to prevent false positives ("adjustment" won't match "just").
+- **Deep investigation protocol**: An optional 4-phase structured methodology (SCOPE → INVESTIGATE → SYNTHESIZE → EVIDENCE) injected into review agents (code-reviewer, security-auditor, debugger). When Gemini CLI is installed, agents can use it for cross-file tracing with a per-agent query budget. Degrades gracefully: disabled by default (zero impact), enabled without Gemini (methodology only, still valuable), enabled with Gemini (full cross-file analysis).
 - **Pipe-safe output**: Rich console uses `force_terminal=sys.stdout.isatty()` to prevent ANSI escape sequences from garbling piped output.
 
 ### Module Dependency Graph
@@ -1103,6 +1130,7 @@ src/agent_team/
 ```
 cli.py ──────┬──→ config.py ──→ enums.py
              ├──→ agents.py ──→ config.py
+             │                ├──→ investigation_protocol.py ──→ config.py
              │                ├──→ code_quality_standards.py
              │                └──→ ui_standards.py
              ├──→ interviewer.py

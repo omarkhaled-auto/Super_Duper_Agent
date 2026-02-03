@@ -13,6 +13,7 @@ from typing import Any
 from .config import AgentConfig, AgentTeamConfig, get_agent_counts
 from .mcp_servers import get_research_tools
 from .code_quality_standards import get_standards_for_agent
+from .investigation_protocol import build_investigation_protocol
 from .ui_standards import load_ui_standards
 
 # ---------------------------------------------------------------------------
@@ -1368,6 +1369,7 @@ def build_agent_definitions(
     mcp_servers: dict[str, Any],
     constraints: list | None = None,
     task_text: str | None = None,
+    gemini_available: bool = False,
 ) -> dict[str, dict[str, Any]]:
     """Build the agents dict for ClaudeAgentOptions.
 
@@ -1499,6 +1501,19 @@ def build_agent_definitions(
         quality_standards = get_standards_for_agent(name)
         if quality_standards:
             agents[name]["prompt"] = agents[name]["prompt"] + "\n\n" + quality_standards
+
+    # Inject investigation protocol into tier 1 review agents
+    if config.investigation.enabled:
+        for name in list(agents.keys()):
+            protocol = build_investigation_protocol(
+                name, config.investigation, gemini_available=gemini_available,
+            )
+            if protocol:
+                agents[name]["prompt"] = agents[name]["prompt"] + protocol
+                # Grant Bash access to code-reviewer for Gemini CLI queries
+                if name == "code-reviewer" and gemini_available:
+                    if "Bash" not in agents[name]["tools"]:
+                        agents[name]["tools"].append("Bash")
 
     return agents
 

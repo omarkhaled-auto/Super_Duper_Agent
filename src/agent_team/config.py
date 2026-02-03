@@ -81,6 +81,38 @@ def _validate_interview_config(cfg: InterviewConfig) -> None:
 
 
 @dataclass
+class InvestigationConfig:
+    enabled: bool = False              # Explicit opt-in (requires Gemini CLI install)
+    gemini_model: str = ""             # Empty = default; e.g. "gemini-2.5-pro"
+    max_queries_per_agent: int = 8     # Hard ceiling — agent decides how many to use
+    timeout_seconds: int = 120         # Max seconds per Gemini query
+    agents: list[str] = field(default_factory=lambda: [
+        "code-reviewer", "security-auditor", "debugger",
+    ])
+
+
+_VALID_INVESTIGATION_AGENTS = frozenset({
+    "code-reviewer", "security-auditor", "debugger",
+    "planner", "researcher", "architect", "task-assigner",
+    "code-writer", "test-runner", "integration-agent",
+    "contract-generator", "spec-validator",
+})
+
+
+def _validate_investigation_config(cfg: InvestigationConfig) -> None:
+    if cfg.max_queries_per_agent < 1:
+        raise ValueError("investigation.max_queries_per_agent must be >= 1")
+    if cfg.timeout_seconds < 1:
+        raise ValueError("investigation.timeout_seconds must be >= 1")
+    for agent in cfg.agents:
+        if agent not in _VALID_INVESTIGATION_AGENTS:
+            raise ValueError(
+                f"investigation.agents contains invalid agent name: {agent!r}. "
+                f"Valid agents: {sorted(_VALID_INVESTIGATION_AGENTS)}"
+            )
+
+
+@dataclass
 class DesignReferenceConfig:
     urls: list[str] = field(default_factory=list)
     depth: str = "full"  # "branding" | "screenshots" | "full"
@@ -184,6 +216,7 @@ class AgentTeamConfig:
     codebase_map: CodebaseMapConfig = field(default_factory=CodebaseMapConfig)
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
     verification: VerificationConfig = field(default_factory=VerificationConfig)
+    investigation: InvestigationConfig = field(default_factory=InvestigationConfig)
     # Agent keys use underscores (Python convention) in config files.
     # The SDK uses hyphens (e.g., "code-writer"). See agents.py for the mapping.
     agents: dict[str, AgentConfig] = field(default_factory=lambda: {
@@ -568,6 +601,17 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
             run_quality_checks=vr.get("run_quality_checks", cfg.verification.run_quality_checks),
             min_test_count=vr.get("min_test_count", cfg.verification.min_test_count),
         )
+
+    if "investigation" in data and isinstance(data["investigation"], dict):
+        inv = data["investigation"]
+        cfg.investigation = InvestigationConfig(
+            enabled=inv.get("enabled", cfg.investigation.enabled),
+            gemini_model=inv.get("gemini_model", cfg.investigation.gemini_model),
+            max_queries_per_agent=inv.get("max_queries_per_agent", cfg.investigation.max_queries_per_agent),
+            timeout_seconds=inv.get("timeout_seconds", cfg.investigation.timeout_seconds),
+            agents=inv.get("agents", cfg.investigation.agents),
+        )
+        _validate_investigation_config(cfg.investigation)
 
     if "agents" in data:
         for name, agent_data in data["agents"].items():

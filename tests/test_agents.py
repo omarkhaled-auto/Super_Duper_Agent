@@ -959,3 +959,96 @@ class TestMandatoryTestWave:
 
     def test_orchestrator_test_rule_is_blocking(self):
         assert "BLOCKING" in ORCHESTRATOR_SYSTEM_PROMPT
+
+
+# ===================================================================
+# Investigation protocol injection
+# ===================================================================
+
+class TestInvestigationInjection:
+    """Tests that investigation protocol is injected into the right agents."""
+
+    def test_protocol_injected_when_enabled(self):
+        from agent_team.config import InvestigationConfig
+        cfg = AgentTeamConfig()
+        cfg.investigation = InvestigationConfig(enabled=True)
+        agents = build_agent_definitions(cfg, {}, gemini_available=False)
+        assert "DEEP INVESTIGATION PROTOCOL" in agents["code-reviewer"]["prompt"]
+        assert "DEEP INVESTIGATION PROTOCOL" in agents["security-auditor"]["prompt"]
+        assert "DEEP INVESTIGATION PROTOCOL" in agents["debugger"]["prompt"]
+
+    def test_protocol_not_injected_when_disabled(self):
+        cfg = AgentTeamConfig()
+        # Default: investigation.enabled = False
+        agents = build_agent_definitions(cfg, {}, gemini_available=False)
+        assert "DEEP INVESTIGATION PROTOCOL" not in agents["code-reviewer"]["prompt"]
+        assert "DEEP INVESTIGATION PROTOCOL" not in agents["debugger"]["prompt"]
+
+    def test_protocol_not_injected_for_planner(self):
+        from agent_team.config import InvestigationConfig
+        cfg = AgentTeamConfig()
+        cfg.investigation = InvestigationConfig(enabled=True)
+        agents = build_agent_definitions(cfg, {}, gemini_available=False)
+        assert "DEEP INVESTIGATION PROTOCOL" not in agents["planner"]["prompt"]
+
+    def test_protocol_not_injected_for_code_writer(self):
+        from agent_team.config import InvestigationConfig
+        cfg = AgentTeamConfig()
+        cfg.investigation = InvestigationConfig(enabled=True)
+        agents = build_agent_definitions(cfg, {}, gemini_available=False)
+        assert "DEEP INVESTIGATION PROTOCOL" not in agents["code-writer"]["prompt"]
+
+    def test_bash_added_to_reviewer_with_gemini(self):
+        from agent_team.config import InvestigationConfig
+        cfg = AgentTeamConfig()
+        cfg.investigation = InvestigationConfig(enabled=True)
+        agents = build_agent_definitions(cfg, {}, gemini_available=True)
+        assert "Bash" in agents["code-reviewer"]["tools"]
+
+    def test_bash_not_added_to_reviewer_without_gemini(self):
+        from agent_team.config import InvestigationConfig
+        cfg = AgentTeamConfig()
+        cfg.investigation = InvestigationConfig(enabled=True)
+        agents = build_agent_definitions(cfg, {}, gemini_available=False)
+        assert "Bash" not in agents["code-reviewer"]["tools"]
+
+    def test_bash_not_added_when_investigation_disabled(self):
+        cfg = AgentTeamConfig()
+        agents = build_agent_definitions(cfg, {}, gemini_available=True)
+        assert "Bash" not in agents["code-reviewer"]["tools"]
+
+    def test_gemini_section_in_reviewer_when_available(self):
+        from agent_team.config import InvestigationConfig
+        cfg = AgentTeamConfig()
+        cfg.investigation = InvestigationConfig(enabled=True)
+        agents = build_agent_definitions(cfg, {}, gemini_available=True)
+        assert "Gemini CLI" in agents["code-reviewer"]["prompt"]
+
+    def test_gemini_section_not_in_reviewer_without_gemini(self):
+        from agent_team.config import InvestigationConfig
+        cfg = AgentTeamConfig()
+        cfg.investigation = InvestigationConfig(enabled=True)
+        agents = build_agent_definitions(cfg, {}, gemini_available=False)
+        assert "Gemini CLI" not in agents["code-reviewer"]["prompt"]
+
+    def test_protocol_all_three_agents_enabled(self):
+        from agent_team.config import InvestigationConfig
+        cfg = AgentTeamConfig()
+        cfg.investigation = InvestigationConfig(enabled=True)
+        agents = build_agent_definitions(cfg, {}, gemini_available=True)
+        for name in ["code-reviewer", "security-auditor", "debugger"]:
+            assert "DEEP INVESTIGATION PROTOCOL" in agents[name]["prompt"], (
+                f"{name} should have investigation protocol"
+            )
+
+    def test_quality_standards_still_present_with_investigation(self):
+        from agent_team.config import InvestigationConfig
+        cfg = AgentTeamConfig()
+        cfg.investigation = InvestigationConfig(enabled=True)
+        agents = build_agent_definitions(cfg, {}, gemini_available=True)
+        # Quality standards should still be injected
+        assert "REVIEW-001" in agents["code-reviewer"]["prompt"]
+        assert "DEBUG-001" in agents["debugger"]["prompt"]
+        # Investigation protocol should also be present
+        assert "DEEP INVESTIGATION PROTOCOL" in agents["code-reviewer"]["prompt"]
+        assert "DEEP INVESTIGATION PROTOCOL" in agents["debugger"]["prompt"]
