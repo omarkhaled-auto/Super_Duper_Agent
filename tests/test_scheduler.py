@@ -21,8 +21,11 @@ from agent_team.scheduler import (
     build_task_context,
     compute_critical_path,
     compute_execution_waves,
+    compute_milestone_schedule,
     compute_schedule,
     detect_file_conflicts,
+    filter_tasks_by_milestone,
+    format_schedule_for_prompt,
     normalize_file_path,
     parse_tasks_md,
     resolve_conflicts_via_dependency,
@@ -1297,3 +1300,346 @@ class TestSchedulerConfigWiring:
         result = compute_schedule(nodes)
         assert result.total_waves >= 1
         assert len(result.critical_path.path) > 0
+
+
+# ===================================================================
+# 14. TaskNode milestone_id Tests
+# ===================================================================
+
+
+class TestTaskNodeMilestoneId:
+    """Tests for the milestone_id field on TaskNode."""
+
+    def test_task_node_milestone_id_default(self):
+        """TaskNode milestone_id defaults to None."""
+        node = _make_node("TASK-001")
+        assert node.milestone_id is None
+
+    def test_task_node_milestone_id_set(self):
+        """milestone_id can be set to a string value."""
+        node = TaskNode(
+            id="TASK-001",
+            title="Setup",
+            description="Setup project",
+            files=[],
+            depends_on=[],
+            status="PENDING",
+            milestone_id="milestone-1",
+        )
+        assert node.milestone_id == "milestone-1"
+
+    def test_task_node_milestone_id_none_explicit(self):
+        """Explicitly passing None leaves milestone_id as None."""
+        node = TaskNode(
+            id="TASK-002",
+            title="Build",
+            description="Build project",
+            files=[],
+            depends_on=[],
+            status="PENDING",
+            milestone_id=None,
+        )
+        assert node.milestone_id is None
+
+
+# ===================================================================
+# 15. parse_tasks_md with milestone field
+# ===================================================================
+
+
+SAMPLE_TASKS_MD_WITH_MILESTONES = """# Task Breakdown: Milestone Test
+Generated: 2025-01-01
+Total Tasks: 3
+
+## Tasks
+
+### TASK-001: Setup project
+- Status: PENDING
+- Dependencies: none
+- Files: src/config.py
+- Milestone: milestone-1
+- Description: Create the project scaffolding
+
+### TASK-002: Create models
+- Status: PENDING
+- Dependencies: TASK-001
+- Files: src/models.py
+- Milestone: milestone-1
+- Description: Define data models
+
+### TASK-003: Build API
+- Status: PENDING
+- Dependencies: TASK-002
+- Files: src/api.py
+- Milestone: milestone-2
+- Description: Build the REST API layer
+"""
+
+
+class TestParseTasksMdWithMilestone:
+    """Tests for parsing milestone field from TASKS.md."""
+
+    def test_parse_tasks_md_with_milestone(self):
+        """Milestone field is correctly parsed from TASKS.md."""
+        tasks = parse_tasks_md(SAMPLE_TASKS_MD_WITH_MILESTONES)
+        assert len(tasks) == 3
+        t1 = next(t for t in tasks if t.id == "TASK-001")
+        assert t1.milestone_id == "milestone-1"
+        t3 = next(t for t in tasks if t.id == "TASK-003")
+        assert t3.milestone_id == "milestone-2"
+
+    def test_parse_tasks_md_without_milestone_field(self):
+        """Tasks without a milestone field have milestone_id=None."""
+        tasks = parse_tasks_md(SAMPLE_TASKS_MD)
+        for task in tasks:
+            assert task.milestone_id is None
+
+    def test_parse_tasks_md_milestone_all_same(self):
+        """All tasks in milestone-1 are correctly grouped."""
+        tasks = parse_tasks_md(SAMPLE_TASKS_MD_WITH_MILESTONES)
+        m1_tasks = [t for t in tasks if t.milestone_id == "milestone-1"]
+        assert len(m1_tasks) == 2
+        assert {t.id for t in m1_tasks} == {"TASK-001", "TASK-002"}
+
+
+# ===================================================================
+# 16. filter_tasks_by_milestone
+# ===================================================================
+
+
+class TestFilterTasksByMilestone:
+    """Tests for filter_tasks_by_milestone."""
+
+    def test_filter_tasks_by_milestone(self):
+        """Filters only tasks belonging to the specified milestone."""
+        t1 = TaskNode(id="T1", title="T1", description="", files=[], depends_on=[], status="PENDING", milestone_id="m1")
+        t2 = TaskNode(id="T2", title="T2", description="", files=[], depends_on=[], status="PENDING", milestone_id="m1")
+        t3 = TaskNode(id="T3", title="T3", description="", files=[], depends_on=[], status="PENDING", milestone_id="m2")
+        t4 = TaskNode(id="T4", title="T4", description="", files=[], depends_on=[], status="PENDING", milestone_id=None)
+        result = filter_tasks_by_milestone([t1, t2, t3, t4], "m1")
+        assert len(result) == 2
+        assert {t.id for t in result} == {"T1", "T2"}
+
+    def test_filter_tasks_by_milestone_empty(self):
+        """Filtering by a non-existent milestone returns an empty list."""
+        t1 = TaskNode(id="T1", title="T1", description="", files=[], depends_on=[], status="PENDING", milestone_id="m1")
+        result = filter_tasks_by_milestone([t1], "m99")
+        assert result == []
+
+    def test_filter_tasks_excludes_none_milestone(self):
+        """Tasks with milestone_id=None are excluded."""
+        t1 = TaskNode(id="T1", title="T1", description="", files=[], depends_on=[], status="PENDING", milestone_id=None)
+        result = filter_tasks_by_milestone([t1], "m1")
+        assert result == []
+
+    def test_filter_tasks_multiple_milestones(self):
+        """Only the requested milestone's tasks are returned."""
+        tasks = [
+            TaskNode(id=f"T{i}", title=f"T{i}", description="", files=[], depends_on=[], status="PENDING", milestone_id=f"m{i % 3}")
+            for i in range(9)
+        ]
+        result = filter_tasks_by_milestone(tasks, "m0")
+        assert all(t.milestone_id == "m0" for t in result)
+        assert len(result) == 3
+
+
+# ===================================================================
+# 17. compute_milestone_schedule
+# ===================================================================
+
+
+class TestComputeMilestoneSchedule:
+    """Tests for compute_milestone_schedule."""
+
+    def test_compute_milestone_schedule_basic(self):
+        """Returns only tasks scoped to the given milestone."""
+        t1 = TaskNode(id="T1", title="T1", description="", files=[], depends_on=[], status="PENDING", milestone_id="m1")
+        t2 = TaskNode(id="T2", title="T2", description="", files=[], depends_on=["T1"], status="PENDING", milestone_id="m1")
+        t3 = TaskNode(id="T3", title="T3", description="", files=[], depends_on=[], status="PENDING", milestone_id="m2")
+        result = compute_milestone_schedule([t1, t2, t3], "m1")
+        assert len(result) == 2
+        assert {t.id for t in result} == {"T1", "T2"}
+
+    def test_compute_milestone_schedule_cross_dep(self):
+        """Cross-milestone deps from completed milestones are removed."""
+        t1 = TaskNode(id="TASK-001", title="T1", description="", files=[], depends_on=[], status="COMPLETE", milestone_id="m1")
+        t2 = TaskNode(
+            id="TASK-002", title="T2", description="", files=[],
+            depends_on=["m1@TASK-001"],  # cross-milestone dep
+            status="PENDING", milestone_id="m2",
+        )
+        result = compute_milestone_schedule([t1, t2], "m2", completed_milestones={"m1"})
+        assert len(result) == 1
+        assert result[0].id == "TASK-002"
+        # Cross-dep from completed milestone should be removed
+        assert "m1@TASK-001" not in result[0].depends_on
+
+    def test_compute_milestone_schedule_cross_dep_unresolved(self):
+        """Cross-milestone deps from incomplete milestones are kept."""
+        t1 = TaskNode(id="TASK-001", title="T1", description="", files=[], depends_on=[], status="PENDING", milestone_id="m1")
+        t2 = TaskNode(
+            id="TASK-002", title="T2", description="", files=[],
+            depends_on=["m1@TASK-001"],
+            status="PENDING", milestone_id="m2",
+        )
+        # m1 is NOT complete
+        result = compute_milestone_schedule([t1, t2], "m2", completed_milestones=set())
+        assert len(result) == 1
+        # Unresolved cross-dep should be kept
+        assert "m1@TASK-001" in result[0].depends_on
+
+    def test_compute_milestone_schedule_empty_milestone(self):
+        """Milestone with no tasks returns empty list."""
+        t1 = TaskNode(id="T1", title="T1", description="", files=[], depends_on=[], status="PENDING", milestone_id="m1")
+        result = compute_milestone_schedule([t1], "m99")
+        assert result == []
+
+    def test_compute_milestone_schedule_no_cross_deps(self):
+        """Tasks with only local deps are returned unchanged."""
+        t1 = TaskNode(id="T1", title="T1", description="", files=[], depends_on=[], status="PENDING", milestone_id="m1")
+        t2 = TaskNode(id="T2", title="T2", description="", files=[], depends_on=["T1"], status="PENDING", milestone_id="m1")
+        result = compute_milestone_schedule([t1, t2], "m1")
+        assert len(result) == 2
+        t2_result = next(t for t in result if t.id == "T2")
+        assert t2_result.depends_on == ["T1"]
+
+    def test_compute_milestone_schedule_preserves_intra_deps(self):
+        """Intra-milestone dependencies are preserved after cross-dep resolution."""
+        t1 = TaskNode(id="TASK-010", title="T1", description="", files=[], depends_on=[], status="PENDING", milestone_id="m2")
+        t2 = TaskNode(
+            id="TASK-011", title="T2", description="", files=[],
+            depends_on=["TASK-010", "m1@TASK-005"],
+            status="PENDING", milestone_id="m2",
+        )
+        result = compute_milestone_schedule([t1, t2], "m2", completed_milestones={"m1"})
+        t2_result = next(t for t in result if t.id == "TASK-011")
+        assert "TASK-010" in t2_result.depends_on
+        assert "m1@TASK-005" not in t2_result.depends_on
+
+
+# ===================================================================
+# 18. format_schedule_for_prompt Tests
+# ===================================================================
+
+
+class TestFormatScheduleForPrompt:
+    """Tests for format_schedule_for_prompt()."""
+
+    def test_empty_schedule_returns_empty_string(self):
+        """An empty schedule (no waves) should return an empty string."""
+        result = ScheduleResult(
+            waves=[],
+            total_waves=0,
+            conflict_summary={},
+            integration_tasks=[],
+            critical_path=CriticalPathInfo(path=[], total_length=0, bottleneck_tasks=[]),
+            tasks=[],
+        )
+        assert format_schedule_for_prompt(result) == ""
+
+    def test_normal_schedule_includes_waves(self):
+        """A schedule with waves should include wave listings."""
+        waves = [
+            ExecutionWave(wave_number=1, task_ids=["TASK-001"]),
+            ExecutionWave(wave_number=2, task_ids=["TASK-002", "TASK-003"]),
+            ExecutionWave(wave_number=3, task_ids=["TASK-004"]),
+        ]
+        cp = CriticalPathInfo(path=["TASK-001", "TASK-002", "TASK-004"], total_length=3, bottleneck_tasks=[])
+        result = ScheduleResult(
+            waves=waves,
+            total_waves=3,
+            conflict_summary={},
+            integration_tasks=[],
+            critical_path=cp,
+            tasks=[],
+        )
+        output = format_schedule_for_prompt(result)
+        assert "Execution waves: 3" in output
+        assert "Wave 1:" in output
+        assert "TASK-001" in output
+        assert "Wave 2:" in output
+        assert "TASK-002" in output
+        assert "TASK-003" in output
+        assert "Wave 3:" in output
+        assert "TASK-004" in output
+
+    def test_includes_critical_path(self):
+        """Output should include critical path info when available."""
+        waves = [ExecutionWave(wave_number=1, task_ids=["A", "B"])]
+        cp = CriticalPathInfo(path=["A", "B"], total_length=2, bottleneck_tasks=["A", "B"])
+        result = ScheduleResult(
+            waves=waves,
+            total_waves=1,
+            conflict_summary={},
+            integration_tasks=[],
+            critical_path=cp,
+            tasks=[],
+        )
+        output = format_schedule_for_prompt(result)
+        assert "Critical path: A -> B" in output
+
+    def test_includes_conflict_summary(self):
+        """Output should include conflict info when present."""
+        waves = [ExecutionWave(wave_number=1, task_ids=["A"])]
+        cp = CriticalPathInfo(path=["A"], total_length=1, bottleneck_tasks=[])
+        result = ScheduleResult(
+            waves=waves,
+            total_waves=1,
+            conflict_summary={"write-write": 2},
+            integration_tasks=[],
+            critical_path=cp,
+            tasks=[],
+        )
+        output = format_schedule_for_prompt(result)
+        assert "Conflicts resolved:" in output
+        assert "write-write: 2" in output
+
+    def test_includes_follow_instruction(self):
+        """Output should include the instruction to follow wave order."""
+        waves = [ExecutionWave(wave_number=1, task_ids=["A"])]
+        cp = CriticalPathInfo(path=["A"], total_length=1, bottleneck_tasks=[])
+        result = ScheduleResult(
+            waves=waves,
+            total_waves=1,
+            conflict_summary={},
+            integration_tasks=[],
+            critical_path=cp,
+            tasks=[],
+        )
+        output = format_schedule_for_prompt(result)
+        assert "Follow wave order" in output
+
+    def test_max_chars_capping(self):
+        """Output should be capped at max_chars characters."""
+        # Create a schedule with many waves to generate long output
+        waves = [
+            ExecutionWave(wave_number=i, task_ids=[f"TASK-{i:03d}-LONG-NAME-TO-FILL-SPACE"])
+            for i in range(1, 50)
+        ]
+        cp = CriticalPathInfo(path=[], total_length=0, bottleneck_tasks=[])
+        result = ScheduleResult(
+            waves=waves,
+            total_waves=49,
+            conflict_summary={},
+            integration_tasks=[],
+            critical_path=cp,
+            tasks=[],
+        )
+        output = format_schedule_for_prompt(result, max_chars=200)
+        assert len(output) <= 200
+        assert output.endswith("...")
+
+    def test_short_output_not_truncated(self):
+        """Short output should not be truncated or have ellipsis."""
+        waves = [ExecutionWave(wave_number=1, task_ids=["A"])]
+        cp = CriticalPathInfo(path=["A"], total_length=1, bottleneck_tasks=[])
+        result = ScheduleResult(
+            waves=waves,
+            total_waves=1,
+            conflict_summary={},
+            integration_tasks=[],
+            critical_path=cp,
+            tasks=[],
+        )
+        output = format_schedule_for_prompt(result, max_chars=2000)
+        assert not output.endswith("...")

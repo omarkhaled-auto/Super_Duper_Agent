@@ -35,6 +35,13 @@ class RunState:
     requirements_total: int = 0
     error_context: str = ""
     milestone_progress: dict[str, dict] = field(default_factory=dict)
+    # Per-milestone orchestration fields (schema version 2)
+    schema_version: int = 2
+    current_milestone: str = ""
+    completed_milestones: list[str] = field(default_factory=list)
+    failed_milestones: list[str] = field(default_factory=list)
+    milestone_order: list[str] = field(default_factory=list)
+    completion_ratio: float = 0.0  # completed_milestones / total_milestones
 
     def __post_init__(self) -> None:
         if not self.run_id:
@@ -54,6 +61,9 @@ class RunSummary:
     requirements_passed: int = 0
     requirements_total: int = 0
     files_changed: list[str] = field(default_factory=list)
+    health: str = "unknown"
+    recovery_passes_triggered: int = 0
+    recovery_types: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -70,6 +80,68 @@ class ConvergenceReport:
 
 
 _STATE_FILE = "STATE.json"
+_CURRENT_SCHEMA_VERSION = 2
+
+
+def update_milestone_progress(
+    state: RunState,
+    milestone_id: str,
+    status: str,
+) -> None:
+    """Update the milestone tracking fields on *state* in place.
+
+    Parameters
+    ----------
+    state : RunState
+        The run state to update.
+    milestone_id : str
+        The milestone whose status changed.
+    status : str
+        New status: ``"IN_PROGRESS"``, ``"COMPLETE"``, or ``"FAILED"``.
+    """
+    status_upper = status.upper()
+    if status_upper == "IN_PROGRESS":
+        state.current_milestone = milestone_id
+    elif status_upper == "COMPLETE":
+        state.current_milestone = ""
+        if milestone_id not in state.completed_milestones:
+            state.completed_milestones.append(milestone_id)
+        # Remove from failed if it was retried successfully
+        if milestone_id in state.failed_milestones:
+            state.failed_milestones.remove(milestone_id)
+    elif status_upper == "FAILED":
+        state.current_milestone = ""
+        if milestone_id not in state.failed_milestones:
+            state.failed_milestones.append(milestone_id)
+
+    state.milestone_progress[milestone_id] = {"status": status_upper}
+
+
+def get_resume_milestone(state: RunState) -> str | None:
+    """Determine which milestone to resume from after an interruption.
+
+    Returns the milestone ID to resume from, or ``None`` if there is
+    nothing to resume.
+    """
+    # If there was a milestone in progress when interrupted, resume there
+    if state.current_milestone:
+        return state.current_milestone
+
+    # Otherwise find the first milestone in order that isn't complete
+    for mid in state.milestone_order:
+        if mid not in state.completed_milestones:
+            return mid
+
+    return None
+
+
+def update_completion_ratio(state: RunState) -> None:
+    """Recompute completion_ratio from completed/total milestones."""
+    total = len(state.milestone_order)
+    if total > 0:
+        state.completion_ratio = len(state.completed_milestones) / total
+    else:
+        state.completion_ratio = 0.0
 
 
 def save_state(state: RunState, directory: str = ".agent-team") -> Path:
@@ -134,6 +206,13 @@ def load_state(directory: str = ".agent-team") -> RunState | None:
             requirements_total=_expect(data.get("requirements_total", 0), (int, float), 0),
             error_context=_expect(data.get("error_context", ""), str, ""),
             milestone_progress=_expect(data.get("milestone_progress", {}), dict, {}),
+            # Schema version 2 fields — backward-compatible defaults
+            schema_version=_expect(data.get("schema_version", 1), (int, float), 1),
+            current_milestone=_expect(data.get("current_milestone", ""), str, ""),
+            completed_milestones=_expect(data.get("completed_milestones", []), list, []),
+            failed_milestones=_expect(data.get("failed_milestones", []), list, []),
+            milestone_order=_expect(data.get("milestone_order", []), list, []),
+            completion_ratio=_expect(data.get("completion_ratio", 0.0), (int, float), 0.0),
         )
     except (json.JSONDecodeError, KeyError, TypeError, ValueError, OSError, UnicodeDecodeError):
         return None

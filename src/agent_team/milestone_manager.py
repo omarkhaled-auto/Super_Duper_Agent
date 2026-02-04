@@ -1,20 +1,346 @@
-"""Milestone health checking and cross-milestone wiring analysis.
+"""Milestone management for PRD-mode orchestration.
 
-Implements Agent 17 (Milestone Health Monitor) and Agent 18 (Cross-Milestone
-Wiring Checker).  Provides the ``MilestoneManager`` class that reads per-
-milestone ``REQUIREMENTS.md`` files from ``.agent-team/milestones/{id}/``,
-computes convergence health, and detects wiring gaps where one milestone
-references files or symbols produced by another milestone but those files
-do not yet exist or do not export the expected symbols.
+Provides MASTER_PLAN.md parsing, context building, rollup health
+computation, and per-milestone health checking / cross-milestone wiring
+analysis.
+
+The per-milestone orchestration loop in ``cli._run_prd_milestones()``
+uses these utilities to decompose PRDs into milestones and execute
+each milestone in a fresh orchestrator session with scoped context.
+Only activated when MASTER_PLAN.md exists **and**
+``config.milestone.enabled`` is True.
 """
 
 from __future__ import annotations
 
+import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Any
 
 from .state import ConvergenceReport
+
+
+# ---------------------------------------------------------------------------
+# MASTER_PLAN.md dataclasses
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class MasterPlanMilestone:
+    """A single milestone entry parsed from MASTER_PLAN.md."""
+
+    id: str  # e.g. "milestone-1"
+    title: str
+    status: str = "PENDING"  # PENDING | IN_PROGRESS | COMPLETE | FAILED
+    dependencies: list[str] = field(default_factory=list)
+    description: str = ""
+
+
+@dataclass
+class MasterPlan:
+    """The full milestone plan parsed from MASTER_PLAN.md."""
+
+    title: str = ""
+    generated: str = ""
+    milestones: list[MasterPlanMilestone] = field(default_factory=list)
+
+    def all_complete(self) -> bool:
+        """Return True when every milestone is COMPLETE."""
+        return bool(self.milestones) and all(
+            m.status == "COMPLETE" for m in self.milestones
+        )
+
+    def get_ready_milestones(self) -> list[MasterPlanMilestone]:
+        """Return milestones whose dependencies are all COMPLETE and that are PENDING."""
+        completed_ids = {m.id for m in self.milestones if m.status == "COMPLETE"}
+        return [
+            m
+            for m in self.milestones
+            if m.status == "PENDING"
+            and all(dep in completed_ids for dep in m.dependencies)
+        ]
+
+    def get_milestone(self, milestone_id: str) -> MasterPlanMilestone | None:
+        """Look up a milestone by ID."""
+        for m in self.milestones:
+            if m.id == milestone_id:
+                return m
+        return None
+
+
+@dataclass
+class MilestoneContext:
+    """Scoped context fed to the orchestrator for a single milestone."""
+
+    milestone_id: str
+    title: str
+    requirements_path: str  # path to this milestone's REQUIREMENTS.md
+    predecessor_summaries: list[MilestoneCompletionSummary] = field(
+        default_factory=list
+    )
+
+
+@dataclass
+class MilestoneCompletionSummary:
+    """Compressed summary of a completed milestone (~100-200 tokens)."""
+
+    milestone_id: str
+    title: str
+    exported_files: list[str] = field(default_factory=list)
+    exported_symbols: list[str] = field(default_factory=list)
+    summary_line: str = ""
+
+
+# ---------------------------------------------------------------------------
+# MASTER_PLAN.md parsing regexes
+# ---------------------------------------------------------------------------
+
+_RE_MILESTONE_HEADER = re.compile(
+    r"^##\s+(?:Milestone\s+)?(\d+)[.:]?\s*(.*)", re.MULTILINE
+)
+_RE_FIELD = re.compile(r"^-\s*(\w[\w\s]*):\s*(.+)", re.MULTILINE)
+_RE_PLAN_TITLE = re.compile(r"^#\s+(?:MASTER\s+PLAN:\s*)?(.+)", re.MULTILINE)
+_RE_GENERATED = re.compile(r"Generated:\s*(.+)", re.IGNORECASE)
+
+
+# ---------------------------------------------------------------------------
+# MASTER_PLAN.md parsing
+# ---------------------------------------------------------------------------
+
+
+def parse_master_plan(content: str) -> MasterPlan:
+    """Parse a MASTER_PLAN.md string into a :class:`MasterPlan`.
+
+    The parser is fault-tolerant: handles ``## Milestone N:``,
+    ``## N.``, status case variations, and missing fields.
+    """
+    plan = MasterPlan()
+
+    title_m = _RE_PLAN_TITLE.search(content)
+    if title_m:
+        plan.title = title_m.group(1).strip()
+
+    gen_m = _RE_GENERATED.search(content)
+    if gen_m:
+        plan.generated = gen_m.group(1).strip()
+
+    # Split at milestone headers
+    splits = list(_RE_MILESTONE_HEADER.finditer(content))
+    for idx, match in enumerate(splits):
+        num = match.group(1)
+        title = match.group(2).strip()
+
+        # Determine the block (text until the next milestone header)
+        start = match.end()
+        end = splits[idx + 1].start() if idx + 1 < len(splits) else len(content)
+        block = content[start:end]
+
+        # Extract structured fields from the block
+        fields: dict[str, str] = {}
+        for fm in _RE_FIELD.finditer(block):
+            key = fm.group(1).strip().lower()
+            fields[key] = fm.group(2).strip()
+
+        milestone_id = fields.get("id", f"milestone-{num}")
+        status = fields.get("status", "PENDING").upper()
+        deps_raw = fields.get("dependencies", "")
+        deps = _parse_deps(deps_raw)
+        description = fields.get("description", "")
+
+        plan.milestones.append(
+            MasterPlanMilestone(
+                id=milestone_id,
+                title=title,
+                status=status,
+                dependencies=deps,
+                description=description,
+            )
+        )
+
+    return plan
+
+
+def _parse_deps(raw: str) -> list[str]:
+    """Parse a dependency string like ``milestone-1, milestone-2`` or ``none``."""
+    if not raw or raw.strip().lower() in ("none", "n/a", "-", ""):
+        return []
+    return [tok.strip() for tok in raw.split(",") if tok.strip()]
+
+
+# ---------------------------------------------------------------------------
+# MASTER_PLAN.md status updates
+# ---------------------------------------------------------------------------
+
+
+def update_master_plan_status(
+    content: str,
+    milestone_id: str,
+    new_status: str,
+) -> str:
+    """Update the status of *milestone_id* in the MASTER_PLAN.md content string.
+
+    Returns the updated content.  If the milestone ID is not found the
+    content is returned unchanged.
+    """
+    # Find "- ID: <milestone_id>" then update the nearest Status field
+    id_pattern = re.compile(
+        rf"-\s*ID:\s*{re.escape(milestone_id)}", re.IGNORECASE
+    )
+    id_match = id_pattern.search(content)
+    if not id_match:
+        return content
+
+    # Search backward from the ID field to find the milestone header
+    block_start = content.rfind("## ", 0, id_match.start())
+    if block_start == -1:
+        block_start = 0
+
+    # Search forward to find the next milestone header or end
+    next_header = content.find("\n## ", id_match.end())
+    block_end = next_header if next_header != -1 else len(content)
+
+    block = content[block_start:block_end]
+    status_re = re.compile(r"(-\s*Status:\s*)(\w+)", re.IGNORECASE)
+    new_block = status_re.sub(rf"\g<1>{new_status}", block, count=1)
+
+    return content[:block_start] + new_block + content[block_end:]
+
+
+# ---------------------------------------------------------------------------
+# Context building
+# ---------------------------------------------------------------------------
+
+
+def build_milestone_context(
+    milestone: MasterPlanMilestone,
+    milestones_dir: str | Path,
+    predecessor_summaries: list[MilestoneCompletionSummary] | None = None,
+) -> MilestoneContext:
+    """Build scoped context for a single milestone execution."""
+    mdir = Path(milestones_dir) / milestone.id
+    return MilestoneContext(
+        milestone_id=milestone.id,
+        title=milestone.title,
+        requirements_path=str(mdir / "REQUIREMENTS.md"),
+        predecessor_summaries=predecessor_summaries or [],
+    )
+
+
+def build_completion_summary(
+    milestone: MasterPlanMilestone,
+    exported_files: list[str] | None = None,
+    exported_symbols: list[str] | None = None,
+    summary_line: str = "",
+) -> MilestoneCompletionSummary:
+    """Create a compressed completion summary for a finished milestone."""
+    return MilestoneCompletionSummary(
+        milestone_id=milestone.id,
+        title=milestone.title,
+        exported_files=exported_files or [],
+        exported_symbols=exported_symbols or [],
+        summary_line=summary_line,
+    )
+
+
+_CACHE_FILE = "COMPLETION_CACHE.json"
+
+
+def save_completion_cache(
+    milestones_dir: str,
+    milestone_id: str,
+    summary: MilestoneCompletionSummary,
+) -> None:
+    """Persist a completion summary as JSON for fast re-reads."""
+    cache_path = Path(milestones_dir) / milestone_id / _CACHE_FILE
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(
+        json.dumps(asdict(summary), indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+def load_completion_cache(
+    milestones_dir: str,
+    milestone_id: str,
+) -> MilestoneCompletionSummary | None:
+    """Load a cached completion summary.  Returns ``None`` if not cached."""
+    cache_path = Path(milestones_dir) / milestone_id / _CACHE_FILE
+    if not cache_path.is_file():
+        return None
+    try:
+        data = json.loads(cache_path.read_text(encoding="utf-8"))
+        return MilestoneCompletionSummary(**data)
+    except (json.JSONDecodeError, TypeError, KeyError):
+        return None
+
+
+def render_predecessor_context(
+    summaries: list[MilestoneCompletionSummary],
+) -> str:
+    """Render predecessor summaries into a compact context string.
+
+    Each summary is ~100-200 tokens.  Even with 20 completed milestones
+    this adds only ~2000-4000 tokens to the orchestrator prompt.
+    """
+    if not summaries:
+        return ""
+    lines = ["## Completed Milestones Context\n"]
+    for s in summaries:
+        lines.append(f"### {s.milestone_id}: {s.title}")
+        if s.summary_line:
+            lines.append(f"  Summary: {s.summary_line}")
+        if s.exported_files:
+            lines.append(f"  Files: {', '.join(s.exported_files[:20])}")
+        if s.exported_symbols:
+            lines.append(f"  Exports: {', '.join(s.exported_symbols[:20])}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Rollup health computation
+# ---------------------------------------------------------------------------
+
+
+def compute_rollup_health(
+    plan: MasterPlan,
+) -> dict[str, Any]:
+    """Compute overall health metrics for the milestone plan.
+
+    Returns a dict with counts and a health status string:
+    ``"healthy"`` -- all milestones COMPLETE or PENDING with no failures
+    ``"degraded"`` -- at least one milestone FAILED but others progressing
+    ``"failed"`` -- majority of milestones FAILED
+    """
+    total = len(plan.milestones)
+    if total == 0:
+        return {"total": 0, "health": "unknown"}
+
+    counts: dict[str, int] = {
+        "PENDING": 0, "IN_PROGRESS": 0, "COMPLETE": 0, "FAILED": 0,
+    }
+    for m in plan.milestones:
+        key = m.status.upper()
+        counts[key] = counts.get(key, 0) + 1
+
+    failed = counts.get("FAILED", 0)
+    if failed == 0:
+        health = "healthy"
+    elif failed < total / 2:
+        health = "degraded"
+    else:
+        health = "failed"
+
+    return {
+        "total": total,
+        "complete": counts.get("COMPLETE", 0),
+        "in_progress": counts.get("IN_PROGRESS", 0),
+        "pending": counts.get("PENDING", 0),
+        "failed": failed,
+        "health": health,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -32,9 +358,15 @@ _UNCHECKED_RE = re.compile(r'^\s*-\s*\[ \]', re.MULTILINE)
 #   imports Foo from src/services/bar.ts
 _IMPORT_REF_RE = re.compile(
     r'(?:'
-    r'import\s*\{?\s*(\w+)\s*\}?\s*from\s*["\']([^"\']+)["\']'  # TS/JS style
-    r'|from\s+([\w./]+)\s+import\s+(\w+)'                        # Python style
-    r'|imports?\s+(\w+)\s+from\s+([\w./]+)'                       # prose style
+    r'import\s*\{?\s*(\w+)\s*\}?\s*from\s*["\']([^"\']+)["\']'  # TS/JS style (groups 1-2)
+    r'|from\s+([\w./]+)\s+import\s+(\w+)'                        # Python style (groups 3-4)
+    r'|imports?\s+(\w+)\s+from\s+([\w./]+)'                       # prose style (groups 5-6)
+    r'|require\(\s*["\']'                                          # CommonJS require (groups 7-8)
+      r'((?:src|lib|app|server|client|packages|modules)/[\w/.-]+)'
+      r'["\']\s*\)(?:\.(\w+))?'
+    r'|import\(\s*["\']'                                           # Dynamic import() (groups 9-10)
+      r'((?:src|lib|app|server|client|packages|modules)/[\w/.-]+)'
+      r'["\']\s*\)(?:\.then\(\s*\w+\s*=>\s*\w+\.(\w+))?'
     r')',
     re.IGNORECASE,
 )
@@ -161,15 +493,24 @@ class MilestoneManager:
         """
         refs: list[tuple[str, str]] = []
         for match in _IMPORT_REF_RE.finditer(content):
+            g = match.groups()
             # TS/JS style: group(1)=symbol, group(2)=path
-            if match.group(1) and match.group(2):
-                refs.append((match.group(1), match.group(2)))
+            if g[0] and g[1]:
+                refs.append((g[0], g[1]))
             # Python style: group(3)=module_path, group(4)=symbol
-            elif match.group(3) and match.group(4):
-                refs.append((match.group(4), match.group(3)))
+            elif g[2] and g[3]:
+                refs.append((g[3], g[2]))
             # Prose style: group(5)=symbol, group(6)=path
-            elif match.group(5) and match.group(6):
-                refs.append((match.group(5), match.group(6)))
+            elif g[4] and g[5]:
+                refs.append((g[4], g[5]))
+            # CommonJS require: group(7)=path, group(8)=symbol (optional)
+            elif g[6]:
+                symbol = g[7] if g[7] else ""
+                refs.append((symbol, g[6]))
+            # Dynamic import(): group(9)=path, group(10)=symbol (optional)
+            elif g[8]:
+                symbol = g[9] if g[9] else ""
+                refs.append((symbol, g[8]))
         return refs
 
     @staticmethod

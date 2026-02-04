@@ -1,4 +1,4 @@
-"""Integration tests — cross-module pipelines."""
+"""Integration tests -- cross-module pipelines."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from agent_team.config import (
     ConstraintEntry,
     DepthDetection,
     DesignReferenceConfig,
+    MilestoneConfig,
     SchedulerConfig,
     VerificationConfig,
     detect_depth,
@@ -31,7 +32,7 @@ pytestmark = pytest.mark.integration
 
 class TestConfigToAgentsPipeline:
     def test_config_to_mcp_to_agents(self, env_with_api_keys):
-        """load_config → get_mcp_servers → build_agent_definitions pipeline."""
+        """load_config -> get_mcp_servers -> build_agent_definitions pipeline."""
         cfg = AgentTeamConfig()
         servers = get_mcp_servers(cfg)
         agents = build_agent_definitions(cfg, servers)
@@ -43,13 +44,13 @@ class TestConfigToAgentsPipeline:
         assert not any("firecrawl" in t for t in researcher_tools)
 
     def test_config_to_depth_to_prompt(self, default_config):
-        """load_config → detect_depth → build_orchestrator_prompt pipeline."""
+        """load_config -> detect_depth -> build_orchestrator_prompt pipeline."""
         depth = detect_depth("do a thorough review", default_config)
         prompt = build_orchestrator_prompt("do a thorough review", depth, default_config)
         assert "[DEPTH: THOROUGH]" in prompt
 
     def test_depth_to_counts_in_prompt(self, default_config):
-        """detect_depth → get_agent_counts → counts appear in prompt."""
+        """detect_depth -> get_agent_counts -> counts appear in prompt."""
         depth = detect_depth("exhaustive analysis", default_config)
         counts = get_agent_counts(depth)
         prompt = build_orchestrator_prompt("exhaustive analysis", depth, default_config)
@@ -60,7 +61,7 @@ class TestConfigToAgentsPipeline:
 
 class TestMCPFlowIntoResearcher:
     def test_mcp_tools_not_in_researcher(self, env_with_api_keys):
-        """MCP tools should NOT be in researcher — orchestrator calls them directly."""
+        """MCP tools should NOT be in researcher -- orchestrator calls them directly."""
         cfg = AgentTeamConfig()
         servers = get_mcp_servers(cfg)
         research_tools = get_research_tools(servers)
@@ -77,7 +78,7 @@ class TestMCPFlowIntoResearcher:
 
 class TestInterviewScopeForcing:
     def test_complex_scope_forces_exhaustive(self, default_config):
-        """Interview scope COMPLEX → exhaustive depth."""
+        """Interview scope COMPLEX -> exhaustive depth."""
         scope = "COMPLEX"
         # Simulate what main() does: if scope is COMPLEX, override depth
         depth_override = None
@@ -149,7 +150,7 @@ class TestFullPromptFeatures:
 
 class TestConfigYAMLRoundTrip:
     def test_write_load_verify(self, tmp_path, monkeypatch):
-        """Config YAML round-trip: write → load → verify."""
+        """Config YAML round-trip: write -> load -> verify."""
         data = {
             "orchestrator": {"model": "sonnet", "max_turns": 200},
             "depth": {"default": "thorough"},
@@ -516,3 +517,390 @@ class TestConfigFieldWiringIntegration:
         assert "25" in prompt
         assert "MY_PLAN.md" in prompt
         assert "100.0" in prompt
+
+
+# ===================================================================
+# Milestone Orchestration Integration Tests
+# ===================================================================
+
+
+def _write_milestone_requirements(tmp_path, milestone_id: str, content: str) -> None:
+    """Helper: create milestones/{id}/REQUIREMENTS.md under .agent-team."""
+    req_dir = tmp_path / ".agent-team" / "milestones" / milestone_id
+    req_dir.mkdir(parents=True, exist_ok=True)
+    (req_dir / "REQUIREMENTS.md").write_text(content, encoding="utf-8")
+
+
+class TestFullMilestoneLifecycle:
+    """Integration: parse MASTER_PLAN.md, verify dependency ordering,
+    simulate milestone completion, confirm all_complete()."""
+
+    def test_full_milestone_lifecycle(self, tmp_path):
+        from agent_team.milestone_manager import (
+            MasterPlan,
+            MasterPlanMilestone,
+            MilestoneManager,
+            build_completion_summary,
+            build_milestone_context,
+            compute_rollup_health,
+            parse_master_plan,
+            render_predecessor_context,
+            update_master_plan_status,
+        )
+
+        # -- 1. Write MASTER_PLAN.md with 3 milestones and dependencies ------
+        master_plan_content = """\
+# MASTER PLAN: Test Project
+
+Generated: 2026-02-04
+
+## Milestone 1: Foundation Layer
+- ID: milestone-1
+- Status: PENDING
+- Dependencies: none
+- Description: Set up project scaffolding and core utilities
+
+## Milestone 2: Business Logic
+- ID: milestone-2
+- Status: PENDING
+- Dependencies: milestone-1
+- Description: Implement business rules and service layer
+
+## Milestone 3: UI Integration
+- ID: milestone-3
+- Status: PENDING
+- Dependencies: milestone-1, milestone-2
+- Description: Wire up the frontend to the service layer
+"""
+        plan_dir = tmp_path / ".agent-team"
+        plan_dir.mkdir(parents=True, exist_ok=True)
+        master_plan_path = plan_dir / "MASTER_PLAN.md"
+        master_plan_path.write_text(master_plan_content, encoding="utf-8")
+
+        # -- 2. Write per-milestone REQUIREMENTS.md files ---------------------
+        _write_milestone_requirements(tmp_path, "milestone-1", (
+            "# Milestone 1 Requirements\n"
+            "- [x] REQ-001: Create src/lib/utils.ts\n"
+            "- [x] REQ-002: Create src/lib/config.ts\n"
+        ))
+        _write_milestone_requirements(tmp_path, "milestone-2", (
+            "# Milestone 2 Requirements\n"
+            "- [ ] REQ-003: Implement src/services/auth.ts\n"
+            "- [ ] REQ-004: Implement src/services/billing.ts\n"
+        ))
+        _write_milestone_requirements(tmp_path, "milestone-3", (
+            "# Milestone 3 Requirements\n"
+            "- [ ] REQ-005: Build src/app/dashboard.tsx\n"
+            "- [ ] REQ-006: Build src/app/settings.tsx\n"
+        ))
+
+        # -- 3. Parse plan and verify structure -------------------------------
+        plan = parse_master_plan(master_plan_content)
+        assert plan.title == "Test Project"
+        assert len(plan.milestones) == 3
+
+        m1, m2, m3 = plan.milestones
+        assert m1.id == "milestone-1"
+        assert m2.id == "milestone-2"
+        assert m3.id == "milestone-3"
+
+        # -- 4. Verify dependency ordering ------------------------------------
+        assert m1.dependencies == []
+        assert m2.dependencies == ["milestone-1"]
+        assert m3.dependencies == ["milestone-1", "milestone-2"]
+
+        # Only milestone-1 should be ready initially (no deps)
+        ready = plan.get_ready_milestones()
+        assert len(ready) == 1
+        assert ready[0].id == "milestone-1"
+        assert plan.all_complete() is False
+
+        # -- 5. Simulate milestone-1 completion -------------------------------
+        m1.status = "COMPLETE"
+        master_plan_content = update_master_plan_status(
+            master_plan_content, "milestone-1", "COMPLETE",
+        )
+        assert "COMPLETE" in master_plan_content
+
+        # milestone-2 should now be ready (its dep milestone-1 is COMPLETE)
+        ready = plan.get_ready_milestones()
+        assert len(ready) == 1
+        assert ready[0].id == "milestone-2"
+
+        # -- 6. Build context for milestone-2 ---------------------------------
+        mm = MilestoneManager(tmp_path)
+        milestones_dir = plan_dir / "milestones"
+
+        summary_1 = build_completion_summary(
+            m1,
+            exported_files=["src/lib/utils.ts", "src/lib/config.ts"],
+            summary_line="Foundation scaffolding done",
+        )
+        ms2_ctx = build_milestone_context(
+            m2, milestones_dir, predecessor_summaries=[summary_1],
+        )
+        assert ms2_ctx.milestone_id == "milestone-2"
+        assert "milestone-2" in ms2_ctx.requirements_path
+        assert len(ms2_ctx.predecessor_summaries) == 1
+        assert ms2_ctx.predecessor_summaries[0].milestone_id == "milestone-1"
+
+        # Predecessor context renders correctly
+        rendered = render_predecessor_context([summary_1])
+        assert "milestone-1" in rendered
+        assert "Foundation scaffolding done" in rendered
+
+        # -- 7. Simulate milestone-2 completion -------------------------------
+        m2.status = "COMPLETE"
+        master_plan_content = update_master_plan_status(
+            master_plan_content, "milestone-2", "COMPLETE",
+        )
+
+        # milestone-3 should now be ready (both deps are COMPLETE)
+        ready = plan.get_ready_milestones()
+        assert len(ready) == 1
+        assert ready[0].id == "milestone-3"
+
+        # -- 8. Simulate milestone-3 completion and verify all_complete -------
+        m3.status = "COMPLETE"
+        assert plan.all_complete() is True
+
+        # -- 9. Rollup health should be "healthy" ----------------------------
+        rollup = compute_rollup_health(plan)
+        assert rollup["health"] == "healthy"
+        assert rollup["total"] == 3
+        assert rollup["complete"] == 3
+        assert rollup["failed"] == 0
+
+
+class TestResumeFlow:
+    """Integration: RunState milestone tracking and resume logic."""
+
+    def test_resume_flow(self):
+        from agent_team.state import (
+            RunState,
+            get_resume_milestone,
+            update_milestone_progress,
+        )
+
+        # -- 1. Create RunState with milestone-2 in progress ------------------
+        state = RunState(
+            task="build the app",
+            current_milestone="milestone-2",
+            completed_milestones=["milestone-1"],
+            milestone_order=["milestone-1", "milestone-2", "milestone-3"],
+        )
+
+        # -- 2. get_resume_milestone returns the in-progress milestone --------
+        resume_id = get_resume_milestone(state)
+        assert resume_id == "milestone-2"
+
+        # -- 3. Complete milestone-2 ------------------------------------------
+        update_milestone_progress(state, "milestone-2", "COMPLETE")
+
+        # -- 4. Verify completed list has both milestones ---------------------
+        assert "milestone-1" in state.completed_milestones
+        assert "milestone-2" in state.completed_milestones
+        assert state.current_milestone == ""
+
+        # -- 5. Progress dict updated ----------------------------------------
+        assert state.milestone_progress["milestone-2"]["status"] == "COMPLETE"
+
+        # -- 6. Next resume should be milestone-3 (first non-complete in order)
+        resume_id = get_resume_milestone(state)
+        assert resume_id == "milestone-3"
+
+        # -- 7. Start milestone-3 then fail it --------------------------------
+        update_milestone_progress(state, "milestone-3", "IN_PROGRESS")
+        assert state.current_milestone == "milestone-3"
+
+        update_milestone_progress(state, "milestone-3", "FAILED")
+        assert state.current_milestone == ""
+        assert "milestone-3" in state.failed_milestones
+
+        # -- 8. Resume after failure should still point to milestone-3 --------
+        resume_id = get_resume_milestone(state)
+        assert resume_id == "milestone-3"
+
+        # -- 9. Retry and succeed -- should move from failed to completed -----
+        update_milestone_progress(state, "milestone-3", "COMPLETE")
+        assert "milestone-3" in state.completed_milestones
+        assert "milestone-3" not in state.failed_milestones
+
+        # -- 10. No more milestones to resume ---------------------------------
+        resume_id = get_resume_milestone(state)
+        assert resume_id is None
+
+
+class TestHealthGateBlocking:
+    """Integration: MilestoneManager health checks gate milestone progress."""
+
+    def test_health_gate_blocking(self, tmp_path):
+        from agent_team.milestone_manager import MilestoneManager
+
+        mm = MilestoneManager(tmp_path)
+
+        # -- 1. Create REQUIREMENTS.md with mostly unchecked items ------------
+        _write_milestone_requirements(tmp_path, "milestone-1", (
+            "# Milestone 1 Requirements\n"
+            "- [ ] REQ-001: Set up project structure\n"
+            "- [ ] REQ-002: Configure CI pipeline\n"
+            "- [ ] REQ-003: Create base components\n"
+            "- [ ] REQ-004: Add linting rules\n"
+            "- [x] REQ-005: Init README\n"
+        ))
+
+        # -- 2. Health should be "failed" (1/5 = 0.2, below all thresholds) --
+        report = mm.check_milestone_health("milestone-1")
+        assert report.total_requirements == 5
+        assert report.checked_requirements == 1
+        assert report.convergence_ratio == pytest.approx(0.2)
+        assert report.health == "failed"
+
+        # -- 3. Now check all items -------------------------------------------
+        _write_milestone_requirements(tmp_path, "milestone-1", (
+            "# Milestone 1 Requirements\n"
+            "- [x] REQ-001: Set up project structure\n"
+            "- [x] REQ-002: Configure CI pipeline\n"
+            "- [x] REQ-003: Create base components\n"
+            "- [x] REQ-004: Add linting rules\n"
+            "- [x] REQ-005: Init README\n"
+        ))
+
+        # -- 4. Health should now be "healthy" (5/5 = 1.0) -------------------
+        report = mm.check_milestone_health("milestone-1")
+        assert report.total_requirements == 5
+        assert report.checked_requirements == 5
+        assert report.convergence_ratio == pytest.approx(1.0)
+        assert report.health == "healthy"
+
+        # -- 5. Verify partial progress with review cycles triggers degraded --
+        _write_milestone_requirements(tmp_path, "milestone-1", (
+            "# Milestone 1 Requirements\n"
+            "- [x] REQ-001: Set up project (review_cycles: 2)\n"
+            "- [x] REQ-002: Configure CI (review_cycles: 1)\n"
+            "- [x] REQ-003: Create base (review_cycles: 1)\n"
+            "- [ ] REQ-004: Add linting\n"
+            "- [ ] REQ-005: Init README\n"
+        ))
+
+        report = mm.check_milestone_health("milestone-1")
+        assert report.total_requirements == 5
+        assert report.checked_requirements == 3
+        assert report.review_cycles == 2
+        # 3/5 = 0.6, cycles > 0, 0.6 >= 0.5 degraded_threshold -> "degraded"
+        assert report.health == "degraded"
+
+
+class TestBackwardCompatNonPRDMode:
+    """Integration: MilestoneConfig defaults do not affect non-PRD paths."""
+
+    def test_backward_compat_non_prd_mode(self):
+        from agent_team.config import AgentTeamConfig, MilestoneConfig
+        from agent_team.state import RunState
+
+        # -- 1. Default AgentTeamConfig has milestones disabled ---------------
+        cfg = AgentTeamConfig()
+        assert cfg.milestone.enabled is False
+        assert isinstance(cfg.milestone, MilestoneConfig)
+
+        # -- 2. MilestoneConfig defaults are sensible and inactive ------------
+        assert cfg.milestone.max_parallel_milestones == 1
+        assert cfg.milestone.health_gate is True
+        assert cfg.milestone.wiring_check is True
+        assert cfg.milestone.resume_from_milestone is None
+
+        # -- 3. Non-PRD config fields are unaffected --------------------------
+        assert cfg.orchestrator.max_turns == 500
+        assert cfg.convergence.max_cycles == 10
+        assert cfg.depth.default == "standard"
+
+        # -- 4. RunState milestone fields have safe empty defaults ------------
+        state = RunState()
+        assert state.current_milestone == ""
+        assert state.completed_milestones == []
+        assert state.failed_milestones == []
+        assert state.milestone_order == []
+        assert state.milestone_progress == {}
+        assert state.schema_version == 2
+
+        # -- 5. Enabling milestones does not break other config ---------------
+        cfg_enabled = AgentTeamConfig(
+            milestone=MilestoneConfig(enabled=True),
+        )
+        assert cfg_enabled.milestone.enabled is True
+        # Other sections still have their defaults
+        assert cfg_enabled.orchestrator.model == "opus"
+        assert cfg_enabled.convergence.max_cycles == 10
+        assert cfg_enabled.scheduler.enabled is True
+
+        # -- 6. YAML round-trip preserves milestone config --------------------
+        import yaml
+        from agent_team.config import load_config
+
+        yaml_data = {
+            "milestone": {
+                "enabled": True,
+                "max_parallel_milestones": 3,
+                "health_gate": False,
+            },
+        }
+        loaded = load_config(cli_overrides=yaml_data)
+        assert loaded.milestone.enabled is True
+        assert loaded.milestone.max_parallel_milestones == 3
+        assert loaded.milestone.health_gate is False
+        # wiring_check retains default
+        assert loaded.milestone.wiring_check is True
+
+
+class TestCrossMilestoneWiringDetection:
+    """Integration: MilestoneManager detects cross-milestone wiring gaps."""
+
+    def test_cross_milestone_wiring_detection(self, tmp_path):
+        from agent_team.milestone_manager import MilestoneManager, WiringGap
+
+        # -- 1. milestone-1 claims ownership of src/services/auth.ts ----------
+        _write_milestone_requirements(tmp_path, "milestone-1", (
+            "# Milestone 1 Requirements\n"
+            "- [x] REQ-001: Create src/services/auth.ts\n"
+            "- [x] REQ-002: Export AuthService class\n"
+        ))
+
+        # -- 2. milestone-2 references (imports from) src/services/auth.ts ----
+        _write_milestone_requirements(tmp_path, "milestone-2", (
+            "# Milestone 2 Requirements\n"
+            "- [ ] REQ-003: Build dashboard using auth service\n"
+            '  import { AuthService } from "src/services/auth.ts"\n'
+            "- [ ] REQ-004: Integrate billing\n"
+        ))
+
+        # -- 3. Do NOT create src/services/auth.ts on disk --------------------
+        # (intentionally missing to trigger wiring gap detection)
+
+        mm = MilestoneManager(tmp_path)
+        gaps = mm.get_cross_milestone_wiring()
+
+        # -- 4. Verify at least one gap is detected ---------------------------
+        assert len(gaps) >= 1
+
+        # The gap should reference the missing file
+        auth_gaps = [g for g in gaps if g.expected_in_file == "src/services/auth.ts"]
+        assert len(auth_gaps) >= 1
+
+        # The gap should identify the correct source and target milestones
+        gap = auth_gaps[0]
+        assert isinstance(gap, WiringGap)
+        assert gap.source_milestone == "milestone-1"
+        assert gap.target_milestone == "milestone-2"
+
+        # -- 5. Now create the file and verify gaps disappear -----------------
+        src_dir = tmp_path / "src" / "services"
+        src_dir.mkdir(parents=True, exist_ok=True)
+        (src_dir / "auth.ts").write_text(
+            "export class AuthService {}\n", encoding="utf-8",
+        )
+
+        gaps_after = mm.get_cross_milestone_wiring()
+        auth_gaps_after = [
+            g for g in gaps_after if g.expected_in_file == "src/services/auth.ts"
+        ]
+        assert len(auth_gaps_after) == 0

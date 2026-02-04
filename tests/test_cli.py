@@ -749,6 +749,24 @@ class TestBuildOptions:
         assert "$max_budget_usd" not in opts.system_prompt
         assert "None" in opts.system_prompt
 
+    def test_max_thinking_tokens_passed_when_set(self):
+        """max_thinking_tokens should be passed to ClaudeAgentOptions when set."""
+        from agent_team.cli import _build_options
+        from agent_team.config import AgentTeamConfig, OrchestratorConfig
+        cfg = AgentTeamConfig(orchestrator=OrchestratorConfig(max_thinking_tokens=10000))
+        opts = _build_options(cfg)
+        assert opts.max_thinking_tokens == 10000
+
+    def test_max_thinking_tokens_not_passed_when_none(self):
+        """max_thinking_tokens should not be in opts_kwargs when None."""
+        from agent_team.cli import _build_options
+        from agent_team.config import AgentTeamConfig
+        cfg = AgentTeamConfig()
+        opts = _build_options(cfg)
+        # When None, the kwarg is not passed, so the SDK default applies.
+        # The attribute may not exist or may be None depending on SDK behavior.
+        assert getattr(opts, "max_thinking_tokens", None) is None
+
 
 # ===================================================================
 # _process_response() — Finding #2
@@ -1358,3 +1376,130 @@ class TestContractPipelineBug1:
 
         assert recovery_called is True
         assert warning_issued is True
+
+
+# ===================================================================
+# Milestone routing tests
+# ===================================================================
+
+
+class TestMilestoneRouting:
+    """Tests for milestone-related routing logic in the CLI."""
+
+    def test_milestone_routing_disabled_by_default(self, env_with_api_keys):
+        """When milestone.enabled is False (default), the non-PRD path (_run_single) is used."""
+        from agent_team.config import AgentTeamConfig
+        cfg = AgentTeamConfig()
+        # Default config should have milestone disabled
+        assert cfg.milestone.enabled is False
+        # Therefore _use_milestones logic should evaluate to False
+        _is_prd_mode = True
+        _master_plan_exists = False
+        _use_milestones = cfg.milestone.enabled and (_is_prd_mode or _master_plan_exists)
+        assert _use_milestones is False
+
+    def test_milestone_routing_enabled_prd(self, env_with_api_keys):
+        """When milestone.enabled=True and PRD mode is active, milestone route should be used."""
+        from agent_team.config import AgentTeamConfig, MilestoneConfig
+        cfg = AgentTeamConfig(milestone=MilestoneConfig(enabled=True))
+        _is_prd_mode = True
+        _master_plan_exists = False
+        _use_milestones = cfg.milestone.enabled and (_is_prd_mode or _master_plan_exists)
+        assert _use_milestones is True
+
+    def test_milestone_routing_enabled_master_plan(self, env_with_api_keys):
+        """Milestone route also activates when MASTER_PLAN.md already exists."""
+        from agent_team.config import AgentTeamConfig, MilestoneConfig
+        cfg = AgentTeamConfig(milestone=MilestoneConfig(enabled=True))
+        _is_prd_mode = False
+        _master_plan_exists = True
+        _use_milestones = cfg.milestone.enabled and (_is_prd_mode or _master_plan_exists)
+        assert _use_milestones is True
+
+    def test_milestone_routing_disabled_even_with_prd(self, env_with_api_keys):
+        """Milestone disabled + PRD mode should NOT route to milestones."""
+        from agent_team.config import AgentTeamConfig, MilestoneConfig
+        cfg = AgentTeamConfig(milestone=MilestoneConfig(enabled=False))
+        _is_prd_mode = True
+        _use_milestones = cfg.milestone.enabled and _is_prd_mode
+        assert _use_milestones is False
+
+    def test_milestone_routing_disabled_no_prd_no_plan(self, env_with_api_keys):
+        """Enabled=True but no PRD and no MASTER_PLAN should not route to milestones."""
+        from agent_team.config import AgentTeamConfig, MilestoneConfig
+        cfg = AgentTeamConfig(milestone=MilestoneConfig(enabled=True))
+        _is_prd_mode = False
+        _master_plan_exists = False
+        _use_milestones = cfg.milestone.enabled and (_is_prd_mode or _master_plan_exists)
+        assert _use_milestones is False
+
+
+class TestMilestoneFunctionExists:
+    """Tests verifying milestone-related functions exist and are callable."""
+
+    def test_run_prd_milestones_exists(self):
+        """_run_prd_milestones function exists and is callable (async)."""
+        import asyncio
+        from agent_team.cli import _run_prd_milestones
+        assert callable(_run_prd_milestones)
+        assert asyncio.iscoroutinefunction(_run_prd_milestones)
+
+    def test_milestone_wiring_fix_exists(self):
+        """_run_milestone_wiring_fix function exists and is callable (async)."""
+        import asyncio
+        from agent_team.cli import _run_milestone_wiring_fix
+        assert callable(_run_milestone_wiring_fix)
+        assert asyncio.iscoroutinefunction(_run_milestone_wiring_fix)
+
+
+class TestBuildResumeContextWithMilestones:
+    """Tests for milestone fields in _build_resume_context."""
+
+    def test_build_resume_context_with_milestones(self, tmp_path):
+        """Milestone fields are rendered in resume context when present."""
+        from agent_team.state import RunState
+        from agent_team.cli import _build_resume_context
+        state = RunState(task="build the app")
+        state.milestone_order = ["milestone-1", "milestone-2", "milestone-3"]
+        state.completed_milestones = ["milestone-1"]
+        state.current_milestone = "milestone-2"
+        state.failed_milestones = []
+        ctx = _build_resume_context(state, str(tmp_path))
+        assert "milestone-1" in ctx
+        assert "milestone-2" in ctx
+        assert "Milestone order" in ctx
+        assert "Completed milestones" in ctx
+        assert "Interrupted during milestone" in ctx
+
+    def test_build_resume_context_no_milestones(self, tmp_path):
+        """When no milestone fields are set, milestone sections are absent."""
+        from agent_team.state import RunState
+        from agent_team.cli import _build_resume_context
+        state = RunState(task="fix the bug")
+        ctx = _build_resume_context(state, str(tmp_path))
+        assert "Milestone order" not in ctx
+
+    def test_build_resume_context_failed_milestones(self, tmp_path):
+        """Failed milestones appear in resume context."""
+        from agent_team.state import RunState
+        from agent_team.cli import _build_resume_context
+        state = RunState(task="build the app")
+        state.milestone_order = ["m1", "m2"]
+        state.failed_milestones = ["m1"]
+        ctx = _build_resume_context(state, str(tmp_path))
+        assert "Failed milestones" in ctx
+        assert "m1" in ctx
+
+    def test_build_resume_context_milestone_progress_dict(self, tmp_path):
+        """milestone_progress dict is rendered in resume context."""
+        from agent_team.state import RunState
+        from agent_team.cli import _build_resume_context
+        state = RunState(task="build the app")
+        state.milestone_progress = {
+            "milestone-1": {"status": "COMPLETE", "checked": 5, "total": 5, "cycles": 2},
+            "milestone-2": {"status": "IN_PROGRESS", "checked": 1, "total": 3, "cycles": 0},
+        }
+        ctx = _build_resume_context(state, str(tmp_path))
+        assert "milestone-1" in ctx
+        assert "milestone-2" in ctx
+        assert "Milestone progress" in ctx

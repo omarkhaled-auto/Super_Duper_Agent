@@ -8,9 +8,12 @@ This is the core file. It defines:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .config import AgentConfig, AgentTeamConfig, get_agent_counts
+
+if TYPE_CHECKING:
+    from .milestone_manager import MilestoneContext
 from .mcp_servers import get_research_tools
 from .code_quality_standards import get_standards_for_agent
 from .investigation_protocol import build_investigation_protocol
@@ -159,7 +162,7 @@ GATE 1 — REVIEW & TEST AUTHORITY: Only the REVIEW FLEET (code-reviewer agents)
 
 GATE 2 — MANDATORY RE-REVIEW: After ANY debug fix, you MUST deploy a review fleet agent to verify the fix. Debug → Re-Review is MANDATORY and NON-NEGOTIABLE. Never skip this step.
 
-GATE 3 — CYCLE REPORTING: After EVERY review cycle, report: "Cycle N: X/Y requirements complete (Z%)". This is mandatory — never skip the report.
+GATE 3 — CYCLE TRACKING & REPORTING: After EVERY review cycle, (a) reviewers MUST increment (review_cycles: N) to (review_cycles: N+1) on every evaluated item, and (b) report: "Cycle N: X/Y requirements complete (Z%)". Both are mandatory — never skip.
 
 GATE 4 — DEPTH ≠ THOROUGHNESS: The depth level (quick/standard/thorough/exhaustive) controls FLEET SIZE, not review quality. Even at QUICK depth, reviews must be thorough.
 
@@ -184,8 +187,10 @@ CONVERGENCE LOOP:
    - For WIRE-xxx items: verify wiring mechanism exists in code (import, route registration, component mount, etc.)
    - Perform ORPHAN DETECTION: flag any new file/export/component that isn't imported/used/rendered anywhere
    - Integration failures documented in Review Log with file paths and missing wiring details
+   - CRITICAL: Increment (review_cycles: N) to (review_cycles: N+1) on EVERY item evaluated, whether marking [x] or leaving [ ]
 
 3. CHECK: Are ALL items [x] in REQUIREMENTS.md?
+   Re-read REQUIREMENTS.md from disk to verify actual state. Count this as convergence cycle N.
    - YES → Proceed to TESTING phase (step 6)
    - NO → Check per-item failure counts:
      a. If any item has review_cycles >= $escalation_threshold → ESCALATE (step 5)
@@ -269,6 +274,9 @@ When the scheduler is enabled, after TASKS.md is created:
 5. Each agent gets scoped context (only its files + contracts, not everything)
 6. For shared files: agents write INTEGRATION DECLARATIONS instead of editing directly
 7. After each wave, the integration-agent processes all declarations atomically
+8. If [EXECUTION SCHEDULE] is provided, FOLLOW it exactly:
+   - Execute wave-by-wave, prioritize CRITICAL PATH tasks
+   If NO schedule provided, compute your own wave order from TASKS.md.
 
 ============================================================
 SECTION 3d: PROGRESSIVE VERIFICATION
@@ -283,10 +291,16 @@ When verification is enabled, after each task completes:
 6. If RED: assign debugger agent to fix, re-verify, then proceed
 
 ============================================================
-SECTION 4: PRD MODE
+SECTION 4: PRD MODE (Two-Phase Orchestration)
 ============================================================
 
-When the user provides a PRD (via --prd flag or a large task describing a full application):
+PRD mode operates in two distinct phases.  The CLI controls which phase
+you are in via the [PHASE: ...] tag injected into the task prompt.
+
+--------------------------------------------------------------
+[PHASE: PRD DECOMPOSITION]
+--------------------------------------------------------------
+When the task prompt contains ``[PHASE: PRD DECOMPOSITION]``:
 
 1. DETECT PRD MODE: Look for PRD file path, or task with sections like "Features", "User Stories", "Architecture", etc.
 
@@ -306,39 +320,44 @@ When the user provides a PRD (via --prd flag or a large task describing a full a
 3. MILESTONE DECOMPOSITION:
    - Synthesize planner outputs into ordered Milestones
    - Create `.agent-team/$master_plan_file` with milestone list + dependencies
-   - Create per-milestone REQUIREMENTS.md files
+   - Create per-milestone REQUIREMENTS.md files in `.agent-team/milestones/milestone-N/`
 
-4. MILESTONE EXECUTION (sequential, respecting dependencies):
-   For each milestone:
+4. STOP.  Do NOT write any implementation code.  Do NOT proceed to execution.
+   The CLI will parse MASTER_PLAN.md and invoke you again in MILESTONE EXECUTION
+   phase for each milestone separately.
+
+--------------------------------------------------------------
+[PHASE: MILESTONE EXECUTION]
+--------------------------------------------------------------
+When the task prompt contains ``[PHASE: MILESTONE EXECUTION]``:
+
+You are executing a SINGLE milestone.  Your context includes:
+- This milestone's REQUIREMENTS.md (the only requirements you should implement)
+- Compressed summaries of completed predecessor milestones
+- The full codebase map (for file discovery)
+
+Execute the full workflow for THIS milestone ONLY:
    a. Research Fleet → gather knowledge for this milestone's tech
-   b. Architecture Fleet → design implementation
+   b. Architecture Fleet → design implementation for this milestone
    c. FULL CONVERGENCE LOOP (code → review → debug → until all [x])
    d. Testing Fleet → write and run tests
    e. Mark milestone COMPLETE only when ALL its items are [x]
-   f. Independent milestones can execute in PARALLEL
-   g. CROSS-MILESTONE WIRING: After each milestone's convergence loop completes:
-      - Deploy ARCHITECTURE FLEET to review cross-milestone integration:
-        * Identify missing WIRE-xxx entries connecting this milestone to previous milestones
-        * Add new WIRE-xxx requirements if cross-milestone connections are needed
-      - Deploy REVIEW FLEET to verify:
-        * Features from this milestone are wired to features from previous milestones
-        * Entry points are updated to include new milestone's modules
-        * No orphaned code exists across milestone boundaries
-      - If cross-milestone wiring issues found:
-        * Add wiring tasks, deploy CODING FLEET for wiring only, re-review
-      - Only mark milestone COMPLETE after cross-milestone wiring passes
 
-5. Cross-milestone context: Later milestones receive context from completed ones.
+CONSTRAINTS:
+- Do NOT modify files that belong to completed milestones unless fixing a wiring issue
+- Do NOT create files or requirements for OTHER milestones
+- Focus EXCLUSIVELY on the milestone described in your REQUIREMENTS.md
+
+5. Cross-milestone context: Predecessor summaries are provided for reference only.
+   Use them to understand exported files, symbols, and integration points.
 
 MILESTONE COMPLETION GATE:
-Before proceeding to milestone N+1:
-1. Run convergence health check on milestone N
-2. Verify milestone N's exports match what milestone N+1 expects to import
-3. If convergence_cycles == 0 for milestone N → STOP and run review fleet
-4. Cross-milestone wiring verification must pass
-Only proceed when milestone N is HEALTHY.
+Before marking this milestone COMPLETE:
+1. All items in this milestone's REQUIREMENTS.md must be [x]
+2. The convergence loop must have run at least 1 review cycle
+3. All tests for this milestone must pass
 
-PRD MODE NEVER STOPS until every milestone in $master_plan_file is COMPLETE and every REQUIREMENTS.md has all items [x].
+PRD MODE NEVER STOPS until every item in the current milestone's REQUIREMENTS.md has all items [x].
 
 ============================================================
 SECTION 5: ADVERSARIAL REVIEW PROTOCOL
@@ -508,16 +527,19 @@ Execute this workflow for every task:
    - If design reference URLs are provided, dedicate researcher(s) to design analysis
 3.5. Deploy ARCHITECTURE FLEET → adds architecture decision, Integration Roadmap (entry points, wiring map, anti-patterns, initialization order), tech + wiring requirements
 4. Deploy TASK ASSIGNER → decomposes requirements into .agent-team/TASKS.md (uses architecture decisions)
-4.5. Deploy CONTRACT GENERATOR → MANDATORY when verification is enabled.
-     Reads architecture decisions + wiring map from REQUIREMENTS.md.
-     Writes .agent-team/CONTRACTS.json.
-     If contract generation fails, report WARNING and continue (but verification will flag this).
+4.5. **MANDATORY BLOCKING GATE**: Deploy CONTRACT GENERATOR
+     - Reads architecture decisions + wiring map from REQUIREMENTS.md.
+     - Writes .agent-team/CONTRACTS.json.
+     - STOP: Verify CONTRACTS.json was created before proceeding to step 5.
+     - If fails: RETRY once. If still fails, report WARNING and continue.
 5. Enter CONVERGENCE LOOP:
+   PRE-CHECK: Verify .agent-team/CONTRACTS.json exists. If missing, deploy CONTRACT GENERATOR now.
    a. CODING FLEET (assigned from TASKS.md dependency graph)
       - Read TASKS.md for available tasks (PENDING + all dependencies COMPLETE)
       - Assign non-overlapping tasks to writers
       - Writers READ their task + REQUIREMENTS.md context
-      - Mark tasks COMPLETE in TASKS.md when done
+      - Each code-writer updates their own task in TASKS.md: PENDING → COMPLETE
+      - After each wave: verify TASKS.md reflects all completions before next wave
    b. REVIEW FLEET → adversarial check (uses REQUIREMENTS.md)
    c. Check completion → if not done, DEBUGGER FLEET → loop
    d. ESCALATION if items stuck 3+ cycles
@@ -873,8 +895,8 @@ Your job is to implement requirements from the Requirements Document, guided by 
 - IMPORT-CHECK: Every file you create must be imported by at least one other file, OR be
   an entry point (page, route, middleware). Standalone utility files with zero importers are bugs.
 - REQUIREMENTS.md is READ-ONLY for code-writers — only reviewers may edit it
-- Do NOT modify TASKS.md — the orchestrator manages task status
-- When done, your task will be marked COMPLETE in TASKS.md by the orchestrator
+- After completing your assigned task, update TASKS.md: change your task's Status: PENDING to Status: COMPLETE. Only change YOUR task's status line.
+- Do NOT modify other tasks' statuses in TASKS.md
 - **UI Quality Standards** (ALWAYS for files producing UI output):
   - Follow the UI Design Standards injected in the orchestrator context.
     These are your quality baseline — every UI element must meet them.
@@ -1614,6 +1636,119 @@ def build_agent_definitions(
     return agents
 
 
+def build_decomposition_prompt(
+    task: str,
+    depth: str,
+    config: AgentTeamConfig,
+    prd_path: str | None = None,
+    cwd: str | None = None,
+    interview_doc: str | None = None,
+    codebase_map_summary: str | None = None,
+) -> str:
+    """Build a prompt that instructs the orchestrator to ONLY decompose.
+
+    The orchestrator will create MASTER_PLAN.md and per-milestone
+    REQUIREMENTS.md files, then STOP without writing code.
+    """
+    req_dir = config.convergence.requirements_dir
+    master_plan = config.convergence.master_plan_file
+
+    parts: list[str] = [
+        f"[PHASE: PRD DECOMPOSITION]",
+        f"[DEPTH: {str(depth).upper()}]",
+        f"[REQUIREMENTS DIR: {req_dir}]",
+    ]
+
+    if cwd:
+        parts.append(f"[PROJECT DIR: {cwd}]")
+
+    if codebase_map_summary:
+        parts.append("\n[CODEBASE MAP — Pre-computed project structure analysis]")
+        parts.append(codebase_map_summary)
+
+    if interview_doc:
+        parts.append("\n[INTERVIEW DOCUMENT — User's requirements from Phase 0]")
+        parts.append("---BEGIN INTERVIEW DOCUMENT---")
+        parts.append(interview_doc)
+        parts.append("---END INTERVIEW DOCUMENT---")
+
+    if prd_path:
+        parts.append(f"\n[PRD FILE: {prd_path}]")
+        parts.append("Read the PRD file to understand full requirements.")
+
+    parts.append(f"\n[ORIGINAL USER REQUEST]\n{task}")
+    parts.append(f"\n[TASK]\n{task}")
+    parts.append("\n[INSTRUCTIONS]")
+    parts.append("You are in PRD DECOMPOSITION phase (Section 4).")
+    parts.append("1. Deploy the PRD ANALYZER FLEET (10+ planners in parallel).")
+    parts.append(f"2. Synthesize outputs into {master_plan} with ordered milestones.")
+    parts.append(f"3. Create per-milestone REQUIREMENTS.md files in {req_dir}/milestones/milestone-N/")
+    parts.append("4. STOP after creating the plan. Do NOT write implementation code.")
+
+    return "\n".join(parts)
+
+
+def build_milestone_execution_prompt(
+    task: str,
+    depth: str,
+    config: AgentTeamConfig,
+    milestone_context: "MilestoneContext | None" = None,
+    cwd: str | None = None,
+    codebase_map_summary: str | None = None,
+    predecessor_context: str = "",
+) -> str:
+    """Build a prompt for executing a single milestone.
+
+    Parameters
+    ----------
+    milestone_context : MilestoneContext
+        Scoped context for the milestone being executed.
+    predecessor_context : str
+        Rendered predecessor summaries from
+        :func:`milestone_manager.render_predecessor_context`.
+    """
+    req_dir = config.convergence.requirements_dir
+
+    parts: list[str] = [
+        f"[PHASE: MILESTONE EXECUTION]",
+        f"[DEPTH: {str(depth).upper()}]",
+        f"[REQUIREMENTS DIR: {req_dir}]",
+    ]
+
+    if milestone_context:
+        parts.append(f"[MILESTONE: {milestone_context.milestone_id}]")
+        parts.append(f"[MILESTONE TITLE: {milestone_context.title}]")
+        parts.append(f"[MILESTONE REQUIREMENTS: {milestone_context.requirements_path}]")
+
+    if cwd:
+        parts.append(f"[PROJECT DIR: {cwd}]")
+
+    if codebase_map_summary:
+        parts.append("\n[CODEBASE MAP — Pre-computed project structure analysis]")
+        parts.append(codebase_map_summary)
+
+    if predecessor_context:
+        parts.append(f"\n{predecessor_context}")
+
+    parts.append(f"\n[ORIGINAL USER REQUEST]\n{task}")
+    parts.append(f"\n[TASK]\n{task}")
+    parts.append("\n[INSTRUCTIONS]")
+    parts.append("You are in MILESTONE EXECUTION phase (Section 4).")
+    if milestone_context:
+        parts.append(
+            f"Execute ONLY milestone '{milestone_context.milestone_id}: "
+            f"{milestone_context.title}'."
+        )
+        parts.append(
+            f"Read requirements from: {milestone_context.requirements_path}"
+        )
+    parts.append("Run the full convergence loop until all requirements are [x].")
+    parts.append("Do NOT modify files from completed milestones unless fixing wiring issues.")
+    parts.append("Do NOT create requirements for other milestones.")
+
+    return "\n".join(parts)
+
+
 def build_orchestrator_prompt(
     task: str,
     depth: str,
@@ -1627,6 +1762,8 @@ def build_orchestrator_prompt(
     codebase_map_summary: str | None = None,
     constraints: list | None = None,
     resume_context: str | None = None,
+    milestone_context: "MilestoneContext | None" = None,
+    schedule_info: Any = None,
 ) -> str:
     """Build the full orchestrator prompt with task-specific context injected."""
     depth_str = str(depth) if not isinstance(depth, str) else depth
@@ -1717,6 +1854,12 @@ def build_orchestrator_prompt(
     if resume_context:
         parts.append(resume_context)
 
+    # Inject execution schedule if available
+    if schedule_info:
+        schedule_str = str(schedule_info) if not isinstance(schedule_info, str) else schedule_info
+        if schedule_str.strip():
+            parts.append(f"\n[EXECUTION SCHEDULE]\n{schedule_str}")
+
     parts.append(f"\n[ORIGINAL USER REQUEST]\n{task}")
     parts.append(f"\n[TASK]\n{task}")
 
@@ -1738,6 +1881,7 @@ def build_orchestrator_prompt(
         parts.append("Then deploy the SPEC FIDELITY VALIDATOR to verify REQUIREMENTS.md against the original request.")
         parts.append("After spec validation and research, deploy the ARCHITECTURE FLEET for design decisions.")
         parts.append("Then deploy the TASK ASSIGNER to create TASKS.md (using architecture decisions).")
+        parts.append("MANDATORY: Deploy the CONTRACT GENERATOR after task assignment. Verify CONTRACTS.json exists before entering the convergence loop.")
         parts.append("Then proceed through the convergence loop.")
         parts.append("Assign code-writer tasks from TASKS.md (by dependency graph).")
         parts.append("Do NOT stop until ALL items in REQUIREMENTS.md are marked [x] AND all tasks in TASKS.md are COMPLETE.")

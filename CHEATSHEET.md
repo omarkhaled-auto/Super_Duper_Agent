@@ -233,6 +233,7 @@ Set these in `config.yaml` (create one with `agent-team init`).
 | `model` | `"opus"` | Model for the orchestrator |
 | `max_turns` | `500` | Max agentic turns per session |
 | `max_budget_usd` | `null` | Cost cap — warns at 80%, hard stops at 100%. Set to `null` for unlimited |
+| `max_thinking_tokens` | `null` | Enable extended thinking for the orchestrator. Must be >= 1024 or `null` |
 
 ### Depth
 
@@ -264,6 +265,7 @@ Set these in `config.yaml` (create one with `agent-team init`).
 | `min_exchanges` | `3` | Minimum exchanges before allowing finalization |
 | `require_understanding_summary` | `true` | Force structured "My Understanding" sections in responses |
 | `require_codebase_exploration` | `true` | Force tool use (Glob/Read/Grep) during Discovery phase |
+| `max_thinking_tokens` | `null` | Enable extended thinking for the interviewer. Must be >= 1024 or `null` |
 
 ### Codebase Map
 
@@ -310,7 +312,19 @@ Set these in `config.yaml` (create one with `agent-team init`).
 
 Decision points: (1) Pre-run strategy, (2) Architecture checkpoint, (3) Convergence reasoning, (4) Completion verification.
 
-Default depth gating: Quick = none, Standard = point 3 only, Thorough = 1+3+4, Exhaustive = all 4.
+Default depth gating: All 4 points active at every depth level — depth controls fleet scale, not reasoning quality.
+
+### Milestone (PRD Mode)
+
+| Option | Default | What it does |
+|--------|---------|-------------|
+| `enabled` | `false` | Enable per-milestone PRD orchestration loop (two-phase: decomposition + execution) |
+| `max_parallel_milestones` | `1` | Max milestones to execute concurrently |
+| `health_gate` | `true` | Block next milestone if previous is unhealthy |
+| `wiring_check` | `true` | Run cross-milestone wiring analysis between milestones |
+| `resume_from_milestone` | `null` | Resume from a specific milestone ID (null = start from beginning) |
+| `wiring_fix_retries` | `1` | Retries for wiring fix passes |
+| `max_milestones_warning` | `30` | Warn if PRD decomposes into more milestones than this |
 
 ### Quality
 

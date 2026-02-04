@@ -522,5 +522,145 @@ def print_run_summary(summary, backend: str = "api") -> None:
         if len(files_changed) > 10:
             content.append(f"  ... and {len(files_changed) - 10} more\n", style="dim")
 
+    # Convergence health (conditional)
+    health = getattr(summary, "health", "unknown")
+    if health != "unknown":
+        print_convergence_health(
+            health=health,
+            req_passed=req_passed,
+            req_total=req_total,
+            review_cycles=cycle_count,
+            escalated_items=[],
+        )
+
+    # Recovery info (conditional)
+    recovery_passes = getattr(summary, "recovery_passes_triggered", 0)
+    recovery_types = getattr(summary, "recovery_types", [])
+    if recovery_passes > 0:
+        print_recovery_report(recovery_passes, recovery_types)
+
     console.print()
     console.print(Panel(content, border_style="green", title="Summary"))
+
+
+# ---------------------------------------------------------------------------
+# Convergence health & recovery reports
+# ---------------------------------------------------------------------------
+
+
+def print_convergence_health(
+    health: str,
+    req_passed: int,
+    req_total: int,
+    review_cycles: int,
+    escalated_items: list[str] | None = None,
+) -> None:
+    """Render a convergence health panel after orchestration.
+
+    Shows: health status (colored), requirements progress bar,
+    review cycle count, and escalated items (if any).
+    """
+    if health == "unknown":
+        return
+
+    health_styles = {
+        "healthy": ("bold green", "green"),
+        "degraded": ("bold yellow", "yellow"),
+        "failed": ("bold red", "red"),
+    }
+    text_style, border_style = health_styles.get(health, ("white", "white"))
+
+    pct = (req_passed / req_total * 100) if req_total > 0 else 0
+    bar_filled = int(pct / 5)
+    bar_empty = 20 - bar_filled
+    bar = f"[green]{'#' * bar_filled}[/][dim]{'.' * bar_empty}[/]"
+
+    content = Text()
+    content.append("CONVERGENCE HEALTH\n\n", style="bold white")
+    content.append("Status: ", style="white")
+    content.append(f"{health.upper()}\n", style=text_style)
+    content.append(f"Requirements: {bar} {req_passed}/{req_total} ({pct:.0f}%)\n", style="white")
+    content.append(f"Review cycles: {review_cycles}\n", style="white")
+
+    if escalated_items:
+        content.append(f"Escalated items: {', '.join(escalated_items)}\n", style="red")
+
+    console.print()
+    console.print(Panel(content, border_style=border_style, title="Convergence"))
+
+
+def print_recovery_report(
+    recovery_count: int,
+    recovery_types: list[str],
+) -> None:
+    """Render recovery pass information after orchestration.
+
+    Shows: pass count, types triggered, and root-cause hints per type.
+    """
+    if recovery_count == 0:
+        return
+
+    type_hints = {
+        "contract_generation": "CONTRACTS.json was not generated during orchestration",
+        "review_recovery": "Review fleet did not achieve sufficient requirement coverage",
+    }
+
+    content = Text()
+    content.append("RECOVERY PASSES\n\n", style="bold yellow")
+    content.append(f"Total passes: {recovery_count}\n", style="white")
+
+    if recovery_types:
+        content.append("Types triggered:\n", style="white")
+        for rtype in recovery_types:
+            hint = type_hints.get(rtype, "Unknown recovery type")
+            content.append(f"  - {rtype}: {hint}\n", style="dim")
+
+    console.print()
+    console.print(Panel(content, border_style="yellow", title="Recovery"))
+
+
+# ---------------------------------------------------------------------------
+# Milestone display
+# ---------------------------------------------------------------------------
+
+
+def print_milestone_start(
+    milestone_id: str,
+    title: str,
+    current: int,
+    total: int,
+) -> None:
+    """Print a banner when starting a milestone."""
+    content = Text()
+    content.append(f"MILESTONE {current}/{total}\n", style="bold cyan")
+    content.append(f"{milestone_id}: {title}", style="white")
+    console.print()
+    console.print(Panel(content, border_style="cyan", title="Milestone Start"))
+
+
+def print_milestone_complete(
+    milestone_id: str,
+    title: str,
+    health: str,
+) -> None:
+    """Print completion banner for a milestone."""
+    style = "green" if health == "healthy" else "yellow" if health == "degraded" else "red"
+    content = Text()
+    content.append(f"{milestone_id}: {title}\n", style="white")
+    content.append(f"Health: {health.upper()}", style=f"bold {style}")
+    console.print()
+    console.print(Panel(content, border_style=style, title="Milestone Complete"))
+
+
+def print_milestone_progress(
+    complete: int,
+    total: int,
+    failed: int = 0,
+) -> None:
+    """Print overall milestone progress."""
+    pct = complete / total * 100 if total > 0 else 0
+    content = Text()
+    content.append(f"Progress: {complete}/{total} ({pct:.0f}%)\n", style="white")
+    if failed:
+        content.append(f"Failed: {failed}", style="bold red")
+    console.print(Panel(content, border_style="blue", title="Milestone Progress"))

@@ -21,6 +21,7 @@ class OrchestratorConfig:
     permission_mode: str = "acceptEdits"
     max_budget_usd: float | None = None
     backend: str = "auto"  # "auto" | "api" | "cli"
+    max_thinking_tokens: int | None = None
 
 
 @dataclass
@@ -88,6 +89,13 @@ class InterviewConfig:
     min_exchanges: int = 3
     require_understanding_summary: bool = True
     require_codebase_exploration: bool = True
+    max_thinking_tokens: int | None = None
+
+
+def _validate_max_thinking_tokens(value: int | None, section: str) -> None:
+    """Validate max_thinking_tokens: must be None or >= 1024 (SDK minimum)."""
+    if value is not None and value < 1024:
+        raise ValueError(f"{section}.max_thinking_tokens must be >= 1024 (got {value})")
 
 
 def _validate_interview_config(cfg: InterviewConfig) -> None:
@@ -95,6 +103,7 @@ def _validate_interview_config(cfg: InterviewConfig) -> None:
         raise ValueError("min_exchanges must be >= 1")
     if cfg.min_exchanges > cfg.max_exchanges:
         raise ValueError("min_exchanges must be <= max_exchanges")
+    _validate_max_thinking_tokens(cfg.max_thinking_tokens, "interview")
 
 
 @dataclass
@@ -139,10 +148,10 @@ class OrchestratorSTConfig:
     """Sequential Thinking at the orchestrator level — depth-gated decision points."""
     enabled: bool = True                    # On by default (depth-gated anyway)
     depth_gate: dict[str, list[int]] = field(default_factory=lambda: {
-        "quick": [],                        # No ST points
-        "standard": [3],                    # Convergence reasoning only
-        "thorough": [1, 3, 4],             # Strategy + convergence + completion
-        "exhaustive": [1, 2, 3, 4],        # All 4 points
+        "quick": [1, 2, 3, 4],             # All points — depth is scale, not reasoning
+        "standard": [1, 2, 3, 4],
+        "thorough": [1, 2, 3, 4],
+        "exhaustive": [1, 2, 3, 4],
     })
     thought_budgets: dict[int, int] = field(default_factory=lambda: {
         1: 8,    # Pre-run strategy: max 8 thoughts
@@ -255,6 +264,24 @@ class DepthDetection:
 
 
 @dataclass
+class MilestoneConfig:
+    """Configuration for the per-milestone orchestration loop.
+
+    Only affects PRD mode.  When ``enabled`` is False (the default),
+    the milestone loop is completely bypassed and non-PRD mode is
+    unchanged.
+    """
+
+    enabled: bool = False
+    max_parallel_milestones: int = 1
+    health_gate: bool = True
+    wiring_check: bool = True
+    resume_from_milestone: str | None = None
+    wiring_fix_retries: int = 1
+    max_milestones_warning: int = 30
+
+
+@dataclass
 class AgentTeamConfig:
     orchestrator: OrchestratorConfig = field(default_factory=OrchestratorConfig)
     depth: DepthConfig = field(default_factory=DepthConfig)
@@ -267,6 +294,7 @@ class AgentTeamConfig:
     quality: QualityConfig = field(default_factory=QualityConfig)
     investigation: InvestigationConfig = field(default_factory=InvestigationConfig)
     orchestrator_st: OrchestratorSTConfig = field(default_factory=OrchestratorSTConfig)
+    milestone: MilestoneConfig = field(default_factory=MilestoneConfig)
     # Agent keys use underscores (Python convention) in config files.
     # The SDK uses hyphens (e.g., "code-writer"). See agents.py for the mapping.
     agents: dict[str, AgentConfig] = field(default_factory=lambda: {
@@ -281,7 +309,7 @@ class AgentTeamConfig:
     mcp_servers: dict[str, MCPServerConfig] = field(default_factory=lambda: {
         "firecrawl": MCPServerConfig(),
         "context7": MCPServerConfig(),
-        "sequential_thinking": MCPServerConfig(enabled=False),
+        "sequential_thinking": MCPServerConfig(),
     })
     display: DisplayConfig = field(default_factory=DisplayConfig)
 
@@ -608,12 +636,15 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
                 f"Invalid orchestrator.backend: {backend!r}. "
                 f"Must be one of: auto, api, cli"
             )
+        max_thinking_tokens = o.get("max_thinking_tokens", cfg.orchestrator.max_thinking_tokens)
+        _validate_max_thinking_tokens(max_thinking_tokens, "orchestrator")
         cfg.orchestrator = OrchestratorConfig(
             model=o.get("model", cfg.orchestrator.model),
             max_turns=o.get("max_turns", cfg.orchestrator.max_turns),
             permission_mode=o.get("permission_mode", cfg.orchestrator.permission_mode),
             max_budget_usd=o.get("max_budget_usd", cfg.orchestrator.max_budget_usd),
             backend=backend,
+            max_thinking_tokens=max_thinking_tokens,
         )
 
     if "depth" in data:
@@ -648,6 +679,7 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
             min_exchanges=iv.get("min_exchanges", cfg.interview.min_exchanges),
             require_understanding_summary=iv.get("require_understanding_summary", cfg.interview.require_understanding_summary),
             require_codebase_exploration=iv.get("require_codebase_exploration", cfg.interview.require_codebase_exploration),
+            max_thinking_tokens=iv.get("max_thinking_tokens", cfg.interview.max_thinking_tokens),
         )
         # Validate the InterviewConfig
         _validate_interview_config(cfg.interview)
@@ -751,6 +783,25 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
             thought_budgets=thought_budgets,
         )
         _validate_orchestrator_st_config(cfg.orchestrator_st)
+
+    if "milestone" in data and isinstance(data["milestone"], dict):
+        ms = data["milestone"]
+        resume_val = ms.get("resume_from_milestone", cfg.milestone.resume_from_milestone)
+        cfg.milestone = MilestoneConfig(
+            enabled=ms.get("enabled", cfg.milestone.enabled),
+            max_parallel_milestones=ms.get(
+                "max_parallel_milestones", cfg.milestone.max_parallel_milestones,
+            ),
+            health_gate=ms.get("health_gate", cfg.milestone.health_gate),
+            wiring_check=ms.get("wiring_check", cfg.milestone.wiring_check),
+            resume_from_milestone=resume_val if isinstance(resume_val, str) else None,
+            wiring_fix_retries=ms.get(
+                "wiring_fix_retries", cfg.milestone.wiring_fix_retries,
+            ),
+            max_milestones_warning=ms.get(
+                "max_milestones_warning", cfg.milestone.max_milestones_warning,
+            ),
+        )
 
     if "agents" in data:
         for name, agent_data in data["agents"].items():

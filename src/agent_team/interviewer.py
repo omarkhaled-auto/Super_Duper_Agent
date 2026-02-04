@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -413,11 +414,43 @@ _SCOPE_RE = re.compile(
 )
 
 
-def _detect_scope(doc_content: str) -> str:
+def _estimate_scope_from_spec(spec_text: str) -> str:
+    """Estimate scope from the raw spec/task text using heuristics.
+
+    Heuristic:
+    - lines > 500 AND features > 8 → COMPLEX
+    - lines > 200 OR features > 4 → MEDIUM
+    - Else → SIMPLE
+
+    Features are counted via bullet points, numbered items, and headings.
+    """
+    if not spec_text:
+        return "MEDIUM"
+
+    lines = spec_text.splitlines()
+    line_count = len(lines)
+
+    # Count features via bullet/numbered/heading patterns
+    feature_pattern = re.compile(
+        r"^\s*(?:[-*+]|\d+[.)]\s|#{1,3}\s)", re.MULTILINE,
+    )
+    feature_count = len(feature_pattern.findall(spec_text))
+
+    if line_count > 500 and feature_count > 8:
+        return "COMPLEX"
+    if line_count > 200 or feature_count > 4:
+        return "MEDIUM"
+    return "SIMPLE"
+
+
+def _detect_scope(doc_content: str, spec_text: str = "") -> str:
     """Detect scope from the Scope: header in the interview document.
 
     Supports plain ``Scope: VALUE`` and markdown-formatted headers like
     ``**Scope:** COMPLEX``.  Matching is case-insensitive.
+
+    If no Scope: header is found and *spec_text* is provided, falls back
+    to heuristic estimation via :func:`_estimate_scope_from_spec`.
     """
     for line in doc_content.splitlines():
         match = _SCOPE_RE.search(line)
@@ -425,6 +458,13 @@ def _detect_scope(doc_content: str) -> str:
             value = match.group(1).strip().upper()
             if value in ("SIMPLE", "MEDIUM", "COMPLEX"):
                 return value
+
+    # Fallback: estimate from spec text if available
+    if spec_text:
+        estimated = _estimate_scope_from_spec(spec_text)
+        logger.info("Scope header not found; estimated %s from spec text", estimated)
+        return estimated
+
     logger.warning("Scope header not found in interview document; defaulting to MEDIUM")
     return "MEDIUM"
 
@@ -443,6 +483,9 @@ def _build_interview_options(
             "Read", "Write", "Edit", "Bash", "Glob", "Grep",
         ],
     }
+
+    if config.interview.max_thinking_tokens is not None:
+        opts_kwargs["max_thinking_tokens"] = config.interview.max_thinking_tokens
 
     if cwd:
         opts_kwargs["cwd"] = Path(cwd)
@@ -625,127 +668,146 @@ async def run_interview(
             f"{doc_path} incrementally."
         )
 
+    # Non-interactive mode detection: if stdin is not a TTY, skip Q&A loop
+    is_interactive = sys.stdin.isatty()
+
     try:
         async with ClaudeSDKClient(options=options) as client:
-            # Send the opening instruction (internal — user doesn't see this)
-            await client.query(opening)
-
-            # Process the interviewer's first response
-            total_cost += await _process_interview_response(client, config.display.verbose)
-            transcript.append({"role": "system", "content": "(opening prompt sent)"})
-            transcript.append({"role": "assistant", "content": "(initial response)"})
-
-            # Multi-turn conversation loop
-            empty_count = 0
-            pending_exit: bool = False
-
-            while exchange_count < config.interview.max_exchanges:
-                # Get user input
-                try:
-                    user_input = console.input("[bold cyan]You:[/] ").strip()
-                except EOFError:
-                    break
-
-                # Handle empty input
-                if not user_input:
-                    empty_count += 1
-                    if empty_count >= 3:
-                        print_warning("Multiple empty inputs — ending interview.")
-                        break
-                    continue
-                empty_count = 0
-
-                exchange_count += 1
-                min_ex = config.interview.min_exchanges
-
-                # --- Three-tier exit handling ---
-
-                # Tier 1: Pending confirmation — user already saw summary
-                if pending_exit:
-                    if user_input.lower().strip() in ("yes", "y", "yeah", "yep", "confirm"):
-                        # Finalize
-                        print_info("Finalizing interview...")
-                        finalize_prompt = (
-                            "The user has confirmed. Write the INTERVIEW.md document now.\n"
-                            "Include all requirements, constraints, scope assessment, "
-                            "and proposed approach discussed during the interview."
-                        )
-                        await client.query(finalize_prompt)
-                        transcript.append({"role": "user", "content": user_input})
-                        total_cost += await _process_interview_response(client, config.display.verbose)
-                        transcript.append({"role": "assistant", "content": "(finalized)"})
-                        break
-                    else:
-                        # User wants to continue
-                        pending_exit = False
-                        if _is_interview_exit(user_input):
-                            # Re-trigger exit flow instead of swallowing
-                            pending_exit = True
-                            confirmation = _build_exit_confirmation_prompt()
-                            await client.query(confirmation)
-                            transcript.append({"role": "user", "content": user_input})
-                            total_cost += await _process_interview_response(client, config.display.verbose)
-                            transcript.append({"role": "assistant", "content": "(exit confirmation re-triggered)"})
-                            continue
-                        # Normal exchange processing...
-                        phase = _get_interview_phase(exchange_count, min_ex)
-                        augmented = _build_exchange_prompt(
-                            user_input, exchange_count, min_ex, phase,
-                            require_understanding=config.interview.require_understanding_summary,
-                            require_exploration=config.interview.require_codebase_exploration,
-                        )
-                        await client.query(augmented)
-                        transcript.append({"role": "user", "content": user_input})
-                        total_cost += await _process_interview_response(client, config.display.verbose)
-                        transcript.append({"role": "assistant", "content": "(response processed)"})
-                        continue
-
-                # Tier 2: Early exit redirect — before min_exchanges
-                if _is_interview_exit(user_input) and exchange_count < min_ex:
-                    print_interview_min_not_reached(exchange_count, min_ex)
-                    continuation = _build_continuation_prompt(exchange_count, min_ex)
-                    await client.query(continuation)
-                    transcript.append({"role": "user", "content": user_input})
-                    total_cost += await _process_interview_response(client, config.display.verbose)
-                    transcript.append({"role": "assistant", "content": "(continuation prompted)"})
-                    continue
-
-                # Tier 3a: Exit after min — trigger confirmation
-                if _is_interview_exit(user_input) and exchange_count >= min_ex:
-                    pending_exit = True
-                    print_interview_pending_exit()
-                    confirmation = _build_exit_confirmation_prompt()
-                    await client.query(confirmation)
-                    transcript.append({"role": "user", "content": user_input})
-                    total_cost += await _process_interview_response(client, config.display.verbose)
-                    transcript.append({"role": "assistant", "content": "(exit confirmation)"})
-                    continue
-
-                # Tier 4: Normal exchange — augment with phase requirements
-                phase = _get_interview_phase(exchange_count, min_ex)
-                augmented = _build_exchange_prompt(
-                    user_input, exchange_count, min_ex, phase,
-                    require_understanding=config.interview.require_understanding_summary,
-                    require_exploration=config.interview.require_codebase_exploration,
-                )
-                await client.query(augmented)
-                transcript.append({"role": "user", "content": user_input})
-                total_cost += await _process_interview_response(client, config.display.verbose)
-                transcript.append({"role": "assistant", "content": "(response processed)"})
-
-            else:
-                # Max exchanges reached — force finalization
-                print_warning(
-                    f"Maximum exchanges ({config.interview.max_exchanges}) reached. "
-                    "Finalizing interview..."
-                )
+            if not is_interactive:
+                # Non-interactive: send finalize prompt immediately
                 finalize_prompt = (
-                    f"We have reached the maximum of {config.interview.max_exchanges} exchanges. "
-                    "Write the INTERVIEW.md document now with everything discussed so far."
+                    f"The user wants to work on: {initial_task or '(no task specified)'}\n\n"
+                    f"The project directory is: {project_dir}\n\n"
+                    "This is a NON-INTERACTIVE session (no TTY). You cannot ask the user questions.\n"
+                    "Explore the codebase, assess the scope (SIMPLE / MEDIUM / COMPLEX), "
+                    "and write the INTERVIEW.md document immediately based on the task description.\n"
+                    f"Save to {doc_path}."
                 )
                 await client.query(finalize_prompt)
                 total_cost += await _process_interview_response(client, config.display.verbose)
-                transcript.append({"role": "assistant", "content": "(max exchanges finalized)"})
+                transcript.append({"role": "system", "content": "(non-interactive finalize)"})
+                transcript.append({"role": "assistant", "content": "(finalized)"})
+            else:
+                # Interactive mode: normal Q&A loop
+                # Send the opening instruction (internal — user doesn't see this)
+                await client.query(opening)
+
+                # Process the interviewer's first response
+                total_cost += await _process_interview_response(client, config.display.verbose)
+                transcript.append({"role": "system", "content": "(opening prompt sent)"})
+                transcript.append({"role": "assistant", "content": "(initial response)"})
+
+                # Multi-turn conversation loop
+                empty_count = 0
+                pending_exit: bool = False
+
+                while exchange_count < config.interview.max_exchanges:
+                    # Get user input
+                    try:
+                        user_input = console.input("[bold cyan]You:[/] ").strip()
+                    except EOFError:
+                        break
+
+                    # Handle empty input
+                    if not user_input:
+                        empty_count += 1
+                        if empty_count >= 3:
+                            print_warning("Multiple empty inputs — ending interview.")
+                            break
+                        continue
+                    empty_count = 0
+
+                    exchange_count += 1
+                    min_ex = config.interview.min_exchanges
+
+                    # --- Three-tier exit handling ---
+
+                    # Tier 1: Pending confirmation — user already saw summary
+                    if pending_exit:
+                        if user_input.lower().strip() in ("yes", "y", "yeah", "yep", "confirm"):
+                            # Finalize
+                            print_info("Finalizing interview...")
+                            finalize_prompt = (
+                                "The user has confirmed. Write the INTERVIEW.md document now.\n"
+                                "Include all requirements, constraints, scope assessment, "
+                                "and proposed approach discussed during the interview."
+                            )
+                            await client.query(finalize_prompt)
+                            transcript.append({"role": "user", "content": user_input})
+                            total_cost += await _process_interview_response(client, config.display.verbose)
+                            transcript.append({"role": "assistant", "content": "(finalized)"})
+                            break
+                        else:
+                            # User wants to continue
+                            pending_exit = False
+                            if _is_interview_exit(user_input):
+                                # Re-trigger exit flow instead of swallowing
+                                pending_exit = True
+                                confirmation = _build_exit_confirmation_prompt()
+                                await client.query(confirmation)
+                                transcript.append({"role": "user", "content": user_input})
+                                total_cost += await _process_interview_response(client, config.display.verbose)
+                                transcript.append({"role": "assistant", "content": "(exit confirmation re-triggered)"})
+                                continue
+                            # Normal exchange processing...
+                            phase = _get_interview_phase(exchange_count, min_ex)
+                            augmented = _build_exchange_prompt(
+                                user_input, exchange_count, min_ex, phase,
+                                require_understanding=config.interview.require_understanding_summary,
+                                require_exploration=config.interview.require_codebase_exploration,
+                            )
+                            await client.query(augmented)
+                            transcript.append({"role": "user", "content": user_input})
+                            total_cost += await _process_interview_response(client, config.display.verbose)
+                            transcript.append({"role": "assistant", "content": "(response processed)"})
+                            continue
+
+                    # Tier 2: Early exit redirect — before min_exchanges
+                    if _is_interview_exit(user_input) and exchange_count < min_ex:
+                        print_interview_min_not_reached(exchange_count, min_ex)
+                        continuation = _build_continuation_prompt(exchange_count, min_ex)
+                        await client.query(continuation)
+                        transcript.append({"role": "user", "content": user_input})
+                        total_cost += await _process_interview_response(client, config.display.verbose)
+                        transcript.append({"role": "assistant", "content": "(continuation prompted)"})
+                        continue
+
+                    # Tier 3a: Exit after min — trigger confirmation
+                    if _is_interview_exit(user_input) and exchange_count >= min_ex:
+                        pending_exit = True
+                        print_interview_pending_exit()
+                        confirmation = _build_exit_confirmation_prompt()
+                        await client.query(confirmation)
+                        transcript.append({"role": "user", "content": user_input})
+                        total_cost += await _process_interview_response(client, config.display.verbose)
+                        transcript.append({"role": "assistant", "content": "(exit confirmation)"})
+                        continue
+
+                    # Tier 4: Normal exchange — augment with phase requirements
+                    phase = _get_interview_phase(exchange_count, min_ex)
+                    augmented = _build_exchange_prompt(
+                        user_input, exchange_count, min_ex, phase,
+                        require_understanding=config.interview.require_understanding_summary,
+                        require_exploration=config.interview.require_codebase_exploration,
+                    )
+                    await client.query(augmented)
+                    transcript.append({"role": "user", "content": user_input})
+                    total_cost += await _process_interview_response(client, config.display.verbose)
+                    transcript.append({"role": "assistant", "content": "(response processed)"})
+
+                else:
+                    # Max exchanges reached — force finalization
+                    print_warning(
+                        f"Maximum exchanges ({config.interview.max_exchanges}) reached. "
+                        "Finalizing interview..."
+                    )
+                    finalize_prompt = (
+                        f"We have reached the maximum of {config.interview.max_exchanges} exchanges. "
+                        "Write the INTERVIEW.md document now with everything discussed so far."
+                    )
+                    await client.query(finalize_prompt)
+                    total_cost += await _process_interview_response(client, config.display.verbose)
+                    transcript.append({"role": "assistant", "content": "(max exchanges finalized)"})
 
     except KeyboardInterrupt:
         print_info("Interview interrupted by user.")
@@ -783,7 +845,7 @@ async def run_interview(
             f"The interviewer may not have saved the document."
         )
 
-    scope = _detect_scope(doc_content) if doc_content else "MEDIUM"
+    scope = _detect_scope(doc_content, spec_text=initial_task or "") if doc_content else "MEDIUM"
 
     print_interview_end(exchange_count, scope, str(doc_path))
 

@@ -10,6 +10,7 @@ from agent_team.config import (
     AgentTeamConfig,
     CodebaseMapConfig,
     MCPServerConfig,
+    MilestoneConfig,
     SchedulerConfig,
     VerificationConfig,
 )
@@ -150,6 +151,17 @@ def env_with_anthropic_only(monkeypatch):
 def full_config_with_new_features() -> AgentTeamConfig:
     """AgentTeamConfig with all new features enabled."""
     return AgentTeamConfig(
+        codebase_map=CodebaseMapConfig(enabled=True),
+        scheduler=SchedulerConfig(enabled=True),
+        verification=VerificationConfig(enabled=True),
+    )
+
+
+@pytest.fixture()
+def config_with_milestones() -> AgentTeamConfig:
+    """AgentTeamConfig with milestone orchestration enabled."""
+    return AgentTeamConfig(
+        milestone=MilestoneConfig(enabled=True),
         codebase_map=CodebaseMapConfig(enabled=True),
         scheduler=SchedulerConfig(enabled=True),
         verification=VerificationConfig(enabled=True),

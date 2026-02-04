@@ -96,6 +96,7 @@ async def verify_task_completion(
     *,
     blocking: bool = True,
     min_test_count: int = 0,
+    milestone_id: str | None = None,
 ) -> TaskVerificationResult:
     """Run the 7-phase verification pipeline for a completed task.
 
@@ -118,7 +119,7 @@ async def verify_task_completion(
     issues: list[str] = []
 
     # Phase 0: Requirements compliance (always runs, deterministic) -------
-    req_result = _check_requirements_compliance(project_root)
+    req_result = _check_requirements_compliance(project_root, milestone_id=milestone_id)
     if req_result and not req_result.passed:
         issues.append(f"Requirements: {req_result.details}")
 
@@ -406,13 +407,23 @@ async def run_automated_review_phases(
 # ---------------------------------------------------------------------------
 
 
-def _check_requirements_compliance(project_root: Path) -> StructuredReviewResult | None:
+def _check_requirements_compliance(
+    project_root: Path,
+    *,
+    milestone_id: str | None = None,
+) -> StructuredReviewResult | None:
     """Check if the project satisfies declared technologies in REQUIREMENTS.md.
+
+    When *milestone_id* is provided the per-milestone REQUIREMENTS.md is
+    used instead of the global one.
 
     Returns ``None`` if no REQUIREMENTS.md exists (nothing to check).
     Otherwise returns a ``StructuredReviewResult`` with phase="requirements".
     """
-    req_path = project_root / ".agent-team" / "REQUIREMENTS.md"
+    if milestone_id:
+        req_path = project_root / ".agent-team" / "milestones" / milestone_id / "REQUIREMENTS.md"
+    else:
+        req_path = project_root / ".agent-team" / "REQUIREMENTS.md"
     if not req_path.is_file():
         return None
 
@@ -1062,12 +1073,19 @@ async def _run_command(
 def write_verification_summary(
     state: ProgressiveVerificationState,
     path: Path,
+    *,
+    milestone_id: str | None = None,
 ) -> None:
     """Write verification state to ``.agent-team/VERIFICATION.md``.
+
+    When *milestone_id* is provided, writes to
+    ``.agent-team/milestones/{milestone_id}/VERIFICATION.md`` instead.
 
     Creates the parent directory if it does not exist. The output
     format is a Markdown document with a summary table and issue list.
     """
+    if milestone_id:
+        path = path.parent / "milestones" / milestone_id / "VERIFICATION.md"
     path.parent.mkdir(parents=True, exist_ok=True)
 
     lines: list[str] = []

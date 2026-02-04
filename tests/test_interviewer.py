@@ -10,6 +10,7 @@ from agent_team.interviewer import (
     INTERVIEWER_SYSTEM_PROMPT,
     InterviewResult,
     _detect_scope,
+    _estimate_scope_from_spec,
     _is_interview_exit,
     _NEGATION_WORDS,
     _get_interview_phase,
@@ -193,6 +194,18 @@ class TestBuildInterviewOptions:
         cfg = AgentTeamConfig()
         opts = _build_interview_options(cfg, cwd=str(tmp_path))
         assert opts.cwd == tmp_path
+
+    def test_max_thinking_tokens_passed_when_set(self):
+        from agent_team.interviewer import _build_interview_options
+        cfg = AgentTeamConfig(interview=InterviewConfig(max_thinking_tokens=8192))
+        opts = _build_interview_options(cfg)
+        assert opts.max_thinking_tokens == 8192
+
+    def test_max_thinking_tokens_not_passed_when_none(self):
+        from agent_team.interviewer import _build_interview_options
+        cfg = AgentTeamConfig()
+        opts = _build_interview_options(cfg)
+        assert getattr(opts, "max_thinking_tokens", None) is None
 
 
 # ===================================================================
@@ -480,3 +493,101 @@ class TestExitBoundary:
         """Exit confirmation should always ask for explicit confirmation."""
         prompt = _build_exit_confirmation_prompt()
         assert "yes" in prompt.lower()
+
+
+# ===================================================================
+# _estimate_scope_from_spec()
+# ===================================================================
+
+class TestEstimateScopeFromSpec:
+    """Tests for _estimate_scope_from_spec heuristic function."""
+
+    def test_empty_string_returns_medium(self):
+        assert _estimate_scope_from_spec("") == "MEDIUM"
+
+    def test_short_spec_returns_simple(self):
+        """A short spec with few features should return SIMPLE."""
+        spec = "Build a hello world app.\n- Print hello\n- Exit cleanly\n"
+        assert _estimate_scope_from_spec(spec) == "SIMPLE"
+
+    def test_medium_spec(self):
+        """A spec with >4 features should return MEDIUM."""
+        lines = ["Feature line\n"] * 50
+        bullets = ["- Feature {}\n".format(i) for i in range(5)]
+        spec = "".join(lines + bullets)
+        assert _estimate_scope_from_spec(spec) == "MEDIUM"
+
+    def test_complex_spec_long_and_many_features(self):
+        """A spec with >500 lines AND >8 features should return COMPLEX."""
+        lines = ["Description line\n"] * 510
+        bullets = ["- Feature {}\n".format(i) for i in range(10)]
+        spec = "".join(lines + bullets)
+        assert _estimate_scope_from_spec(spec) == "COMPLEX"
+
+    def test_long_but_few_features_returns_medium(self):
+        """A spec with >500 lines but <=8 features should return MEDIUM (lines > 200)."""
+        lines = ["Description line\n"] * 510
+        bullets = ["- Feature A\n", "- Feature B\n"]
+        spec = "".join(lines + bullets)
+        result = _estimate_scope_from_spec(spec)
+        assert result == "MEDIUM"
+
+    def test_short_but_many_features_returns_medium(self):
+        """A spec with <=200 lines but >4 features should return MEDIUM."""
+        bullets = ["- Feature {}\n".format(i) for i in range(6)]
+        spec = "".join(bullets)
+        assert _estimate_scope_from_spec(spec) == "MEDIUM"
+
+    def test_numbered_items_count_as_features(self):
+        """Numbered items (1. 2. etc.) should count as features."""
+        items = ["{}. Feature item\n".format(i) for i in range(1, 6)]
+        spec = "".join(items)
+        assert _estimate_scope_from_spec(spec) == "MEDIUM"
+
+    def test_headings_count_as_features(self):
+        """Markdown headings should count as features."""
+        headings = ["## Section {}\n".format(i) for i in range(6)]
+        spec = "".join(headings)
+        assert _estimate_scope_from_spec(spec) == "MEDIUM"
+
+    def test_always_returns_valid_scope(self):
+        """Return value is always one of SIMPLE, MEDIUM, COMPLEX."""
+        for text in ["", "x", "x\n" * 1000, "- " * 100]:
+            result = _estimate_scope_from_spec(text)
+            assert result in ("SIMPLE", "MEDIUM", "COMPLEX")
+
+
+# ===================================================================
+# _detect_scope() with spec_text fallback
+# ===================================================================
+
+class TestDetectScopeWithSpecFallback:
+    """Tests for _detect_scope with the spec_text fallback parameter."""
+
+    def test_header_takes_priority_over_spec(self):
+        """When Scope: header exists, spec_text fallback is not used."""
+        doc = "Scope: SIMPLE\n"
+        complex_spec = "".join(["line\n"] * 600 + ["- Feature\n"] * 10)
+        assert _detect_scope(doc, spec_text=complex_spec) == "SIMPLE"
+
+    def test_fallback_to_spec_when_no_header(self):
+        """When no Scope: header exists and spec_text is provided, estimate from spec."""
+        doc = "# Task Brief\nSome content without scope header\n"
+        complex_spec = "".join(["line\n"] * 600 + ["- Feature\n"] * 10)
+        result = _detect_scope(doc, spec_text=complex_spec)
+        assert result == "COMPLEX"
+
+    def test_backward_compat_no_spec(self):
+        """Without spec_text, _detect_scope still defaults to MEDIUM when no header."""
+        doc = "# No scope header here\n"
+        assert _detect_scope(doc) == "MEDIUM"
+
+    def test_empty_doc_with_spec_fallback(self):
+        """Empty doc_content with spec_text should use the heuristic."""
+        spec = "".join(["- Feature {}\n".format(i) for i in range(6)])
+        result = _detect_scope("", spec_text=spec)
+        assert result == "MEDIUM"
+
+    def test_empty_doc_empty_spec(self):
+        """Both empty should return MEDIUM."""
+        assert _detect_scope("", spec_text="") == "MEDIUM"

@@ -34,6 +34,8 @@ from . import __version__
 from .agents import (
     ORCHESTRATOR_SYSTEM_PROMPT,
     build_agent_definitions,
+    build_decomposition_prompt,
+    build_milestone_execution_prompt,
     build_orchestrator_prompt,
 )
 from .config import AgentTeamConfig, apply_depth_quality_gating, detect_depth, extract_constraints, load_config, parse_max_review_cycles, parse_per_item_review_cycles
@@ -43,6 +45,7 @@ from .display import (
     print_agent_response,
     print_banner,
     print_completion,
+    print_convergence_health,
     print_contract_violation,
     print_cost_summary,
     print_depth_detection,
@@ -54,7 +57,11 @@ from .display import (
     print_interview_skip,
     print_map_complete,
     print_map_start,
+    print_milestone_complete,
+    print_milestone_progress,
+    print_milestone_start,
     print_prd_mode,
+    print_recovery_report,
     print_run_summary,
     print_schedule_summary,
     print_task_start,
@@ -256,6 +263,9 @@ def _build_options(
             "Task", "WebSearch", "WebFetch",
         ],
     }
+
+    if config.orchestrator.max_thinking_tokens is not None:
+        opts_kwargs["max_thinking_tokens"] = config.orchestrator.max_thinking_tokens
 
     if mcp_servers:
         opts_kwargs["mcp_servers"] = mcp_servers
@@ -474,6 +484,7 @@ async def _run_single(
     intervention: "InterventionQueue | None" = None,
     resume_context: str | None = None,
     task_text: str | None = None,
+    schedule_info: str | None = None,
 ) -> float:
     """Run a single task to completion. Returns total cost."""
     options = _build_options(config, cwd, constraints=constraints, task_text=task_text or task, depth=depth)
@@ -497,6 +508,7 @@ async def _run_single(
         codebase_map_summary=codebase_map_summary,
         constraints=constraints,
         resume_context=resume_context,
+        schedule_info=schedule_info,
     )
 
     print_task_start(task, depth, agent_count)
@@ -508,14 +520,33 @@ async def _run_single(
 
     # Cost breakdown (gated behind show_cost; skip in subscription mode)
     cycle_count = 0
+    req_passed = 0
+    req_total = 0
+    health = "unknown"
+
     if config.display.show_cost and _backend == "api":
         print_cost_summary(phase_costs)
 
-    # Read REQUIREMENTS.md for actual cycle count (always, for RunSummary)
+    # Read REQUIREMENTS.md for actual cycle count + requirement stats (always, for RunSummary)
     req_path = Path(cwd or ".") / config.convergence.requirements_dir / config.convergence.requirements_file
     if req_path.exists():
         try:
-            cycle_count = parse_max_review_cycles(req_path.read_text(encoding="utf-8"))
+            req_content = req_path.read_text(encoding="utf-8")
+            cycle_count = parse_max_review_cycles(req_content)
+            # Parse checked/unchecked counts
+            checked = len(re.findall(r"^- \[x\]", req_content, re.MULTILINE))
+            unchecked = len(re.findall(r"^- \[ \]", req_content, re.MULTILINE))
+            req_passed = checked
+            req_total = checked + unchecked
+            # Derive health
+            if req_total == 0:
+                health = "unknown"
+            elif req_passed == req_total:
+                health = "healthy"
+            elif cycle_count > 0 and req_passed / req_total >= config.convergence.degraded_threshold:
+                health = "degraded"
+            else:
+                health = "failed"
         except (OSError, ValueError) as exc:
             print_warning(f"Could not parse review cycles: {exc}")
 
@@ -525,10 +556,397 @@ async def _run_single(
 
     # Run summary (always shown, not gated behind show_cost)
     from .state import RunSummary
-    summary = RunSummary(task=task[:100], depth=depth, total_cost=total_cost, cycle_count=cycle_count)
+    summary = RunSummary(
+        task=task[:100],
+        depth=depth,
+        total_cost=total_cost,
+        cycle_count=cycle_count,
+        requirements_passed=req_passed,
+        requirements_total=req_total,
+        health=health,
+    )
     print_run_summary(summary, backend=_backend)
 
     return total_cost
+
+
+# ---------------------------------------------------------------------------
+# PRD milestone orchestration loop
+# ---------------------------------------------------------------------------
+
+
+def _build_completed_milestones_context(
+    plan: "MasterPlan",
+    milestone_manager: "MilestoneManager",
+) -> list["MilestoneCompletionSummary"]:
+    """Build compressed summaries for all completed milestones."""
+    from .milestone_manager import (
+        MilestoneCompletionSummary,
+        build_completion_summary,
+        load_completion_cache,
+        save_completion_cache,
+    )
+
+    summaries: list[MilestoneCompletionSummary] = []
+    for m in plan.milestones:
+        if m.status == "COMPLETE":
+            # Try cache first
+            cached = load_completion_cache(
+                str(milestone_manager._milestones_dir), m.id,
+            )
+            if cached:
+                summaries.append(cached)
+                continue
+            # Fallback: build from REQUIREMENTS.md
+            exported_files = list(milestone_manager._collect_milestone_files(m.id))
+            summary = build_completion_summary(
+                milestone=m,
+                exported_files=exported_files[:20],
+                summary_line=m.description[:120] if m.description else m.title,
+            )
+            # Cache for future iterations
+            save_completion_cache(
+                str(milestone_manager._milestones_dir), m.id, summary,
+            )
+            summaries.append(summary)
+    return summaries
+
+
+async def _run_prd_milestones(
+    task: str,
+    config: AgentTeamConfig,
+    cwd: str | None,
+    depth: str,
+    prd_path: str | None,
+    interview_doc: str | None = None,
+    codebase_map_summary: str | None = None,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+) -> float:
+    """Execute the per-milestone orchestration loop for PRD mode.
+
+    Phase 1: Decomposition — one orchestrator call to create MASTER_PLAN.md
+    Phase 2: Execution — one fresh session per milestone, in dependency order
+
+    Returns total cost across all phases.
+    """
+    from .milestone_manager import (
+        MilestoneManager,
+        build_milestone_context,
+        compute_rollup_health,
+        parse_master_plan,
+        render_predecessor_context,
+        update_master_plan_status,
+    )
+    from .state import save_state, update_completion_ratio, update_milestone_progress
+
+    global _current_state
+
+    total_cost = 0.0
+    project_root = Path(cwd or ".")
+    req_dir = project_root / config.convergence.requirements_dir
+    master_plan_path = req_dir / config.convergence.master_plan_file
+
+    # ------------------------------------------------------------------
+    # Phase 1: DECOMPOSITION
+    # ------------------------------------------------------------------
+    # Check if MASTER_PLAN.md already exists (resume scenario)
+    if not master_plan_path.is_file():
+        print_info("Phase 1: PRD Decomposition — creating MASTER_PLAN.md")
+
+        decomp_prompt = build_decomposition_prompt(
+            task=task,
+            depth=depth,
+            config=config,
+            prd_path=prd_path,
+            cwd=cwd,
+            interview_doc=interview_doc,
+            codebase_map_summary=codebase_map_summary,
+        )
+
+        options = _build_options(config, cwd, constraints=constraints, task_text=task, depth=depth)
+        phase_costs: dict[str, float] = {}
+
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(decomp_prompt)
+            decomp_cost = await _process_response(client, config, phase_costs)
+            if intervention:
+                decomp_cost += await _drain_interventions(client, intervention, config, phase_costs)
+            total_cost += decomp_cost
+
+        if not master_plan_path.is_file():
+            print_error(
+                "Decomposition did not create MASTER_PLAN.md. "
+                "The orchestrator may need a different prompt. Aborting milestone loop."
+            )
+            return total_cost
+    else:
+        print_info("Phase 1: Skipping decomposition — MASTER_PLAN.md already exists")
+
+    # Parse the master plan
+    plan_content = master_plan_path.read_text(encoding="utf-8")
+    plan = parse_master_plan(plan_content)
+
+    if not plan.milestones:
+        print_error("MASTER_PLAN.md contains no milestones. Aborting.")
+        return total_cost
+
+    # Warn if decomposition produced too many milestones
+    if len(plan.milestones) > config.milestone.max_milestones_warning:
+        print_warning(
+            f"Decomposition produced {len(plan.milestones)} milestones "
+            f"(threshold: {config.milestone.max_milestones_warning}). "
+            f"Consider consolidating to reduce execution cost."
+        )
+
+    # Save milestone order in state
+    if _current_state:
+        _current_state.milestone_order = [m.id for m in plan.milestones]
+
+    mm = MilestoneManager(project_root)
+    milestones_dir = req_dir / "milestones"
+
+    # Determine resume point
+    resume_from = config.milestone.resume_from_milestone
+    if not resume_from and _current_state:
+        from .state import get_resume_milestone
+        resume_from = get_resume_milestone(_current_state)
+
+    # ------------------------------------------------------------------
+    # Phase 2: EXECUTION LOOP
+    # ------------------------------------------------------------------
+    print_info(f"Phase 2: Executing {len(plan.milestones)} milestones")
+
+    iteration = 0
+    max_iterations = len(plan.milestones) * 2  # safety limit
+
+    while not plan.all_complete() and iteration < max_iterations:
+        iteration += 1
+        ready = plan.get_ready_milestones()
+
+        if not ready:
+            # Check for deadlock or all failed
+            health = compute_rollup_health(plan)
+            if health["health"] == "failed":
+                print_error("Milestone plan health: FAILED. Stopping.")
+                break
+            print_warning("No milestones ready. Waiting for dependencies to resolve...")
+            break
+
+        for milestone in ready:
+            # Skip already-completed milestones (resume scenario)
+            if resume_from and milestone.id != resume_from:
+                completed_ids = {m.id for m in plan.milestones if m.status == "COMPLETE"}
+                if milestone.id in completed_ids:
+                    continue
+
+            # Clear resume_from after first milestone starts
+            resume_from = None
+
+            # Track milestone index for display
+            ms_index = next(
+                (i + 1 for i, m in enumerate(plan.milestones) if m.id == milestone.id),
+                0,
+            )
+
+            print_milestone_start(
+                milestone.id, milestone.title,
+                ms_index, len(plan.milestones),
+            )
+
+            # Update plan and state
+            milestone.status = "IN_PROGRESS"
+            plan_content = update_master_plan_status(plan_content, milestone.id, "IN_PROGRESS")
+            master_plan_path.write_text(plan_content, encoding="utf-8")
+
+            if _current_state:
+                update_milestone_progress(_current_state, milestone.id, "IN_PROGRESS")
+                update_completion_ratio(_current_state)
+                save_state(_current_state, directory=str(req_dir.parent / ".agent-team"))
+
+            # Build scoped context
+            predecessor_summaries = _build_completed_milestones_context(plan, mm)
+            ms_context = build_milestone_context(
+                milestone, milestones_dir, predecessor_summaries,
+            )
+            predecessor_str = render_predecessor_context(predecessor_summaries)
+
+            # Build milestone-specific prompt
+            ms_prompt = build_milestone_execution_prompt(
+                task=task,
+                depth=depth,
+                config=config,
+                milestone_context=ms_context,
+                cwd=cwd,
+                codebase_map_summary=codebase_map_summary,
+                predecessor_context=predecessor_str,
+            )
+
+            # Fresh session for this milestone
+            ms_options = _build_options(
+                config, cwd, constraints=constraints,
+                task_text=task, depth=depth,
+            )
+            ms_phase_costs: dict[str, float] = {}
+
+            try:
+                async with ClaudeSDKClient(options=ms_options) as client:
+                    await client.query(ms_prompt)
+                    ms_cost = await _process_response(client, config, ms_phase_costs)
+                    if intervention:
+                        ms_cost += await _drain_interventions(
+                            client, intervention, config, ms_phase_costs,
+                        )
+                    total_cost += ms_cost
+            except Exception as exc:
+                print_warning(f"Milestone {milestone.id} failed: {exc}")
+                milestone.status = "FAILED"
+                plan_content = update_master_plan_status(
+                    plan_content, milestone.id, "FAILED",
+                )
+                master_plan_path.write_text(plan_content, encoding="utf-8")
+                if _current_state:
+                    update_milestone_progress(_current_state, milestone.id, "FAILED")
+                    update_completion_ratio(_current_state)
+                    save_state(_current_state, directory=str(req_dir.parent / ".agent-team"))
+                continue
+
+            # Health check (if gate enabled)
+            health_report = mm.check_milestone_health(
+                milestone.id,
+                min_convergence_ratio=config.convergence.min_convergence_ratio,
+            )
+
+            if config.milestone.health_gate and health_report.health == "failed":
+                print_warning(
+                    f"Milestone {milestone.id} health gate FAILED "
+                    f"({health_report.checked_requirements}/{health_report.total_requirements}). "
+                    f"Marking as FAILED."
+                )
+                milestone.status = "FAILED"
+                plan_content = update_master_plan_status(
+                    plan_content, milestone.id, "FAILED",
+                )
+                master_plan_path.write_text(plan_content, encoding="utf-8")
+                if _current_state:
+                    update_milestone_progress(_current_state, milestone.id, "FAILED")
+                continue
+
+            # Wiring verification with retry loop (if enabled)
+            if config.milestone.wiring_check:
+                max_retries = config.milestone.wiring_fix_retries
+                for wiring_attempt in range(max_retries + 1):
+                    export_issues = mm.verify_milestone_exports(milestone.id)
+                    if not export_issues:
+                        break  # Clean — no wiring gaps
+                    if wiring_attempt < max_retries:
+                        print_warning(
+                            f"Milestone {milestone.id} has {len(export_issues)} wiring issues "
+                            f"(attempt {wiring_attempt + 1}/{max_retries + 1}). "
+                            f"Running wiring fix pass."
+                        )
+                        wiring_cost = await _run_milestone_wiring_fix(
+                            milestone_id=milestone.id,
+                            wiring_issues=export_issues,
+                            config=config,
+                            cwd=cwd,
+                            depth=depth,
+                            task=task,
+                            constraints=constraints,
+                            intervention=intervention,
+                        )
+                        total_cost += wiring_cost
+                    else:
+                        print_warning(
+                            f"Milestone {milestone.id} still has {len(export_issues)} "
+                            f"wiring issues after {max_retries} fix attempt(s). "
+                            f"Proceeding anyway."
+                        )
+
+            # Mark complete
+            milestone.status = "COMPLETE"
+            plan_content = update_master_plan_status(
+                plan_content, milestone.id, "COMPLETE",
+            )
+            master_plan_path.write_text(plan_content, encoding="utf-8")
+
+            if _current_state:
+                update_milestone_progress(_current_state, milestone.id, "COMPLETE")
+                update_completion_ratio(_current_state)
+                save_state(_current_state, directory=str(req_dir.parent / ".agent-team"))
+
+            # Cache completion summary for future iterations
+            from .milestone_manager import save_completion_cache, build_completion_summary as _build_cs
+            _cs = _build_cs(
+                milestone=milestone,
+                exported_files=list(mm._collect_milestone_files(milestone.id))[:20],
+                summary_line=milestone.description[:120] if milestone.description else milestone.title,
+            )
+            save_completion_cache(str(mm._milestones_dir), milestone.id, _cs)
+
+            print_milestone_complete(milestone.id, milestone.title, health_report.health)
+
+        # Re-read plan for next iteration
+        plan_content = master_plan_path.read_text(encoding="utf-8")
+        plan = parse_master_plan(plan_content)
+
+        rollup = compute_rollup_health(plan)
+        print_milestone_progress(
+            rollup.get("complete", 0),
+            rollup.get("total", 0),
+            rollup.get("failed", 0),
+        )
+
+    return total_cost
+
+
+async def _run_milestone_wiring_fix(
+    milestone_id: str,
+    wiring_issues: list[str],
+    config: AgentTeamConfig,
+    cwd: str | None,
+    depth: str,
+    task: str,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+) -> float:
+    """Run a targeted wiring fix pass for cross-milestone integration gaps.
+
+    Launches a fresh orchestrator session with instructions to fix only
+    the listed wiring issues, without touching other milestones' code.
+
+    Returns the cost of the wiring fix pass.
+    """
+    if not wiring_issues:
+        return 0.0
+
+    print_info(f"Running wiring fix for milestone {milestone_id} ({len(wiring_issues)} issues)")
+
+    wiring_block = "\n".join(f"  - {issue}" for issue in wiring_issues)
+    fix_prompt = (
+        f"[PHASE: WIRING FIX]\n"
+        f"[MILESTONE: {milestone_id}]\n"
+        f"\nThe following cross-milestone wiring issues were detected:\n"
+        f"{wiring_block}\n\n"
+        f"Fix ONLY these wiring issues. Do NOT modify other functionality.\n"
+        f"After fixing, verify the connections work by tracing the import chain.\n"
+        f"\n[ORIGINAL USER REQUEST]\n{task}"
+    )
+
+    options = _build_options(config, cwd, constraints=constraints, task_text=task, depth=depth)
+    phase_costs: dict[str, float] = {}
+    cost = 0.0
+
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(fix_prompt)
+            cost = await _process_response(client, config, phase_costs)
+            if intervention:
+                cost += await _drain_interventions(client, intervention, config, phase_costs)
+    except Exception as exc:
+        print_warning(f"Wiring fix for {milestone_id} failed: {exc}")
+
+    return cost
 
 
 # ---------------------------------------------------------------------------
@@ -882,7 +1300,23 @@ def _build_resume_context(state: object, cwd: str) -> str:
             checked = mdata.get("checked", 0)
             total = mdata.get("total", 0)
             mc = mdata.get("cycles", 0)
-            lines.append(f"  - {mid}: {checked}/{total} requirements, {mc} cycles")
+            status = mdata.get("status", "unknown")
+            lines.append(f"  - {mid}: {status} ({checked}/{total} requirements, {mc} cycles)")
+
+    # Schema version 2 milestone-aware resume context
+    current_ms = getattr(state, "current_milestone", "")
+    completed_ms = getattr(state, "completed_milestones", [])
+    failed_ms = getattr(state, "failed_milestones", [])
+    ms_order = getattr(state, "milestone_order", [])
+
+    if ms_order:
+        lines.append(f"Milestone order: {', '.join(ms_order)}")
+        if completed_ms:
+            lines.append(f"Completed milestones: {', '.join(completed_ms)}")
+        if failed_ms:
+            lines.append(f"Failed milestones: {', '.join(failed_ms)}")
+        if current_ms:
+            lines.append(f"Interrupted during milestone: {current_ms}")
 
     lines.append("")
     lines.append("[RESUME INSTRUCTIONS]")
@@ -1013,8 +1447,9 @@ def _run_review_only(
         "2. Deploy the REVIEW FLEET (code-reviewer agents) to verify EACH unchecked item\n"
         "3. For each item, find the implementation and verify correctness\n"
         "4. Mark items [x] ONLY if fully implemented, or document issues in Review Log\n"
-        "5. Deploy TEST RUNNER agents to run tests\n"
-        f"6. Report final convergence status: target {total}/{total} requirements checked\n\n"
+        "5. ALWAYS update (review_cycles: N) to (review_cycles: N+1) on EVERY evaluated item\n"
+        "6. Deploy TEST RUNNER agents to run tests\n"
+        f"7. Report final convergence status: target {total}/{total} requirements checked\n\n"
         "This is NOT optional. The system has detected a convergence failure and this "
         "review pass is MANDATORY."
     )
@@ -1610,22 +2045,56 @@ def main() -> None:
                 # Apply depth-based quality gating (QUICK disables quality features)
                 apply_depth_quality_gating(depth, config)
 
-                run_cost = asyncio.run(_run_single(
-                    task=task,
-                    config=config,
-                    cwd=cwd,
-                    depth=depth,
-                    agent_count=agent_count,
-                    prd_path=args.prd,
-                    interview_doc=interview_doc,
-                    interview_scope=interview_scope,
-                    design_reference_urls=design_ref_urls or None,
-                    codebase_map_summary=codebase_map_summary,
-                    constraints=constraints,
-                    intervention=intervention,
-                    resume_context=_resume_ctx,
-                    task_text=args.task,
-                ))
+                # Route to milestone loop if PRD mode + milestone feature enabled
+                _is_prd_mode = bool(args.prd) or interview_scope == "COMPLEX"
+                _master_plan_exists = (
+                    Path(cwd) / config.convergence.requirements_dir
+                    / config.convergence.master_plan_file
+                ).is_file()
+                _use_milestones = (
+                    config.milestone.enabled
+                    and (_is_prd_mode or _master_plan_exists)
+                )
+
+                if _use_milestones:
+                    print_info("Milestone orchestration enabled — entering per-milestone loop")
+                    run_cost = asyncio.run(_run_prd_milestones(
+                        task=task,
+                        config=config,
+                        cwd=cwd,
+                        depth=depth,
+                        prd_path=args.prd,
+                        interview_doc=interview_doc,
+                        codebase_map_summary=codebase_map_summary,
+                        constraints=constraints,
+                        intervention=intervention,
+                    ))
+                else:
+                    # Format schedule for prompt injection (if available)
+                    _schedule_str = None
+                    if schedule_info is not None:
+                        try:
+                            from .scheduler import format_schedule_for_prompt
+                            _schedule_str = format_schedule_for_prompt(schedule_info)
+                        except (ImportError, Exception):
+                            pass
+                    run_cost = asyncio.run(_run_single(
+                        task=task,
+                        config=config,
+                        cwd=cwd,
+                        depth=depth,
+                        agent_count=agent_count,
+                        prd_path=args.prd,
+                        interview_doc=interview_doc,
+                        interview_scope=interview_scope,
+                        design_reference_urls=design_ref_urls or None,
+                        codebase_map_summary=codebase_map_summary,
+                        constraints=constraints,
+                        intervention=intervention,
+                        resume_context=_resume_ctx,
+                        task_text=args.task,
+                        schedule_info=_schedule_str,
+                    ))
         except Exception as exc:
             # Root Cause #1: ProcessError (or any exception) during orchestration
             # must NOT prevent post-orchestration (verification, state cleanup)
@@ -1662,22 +2131,33 @@ def main() -> None:
         intervention.stop()
 
     # -------------------------------------------------------------------
-    # Post-orchestration: Update TASKS.md statuses
+    # Post-orchestration: TASKS.md diagnostic (replaces blind mark-all)
     # -------------------------------------------------------------------
+    recovery_types: list[str] = []
+
     if config.scheduler.enabled:
         try:
-            from .scheduler import update_tasks_md_statuses
+            from .scheduler import parse_tasks_md
 
             tasks_path = (
                 Path(cwd) / config.convergence.requirements_dir / "TASKS.md"
             )
             if tasks_path.is_file():
-                old_content = tasks_path.read_text(encoding="utf-8")
-                new_content = update_tasks_md_statuses(old_content)
-                tasks_path.write_text(new_content, encoding="utf-8")
-                print_info("TASKS.md statuses updated to COMPLETE.")
+                tasks_content = tasks_path.read_text(encoding="utf-8")
+                parsed_tasks = parse_tasks_md(tasks_content)
+                pending_count = sum(1 for t in parsed_tasks if t.status == "PENDING")
+                complete_count = sum(1 for t in parsed_tasks if t.status == "COMPLETE")
+                total_tasks = len(parsed_tasks)
+                if pending_count > 0:
+                    print_warning(
+                        f"TASKS.md: {pending_count}/{total_tasks} tasks still PENDING "
+                        f"({complete_count} COMPLETE). Code-writers should have marked "
+                        f"their own tasks COMPLETE during execution."
+                    )
+                else:
+                    print_info(f"TASKS.md: All {total_tasks} tasks marked COMPLETE.")
         except Exception as exc:
-            print_warning(f"Task status update failed: {exc}")
+            print_warning(f"Task status diagnostic failed: {exc}")
 
     # -------------------------------------------------------------------
     # Post-orchestration: Contract health check
@@ -1700,6 +2180,8 @@ def main() -> None:
         has_requirements = req_path.is_file()
 
         if not contract_path.is_file() and has_requirements and generator_enabled:
+            print_warning("RECOVERY PASS [contract_generation]: CONTRACTS.json not found after orchestration.")
+            recovery_types.append("contract_generation")
             try:
                 recovery_cost = _run_contract_generation(
                     cwd=cwd,
@@ -1721,6 +2203,15 @@ def main() -> None:
         _current_state.convergence_cycles = convergence_report.review_cycles
         _current_state.requirements_checked = convergence_report.checked_requirements
         _current_state.requirements_total = convergence_report.total_requirements
+
+    # Display convergence health panel
+    print_convergence_health(
+        health=convergence_report.health,
+        req_passed=convergence_report.checked_requirements,
+        req_total=convergence_report.total_requirements,
+        review_cycles=convergence_report.review_cycles,
+        escalated_items=convergence_report.escalated_items,
+    )
 
     # Log escalated items if any
     if convergence_report.escalated_items:
@@ -1765,10 +2256,12 @@ def main() -> None:
 
     if needs_recovery:
         print_warning(
-            f"CONVERGENCE FAILURE: {convergence_report.checked_requirements}/"
+            f"RECOVERY PASS [review_recovery]: {convergence_report.checked_requirements}/"
             f"{convergence_report.total_requirements} requirements checked "
             f"({convergence_report.review_cycles} review cycles). Launching recovery pass."
         )
+        recovery_types.append("review_recovery")
+        pre_recovery_cycles = convergence_report.review_cycles
         try:
             recovery_cost = _run_review_only(
                 cwd=cwd,
@@ -1787,8 +2280,18 @@ def main() -> None:
             if _current_state:
                 _current_state.convergence_cycles = convergence_report.review_cycles
                 _current_state.requirements_checked = convergence_report.checked_requirements
+            # Verify cycle counter actually increased
+            if convergence_report.review_cycles <= pre_recovery_cycles:
+                print_warning(
+                    f"Review recovery did not increment cycle counter "
+                    f"(before: {pre_recovery_cycles}, after: {convergence_report.review_cycles})."
+                )
         except Exception as exc:
             print_warning(f"Review recovery pass failed: {exc}")
+
+    # Display recovery report if any recovery passes were triggered
+    if recovery_types:
+        print_recovery_report(len(recovery_types), recovery_types)
 
     if _current_state:
         _current_state.completed_phases.append("post_orchestration")

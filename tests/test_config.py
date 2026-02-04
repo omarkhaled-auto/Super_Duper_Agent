@@ -19,6 +19,7 @@ from agent_team.config import (
     InterviewConfig,
     InvestigationConfig,
     MCPServerConfig,
+    MilestoneConfig,
     OrchestratorConfig,
     QualityConfig,
     SchedulerConfig,
@@ -273,7 +274,7 @@ class TestAgentTeamConfigDefaults:
         assert "firecrawl" in c.mcp_servers
         assert "context7" in c.mcp_servers
         assert "sequential_thinking" in c.mcp_servers
-        assert c.mcp_servers["sequential_thinking"].enabled is False
+        assert c.mcp_servers["sequential_thinking"].enabled is True
 
     def test_has_codebase_map_config(self):
         c = AgentTeamConfig()
@@ -1232,3 +1233,230 @@ class TestQualityConfig:
         assert cfg.quality.craft_review is False
         # quality_triggers_reloop unchanged
         assert cfg.quality.quality_triggers_reloop is True
+
+
+# ===================================================================
+# max_thinking_tokens
+# ===================================================================
+
+class TestMaxThinkingTokensDefaults:
+    def test_orchestrator_default_none(self):
+        c = OrchestratorConfig()
+        assert c.max_thinking_tokens is None
+
+    def test_interview_default_none(self):
+        c = InterviewConfig()
+        assert c.max_thinking_tokens is None
+
+
+class TestMaxThinkingTokensFromYaml:
+    def test_orchestrator_max_thinking_tokens_set(self):
+        cfg = _dict_to_config({"orchestrator": {"max_thinking_tokens": 10000}})
+        assert cfg.orchestrator.max_thinking_tokens == 10000
+
+    def test_orchestrator_max_thinking_tokens_omitted(self):
+        cfg = _dict_to_config({"orchestrator": {"model": "opus"}})
+        assert cfg.orchestrator.max_thinking_tokens is None
+
+    def test_interview_max_thinking_tokens_set(self):
+        cfg = _dict_to_config({"interview": {"max_thinking_tokens": 8192}})
+        assert cfg.interview.max_thinking_tokens == 8192
+
+    def test_interview_max_thinking_tokens_omitted(self):
+        cfg = _dict_to_config({"interview": {"enabled": True}})
+        assert cfg.interview.max_thinking_tokens is None
+
+    def test_both_set_independently(self):
+        cfg = _dict_to_config({
+            "orchestrator": {"max_thinking_tokens": 16000},
+            "interview": {"max_thinking_tokens": 4096},
+        })
+        assert cfg.orchestrator.max_thinking_tokens == 16000
+        assert cfg.interview.max_thinking_tokens == 4096
+
+
+class TestMaxThinkingTokensValidation:
+    def test_orchestrator_below_minimum_raises(self):
+        with pytest.raises(ValueError, match="orchestrator.max_thinking_tokens must be >= 1024"):
+            _dict_to_config({"orchestrator": {"max_thinking_tokens": 512}})
+
+    def test_orchestrator_zero_raises(self):
+        with pytest.raises(ValueError, match="orchestrator.max_thinking_tokens must be >= 1024"):
+            _dict_to_config({"orchestrator": {"max_thinking_tokens": 0}})
+
+    def test_orchestrator_one_raises(self):
+        with pytest.raises(ValueError, match="orchestrator.max_thinking_tokens must be >= 1024"):
+            _dict_to_config({"orchestrator": {"max_thinking_tokens": 1}})
+
+    def test_orchestrator_1023_raises(self):
+        with pytest.raises(ValueError, match="orchestrator.max_thinking_tokens must be >= 1024"):
+            _dict_to_config({"orchestrator": {"max_thinking_tokens": 1023}})
+
+    def test_orchestrator_1024_accepted(self):
+        cfg = _dict_to_config({"orchestrator": {"max_thinking_tokens": 1024}})
+        assert cfg.orchestrator.max_thinking_tokens == 1024
+
+    def test_orchestrator_null_accepted(self):
+        cfg = _dict_to_config({"orchestrator": {"max_thinking_tokens": None}})
+        assert cfg.orchestrator.max_thinking_tokens is None
+
+    def test_interview_below_minimum_raises(self):
+        with pytest.raises(ValueError, match="interview.max_thinking_tokens must be >= 1024"):
+            _dict_to_config({"interview": {"max_thinking_tokens": 100}})
+
+    def test_interview_1024_accepted(self):
+        cfg = _dict_to_config({"interview": {"max_thinking_tokens": 1024}})
+        assert cfg.interview.max_thinking_tokens == 1024
+
+    def test_interview_null_accepted(self):
+        cfg = _dict_to_config({"interview": {"max_thinking_tokens": None}})
+        assert cfg.interview.max_thinking_tokens is None
+
+
+# ===================================================================
+# MilestoneConfig
+# ===================================================================
+
+class TestMilestoneConfigDefaults:
+    """Tests for MilestoneConfig dataclass defaults."""
+
+    def test_milestone_config_defaults(self):
+        """MilestoneConfig() has correct defaults for all fields."""
+        mc = MilestoneConfig()
+        assert mc.enabled is False
+        assert mc.max_parallel_milestones == 1
+        assert mc.health_gate is True
+        assert mc.wiring_check is True
+        assert mc.resume_from_milestone is None
+        assert mc.wiring_fix_retries == 1
+        assert mc.max_milestones_warning == 30
+
+    def test_enabled_false_by_default(self):
+        mc = MilestoneConfig()
+        assert mc.enabled is False
+
+    def test_max_parallel_milestones_default(self):
+        mc = MilestoneConfig()
+        assert mc.max_parallel_milestones == 1
+
+    def test_health_gate_default(self):
+        mc = MilestoneConfig()
+        assert mc.health_gate is True
+
+    def test_wiring_check_default(self):
+        mc = MilestoneConfig()
+        assert mc.wiring_check is True
+
+    def test_resume_from_milestone_default_none(self):
+        mc = MilestoneConfig()
+        assert mc.resume_from_milestone is None
+
+
+class TestMilestoneConfigInAgentTeamConfig:
+    """Tests for MilestoneConfig within AgentTeamConfig."""
+
+    def test_milestone_config_in_agent_team_config(self):
+        """AgentTeamConfig has a milestone field of type MilestoneConfig."""
+        c = AgentTeamConfig()
+        assert hasattr(c, "milestone")
+        assert isinstance(c.milestone, MilestoneConfig)
+
+    def test_milestone_disabled_by_default_in_full_config(self):
+        """AgentTeamConfig().milestone.enabled is False by default."""
+        c = AgentTeamConfig()
+        assert c.milestone.enabled is False
+
+    def test_milestone_custom_values(self):
+        """MilestoneConfig fields can be set via AgentTeamConfig constructor."""
+        mc = MilestoneConfig(enabled=True, max_parallel_milestones=3)
+        c = AgentTeamConfig(milestone=mc)
+        assert c.milestone.enabled is True
+        assert c.milestone.max_parallel_milestones == 3
+
+
+class TestDictToConfigMilestone:
+    """Tests for milestone section parsing in _dict_to_config."""
+
+    def test_dict_to_config_milestone_section(self):
+        """Parsing milestone from YAML dict sets all fields correctly."""
+        cfg = _dict_to_config({
+            "milestone": {
+                "enabled": True,
+                "max_parallel_milestones": 2,
+                "health_gate": False,
+                "wiring_check": False,
+            }
+        })
+        assert cfg.milestone.enabled is True
+        assert cfg.milestone.max_parallel_milestones == 2
+        assert cfg.milestone.health_gate is False
+        assert cfg.milestone.wiring_check is False
+
+    def test_dict_to_config_milestone_disabled_by_default(self):
+        """An empty config dict leaves milestone.enabled=False."""
+        cfg = _dict_to_config({})
+        assert cfg.milestone.enabled is False
+
+    def test_dict_to_config_milestone_resume_from_milestone(self):
+        """resume_from_milestone string is parsed from YAML dict."""
+        cfg = _dict_to_config({
+            "milestone": {
+                "resume_from_milestone": "milestone-3",
+            }
+        })
+        assert cfg.milestone.resume_from_milestone == "milestone-3"
+
+    def test_dict_to_config_milestone_resume_none_when_absent(self):
+        """resume_from_milestone is None when not specified."""
+        cfg = _dict_to_config({"milestone": {"enabled": True}})
+        assert cfg.milestone.resume_from_milestone is None
+
+    def test_dict_to_config_milestone_partial_yaml(self):
+        """Partial milestone config preserves defaults for unset fields."""
+        cfg = _dict_to_config({"milestone": {"enabled": True}})
+        assert cfg.milestone.enabled is True
+        assert cfg.milestone.max_parallel_milestones == 1  # default preserved
+        assert cfg.milestone.health_gate is True  # default preserved
+        assert cfg.milestone.wiring_check is True  # default preserved
+
+    def test_dict_to_config_milestone_non_dict_ignored(self):
+        """Non-dict milestone value should not crash or alter defaults."""
+        cfg = _dict_to_config({"milestone": "invalid"})
+        assert cfg.milestone.enabled is False  # default unchanged
+
+    def test_dict_to_config_milestone_resume_non_string_becomes_none(self):
+        """Non-string resume_from_milestone is coerced to None."""
+        cfg = _dict_to_config({"milestone": {"resume_from_milestone": 42}})
+        assert cfg.milestone.resume_from_milestone is None
+
+    def test_dict_to_config_wiring_fix_retries(self):
+        """wiring_fix_retries is parsed from YAML dict."""
+        cfg = _dict_to_config({"milestone": {"wiring_fix_retries": 3}})
+        assert cfg.milestone.wiring_fix_retries == 3
+
+    def test_dict_to_config_max_milestones_warning(self):
+        """max_milestones_warning is parsed from YAML dict."""
+        cfg = _dict_to_config({"milestone": {"max_milestones_warning": 20}})
+        assert cfg.milestone.max_milestones_warning == 20
+
+
+class TestMilestoneConfigNewDefaults:
+    """Tests for new MilestoneConfig fields (Improvements #2 and #3)."""
+
+    def test_wiring_fix_retries_default(self):
+        mc = MilestoneConfig()
+        assert mc.wiring_fix_retries == 1
+
+    def test_max_milestones_warning_default(self):
+        mc = MilestoneConfig()
+        assert mc.max_milestones_warning == 30
+
+    def test_wiring_fix_retries_partial_yaml_preserved(self):
+        """Partial YAML preserves default wiring_fix_retries."""
+        cfg = _dict_to_config({"milestone": {"enabled": True}})
+        assert cfg.milestone.wiring_fix_retries == 1
+
+    def test_max_milestones_warning_partial_yaml_preserved(self):
+        """Partial YAML preserves default max_milestones_warning."""
+        cfg = _dict_to_config({"milestone": {"enabled": True}})
+        assert cfg.milestone.max_milestones_warning == 30

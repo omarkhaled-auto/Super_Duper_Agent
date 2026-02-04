@@ -39,6 +39,7 @@ class TaskNode:
     status: str  # "PENDING" | "IN_PROGRESS" | "COMPLETE" | "FAILED"
     assigned_agent: str | None = None
     integration_declares: dict[str, list[str]] = field(default_factory=dict)
+    milestone_id: str | None = None  # e.g. "milestone-1"
 
 
 @dataclass
@@ -116,8 +117,10 @@ RE_PARENT = re.compile(r"-\s*(?:parent):\s*(.+)", re.IGNORECASE)
 RE_DESC = re.compile(
     r"-\s*(?:description):\s*(.+)", re.IGNORECASE | re.DOTALL
 )
+RE_MILESTONE = re.compile(r"-\s*(?:milestone):\s*(.+)", re.IGNORECASE)
 
 _TASK_ID_PATTERN = re.compile(r"TASK-\d+")
+_CROSS_MILESTONE_DEP = re.compile(r"(\w[\w-]*)@(TASK-\d+)")
 
 
 # ---------------------------------------------------------------------------
@@ -263,6 +266,14 @@ def parse_tasks_md(content: str) -> list[TaskNode]:
             line_num = block[: parent_match.start()].count("\n")
             field_lines.add(line_num)
 
+        # Milestone
+        milestone_id: str | None = None
+        milestone_match = RE_MILESTONE.search(block)
+        if milestone_match:
+            milestone_id = milestone_match.group(1).strip() or None
+            line_num = block[: milestone_match.start()].count("\n")
+            field_lines.add(line_num)
+
         # Description
         description = _extract_description(block, field_lines)
 
@@ -274,10 +285,71 @@ def parse_tasks_md(content: str) -> list[TaskNode]:
                 files=files,
                 depends_on=depends_on,
                 status=status,
+                milestone_id=milestone_id,
             )
         )
 
     return tasks
+
+
+# ---------------------------------------------------------------------------
+# Milestone-scoped scheduling
+# ---------------------------------------------------------------------------
+
+
+def filter_tasks_by_milestone(
+    tasks: list[TaskNode],
+    milestone_id: str,
+) -> list[TaskNode]:
+    """Return only tasks belonging to *milestone_id*.
+
+    Tasks with ``milestone_id=None`` are excluded.
+    """
+    return [t for t in tasks if t.milestone_id == milestone_id]
+
+
+def compute_milestone_schedule(
+    tasks: list[TaskNode],
+    milestone_id: str,
+    completed_milestones: set[str] | None = None,
+) -> list[TaskNode]:
+    """Return tasks for *milestone_id*, resolving cross-milestone deps.
+
+    Cross-milestone dependencies use ``@`` syntax in the depends_on
+    field (e.g. ``milestone-1@TASK-003``).  Dependencies that reference
+    a milestone in *completed_milestones* are considered satisfied and
+    are removed from the task's ``depends_on`` list.
+
+    Parameters
+    ----------
+    tasks : list[TaskNode]
+        All tasks from all milestones.
+    milestone_id : str
+        The milestone to schedule.
+    completed_milestones : set[str] | None
+        Set of milestone IDs whose tasks are already COMPLETE.
+
+    Returns
+    -------
+    list[TaskNode]
+        Tasks for this milestone with resolved dependencies.
+    """
+    completed = completed_milestones or set()
+    scoped = filter_tasks_by_milestone(tasks, milestone_id)
+
+    for task in scoped:
+        resolved_deps: list[str] = []
+        for dep in task.depends_on:
+            cross = _CROSS_MILESTONE_DEP.match(dep)
+            if cross:
+                dep_milestone = cross.group(1)
+                if dep_milestone in completed:
+                    continue  # satisfied — drop it
+                # Milestone not yet complete — keep the raw dep string
+            resolved_deps.append(dep)
+        task.depends_on = resolved_deps
+
+    return scoped
 
 
 def update_tasks_md_statuses(
@@ -1131,3 +1203,38 @@ def render_task_context_md(ctx: TaskContext) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+def format_schedule_for_prompt(schedule: ScheduleResult, max_chars: int = 800) -> str:
+    """Format a :class:`ScheduleResult` as a string for prompt injection.
+
+    Returns a concise summary of the execution schedule suitable for
+    injecting into the orchestrator prompt. Output is capped at
+    *max_chars* characters.
+
+    Returns an empty string for empty schedules.
+    """
+    if not schedule.waves:
+        return ""
+
+    parts: list[str] = []
+    parts.append(f"Execution waves: {schedule.total_waves}")
+
+    for wave in schedule.waves:
+        task_ids_str = ", ".join(wave.task_ids)
+        parts.append(f"  Wave {wave.wave_number}: [{task_ids_str}]")
+
+    if schedule.critical_path and schedule.critical_path.path:
+        cp_str = " -> ".join(schedule.critical_path.path)
+        parts.append(f"Critical path: {cp_str}")
+
+    if schedule.conflict_summary:
+        conflict_parts = [f"{k}: {v}" for k, v in schedule.conflict_summary.items()]
+        parts.append(f"Conflicts resolved: {', '.join(conflict_parts)}")
+
+    parts.append("Follow wave order. Prioritize CRITICAL PATH tasks.")
+
+    result = "\n".join(parts)
+    if len(result) > max_chars:
+        result = result[:max_chars - 3] + "..."
+    return result

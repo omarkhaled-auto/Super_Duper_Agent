@@ -110,6 +110,7 @@ Interview → Codebase Map → Plan → Research → Architect → Contract → 
 | 9.6 | **Sequential Thinking** | Structured reasoning at 4 orchestrator decision points + numbered thought methodology for review agents |
 | 9.7 | **Quality Spot Checks** | Regex-based scan for anti-patterns (FRONT-xxx, BACK-xxx, SLOP-xxx) in project files |
 | 9.8 | **Milestone Health** | PRD mode: tracks per-milestone convergence, detects cross-milestone wiring gaps |
+| 9.9 | **Convergence Health** | Post-run health panel: healthy/degraded/failed status, requirements progress, recovery passes |
 | 10 | **Progressive Verification** | 5-phase pipeline: requirements compliance → contracts → lint → type check → tests |
 
 Steps 5-7 repeat in a **convergence loop** until every `- [ ]` in REQUIREMENTS.md becomes `- [x]`.
@@ -277,7 +278,7 @@ There are two paths:
 agent-team --prd product-spec.md
 ```
 
-This automatically forces **exhaustive** depth. The orchestrator reads the PRD, creates a MASTER_PLAN.md with milestones, and executes each milestone through the full pipeline.
+This automatically forces **exhaustive** depth. PRD mode operates in two phases: (1) **Decomposition** — the orchestrator reads the PRD and creates a MASTER_PLAN.md with ordered milestones and dependencies, (2) **Execution** — each milestone is executed in a separate orchestrator session with scoped context (its own REQUIREMENTS.md + compressed summaries of completed predecessors). Enable per-milestone orchestration with `milestone.enabled: true` in config.
 
 **Path 2: Build the PRD through the interview**
 
@@ -551,6 +552,7 @@ orchestrator:
   model: "opus"           # Model for the orchestrator
   max_turns: 500          # Max agentic turns per session
   max_budget_usd: null    # Cost cap — warns at 80%, stops at 100% (null = unlimited)
+  max_thinking_tokens: null  # Extended thinking budget (null = disabled, >= 1024 to enable)
   permission_mode: "acceptEdits"
 
 depth:
@@ -582,6 +584,7 @@ interview:
   min_exchanges: 3                     # Minimum before allowing finalization
   require_understanding_summary: true  # Force structured "My Understanding" sections
   require_codebase_exploration: true   # Force tool use (Glob/Read/Grep) in Discovery phase
+  max_thinking_tokens: null            # Extended thinking budget (null = disabled, >= 1024 to enable)
 
 design_reference:
   urls: []                # Reference website URLs for design inspiration
@@ -645,19 +648,30 @@ agents:
     model: "opus"
     enabled: true
 
+milestone:
+  enabled: false              # Enable per-milestone PRD orchestration loop
+  max_parallel_milestones: 1  # Max milestones to execute concurrently
+  health_gate: true           # Block next milestone if previous is unhealthy
+  wiring_check: true          # Run cross-milestone wiring analysis
+  resume_from_milestone: null # Resume from a specific milestone ID (null = start from beginning)
+  wiring_fix_retries: 1       # Retries for wiring fix passes
+  max_milestones_warning: 30  # Warn if PRD decomposes into more milestones than this
+
 mcp_servers:
   firecrawl:
     enabled: true         # Web scraping/search (requires FIRECRAWL_API_KEY)
   context7:
     enabled: true         # Library documentation (no key required)
+  sequential_thinking:
+    enabled: true         # Sequential Thinking MCP server (enabled by default)
 
 orchestrator_st:
-  enabled: true               # Sequential Thinking at orchestrator decision points (depth-gated)
+  enabled: true               # Sequential Thinking at orchestrator decision points
   depth_gate:                  # Which ST decision points activate at each depth
-    quick: []                  # None — zero overhead
-    standard: [3]              # Convergence reasoning only
-    thorough: [1, 3, 4]        # Strategy + convergence + completion
-    exhaustive: [1, 2, 3, 4]   # All 4 points
+    quick: [1, 2, 3, 4]       # All points — depth is scale, not reasoning quality
+    standard: [1, 2, 3, 4]
+    thorough: [1, 2, 3, 4]
+    exhaustive: [1, 2, 3, 4]
   thought_budgets:             # Max thoughts per decision point
     1: 8                       # Pre-run strategy
     2: 10                      # Architecture checkpoint
@@ -1009,8 +1023,9 @@ tests/
 │                         #   falsy-value preservation, config propagation,
 │                         #   constraint extraction, technology regex,
 │                         #   test requirement regex, enhanced constraint
-│                         #   extraction, DepthDetection, InvestigationConfig
-│                         #   defaults/validation/YAML loading (202 tests)
+│                         #   extraction, DepthDetection, InvestigationConfig,
+│                         #   MilestoneConfig, max_thinking_tokens validation,
+│                         #   defaults/validation/YAML loading (230+ tests)
 ├── test_agents.py        # Prompt constants, build_agent_definitions,
 │                         #   build_orchestrator_prompt, per-agent model config,
 │                         #   naming consistency, template substitution,
@@ -1022,12 +1037,15 @@ tests/
 ├── test_cli.py           # _detect_agent_count, _detect_prd_from_task, _parse_args,
 │                         #   _handle_interrupt, main(), mutual exclusion,
 │                         #   URL validation, build options, template vars,
-│                         #   subscription backend, resume subcommand (120 tests)
+│                         #   subscription backend, resume subcommand,
+│                         #   milestone loop, convergence health (155+ tests)
 ├── test_interviewer.py   # EXIT_PHRASES, _is_interview_exit (all 26 phrases parametrized),
-│                         #   _detect_scope, InterviewResult, run_interview,
-│                         #   _build_interview_options, phase helpers (102 tests)
-├── test_display.py       # Smoke tests for all display functions including scheduler
-│                         #   and verification output + console configuration (50 tests)
+│                         #   _detect_scope, _estimate_scope_from_spec,
+│                         #   InterviewResult, run_interview, non-interactive mode,
+│                         #   _build_interview_options, phase helpers (115+ tests)
+├── test_display.py       # Smoke tests for all display functions including scheduler,
+│                         #   verification, convergence health, recovery reports,
+│                         #   milestone progress + console configuration (65+ tests)
 ├── test_mcp_servers.py   # _firecrawl_server, _context7_server, get_mcp_servers,
 │                         #   get_research_tools (22 tests)
 ├── test_codebase_map.py  # File discovery, exports/imports extraction, framework
@@ -1040,18 +1058,21 @@ tests/
 ├── test_scheduler.py     # Task parsing, dependency graph, topological sort,
 │                         #   execution waves, file conflict detection, critical
 │                         #   path, file context, task context rendering,
-│                         #   config wiring (max_parallel, conflict_strategy) (106 tests)
+│                         #   milestone-scoped scheduling, cross-milestone deps,
+│                         #   config wiring (max_parallel, conflict_strategy) (140+ tests)
 ├── test_verification.py  # Subprocess runner, verify_task_completion, automated
 │                         #   review phases, health computation, verification
 │                         #   summary output, blocking config wiring,
 │                         #   requirements compliance, Windows PATH
 │                         #   resolution (63 tests)
 ├── test_state.py         # RunState, RunSummary, save/load state, atomic writes,
-│                         #   staleness detection (29 tests)
+│                         #   staleness detection, milestone tracking, schema v2,
+│                         #   update_milestone_progress, get_resume_milestone (55+ tests)
 ├── test_integration.py   # Cross-module pipelines: config→agents, depth→prompt,
 │                         #   MCP→researcher, interview→orchestrator, runtime
 │                         #   wiring for scheduler/contracts/verification,
-│                         #   config field wiring end-to-end (31 tests)
+│                         #   milestone orchestration, convergence health,
+│                         #   config field wiring end-to-end (65+ tests)
 ├── test_ui_standards.py  # UI design standards loading, custom standards file,
 │                         #   SLOP anti-pattern validation,
 │                         #   get_ui_design_standards() (25 tests)
@@ -1072,8 +1093,10 @@ tests/
 │                         # Convergence ratio computation, health status thresholds,
 │                         #   recovery/degraded detection, report generation
 ├── test_milestone_manager.py
-│                         # Per-milestone health tracking, cross-milestone wiring
-│                         #   gap detection, import reference parsing
+│                         # MASTER_PLAN.md parsing, milestone context building,
+│                         #   completion summaries, rollup health, per-milestone
+│                         #   health tracking, cross-milestone wiring gap detection,
+│                         #   import reference parsing (100+ tests)
 ├── test_quality_checks.py
 │                         # Regex-based anti-pattern spot checks, violation
 │                         #   dataclass, file scanning, max violations cap
@@ -1085,11 +1108,14 @@ tests/
 │                         #   quality checks phase integration
 ├── test_wiring_depth.py  # Wiring dependency detection, WIRE-xxx task parsing,
 │                         #   schedule hint generation
+├── test_sdk_cmd_overflow.py
+│                         # SDK command overflow protection, prompt size limits,
+│                         #   large task handling (12+ tests)
 └── test_e2e.py           # Real API smoke tests: CLI --help/--version,
                           #   SDK client lifecycle, Firecrawl config (5 tests)
 ```
 
-**Total: 1422 tests** — 1417 unit/integration (always run) + 5 E2E (require `--run-e2e`).
+**Total: 1691 tests** — 1686 unit/integration (always run) + 5 E2E (require `--run-e2e`).
 
 ### Known Bug Verification
 
@@ -1138,16 +1164,16 @@ src/agent_team/
 ├── code_quality_standards.py  # Non-configurable code quality standards (70 anti-patterns across 5 domains)
 ├── quality_checks.py        # Regex-based anti-pattern spot checker — scans project files for FRONT/BACK/SLOP violations
 ├── ui_standards.py          # Built-in UI design standards (SLOP-001→015) + custom standards file support
-├── interviewer.py           # Phase 0: 3-phase interactive interview with min-exchange enforcement
-├── display.py               # Rich terminal output (banners, tables, progress, verification)
-├── state.py                 # Run state persistence: save/load STATE.json, atomic writes, staleness detection, convergence reports
+├── interviewer.py           # Phase 0: 3-phase interactive interview with min-exchange enforcement, non-interactive mode, scope estimation
+├── display.py               # Rich terminal output (banners, tables, progress, verification, convergence health panels, milestone progress)
+├── state.py                 # Run state persistence: save/load STATE.json, atomic writes, staleness detection, convergence reports, milestone tracking (schema v2)
 ├── mcp_servers.py           # Firecrawl + Context7 MCP server configuration
 ├── _lang.py                 # Shared language detection (Python, TS, JS, Go, Rust, etc.)
 ├── enums.py                 # Type-safe enums (DepthLevel, TaskStatus, HealthStatus, etc.)
 ├── codebase_map.py          # Phase 0.5: project structure analysis, dependency mapping
 ├── contracts.py             # Interface contracts: module exports + wiring verification
-├── scheduler.py             # Smart task scheduler: DAG, conflict detection, wave computation
-├── milestone_manager.py     # PRD mode: per-milestone health tracking + cross-milestone wiring gap detection
+├── scheduler.py             # Smart task scheduler: DAG, conflict detection, wave computation, milestone-scoped scheduling + cross-milestone deps
+├── milestone_manager.py     # PRD mode: MASTER_PLAN.md parsing, two-phase orchestration (decomposition + execution), milestone context building, completion summaries, per-milestone health + cross-milestone wiring
 ├── wiring.py                # Wiring dependency detection — defers WIRE-xxx tasks until prerequisites complete
 └── verification.py          # Progressive verification: requirements → contracts → lint → types → tests → build → security → quality checks
 ```
@@ -1176,10 +1202,12 @@ src/agent_team/
 - **Transcript backup**: Interview exchanges are saved to `INTERVIEW_BACKUP.json` independently of Claude's file writes, so context is never lost.
 - **Word-boundary matching**: Depth detection and scope detection use `\b` regex boundaries to prevent false positives ("adjustment" won't match "just").
 - **Deep investigation protocol**: An optional 4-phase structured methodology (SCOPE → INVESTIGATE → SYNTHESIZE → EVIDENCE) injected into review agents (code-reviewer, security-auditor, debugger). When Gemini CLI is installed, agents can use it for cross-file tracing with a per-agent query budget. Degrades gracefully: disabled by default (zero impact), enabled without Gemini (methodology only, still valuable), enabled with Gemini (full cross-file analysis).
-- **Sequential Thinking**: Two layers of structured reasoning. (1) Review agents get a numbered thought methodology (hypothesis → verify → revise) that composes with the investigation protocol. (2) The orchestrator uses Sequential Thinking at 4 depth-gated decision points: pre-run strategy, architecture checkpoint, convergence reasoning, and completion verification. At Quick depth, zero ST points fire. At Exhaustive, all 4 fire. Each point has a configurable thought budget.
+- **Sequential Thinking**: Two layers of structured reasoning. (1) Review agents get a numbered thought methodology (hypothesis → verify → revise) that composes with the investigation protocol. (2) The orchestrator uses Sequential Thinking at 4 decision points: pre-run strategy, architecture checkpoint, convergence reasoning, and completion verification. All 4 points fire at every depth level — depth controls fleet scale, not reasoning quality. Each point has a configurable thought budget. The Sequential Thinking MCP server is enabled by default.
 - **Quality optimization**: Three production-quality features enabled by default. `production_defaults` injects production-readiness requirements (TECH-xxx) into the planner. `craft_review` adds a CODE CRAFT pass to reviewers (naming, structure, duplication). `quality_triggers_reloop` feeds quality violations back into the convergence loop so they get fixed, not just reported.
 - **Anti-pattern spot checks**: `quality_checks.py` scans project files with compiled regex patterns for common anti-patterns (FRONT-xxx, BACK-xxx, SLOP-xxx). Runs as a non-blocking advisory phase in the verification pipeline. Capped at 100 violations per scan.
-- **Milestone management**: In PRD mode, `milestone_manager.py` tracks per-milestone convergence health and detects cross-milestone wiring gaps — cases where one milestone references files or symbols that another milestone should have produced but hasn't yet.
+- **Milestone management**: PRD mode now uses two-phase orchestration. Phase 1 (Decomposition): the orchestrator reads the PRD and creates MASTER_PLAN.md with ordered milestones and dependencies. Phase 2 (Execution): each milestone runs in a separate orchestrator session with scoped context — its own REQUIREMENTS.md plus compressed summaries of completed predecessors. `milestone_manager.py` handles MASTER_PLAN.md parsing, milestone context building, completion caching, rollup health computation, and cross-milestone wiring gap detection. Controlled via the `milestone` config section (disabled by default).
+- **Convergence health display**: After each orchestration run, a convergence health panel shows status (healthy/degraded/failed), a visual requirements progress bar, review cycle count, and recovery pass information. Three configurable thresholds (`min_convergence_ratio`, `recovery_threshold`, `degraded_threshold`) drive the health classification.
+- **Non-interactive interviewer**: When stdin is not a TTY (CI/CD pipelines, scripted runs), the interviewer automatically skips the interactive Q&A loop. Scope estimation falls back to heuristic analysis of the spec text when no `Scope:` header is found in the interview document.
 - **Wiring dependency scheduling**: `wiring.py` identifies WIRE-xxx tasks in TASKS.md and builds a dependency map so the scheduler defers integration tasks until all prerequisite implementation tasks are complete.
 - **Convergence health tracking**: Three configurable thresholds (`min_convergence_ratio`, `recovery_threshold`, `degraded_threshold`) give the orchestrator visibility into whether convergence is healthy, recovering, or degraded, enabling smarter escalation decisions.
 - **Pipe-safe output**: Rich console uses `force_terminal=sys.stdout.isatty()` to prevent ANSI escape sequences from garbling piped output.

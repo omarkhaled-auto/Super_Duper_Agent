@@ -10,6 +10,7 @@ from agent_team.display import (
     print_banner,
     print_completion,
     print_contract_violation,
+    print_convergence_health,
     print_convergence_status,
     print_cost_summary,
     print_error,
@@ -22,6 +23,7 @@ from agent_team.display import (
     print_interview_skip,
     print_interview_start,
     print_prd_mode,
+    print_recovery_report,
     print_resume_banner,
     print_review_results,
     print_run_summary,
@@ -291,3 +293,136 @@ class TestSubscriptionDisplay:
         print_run_summary(summary)  # no backend kwarg
         captured = capsys.readouterr()
         assert "subscription" not in captured.out
+
+
+# ===================================================================
+# print_convergence_health()
+# ===================================================================
+
+class TestPrintConvergenceHealth:
+    """Tests for print_convergence_health display function."""
+
+    def test_unknown_health_no_output(self, capsys):
+        """health='unknown' should produce no output (early return)."""
+        print_convergence_health("unknown", 0, 0, 0)
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+    def test_healthy_produces_output(self, capsys):
+        """health='healthy' should produce output."""
+        print_convergence_health("healthy", 10, 10, 3)
+        captured = capsys.readouterr()
+        assert captured.out != ""
+
+    def test_degraded_produces_output(self, capsys):
+        """health='degraded' should produce output."""
+        print_convergence_health("degraded", 5, 10, 2)
+        captured = capsys.readouterr()
+        assert captured.out != ""
+
+    def test_failed_produces_output(self, capsys):
+        """health='failed' should produce output."""
+        print_convergence_health("failed", 2, 10, 1)
+        captured = capsys.readouterr()
+        assert captured.out != ""
+
+    def test_with_escalated_items(self, capsys):
+        """Escalated items should appear in output."""
+        print_convergence_health(
+            "degraded", 5, 10, 2,
+            escalated_items=["REQ-001", "REQ-002"],
+        )
+        captured = capsys.readouterr()
+        assert captured.out != ""
+
+    def test_zero_total_no_division_error(self, capsys):
+        """req_total=0 should not cause ZeroDivisionError."""
+        print_convergence_health("healthy", 0, 0, 0)
+        captured = capsys.readouterr()
+        assert captured.out != ""
+
+    def test_no_escalated_items(self, capsys):
+        """None escalated_items should not cause errors."""
+        print_convergence_health("healthy", 8, 10, 3, escalated_items=None)
+        captured = capsys.readouterr()
+        assert captured.out != ""
+
+
+# ===================================================================
+# print_recovery_report()
+# ===================================================================
+
+class TestPrintRecoveryReport:
+    """Tests for print_recovery_report display function."""
+
+    def test_zero_count_no_output(self, capsys):
+        """recovery_count=0 should produce no output (early return)."""
+        print_recovery_report(0, [])
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+    def test_contract_generation_type(self, capsys):
+        """Should produce output for contract_generation recovery type."""
+        print_recovery_report(1, ["contract_generation"])
+        captured = capsys.readouterr()
+        assert captured.out != ""
+
+    def test_review_recovery_type(self, capsys):
+        """Should produce output for review_recovery recovery type."""
+        print_recovery_report(1, ["review_recovery"])
+        captured = capsys.readouterr()
+        assert captured.out != ""
+
+    def test_multiple_recovery_types(self, capsys):
+        """Should handle multiple recovery types."""
+        print_recovery_report(2, ["contract_generation", "review_recovery"])
+        captured = capsys.readouterr()
+        assert captured.out != ""
+
+    def test_unknown_recovery_type(self, capsys):
+        """Should handle unknown recovery types without crashing."""
+        print_recovery_report(1, ["unknown_type"])
+        captured = capsys.readouterr()
+        assert captured.out != ""
+
+
+# ===================================================================
+# print_run_summary() with new fields
+# ===================================================================
+
+class TestPrintRunSummaryNewFields:
+    """Tests for print_run_summary with health and recovery fields."""
+
+    def test_summary_with_health(self, capsys):
+        """RunSummary with health='healthy' should include health display."""
+        from agent_team.state import RunSummary
+        summary = RunSummary(
+            task="fix bug", depth="standard", total_cost=1.0,
+            requirements_passed=10, requirements_total=10,
+            health="healthy",
+        )
+        print_run_summary(summary)
+        captured = capsys.readouterr()
+        assert captured.out != ""
+
+    def test_summary_with_recovery(self, capsys):
+        """RunSummary with recovery passes should include recovery display."""
+        from agent_team.state import RunSummary
+        summary = RunSummary(
+            task="fix bug", depth="standard", total_cost=1.0,
+            health="degraded",
+            recovery_passes_triggered=1,
+            recovery_types=["contract_generation"],
+        )
+        print_run_summary(summary)
+        captured = capsys.readouterr()
+        assert captured.out != ""
+
+    def test_summary_unknown_health_no_extra(self, capsys):
+        """RunSummary with health='unknown' should not show health panel."""
+        from agent_team.state import RunSummary
+        summary = RunSummary(task="fix bug", depth="standard", total_cost=0.0)
+        print_run_summary(summary)
+        captured = capsys.readouterr()
+        # Should still produce some output (the basic summary)
+        assert captured.out != ""
