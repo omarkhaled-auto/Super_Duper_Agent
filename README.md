@@ -107,6 +107,9 @@ Interview → Codebase Map → Plan → Research → Architect → Contract → 
 | 8 | **Test Runner** | Writes and runs tests for each requirement. Has 15 testing anti-patterns injected |
 | 9 | **Security Auditor** | OWASP checks, dependency audit, credential scanning |
 | 9.5 | **Deep Investigation** | Optional: Gemini CLI + structured 4-phase methodology for cross-file tracing (reviewer, auditor, debugger) |
+| 9.6 | **Sequential Thinking** | Structured reasoning at 4 orchestrator decision points + numbered thought methodology for review agents |
+| 9.7 | **Quality Spot Checks** | Regex-based scan for anti-patterns (FRONT-xxx, BACK-xxx, SLOP-xxx) in project files |
+| 9.8 | **Milestone Health** | PRD mode: tracks per-milestone convergence, detects cross-milestone wiring gaps |
 | 10 | **Progressive Verification** | 5-phase pipeline: requirements compliance → contracts → lint → type check → tests |
 
 Steps 5-7 repeat in a **convergence loop** until every `- [ ]` in REQUIREMENTS.md becomes `- [x]`.
@@ -568,6 +571,9 @@ convergence:
   requirements_dir: ".agent-team"
   requirements_file: "REQUIREMENTS.md"
   master_plan_file: "MASTER_PLAN.md"  # Customizable — change to any filename
+  min_convergence_ratio: 0.9        # Minimum pass ratio to declare convergence (0.0–1.0)
+  recovery_threshold: 0.8           # Below this ratio, convergence is "recovering"
+  degraded_threshold: 0.5           # Below this ratio, convergence is "degraded"
 
 interview:
   enabled: true                        # Run interview phase
@@ -603,6 +609,10 @@ verification:
   run_lint: true                            # Run lint phase
   run_type_check: true                      # Run type-check phase
   run_tests: true                           # Run test phase
+  run_build: true                           # Run build phase
+  run_security: true                        # Run security scan phase
+  run_quality_checks: true                  # Run regex-based anti-pattern spot checks
+  min_test_count: 0                         # Minimum test count to pass verification (0 = no minimum)
   contract_file: ".agent-team/CONTRACTS.json"
   verification_file: ".agent-team/VERIFICATION.md"
 
@@ -640,6 +650,24 @@ mcp_servers:
     enabled: true         # Web scraping/search (requires FIRECRAWL_API_KEY)
   context7:
     enabled: true         # Library documentation (no key required)
+
+orchestrator_st:
+  enabled: true               # Sequential Thinking at orchestrator decision points (depth-gated)
+  depth_gate:                  # Which ST decision points activate at each depth
+    quick: []                  # None — zero overhead
+    standard: [3]              # Convergence reasoning only
+    thorough: [1, 3, 4]        # Strategy + convergence + completion
+    exhaustive: [1, 2, 3, 4]   # All 4 points
+  thought_budgets:             # Max thoughts per decision point
+    1: 8                       # Pre-run strategy
+    2: 10                      # Architecture checkpoint
+    3: 12                      # Convergence reasoning
+    4: 8                       # Completion verification
+
+quality:
+  production_defaults: true    # Inject production-readiness TECH-xxx items into planner
+  craft_review: true           # Enable CODE CRAFT review pass in reviewers
+  quality_triggers_reloop: true  # Quality violations feed back into convergence loop
 
 investigation:
   enabled: false              # Opt-in: deep investigation protocol for review agents
@@ -1037,11 +1065,31 @@ tests/
 │                         #   standards validation, anti-pattern completeness,
 │                         #   get_standards_for_agent(), agent mapping,
 │                         #   edge cases (empty/case/underscore) (49 tests)
+├── test_sequential_thinking.py
+│                         # ST methodology builder, depth gating, thought budgets,
+│                         #   review agent injection, orchestrator decision points
+├── test_convergence_health.py
+│                         # Convergence ratio computation, health status thresholds,
+│                         #   recovery/degraded detection, report generation
+├── test_milestone_manager.py
+│                         # Per-milestone health tracking, cross-milestone wiring
+│                         #   gap detection, import reference parsing
+├── test_quality_checks.py
+│                         # Regex-based anti-pattern spot checks, violation
+│                         #   dataclass, file scanning, max violations cap
+├── test_state_extended.py
+│                         # Extended state persistence, convergence reports,
+│                         #   milestone state tracking
+├── test_build_verification.py
+│                         # Build phase verification, security scan phase,
+│                         #   quality checks phase integration
+├── test_wiring_depth.py  # Wiring dependency detection, WIRE-xxx task parsing,
+│                         #   schedule hint generation
 └── test_e2e.py           # Real API smoke tests: CLI --help/--version,
                           #   SDK client lifecycle, Firecrawl config (5 tests)
 ```
 
-**Total: 1271 tests** — 1266 unit/integration (always run) + 5 E2E (require `--run-e2e`).
+**Total: 1422 tests** — 1417 unit/integration (always run) + 5 E2E (require `--run-e2e`).
 
 ### Known Bug Verification
 
@@ -1079,24 +1127,29 @@ The test suite explicitly verifies fixes for known bugs:
 
 ```
 src/agent_team/
-├── __init__.py          # Package entry, version
-├── __main__.py          # python -m agent_team support
-├── cli.py               # CLI parsing, subcommands, interview/orchestrator dispatch, budget tracking
-├── config.py            # YAML config loading, depth detection, constraint extraction (incl. tech stack + test count), fleet scaling, investigation config
-├── agents.py            # 10 agent system prompts (+ spec-validator) + orchestrator prompt builder + constraint/quality-standards/investigation injection
+├── __init__.py              # Package entry, version
+├── __main__.py              # python -m agent_team support
+├── cli.py                   # CLI parsing, subcommands, interview/orchestrator dispatch, budget tracking
+├── config.py                # YAML config loading, depth detection, constraint extraction (incl. tech stack + test count), fleet scaling, ST config
+├── agents.py                # 10 agent system prompts (+ spec-validator) + orchestrator prompt builder + constraint/quality-standards/investigation/ST injection
 ├── investigation_protocol.py  # Deep investigation protocol: 4-phase methodology + Gemini CLI integration + per-agent focus
+├── sequential_thinking.py   # Numbered thought methodology for review agents (composable with investigation protocol)
+├── orchestrator_reasoning.py  # 4 depth-gated Sequential Thinking decision points for the orchestrator
 ├── code_quality_standards.py  # Non-configurable code quality standards (70 anti-patterns across 5 domains)
-├── ui_standards.py      # Built-in UI design standards (SLOP-001→015) + custom standards file support
-├── interviewer.py       # Phase 0: 3-phase interactive interview with min-exchange enforcement
-├── display.py           # Rich terminal output (banners, tables, progress, verification)
-├── state.py             # Run state persistence: save/load STATE.json, atomic writes, staleness detection
-├── mcp_servers.py       # Firecrawl + Context7 MCP server configuration
-├── _lang.py             # Shared language detection (Python, TS, JS, Go, Rust, etc.)
-├── enums.py             # Type-safe enums (DepthLevel, TaskStatus, HealthStatus, etc.)
-├── codebase_map.py      # Phase 0.5: project structure analysis, dependency mapping
-├── contracts.py         # Interface contracts: module exports + wiring verification
-├── scheduler.py         # Smart task scheduler: DAG, conflict detection, wave computation
-└── verification.py      # Progressive verification: requirements compliance → contracts → lint → types → tests, Windows PATH resolution
+├── quality_checks.py        # Regex-based anti-pattern spot checker — scans project files for FRONT/BACK/SLOP violations
+├── ui_standards.py          # Built-in UI design standards (SLOP-001→015) + custom standards file support
+├── interviewer.py           # Phase 0: 3-phase interactive interview with min-exchange enforcement
+├── display.py               # Rich terminal output (banners, tables, progress, verification)
+├── state.py                 # Run state persistence: save/load STATE.json, atomic writes, staleness detection, convergence reports
+├── mcp_servers.py           # Firecrawl + Context7 MCP server configuration
+├── _lang.py                 # Shared language detection (Python, TS, JS, Go, Rust, etc.)
+├── enums.py                 # Type-safe enums (DepthLevel, TaskStatus, HealthStatus, etc.)
+├── codebase_map.py          # Phase 0.5: project structure analysis, dependency mapping
+├── contracts.py             # Interface contracts: module exports + wiring verification
+├── scheduler.py             # Smart task scheduler: DAG, conflict detection, wave computation
+├── milestone_manager.py     # PRD mode: per-milestone health tracking + cross-milestone wiring gap detection
+├── wiring.py                # Wiring dependency detection — defers WIRE-xxx tasks until prerequisites complete
+└── verification.py          # Progressive verification: requirements → contracts → lint → types → tests → build → security → quality checks
 ```
 
 ### Key Design Decisions
@@ -1123,6 +1176,12 @@ src/agent_team/
 - **Transcript backup**: Interview exchanges are saved to `INTERVIEW_BACKUP.json` independently of Claude's file writes, so context is never lost.
 - **Word-boundary matching**: Depth detection and scope detection use `\b` regex boundaries to prevent false positives ("adjustment" won't match "just").
 - **Deep investigation protocol**: An optional 4-phase structured methodology (SCOPE → INVESTIGATE → SYNTHESIZE → EVIDENCE) injected into review agents (code-reviewer, security-auditor, debugger). When Gemini CLI is installed, agents can use it for cross-file tracing with a per-agent query budget. Degrades gracefully: disabled by default (zero impact), enabled without Gemini (methodology only, still valuable), enabled with Gemini (full cross-file analysis).
+- **Sequential Thinking**: Two layers of structured reasoning. (1) Review agents get a numbered thought methodology (hypothesis → verify → revise) that composes with the investigation protocol. (2) The orchestrator uses Sequential Thinking at 4 depth-gated decision points: pre-run strategy, architecture checkpoint, convergence reasoning, and completion verification. At Quick depth, zero ST points fire. At Exhaustive, all 4 fire. Each point has a configurable thought budget.
+- **Quality optimization**: Three production-quality features enabled by default. `production_defaults` injects production-readiness requirements (TECH-xxx) into the planner. `craft_review` adds a CODE CRAFT pass to reviewers (naming, structure, duplication). `quality_triggers_reloop` feeds quality violations back into the convergence loop so they get fixed, not just reported.
+- **Anti-pattern spot checks**: `quality_checks.py` scans project files with compiled regex patterns for common anti-patterns (FRONT-xxx, BACK-xxx, SLOP-xxx). Runs as a non-blocking advisory phase in the verification pipeline. Capped at 100 violations per scan.
+- **Milestone management**: In PRD mode, `milestone_manager.py` tracks per-milestone convergence health and detects cross-milestone wiring gaps — cases where one milestone references files or symbols that another milestone should have produced but hasn't yet.
+- **Wiring dependency scheduling**: `wiring.py` identifies WIRE-xxx tasks in TASKS.md and builds a dependency map so the scheduler defers integration tasks until all prerequisite implementation tasks are complete.
+- **Convergence health tracking**: Three configurable thresholds (`min_convergence_ratio`, `recovery_threshold`, `degraded_threshold`) give the orchestrator visibility into whether convergence is healthy, recovering, or degraded, enabling smarter escalation decisions.
 - **Pipe-safe output**: Rich console uses `force_terminal=sys.stdout.isatty()` to prevent ANSI escape sequences from garbling piped output.
 
 ### Module Dependency Graph
@@ -1131,6 +1190,8 @@ src/agent_team/
 cli.py ──────┬──→ config.py ──→ enums.py
              ├──→ agents.py ──→ config.py
              │                ├──→ investigation_protocol.py ──→ config.py
+             │                ├──→ sequential_thinking.py ───→ config.py
+             │                ├──→ orchestrator_reasoning.py ──→ config.py
              │                ├──→ code_quality_standards.py
              │                └──→ ui_standards.py
              ├──→ interviewer.py
@@ -1140,7 +1201,11 @@ cli.py ──────┬──→ config.py ──→ enums.py
              ├──→ codebase_map.py ──→ _lang.py
              ├──→ contracts.py ────→ _lang.py
              ├──→ scheduler.py
+             │    └──→ wiring.py
+             ├──→ milestone_manager.py ──→ state.py
+             ├──→ quality_checks.py
              └──→ verification.py ──→ contracts.py
+                                  └──→ quality_checks.py
 ```
 
 ---

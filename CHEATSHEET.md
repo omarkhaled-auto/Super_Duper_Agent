@@ -250,6 +250,9 @@ Set these in `config.yaml` (create one with `agent-team init`).
 | `escalation_threshold` | `3` | How many times a requirement can fail before escalation |
 | `max_escalation_depth` | `2` | Max re-planning levels before asking the user |
 | `master_plan_file` | `"MASTER_PLAN.md"` | Filename for the milestone plan (PRD mode) |
+| `min_convergence_ratio` | `0.9` | Minimum pass ratio to declare convergence (0.0–1.0) |
+| `recovery_threshold` | `0.8` | Below this, convergence status is "recovering" |
+| `degraded_threshold` | `0.5` | Below this, convergence status is "degraded" |
 
 ### Interview
 
@@ -292,6 +295,30 @@ Set these in `config.yaml` (create one with `agent-team init`).
 | `run_lint` | `true` | Run lint phase |
 | `run_type_check` | `true` | Run type-check phase |
 | `run_tests` | `true` | Run test phase |
+| `run_build` | `true` | Run build phase |
+| `run_security` | `true` | Run security scan phase |
+| `run_quality_checks` | `true` | Run regex-based anti-pattern spot checks |
+| `min_test_count` | `0` | Minimum test count to pass verification (0 = no minimum) |
+
+### Orchestrator Sequential Thinking
+
+| Option | Default | What it does |
+|--------|---------|-------------|
+| `enabled` | `true` | Enable Sequential Thinking at orchestrator decision points |
+| `depth_gate` | *(see below)* | Which decision points activate at each depth level |
+| `thought_budgets` | `{1: 8, 2: 10, 3: 12, 4: 8}` | Max thoughts per decision point |
+
+Decision points: (1) Pre-run strategy, (2) Architecture checkpoint, (3) Convergence reasoning, (4) Completion verification.
+
+Default depth gating: Quick = none, Standard = point 3 only, Thorough = 1+3+4, Exhaustive = all 4.
+
+### Quality
+
+| Option | Default | What it does |
+|--------|---------|-------------|
+| `production_defaults` | `true` | Inject production-readiness requirements into the planner |
+| `craft_review` | `true` | Enable CODE CRAFT review pass in reviewers |
+| `quality_triggers_reloop` | `true` | Quality violations feed back into the convergence loop |
 
 ### Display
 
