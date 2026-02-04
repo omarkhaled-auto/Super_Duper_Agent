@@ -1,0 +1,44 @@
+// =============================================================================
+// Shared Enums — must match the Prisma schema enums exactly
+// =============================================================================
+
+export enum TaskStatus {
+  BACKLOG = "BACKLOG",
+  TODO = "TODO",
+  IN_PROGRESS = "IN_PROGRESS",
+  IN_REVIEW = "IN_REVIEW",
+  DONE = "DONE",
+}
+
+export enum TaskPriority {
+  URGENT = "URGENT",
+  HIGH = "HIGH",
+  MEDIUM = "MEDIUM",
+  LOW = "LOW",
+}
+
+export enum ProjectRole {
+  ADMIN = "ADMIN",
+  MEMBER = "MEMBER",
+  VIEWER = "VIEWER",
+}
+
+export enum ActivityType {
+  TASK_CREATED = "TASK_CREATED",
+  TASK_UPDATED = "TASK_UPDATED",
+  TASK_DELETED = "TASK_DELETED",
+  TASK_MOVED = "TASK_MOVED",
+  TASK_ASSIGNED = "TASK_ASSIGNED",
+  TASK_COMMENT_ADDED = "TASK_COMMENT_ADDED",
+  TASK_LABEL_ADDED = "TASK_LABEL_ADDED",
+  TASK_LABEL_REMOVED = "TASK_LABEL_REMOVED",
+  SUBTASK_CREATED = "SUBTASK_CREATED",
+  SUBTASK_COMPLETED = "SUBTASK_COMPLETED",
+  SUBTASK_UNCOMPLETED = "SUBTASK_UNCOMPLETED",
+  PROJECT_CREATED = "PROJECT_CREATED",
+  PROJECT_UPDATED = "PROJECT_UPDATED",
+  PROJECT_ARCHIVED = "PROJECT_ARCHIVED",
+  PROJECT_MEMBER_ADDED = "PROJECT_MEMBER_ADDED",
+  PROJECT_MEMBER_REMOVED = "PROJECT_MEMBER_REMOVED",
+  PROJECT_MEMBER_ROLE_CHANGED = "PROJECT_MEMBER_ROLE_CHANGED",
+}

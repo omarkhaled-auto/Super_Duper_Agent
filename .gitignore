@@ -10,3 +10,5 @@ build/
 .venv/
 venv/
 nul
+node_modules/
+.agent-team/

@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LinkVault - Bookmark Manager</title>
+  <style>
+    :root {
+      --lv-bg-base: #0a0a0a;
+      --lv-bg-surface: #171717;
+      --lv-bg-elevated: #1f1f1f;
+      --lv-text-primary: #f5f5f5;
+      --lv-text-secondary: #a0a0a0;
+      --lv-text-muted: #666666;
+      --lv-border-faint: #2a2a2a;
+      --lv-border-muted: #333333;
+      --lv-accent: #fa5d19;
+      --lv-success: #5cd47f;
+      --lv-error: #f05545;
+      --lv-info: #5a8ffc;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: var(--lv-bg-base);
+      color: var(--lv-text-primary);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      min-height: 100vh;
+    }
+
+    /* Container */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Header */
+    header {
+      text-align: center;
+      padding: 48px 24px 32px;
+      margin-bottom: 24px;
+    }
+
+    header h1 {
+      color: var(--lv-accent);
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    header p {
+      color: var(--lv-text-secondary);
+      font-size: 1.1rem;
+    }
+
+    /* Controls Section */
+    #controls {
+      max-width: 1200px;
+      margin: 0 auto 24px;
+      padding: 0 24px;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    #search-input {
+      flex: 1;
+      min-width: 200px;
+      padding: 12px 16px;
+      background-color: var(--lv-bg-surface);
+      border: 1px solid var(--lv-border-faint);
+      border-radius: 6px;
+      color: var(--lv-text-primary);
+      font-size: 1rem;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    #search-input:focus {
+      outline: none;
+      border-color: var(--lv-accent);
+      box-shadow: 0 0 0 3px rgba(250, 93, 25, 0.15);
+    }
+
+    #search-input::placeholder {
+      color: var(--lv-text-muted);
+    }
+
+    #tag-filter {
+      min-width: 180px;
+      padding: 12px 16px;
+      background-color: var(--lv-bg-surface);
+      border: 1px solid var(--lv-border-faint);
+      border-radius: 6px;
+      color: var(--lv-text-primary);
+      font-size: 1rem;
+      cursor: pointer;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    #tag-filter:focus {
+      outline: none;
+      border-color: var(--lv-accent);
+      box-shadow: 0 0 0 3px rgba(250, 93, 25, 0.15);
+    }
+
+    /* Add Form Section */
+    #add-section {
+      max-width: 1200px;
+      margin: 0 auto 32px;
+      padding: 0 24px;
+    }
+
+    #add-bookmark-form {
+      background-color: var(--lv-bg-surface);
+      border: 1px solid var(--lv-border-faint);
+      border-radius: 8px;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      align-items: end;
+    }
+
+    #add-bookmark-form input {
+      width: 100%;
+      padding: 12px 16px;
+      background-color: var(--lv-bg-elevated);
+      border: 1px solid var(--lv-border-faint);
+      border-radius: 6px;
+      color: var(--lv-text-primary);
+      font-size: 1rem;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    #add-bookmark-form input:focus {
+      outline: none;
+      border-color: var(--lv-accent);
+      box-shadow: 0 0 0 3px rgba(250, 93, 25, 0.15);
+    }
+
+    #add-bookmark-form input::placeholder {
+      color: var(--lv-text-muted);
+    }
+
+    #add-bookmark-form button[type="submit"] {
+      padding: 12px 24px;
+      background-color: var(--lv-accent);
+      border: none;
+      border-radius: 6px;
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s ease, transform 0.1s ease;
+    }
+
+    #add-bookmark-form button[type="submit"]:hover {
+      background-color: #e54d0a;
+    }
+
+    #add-bookmark-form button[type="submit"]:active {
+      transform: scale(0.98);
+    }
+
+    /* Bookmark List */
+    #bookmark-list {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px 48px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+    }
+
+    /* Bookmark Cards */
+    .bookmark-card {
+      background-color: var(--lv-bg-surface);
+      border: 1px solid var(--lv-border-faint);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .bookmark-card:hover {
+      border-color: var(--lv-border-muted);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .bookmark-card .card-title {
+      color: var(--lv-text-primary);
+      font-size: 1.1rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: color 0.2s ease;
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .bookmark-card .card-title:hover {
+      color: var(--lv-accent);
+    }
+
+    .bookmark-card .card-url {
+      color: var(--lv-text-muted);
+      font-size: 0.85rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .bookmark-card .card-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .bookmark-card .tag {
+      display: inline-block;
+      padding: 4px 8px;
+      background-color: var(--lv-bg-elevated);
+      border-radius: 4px;
+      font-size: 0.75rem;
+      color: var(--lv-text-secondary);
+    }
+
+    .bookmark-card .card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+      padding-top: 8px;
+      border-top: 1px solid var(--lv-border-faint);
+    }
+
+    .bookmark-card .btn-edit,
+    .bookmark-card .btn-delete {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s ease, transform 0.1s ease;
+    }
+
+    .bookmark-card .btn-edit {
+      background-color: var(--lv-accent);
+      color: white;
+    }
+
+    .bookmark-card .btn-edit:hover {
+      background-color: #e54d0a;
+    }
+
+    .bookmark-card .btn-delete {
+      background-color: transparent;
+      border: 1px solid var(--lv-error);
+      color: var(--lv-error);
+    }
+
+    .bookmark-card .btn-delete:hover {
+      background-color: var(--lv-error);
+      color: white;
+    }
+
+    .bookmark-card .btn-edit:active,
+    .bookmark-card .btn-delete:active {
+      transform: scale(0.98);
+    }
+
+    /* Modal */
+    .modal {
+      position: fixed;
+      inset: 0;
+      background-color: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 24px;
+    }
+
+    .modal[hidden] {
+      display: none;
+    }
+
+    .modal-content {
+      background-color: var(--lv-bg-surface);
+      border: 1px solid var(--lv-border-muted);
+      border-radius: 12px;
+      padding: 24px;
+      width: 100%;
+      max-width: 500px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-content form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .modal-content input {
+      width: 100%;
+      padding: 12px 16px;
+      background-color: var(--lv-bg-elevated);
+      border: 1px solid var(--lv-border-faint);
+      border-radius: 6px;
+      color: var(--lv-text-primary);
+      font-size: 1rem;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .modal-content input:focus {
+      outline: none;
+      border-color: var(--lv-accent);
+      box-shadow: 0 0 0 3px rgba(250, 93, 25, 0.15);
+    }
+
+    .modal-content input::placeholder {
+      color: var(--lv-text-muted);
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      margin-top: 8px;
+    }
+
+    .modal-actions button {
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s ease, transform 0.1s ease;
+    }
+
+    .modal-actions button[type="submit"] {
+      background-color: var(--lv-accent);
+      border: none;
+      color: white;
+    }
+
+    .modal-actions button[type="submit"]:hover {
+      background-color: #e54d0a;
+    }
+
+    .modal-actions button[type="button"] {
+      background-color: transparent;
+      border: 1px solid var(--lv-border-muted);
+      color: var(--lv-text-secondary);
+    }
+
+    .modal-actions button[type="button"]:hover {
+      background-color: var(--lv-bg-elevated);
+      color: var(--lv-text-primary);
+    }
+
+    .modal-actions button:active {
+      transform: scale(0.98);
+    }
+
+    /* Toast Container */
+    #toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 1100;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .toast {
+      background-color: var(--lv-bg-surface);
+      border: 1px solid var(--lv-border-muted);
+      border-radius: 8px;
+      padding: 12px 20px;
+      min-width: 280px;
+      max-width: 400px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      animation: slideIn 0.3s ease;
+    }
+
+    .toast.success {
+      border-left: 4px solid var(--lv-success);
+    }
+
+    .toast.error {
+      border-left: 4px solid var(--lv-error);
+    }
+
+    .toast.info {
+      border-left: 4px solid var(--lv-info);
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes slideOut {
+      from {
+        transform: translateX(0);
+        opacity: 1;
+      }
+      to {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+    }
+
+    /* Empty State */
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--lv-text-muted);
+    }
+
+    .empty-state p {
+      font-size: 1.1rem;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 640px) {
+      header h1 {
+        font-size: 2rem;
+      }
+
+      #controls {
+        flex-direction: column;
+      }
+
+      #tag-filter {
+        width: 100%;
+      }
+
+      #add-bookmark-form {
+        grid-template-columns: 1fr;
+      }
+
+      #bookmark-list {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header Section -->
+  <header>
+    <h1>LinkVault</h1>
+    <p>URL Bookmark Manager</p>
+  </header>
+
+  <!-- Controls Section -->
+  <section id="controls">
+    <input type="search" id="search-input" placeholder="Search bookmarks...">
+    <select id="tag-filter">
+      <option value="">All Tags</option>
+    </select>
+  </section>
+
+  <!-- Add Bookmark Form -->
+  <section id="add-section">
+    <form id="add-bookmark-form">
+      <input type="text" id="title-input" placeholder="Bookmark title" required>
+      <input type="url" id="url-input" placeholder="https://example.com" required>
+      <input type="text" id="tags-input" placeholder="Tags (comma-separated)">
+      <button type="submit">Add Bookmark</button>
+    </form>
+  </section>
+
+  <!-- Bookmark List Container -->
+  <main id="bookmark-list">
+    <!-- JavaScript will populate this section -->
+  </main>
+
+  <!-- Edit Modal Structure -->
+  <div id="edit-modal" class="modal" hidden>
+    <div class="modal-content">
+      <form id="edit-bookmark-form">
+        <input type="hidden" id="edit-id">
+        <input type="text" id="edit-title" placeholder="Bookmark title" required>
+        <input type="url" id="edit-url" placeholder="https://example.com" required>
+        <input type="text" id="edit-tags" placeholder="Tags (comma-separated)">
+        <div class="modal-actions">
+          <button type="submit">Save</button>
+          <button type="button" id="cancel-edit">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast/Notification Container -->
+  <div id="toast-container"></div>
+
+  <script>
+    // ===================
+    // State
+    // ===================
+    let bookmarks = [];
+
+    // ===================
+    // DOM Elements
+    // ===================
+    const bookmarkList = document.getElementById('bookmark-list');
+    const addForm = document.getElementById('add-bookmark-form');
+    const searchInput = document.getElementById('search-input');
+    const tagFilter = document.getElementById('tag-filter');
+    const editModal = document.getElementById('edit-modal');
+    const editForm = document.getElementById('edit-bookmark-form');
+    const cancelEditBtn = document.getElementById('cancel-edit');
+    const toastContainer = document.getElementById('toast-container');
+
+    // ===================
+    // Utility Functions
+    // ===================
+    function debounce(fn, delay) {
+      let timeoutId;
+      return function (...args) {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => fn.apply(this, args), delay);
+      };
+    }
+
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.textContent = message;
+      toastContainer.appendChild(toast);
+
+      // Auto-remove after 4 seconds
+      setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    function filterBookmarks() {
+      const searchTerm = searchInput.value.toLowerCase().trim();
+      const selectedTag = tagFilter.value;
+
+      return bookmarks.filter(bookmark => {
+        // Search filter
+        const matchesSearch = !searchTerm ||
+          bookmark.title.toLowerCase().includes(searchTerm) ||
+          bookmark.url.toLowerCase().includes(searchTerm) ||
+          (bookmark.tags && bookmark.tags.some(tag => tag.toLowerCase().includes(searchTerm)));
+
+        // Tag filter
+        const matchesTag = !selectedTag ||
+          (bookmark.tags && bookmark.tags.includes(selectedTag));
+
+        return matchesSearch && matchesTag;
+      });
+    }
+
+    // ===================
+    // API Functions
+    // ===================
+    async function fetchBookmarks() {
+      try {
+        const response = await fetch('/bookmarks');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        bookmarks = await response.json();
+        updateTagFilter(bookmarks);
+        renderBookmarks(filterBookmarks());
+      } catch (error) {
+        console.error('Error fetching bookmarks:', error);
+        showToast('Failed to load bookmarks', 'error');
+      }
+    }
+
+    async function createBookmark(data) {
+      try {
+        const response = await fetch('/bookmarks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(data),
+        });
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        }
+        const newBookmark = await response.json();
+        showToast('Bookmark created successfully', 'success');
+        return newBookmark;
+      } catch (error) {
+        console.error('Error creating bookmark:', error);
+        showToast(error.message || 'Failed to create bookmark', 'error');
+        throw error;
+      }
+    }
+
+    async function updateBookmark(id, data) {
+      try {
+        const response = await fetch(`/bookmarks/${id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(data),
+        });
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        }
+        const updatedBookmark = await response.json();
+        showToast('Bookmark updated successfully', 'success');
+        return updatedBookmark;
+      } catch (error) {
+        console.error('Error updating bookmark:', error);
+        showToast(error.message || 'Failed to update bookmark', 'error');
+        throw error;
+      }
+    }
+
+    async function deleteBookmark(id) {
+      try {
+        const response = await fetch(`/bookmarks/${id}`, {
+          method: 'DELETE',
+        });
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        }
+        showToast('Bookmark deleted successfully', 'success');
+      } catch (error) {
+        console.error('Error deleting bookmark:', error);
+        showToast(error.message || 'Failed to delete bookmark', 'error');
+        throw error;
+      }
+    }
+
+    // ===================
+    // Render Functions
+    // ===================
+    function createBookmarkCard(bookmark) {
+      const card = document.createElement('article');
+      card.className = 'bookmark-card';
+      card.dataset.id = bookmark.id;
+
+      const tagsHtml = bookmark.tags && bookmark.tags.length > 0
+        ? bookmark.tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')
+        : '';
+
+      card.innerHTML = `
+        <a href="${escapeHtml(bookmark.url)}" class="card-title" target="_blank" rel="noopener noreferrer">
+          ${escapeHtml(bookmark.title)}
+        </a>
+        <span class="card-url">${escapeHtml(bookmark.url)}</span>
+        <div class="card-tags">${tagsHtml}</div>
+        <div class="card-actions">
+          <button class="btn-edit" data-id="${bookmark.id}">Edit</button>
+          <button class="btn-delete" data-id="${bookmark.id}">Delete</button>
+        </div>
+      `;
+
+      return card;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function renderBookmarks(bookmarksToRender) {
+      bookmarkList.innerHTML = '';
+
+      if (bookmarksToRender.length === 0) {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'empty-state';
+        emptyState.innerHTML = '<p>No bookmarks found. Add your first bookmark above!</p>';
+        bookmarkList.appendChild(emptyState);
+        return;
+      }
+
+      bookmarksToRender.forEach(bookmark => {
+        const card = createBookmarkCard(bookmark);
+        bookmarkList.appendChild(card);
+      });
+    }
+
+    function updateTagFilter(bookmarksData) {
+      const currentValue = tagFilter.value;
+      const allTags = new Set();
+
+      bookmarksData.forEach(bookmark => {
+        if (bookmark.tags && Array.isArray(bookmark.tags)) {
+          bookmark.tags.forEach(tag => allTags.add(tag));
+        }
+      });
+
+      // Clear existing options except the first one
+      tagFilter.innerHTML = '<option value="">All Tags</option>';
+
+      // Add sorted tags
+      Array.from(allTags).sort().forEach(tag => {
+        const option = document.createElement('option');
+        option.value = tag;
+        option.textContent = tag;
+        tagFilter.appendChild(option);
+      });
+
+      // Restore previous selection if it still exists
+      if (currentValue && allTags.has(currentValue)) {
+        tagFilter.value = currentValue;
+      }
+    }
+
+    // ===================
+    // Modal Functions
+    // ===================
+    function openEditModal(bookmark) {
+      document.getElementById('edit-id').value = bookmark.id;
+      document.getElementById('edit-title').value = bookmark.title;
+      document.getElementById('edit-url').value = bookmark.url;
+      document.getElementById('edit-tags').value = bookmark.tags ? bookmark.tags.join(', ') : '';
+      editModal.hidden = false;
+    }
+
+    function closeEditModal() {
+      editModal.hidden = true;
+      editForm.reset();
+    }
+
+    // ===================
+    // Event Handlers
+    // ===================
+
+    // Add bookmark form submit
+    addForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const title = document.getElementById('title-input').value.trim();
+      const url = document.getElementById('url-input').value.trim();
+      const tagsInput = document.getElementById('tags-input').value.trim();
+      const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(t => t) : [];
+
+      try {
+        await createBookmark({ title, url, tags });
+        addForm.reset();
+        await fetchBookmarks();
+      } catch (error) {
+        // Error already handled in createBookmark
+      }
+    });
+
+    // Search input with debounce
+    const debouncedSearch = debounce(() => {
+      renderBookmarks(filterBookmarks());
+    }, 300);
+
+    searchInput.addEventListener('input', debouncedSearch);
+
+    // Tag filter change
+    tagFilter.addEventListener('change', () => {
+      renderBookmarks(filterBookmarks());
+    });
+
+    // Edit and Delete button clicks (event delegation)
+    bookmarkList.addEventListener('click', async (e) => {
+      const editBtn = e.target.closest('.btn-edit');
+      const deleteBtn = e.target.closest('.btn-delete');
+
+      if (editBtn) {
+        const id = editBtn.dataset.id;
+        const bookmark = bookmarks.find(b => b.id === id);
+        if (bookmark) {
+          openEditModal(bookmark);
+        }
+      }
+
+      if (deleteBtn) {
+        const id = deleteBtn.dataset.id;
+        const bookmark = bookmarks.find(b => b.id === id);
+        if (bookmark && confirm(`Are you sure you want to delete "${bookmark.title}"?`)) {
+          try {
+            await deleteBookmark(id);
+            await fetchBookmarks();
+          } catch (error) {
+            // Error already handled in deleteBookmark
+          }
+        }
+      }
+    });
+
+    // Edit form submit
+    editForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const id = document.getElementById('edit-id').value;
+      const title = document.getElementById('edit-title').value.trim();
+      const url = document.getElementById('edit-url').value.trim();
+      const tagsInput = document.getElementById('edit-tags').value.trim();
+      const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(t => t) : [];
+
+      try {
+        await updateBookmark(id, { title, url, tags });
+        closeEditModal();
+        await fetchBookmarks();
+      } catch (error) {
+        // Error already handled in updateBookmark
+      }
+    });
+
+    // Cancel edit button
+    cancelEditBtn.addEventListener('click', closeEditModal);
+
+    // Close modal on backdrop click
+    editModal.addEventListener('click', (e) => {
+      if (e.target === editModal) {
+        closeEditModal();
+      }
+    });
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !editModal.hidden) {
+        closeEditModal();
+      }
+    });
+
+    // ===================
+    // Initialization
+    // ===================
+    document.addEventListener('DOMContentLoaded', () => {
+      fetchBookmarks();
+    });
+  </script>
+</body>
+</html>

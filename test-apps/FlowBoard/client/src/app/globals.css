@@ -1,0 +1,565 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =============================================================================
+   FlowBoard Design System -- Global CSS Custom Properties
+   =============================================================================
+   Inspired by Linear's industrial precision: near-black dark mode, strong
+   typography hierarchy, subtle borders, violet accent.
+
+   Font stack:
+     Heading  -- Space Grotesk     (technical, clean, distinctive)
+     Body     -- Plus Jakarta Sans (modern, readable)
+     Mono     -- JetBrains Mono    (for code, task IDs)
+
+   Color philosophy:
+     Dark mode is the PRIMARY experience (defaultTheme="dark" in ThemeProvider).
+     next-themes uses attribute="class", which adds .dark to <html> in dark mode.
+     :root defines light-theme values; .dark overrides for dark-theme values.
+     All colors reference CSS custom properties so theme switching
+     is instant and every component automatically adapts.
+   ============================================================================= */
+
+@layer base {
+  /* ==========================================================================
+     LIGHT THEME (default -- :root)
+     Clean whites, high-contrast text, same violet accent.
+     ========================================================================== */
+  :root {
+    /* ---- Core Backgrounds ---- */
+    --color-bg-primary: 0 0% 98.5%;
+    --color-bg-secondary: 0 0% 96.5%;
+    --color-bg-tertiary: 0 0% 100%;
+    --color-bg-quaternary: 0 0% 95%;
+    --color-bg-elevated: 0 0% 100%;
+
+    /* ---- Surface Overlays ---- */
+    --color-surface-overlay: 0 0% 0% / 0.02;
+    --color-surface-hover: 0 0% 0% / 0.04;
+    --color-surface-active: 0 0% 0% / 0.06;
+    --color-surface-selected: 253 91% 67% / 0.06;
+
+    /* ---- Text Hierarchy ---- */
+    --color-text-primary: 240 6% 10%;
+    --color-text-secondary: 240 3% 32%;
+    --color-text-tertiary: 0 0% 50%;
+    --color-text-quaternary: 0 0% 65%;
+    --color-text-on-accent: 0 0% 100%;
+
+    /* ---- Borders ---- */
+    --color-border-default: 0 0% 0% / 0.08;
+    --color-border-subtle: 0 0% 0% / 0.05;
+    --color-border-strong: 0 0% 0% / 0.15;
+    --color-border-accent: 253 91% 67% / 0.5;
+
+    /* ---- Primary Accent: Violet ---- */
+    --color-accent: 253 91% 67%;
+    --color-accent-hover: 253 91% 60%;
+    --color-accent-active: 253 91% 53%;
+    --color-accent-muted: 253 91% 67% / 0.10;
+    --color-accent-subtle: 253 91% 67% / 0.05;
+
+    /* ---- Priority Colors ---- */
+    --color-priority-urgent: 0 72% 51%;
+    --color-priority-high: 25 95% 46%;
+    --color-priority-medium: 45 93% 47%;
+    --color-priority-low: 217 91% 50%;
+    --color-priority-none: 0 0% 60%;
+
+    /* ---- Status Colors ---- */
+    --color-status-backlog: 0 0% 55%;
+    --color-status-todo: 217 91% 50%;
+    --color-status-in-progress: 253 91% 60%;
+    --color-status-in-review: 25 95% 46%;
+    --color-status-done: 142 71% 40%;
+    --color-status-cancelled: 0 0% 60%;
+
+    /* ---- Semantic Colors ---- */
+    --color-success: 142 71% 40%;
+    --color-success-muted: 142 71% 45% / 0.10;
+    --color-warning: 38 92% 45%;
+    --color-warning-muted: 38 92% 50% / 0.10;
+    --color-error: 0 72% 51%;
+    --color-error-muted: 0 84% 60% / 0.10;
+    --color-info: 199 89% 42%;
+    --color-info-muted: 199 89% 48% / 0.10;
+
+    /* ---- Shadows ---- */
+    --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+    --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.10), 0 8px 10px -6px rgb(0 0 0 / 0.06);
+    --shadow-glow: 0 0 20px rgb(139 92 246 / 0.10);
+
+    /* ---- Border Radius ---- */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
+    --radius-2xl: 16px;
+    --radius-full: 9999px;
+
+    /* ---- Layout Constants ---- */
+    --sidebar-width: 240px;
+    --sidebar-width-collapsed: 64px;
+    --header-height: 48px;
+    --panel-width: 480px;
+    --panel-width-lg: 640px;
+    --kanban-column-width: 320px;
+    --kanban-column-min-width: 280px;
+    --kanban-card-gap: 8px;
+
+    /* ---- Transitions ---- */
+    --transition-fast: 150ms ease-out;
+    --transition-base: 200ms ease-out;
+    --transition-slow: 300ms ease-out;
+    --transition-spring: 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* ---- Z-Index Scale ---- */
+    --z-base: 0;
+    --z-dropdown: 50;
+    --z-sticky: 100;
+    --z-overlay: 200;
+    --z-modal: 300;
+    --z-popover: 400;
+    --z-toast: 500;
+    --z-command-palette: 600;
+    --z-tooltip: 700;
+
+    /* ---- Skeleton Shimmer ---- */
+    --skeleton-base: 0 0% 93%;
+    --skeleton-shimmer: 0 0% 97%;
+
+    /* ---- shadcn/ui Variable Mapping ---- */
+    --background: var(--color-bg-primary);
+    --foreground: var(--color-text-primary);
+    --card: var(--color-bg-tertiary);
+    --card-foreground: var(--color-text-primary);
+    --popover: var(--color-bg-elevated);
+    --popover-foreground: var(--color-text-primary);
+    --primary: var(--color-accent);
+    --primary-foreground: var(--color-text-on-accent);
+    --secondary: var(--color-bg-quaternary);
+    --secondary-foreground: var(--color-text-primary);
+    --muted: var(--color-bg-quaternary);
+    --muted-foreground: var(--color-text-tertiary);
+    --accent: var(--color-bg-quaternary);
+    --accent-foreground: var(--color-text-primary);
+    --destructive: var(--color-error);
+    --destructive-foreground: 0 0% 100%;
+    --border: var(--color-border-default);
+    --input: var(--color-border-default);
+    --ring: var(--color-accent);
+    --radius: 0.375rem;
+
+    /* ---- Chart palette for Recharts ---- */
+    --chart-1: 253 91% 67%;
+    --chart-2: 142 71% 45%;
+    --chart-3: 217 91% 60%;
+    --chart-4: 25 95% 53%;
+    --chart-5: 0 84% 60%;
+
+    /* ---- Sidebar ---- */
+    --sidebar-background: var(--color-bg-secondary);
+    --sidebar-foreground: var(--color-text-secondary);
+    --sidebar-primary: var(--color-accent);
+    --sidebar-primary-foreground: var(--color-text-on-accent);
+    --sidebar-accent: var(--color-bg-quaternary);
+    --sidebar-accent-foreground: var(--color-text-primary);
+    --sidebar-border: var(--color-border-subtle);
+    --sidebar-ring: var(--color-accent);
+
+    /* ---- Flat Design Tokens (hex-like, for use in Recharts/SVG) ---- */
+    --surface-primary: #FAFAFA;
+    --surface-secondary: #F4F4F5;
+    --surface-tertiary: #E8E8EA;
+    --surface-elevated: #FFFFFF;
+    --surface-overlay: rgba(0, 0, 0, 0.5);
+    --content-primary: #09090B;
+    --content-secondary: #52525B;
+    --content-tertiary: #A1A1AA;
+    --content-quaternary: #D4D4D8;
+    --content-inverse: #FAFAFA;
+    --edge-default: #E4E4E7;
+    --edge-subtle: #F0F0F2;
+    --edge-strong: #A1A1AA;
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08);
+    --shadow-panel: 0 4px 12px rgba(0, 0, 0, 0.1);
+    --shadow-overlay: 0 16px 48px rgba(0, 0, 0, 0.15);
+
+    /* ---- Chart Colors (hex, for Recharts fill/stroke) ---- */
+    --chart-brand: #7C3AED;
+    --chart-success: #16A34A;
+    --chart-info: #2563EB;
+    --chart-warning: #D97706;
+    --chart-error: #DC2626;
+    --chart-grid: #E4E4E7;
+    --chart-axis: #A1A1AA;
+    --chart-tooltip-bg: #FFFFFF;
+    --chart-tooltip-border: #E4E4E7;
+  }
+
+  /* ==========================================================================
+     DARK THEME (class="dark" on <html>, applied by next-themes)
+     Near-black palette with subtle blue undertone, violet accent.
+     ========================================================================== */
+  .dark {
+    /* ---- Core Backgrounds ----
+       Graduated scale from near-black canvas to slightly lighter surfaces. */
+    --color-bg-primary: 240 6% 4%;
+    --color-bg-secondary: 240 5% 6.5%;
+    --color-bg-tertiary: 240 4% 9%;
+    --color-bg-quaternary: 240 3% 11.5%;
+    --color-bg-elevated: 240 3% 14%;
+
+    /* ---- Surface Overlays ---- */
+    --color-surface-overlay: 0 0% 100% / 0.03;
+    --color-surface-hover: 0 0% 100% / 0.05;
+    --color-surface-active: 0 0% 100% / 0.08;
+    --color-surface-selected: 253 91% 67% / 0.08;
+
+    /* ---- Text Hierarchy ---- */
+    --color-text-primary: 0 0% 95%;
+    --color-text-secondary: 0 0% 70%;
+    --color-text-tertiary: 0 0% 50%;
+    --color-text-quaternary: 0 0% 35%;
+    --color-text-on-accent: 0 0% 100%;
+
+    /* ---- Borders ---- */
+    --color-border-default: 0 0% 100% / 0.08;
+    --color-border-subtle: 0 0% 100% / 0.05;
+    --color-border-strong: 0 0% 100% / 0.15;
+    --color-border-accent: 253 91% 67% / 0.5;
+
+    /* ---- Primary Accent: Violet ---- */
+    --color-accent: 253 91% 67%;
+    --color-accent-hover: 253 91% 60%;
+    --color-accent-active: 253 91% 53%;
+    --color-accent-muted: 253 91% 67% / 0.15;
+    --color-accent-subtle: 253 91% 67% / 0.08;
+
+    /* ---- Priority Colors ---- */
+    --color-priority-urgent: 0 84% 60%;
+    --color-priority-high: 25 95% 53%;
+    --color-priority-medium: 48 96% 53%;
+    --color-priority-low: 217 91% 60%;
+    --color-priority-none: 0 0% 35%;
+
+    /* ---- Status Colors ---- */
+    --color-status-backlog: 0 0% 45%;
+    --color-status-todo: 217 91% 60%;
+    --color-status-in-progress: 253 91% 67%;
+    --color-status-in-review: 25 95% 53%;
+    --color-status-done: 142 71% 45%;
+    --color-status-cancelled: 0 0% 30%;
+
+    /* ---- Semantic Colors ---- */
+    --color-success: 142 71% 45%;
+    --color-success-muted: 142 71% 45% / 0.15;
+    --color-warning: 38 92% 50%;
+    --color-warning-muted: 38 92% 50% / 0.15;
+    --color-error: 0 84% 60%;
+    --color-error-muted: 0 84% 60% / 0.15;
+    --color-info: 199 89% 48%;
+    --color-info-muted: 199 89% 48% / 0.15;
+
+    /* ---- Shadows ---- */
+    --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.30);
+    --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.40), 0 1px 2px -1px rgb(0 0 0 / 0.40);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.40), 0 2px 4px -2px rgb(0 0 0 / 0.40);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.40), 0 4px 6px -4px rgb(0 0 0 / 0.40);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.50), 0 8px 10px -6px rgb(0 0 0 / 0.50);
+    --shadow-glow: 0 0 20px rgb(139 92 246 / 0.15);
+
+    /* ---- Skeleton Shimmer ---- */
+    --skeleton-base: 240 4% 10%;
+    --skeleton-shimmer: 240 3% 16%;
+
+    /* ---- shadcn/ui Variable Mapping (dark) ---- */
+    --background: var(--color-bg-primary);
+    --foreground: var(--color-text-primary);
+    --card: var(--color-bg-tertiary);
+    --card-foreground: var(--color-text-primary);
+    --popover: var(--color-bg-elevated);
+    --popover-foreground: var(--color-text-primary);
+    --primary: var(--color-accent);
+    --primary-foreground: var(--color-text-on-accent);
+    --secondary: var(--color-bg-quaternary);
+    --secondary-foreground: var(--color-text-primary);
+    --muted: var(--color-bg-tertiary);
+    --muted-foreground: var(--color-text-tertiary);
+    --accent: var(--color-bg-quaternary);
+    --accent-foreground: var(--color-text-primary);
+    --destructive: var(--color-error);
+    --destructive-foreground: 0 0% 100%;
+    --border: var(--color-border-default);
+    --input: var(--color-border-default);
+    --ring: var(--color-accent);
+
+    /* ---- Chart palette for Recharts (dark) ---- */
+    --chart-1: 253 91% 67%;
+    --chart-2: 142 71% 45%;
+    --chart-3: 217 91% 60%;
+    --chart-4: 25 95% 53%;
+    --chart-5: 0 84% 60%;
+
+    /* ---- Sidebar (dark) ---- */
+    --sidebar-background: var(--color-bg-secondary);
+    --sidebar-foreground: var(--color-text-secondary);
+    --sidebar-primary: var(--color-accent);
+    --sidebar-primary-foreground: var(--color-text-on-accent);
+    --sidebar-accent: var(--color-bg-quaternary);
+    --sidebar-accent-foreground: var(--color-text-primary);
+    --sidebar-border: var(--color-border-subtle);
+    --sidebar-ring: var(--color-accent);
+
+    /* ---- Flat Design Tokens (hex-like, for use in Recharts/SVG) ---- */
+    --surface-primary: #0A0A0B;
+    --surface-secondary: #141416;
+    --surface-tertiary: #1C1C1F;
+    --surface-elevated: #222225;
+    --surface-overlay: rgba(0, 0, 0, 0.7);
+    --content-primary: #EDEDEF;
+    --content-secondary: #A0A0A6;
+    --content-tertiary: #6B6B73;
+    --content-quaternary: #4A4A52;
+    --content-inverse: #09090B;
+    --edge-default: #2A2A2D;
+    --edge-subtle: #1F1F22;
+    --edge-strong: #3F3F45;
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-panel: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-overlay: 0 16px 48px rgba(0, 0, 0, 0.5);
+
+    /* ---- Chart Colors (hex, for Recharts fill/stroke) ---- */
+    --chart-brand: #8B5CF6;
+    --chart-success: #22C55E;
+    --chart-info: #3B82F6;
+    --chart-warning: #F59E0B;
+    --chart-error: #EF4444;
+    --chart-grid: #2A2A2D;
+    --chart-axis: #6B6B73;
+    --chart-tooltip-bg: #222225;
+    --chart-tooltip-border: #3F3F45;
+  }
+}
+
+/* =============================================================================
+   BASE ELEMENT STYLES
+   ============================================================================= */
+
+@layer base {
+  /* Smooth transition for theme switching */
+  *,
+  *::before,
+  *::after {
+    @apply border-border;
+    box-sizing: border-box;
+    transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body), system-ui, -apple-system, sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* Heading typography -- Space Grotesk */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading), system-ui, -apple-system, sans-serif;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.025em;
+    color: hsl(var(--color-text-primary));
+    text-wrap: balance;
+  }
+  h1 {
+    font-size: 2.25rem;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+  }
+  h2 {
+    font-size: 1.875rem;
+    letter-spacing: -0.03em;
+  }
+  h3 {
+    font-size: 1.5rem;
+  }
+  h4 {
+    font-size: 1.25rem;
+  }
+  h5 {
+    font-size: 1.125rem;
+    font-weight: 500;
+  }
+  h6 {
+    font-size: 1rem;
+    font-weight: 500;
+  }
+
+  /* Monospace elements */
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--font-mono), "Courier New", monospace;
+  }
+
+  /* Focus ring -- accessible, beautiful, on-brand */
+  :focus-visible {
+    outline: 2px solid hsl(var(--color-accent));
+    outline-offset: 2px;
+    border-radius: var(--radius-sm, 4px);
+  }
+
+  /* Scrollbar (Webkit + Firefox) */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--color-text-quaternary));
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--color-text-tertiary));
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--color-text-quaternary)) transparent;
+  }
+
+  /* Selection */
+  ::selection {
+    background: hsl(var(--color-accent-muted));
+    color: hsl(var(--color-text-primary));
+  }
+}
+
+/* =============================================================================
+   COMPONENT LAYER -- Reusable FlowBoard patterns
+   ============================================================================= */
+
+@layer components {
+  /* ---- Skeleton Loading ---- */
+  .skeleton {
+    @apply rounded-md;
+    background: linear-gradient(
+      90deg,
+      hsl(var(--skeleton-base)) 0%,
+      hsl(var(--skeleton-shimmer)) 50%,
+      hsl(var(--skeleton-base)) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  }
+}
+
+/* =============================================================================
+   ANIMATION KEYFRAMES
+   ============================================================================= */
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* =============================================================================
+   PREFERS-REDUCED-MOTION SUPPORT
+   =============================================================================
+   Disable/reduce all animations and transitions for users who prefer
+   reduced motion. Complements Tailwind's motion-safe: / motion-reduce: prefixes.
+   ============================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .skeleton {
+    animation: none !important;
+    background: hsl(var(--skeleton-base)) !important;
+  }
+
+  html {
+    scroll-behavior: auto !important;
+  }
+}
+
+/* =============================================================================
+   MOBILE RESPONSIVE UTILITIES
+   ============================================================================= */
+
+/* iOS safe area support */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Mobile full-screen panel override */
+@media (max-width: 767px) {
+  [data-side="right"][role="dialog"] {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+/* Responsive container padding */
+@layer utilities {
+  .container-padding {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  @media (min-width: 768px) {
+    .container-padding {
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    .container-padding {
+      padding-left: 2rem;
+      padding-right: 2rem;
+    }
+  }
+
+  /* Mobile-only no-scrollbar */
+  @media (max-width: 767px) {
+    .max-md\:no-scrollbar::-webkit-scrollbar { display: none; }
+    .max-md\:no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  }
+
+  /* Touch manipulation */
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+}

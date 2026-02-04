@@ -1,0 +1,86 @@
+Build "FlowBoard" — a modern, real-time project management dashboard inspired by Linear.
+
+Design reference: https://linear.app (scrape the design language — colors, typography, spacing, component patterns, the sidebar navigation, the clean minimalism)
+
+Tech stack: Next.js 14 App Router, TypeScript, Tailwind CSS, shadcn/ui, Node.js/Express backend, PostgreSQL with Prisma ORM, Socket.io for real-time.
+
+## Core Features
+
+### Authentication
+- Email/password signup & login with JWT
+- Protected routes, session persistence
+- User avatar & profile settings
+
+### Dashboard (Home)
+- Project cards with progress indicators (tasks done / total)
+- Recent activity feed (real-time via WebSocket)
+- Quick-add task shortcut
+- "My tasks" summary with due-date awareness
+
+### Kanban Board View
+- Drag-and-drop columns: Backlog → Todo → In Progress → In Review → Done
+- Smooth animations on card movement
+- Card shows: title, priority badge (Urgent/High/Medium/Low with color), assignee avatar, due date
+- Inline quick-edit on cards
+- Add new card inline at bottom of each column
+- Column task count badges
+
+### List View (Table)
+- Sortable columns: title, status, priority, assignee, due date, created
+- Multi-select with bulk actions (change status, assign, delete)
+- Inline editing for status and priority
+- Pagination with items-per-page selector
+
+### Task Detail Panel
+- Slide-over panel from right side (not a new page)
+- Rich text description (use a markdown editor)
+- Status, priority, assignee, due date fields
+- Activity log / comments section
+- Sub-tasks with checkbox completion
+- Labels/tags with color coding
+- Created/updated timestamps
+
+### Projects
+- Create/edit/archive projects
+- Project-level settings (name, description, icon, color)
+- Member management (invite by email, role: admin/member/viewer)
+- Per-project Kanban and List views
+
+### Search & Keyboard Shortcuts
+- Global search (Cmd/Ctrl+K) — searches tasks, projects, and members
+- Keyboard shortcuts: N for new task, B for board view, L for list view
+- Command palette style UI
+
+### Real-Time
+- WebSocket for live updates — when one user moves a task, all connected users see it instantly
+- Optimistic UI updates with rollback on failure
+- Online presence indicators (who's viewing the board)
+
+### Dark/Light Mode
+- System preference detection with manual toggle
+- Smooth theme transition
+- Both themes must look equally polished
+
+### Analytics Page
+- Tasks completed over time (area chart)
+- Tasks by status (donut chart)
+- Tasks by priority distribution (bar chart)
+- Team velocity (tasks completed per week, line chart)
+- Use Recharts for all visualizations
+
+### Responsive Design
+- Full desktop experience
+- Tablet: collapsible sidebar
+- Mobile: bottom navigation, swipeable kanban columns
+
+## Non-Functional Requirements
+- TypeScript strict mode everywhere
+- API input validation with Zod
+- Proper error handling with toast notifications
+- Loading skeletons (not spinners) for all data-fetching states
+- Optimistic updates for all mutations
+- 20+ tests covering critical paths (auth flow, task CRUD, drag-and-drop state, API endpoints)
+- Seed script that populates demo data (3 projects, 30+ tasks, 3 users) so the app looks alive on first run
+- Clean folder structure: monorepo with /client and /server directories
+
+Make it beautiful. Make it feel fast. Make it feel like a real product, not a demo.

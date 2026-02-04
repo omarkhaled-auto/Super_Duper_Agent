@@ -1,0 +1,63 @@
+orchestrator:
+  model: "opus"
+  max_turns: 500
+  permission_mode: "acceptEdits"
+
+depth:
+  default: "thorough"
+
+convergence:
+  max_cycles: 8
+  escalation_threshold: 3
+  requirements_dir: ".agent-team"
+
+interview:
+  enabled: false
+
+design_reference:
+  urls: ["https://firecrawl.dev"]
+  depth: "full"
+  max_pages_per_site: 3
+
+codebase_map:
+  enabled: true
+  max_files: 500
+  timeout_seconds: 30
+
+scheduler:
+  enabled: true
+  max_parallel_tasks: 5
+  conflict_strategy: "artificial-dependency"
+  enable_context_scoping: true
+  enable_critical_path: true
+
+verification:
+  enabled: true
+  blocking: true
+  run_lint: true
+  run_type_check: true
+  run_tests: true
+
+agents:
+  planner: { model: "opus", enabled: true }
+  researcher: { model: "opus", enabled: true }
+  architect: { model: "opus", enabled: true }
+  task_assigner: { model: "opus", enabled: true }
+  code_writer: { model: "opus", enabled: true }
+  code_reviewer: { model: "opus", enabled: true }
+  test_runner: { model: "opus", enabled: true }
+  debugger: { model: "opus", enabled: true }
+  integration_agent: { model: "opus", enabled: true }
+  contract_generator: { model: "opus", enabled: true }
+  security_auditor: { enabled: false }
+
+mcp_servers:
+  firecrawl: { enabled: true }
+  context7: { enabled: true }
+
+display:
+  show_cost: true
+  show_tools: true
+  show_fleet_composition: true
+  show_convergence_status: true
+  verbose: true
