@@ -343,6 +343,81 @@ def compute_rollup_health(
     }
 
 
+def aggregate_milestone_convergence(
+    mm: "MilestoneManager",
+    min_convergence_ratio: float = 0.9,
+    degraded_threshold: float = 0.5,
+) -> ConvergenceReport:
+    """Aggregate convergence reports from all milestones into a single report.
+
+    Iterates all milestone directories, calls ``check_milestone_health()``
+    per milestone, and combines the results into a global
+    :class:`ConvergenceReport`.
+
+    Parameters
+    ----------
+    mm : MilestoneManager
+        Manager instance pointing at the project root.
+    min_convergence_ratio : float
+        Ratio at or above which health is ``"healthy"``.
+    degraded_threshold : float
+        Ratio at or above which health is ``"degraded"`` when the review
+        fleet has been deployed.
+
+    Returns
+    -------
+    ConvergenceReport
+        Aggregated health report across all milestones.
+    """
+    milestone_ids = mm._list_milestone_ids()
+    if not milestone_ids:
+        return ConvergenceReport(health="unknown")
+
+    total_checked = 0
+    total_requirements = 0
+    max_cycles = 0
+    all_escalated: list[str] = []
+    # M3: Track zero-cycle milestones (Issue #10)
+    zero_cycle_milestones: list[str] = []
+
+    for mid in milestone_ids:
+        report = mm.check_milestone_health(
+            mid,
+            min_convergence_ratio=min_convergence_ratio,
+            degraded_threshold=degraded_threshold,
+        )
+        total_checked += report.checked_requirements
+        total_requirements += report.total_requirements
+        max_cycles = max(max_cycles, report.review_cycles)
+        all_escalated.extend(report.escalated_items)
+        # M3: Track milestones with requirements but 0 review cycles
+        if report.review_cycles == 0 and report.total_requirements > 0:
+            zero_cycle_milestones.append(mid)
+
+    ratio = total_checked / total_requirements if total_requirements > 0 else 0.0
+    fleet_deployed = max_cycles > 0
+
+    if total_requirements == 0:
+        health = "unknown"
+    elif ratio >= min_convergence_ratio:
+        health = "healthy"
+    elif fleet_deployed and ratio >= degraded_threshold:
+        health = "degraded"
+    else:
+        health = "failed"
+
+    return ConvergenceReport(
+        total_requirements=total_requirements,
+        checked_requirements=total_checked,
+        review_cycles=max_cycles,
+        convergence_ratio=ratio,
+        review_fleet_deployed=fleet_deployed,
+        health=health,
+        escalated_items=all_escalated,
+        zero_cycle_milestones=zero_cycle_milestones,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Regex patterns (reuse the review_cycles pattern from config.py)
 # ---------------------------------------------------------------------------

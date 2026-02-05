@@ -214,6 +214,11 @@ def print_info(message: str) -> None:
     console.print(f"[dim]{message}[/]")
 
 
+def print_success(message: str) -> None:
+    """Print a success message."""
+    console.print(f"[bold green]Success:[/] {message}")
+
+
 def print_escalation(item: str, reason: str) -> None:
     """Print an escalation notice.
 
@@ -554,11 +559,12 @@ def print_convergence_health(
     req_total: int,
     review_cycles: int,
     escalated_items: list[str] | None = None,
+    zero_cycle_milestones: list[str] | None = None,
 ) -> None:
     """Render a convergence health panel after orchestration.
 
     Shows: health status (colored), requirements progress bar,
-    review cycle count, and escalated items (if any).
+    review cycle count, escalated items, and zero-cycle milestone warnings.
     """
     if health == "unknown":
         return
@@ -585,8 +591,22 @@ def print_convergence_health(
     if escalated_items:
         content.append(f"Escalated items: {', '.join(escalated_items)}\n", style="red")
 
+    # M3: Zero-cycle milestone warning (Issue #10)
+    if zero_cycle_milestones:
+        content.append(
+            f"Zero-cycle milestones: {', '.join(zero_cycle_milestones)}\n",
+            style="yellow"
+        )
+
     console.print()
     console.print(Panel(content, border_style=border_style, title="Convergence"))
+
+    # M3: Additional warning outside the panel for visibility
+    if zero_cycle_milestones:
+        console.print(
+            f"[yellow]ZERO-CYCLE MILESTONES: {len(zero_cycle_milestones)} milestone(s) "
+            f"never deployed review fleet: {', '.join(zero_cycle_milestones)}[/]"
+        )
 
 
 def print_recovery_report(

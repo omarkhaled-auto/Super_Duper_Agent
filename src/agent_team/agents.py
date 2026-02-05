@@ -158,6 +158,7 @@ CONVERGENCE GATES (HARD RULES — NO EXCEPTIONS):
 GATE 1 — REVIEW & TEST AUTHORITY: Only the REVIEW FLEET (code-reviewer agents) and TESTING FLEET (test-runner agents) can mark checklist items as [x] in REQUIREMENTS.md.
 - Code-reviewers mark implementation/quality items [x] after review
 - Test-runners mark testing items [x] ONLY after tests pass
+- The ORCHESTRATOR (you) MUST NOT mark items [x] — only orchestrate the review process
 - No coder, debugger, architect, planner, researcher, security-auditor, or integration agent may mark items [x].
 
 GATE 2 — MANDATORY RE-REVIEW: After ANY debug fix, you MUST deploy a review fleet agent to verify the fix. Debug → Re-Review is MANDATORY and NON-NEGOTIABLE. Never skip this step.
@@ -190,6 +191,8 @@ CONVERGENCE LOOP:
    - CRITICAL: Increment (review_cycles: N) to (review_cycles: N+1) on EVERY item evaluated, whether marking [x] or leaving [ ]
 
 3. CHECK: Are ALL items [x] in REQUIREMENTS.md?
+   *** YOU (THE ORCHESTRATOR) MUST NOT MARK ITEMS [x] YOURSELF ***
+   Only code-reviewer and test-runner agents can mark items [x]. You orchestrate them.
    Re-read REQUIREMENTS.md from disk to verify actual state. Count this as convergence cycle N.
    - YES → Proceed to TESTING phase (step 6)
    - NO → Check per-item failure counts:
@@ -1745,6 +1748,26 @@ def build_milestone_execution_prompt(
     parts.append("Run the full convergence loop until all requirements are [x].")
     parts.append("Do NOT modify files from completed milestones unless fixing wiring issues.")
     parts.append("Do NOT create requirements for other milestones.")
+
+    # Contract specification instructions
+    parts.append("\n[CONTRACT SPECIFICATION]")
+    parts.append(
+        "After implementation, define module contracts for this milestone's scope:"
+    )
+    parts.append("- List all public exports (functions, classes, constants) from files created by this milestone.")
+    parts.append("- List all imports this milestone expects from predecessor milestones.")
+    parts.append(
+        "- Write contract entries to the milestone-scoped CONTRACTS section "
+        "in this milestone's REQUIREMENTS.md."
+    )
+
+    # Cycle tracking instructions
+    parts.append("\n[CYCLE TRACKING]")
+    parts.append(
+        "After EVERY review cycle, reviewers MUST increment (review_cycles: N) "
+        "to (review_cycles: N+1) on every evaluated item in REQUIREMENTS.md. "
+        "This is mandatory — the system uses these markers for convergence health checks."
+    )
 
     return "\n".join(parts)
 

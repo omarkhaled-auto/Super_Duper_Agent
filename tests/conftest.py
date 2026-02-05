@@ -166,3 +166,58 @@ def config_with_milestones() -> AgentTeamConfig:
         scheduler=SchedulerConfig(enabled=True),
         verification=VerificationConfig(enabled=True),
     )
+
+
+# ---------------------------------------------------------------------------
+# Milestone project structure fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def milestone_project_structure(tmp_path):
+    """Create a temporary milestone project structure with sample REQUIREMENTS.md files.
+
+    Returns (project_root, milestones_dir) tuple.
+    """
+    agent_team_dir = tmp_path / ".agent-team"
+    milestones_dir = agent_team_dir / "milestones"
+
+    # Milestone 1: 10 requirements, 5 checked, 2 review cycles
+    m1_dir = milestones_dir / "milestone-1"
+    m1_dir.mkdir(parents=True)
+    m1_req = (
+        "# Requirements: Foundation\n\n"
+        "- [x] Set up project structure (review_cycles: 2)\n"
+        "- [x] Configure TypeScript (review_cycles: 2)\n"
+        "- [x] Set up testing framework (review_cycles: 2)\n"
+        "- [x] Configure linting (review_cycles: 1)\n"
+        "- [x] Set up CI/CD pipeline (review_cycles: 1)\n"
+        "- [ ] Configure deployment (review_cycles: 1)\n"
+        "- [ ] Set up monitoring (review_cycles: 0)\n"
+        "- [ ] Add logging framework (review_cycles: 0)\n"
+        "- [ ] Set up error tracking\n"
+        "- [ ] Configure environment variables\n"
+    )
+    (m1_dir / "REQUIREMENTS.md").write_text(m1_req, encoding="utf-8")
+
+    # Milestone 2: 5 requirements, 3 checked, 3 review cycles
+    m2_dir = milestones_dir / "milestone-2"
+    m2_dir.mkdir(parents=True)
+    m2_req = (
+        "# Requirements: Backend API\n\n"
+        "- [x] Design REST API endpoints (review_cycles: 3)\n"
+        "- [x] Implement user authentication (review_cycles: 3)\n"
+        "- [x] Create database schema (review_cycles: 2)\n"
+        "- [ ] Add input validation (review_cycles: 1)\n"
+        "- [ ] Implement rate limiting\n"
+    )
+    (m2_dir / "REQUIREMENTS.md").write_text(m2_req, encoding="utf-8")
+
+    return tmp_path, milestones_dir
+
+
+@pytest.fixture()
+def prd_mode_config() -> AgentTeamConfig:
+    """AgentTeamConfig with milestone.enabled=True for PRD mode testing."""
+    return AgentTeamConfig(
+        milestone=MilestoneConfig(enabled=True),
+    )

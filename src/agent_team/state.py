@@ -77,6 +77,8 @@ class ConvergenceReport:
     review_fleet_deployed: bool = False  # cycles > 0
     health: str = "unknown"  # "healthy" | "degraded" | "failed"
     escalated_items: list[str] = field(default_factory=list)  # items at escalation threshold still unchecked
+    # M3: Zero-cycle milestone tracking (Issue #10)
+    zero_cycle_milestones: list[str] = field(default_factory=list)  # milestones with 0 review cycles
 
 
 _STATE_FILE = "STATE.json"

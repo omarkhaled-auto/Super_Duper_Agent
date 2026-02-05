@@ -64,6 +64,7 @@ from .display import (
     print_recovery_report,
     print_run_summary,
     print_schedule_summary,
+    print_success,
     print_task_start,
     print_verification_summary,
     print_warning,
@@ -622,16 +623,18 @@ async def _run_prd_milestones(
     codebase_map_summary: str | None = None,
     constraints: list | None = None,
     intervention: "InterventionQueue | None" = None,
-) -> float:
+) -> tuple[float, ConvergenceReport | None]:
     """Execute the per-milestone orchestration loop for PRD mode.
 
     Phase 1: Decomposition — one orchestrator call to create MASTER_PLAN.md
     Phase 2: Execution — one fresh session per milestone, in dependency order
 
-    Returns total cost across all phases.
+    Returns ``(total_cost, convergence_report)`` where the report aggregates
+    health across all milestones (or ``None`` if no milestones completed).
     """
     from .milestone_manager import (
         MilestoneManager,
+        aggregate_milestone_convergence,
         build_milestone_context,
         compute_rollup_health,
         parse_master_plan,
@@ -679,7 +682,7 @@ async def _run_prd_milestones(
                 "Decomposition did not create MASTER_PLAN.md. "
                 "The orchestrator may need a different prompt. Aborting milestone loop."
             )
-            return total_cost
+            return total_cost, None
     else:
         print_info("Phase 1: Skipping decomposition — MASTER_PLAN.md already exists")
 
@@ -689,7 +692,7 @@ async def _run_prd_milestones(
 
     if not plan.milestones:
         print_error("MASTER_PLAN.md contains no milestones. Aborting.")
-        return total_cost
+        return total_cost, None
 
     # Warn if decomposition produced too many milestones
     if len(plan.milestones) > config.milestone.max_milestones_warning:
@@ -788,6 +791,7 @@ async def _run_prd_milestones(
                 task_text=task, depth=depth,
             )
             ms_phase_costs: dict[str, float] = {}
+            health_report: ConvergenceReport | None = None
 
             try:
                 async with ClaudeSDKClient(options=ms_options) as client:
@@ -830,6 +834,8 @@ async def _run_prd_milestones(
                 master_plan_path.write_text(plan_content, encoding="utf-8")
                 if _current_state:
                     update_milestone_progress(_current_state, milestone.id, "FAILED")
+                    update_completion_ratio(_current_state)
+                    save_state(_current_state, directory=str(req_dir.parent / ".agent-team"))
                 continue
 
             # Wiring verification with retry loop (if enabled)
@@ -884,7 +890,8 @@ async def _run_prd_milestones(
             )
             save_completion_cache(str(mm._milestones_dir), milestone.id, _cs)
 
-            print_milestone_complete(milestone.id, milestone.title, health_report.health)
+            health_status = health_report.health if health_report else "unknown"
+            print_milestone_complete(milestone.id, milestone.title, health_status)
 
         # Re-read plan for next iteration
         plan_content = master_plan_path.read_text(encoding="utf-8")
@@ -897,7 +904,13 @@ async def _run_prd_milestones(
             rollup.get("failed", 0),
         )
 
-    return total_cost
+    # Aggregate convergence across all milestones
+    milestone_report = aggregate_milestone_convergence(
+        mm,
+        min_convergence_ratio=config.convergence.min_convergence_ratio,
+        degraded_threshold=config.convergence.degraded_threshold,
+    )
+    return total_cost, milestone_report
 
 
 async def _run_milestone_wiring_fix(
@@ -1348,6 +1361,24 @@ def _build_resume_context(state: object, cwd: str) -> str:
     return "\n".join(lines)
 
 
+def _has_milestone_requirements(cwd: str, config: AgentTeamConfig) -> bool:
+    """Check if any milestone-level REQUIREMENTS.md files exist.
+
+    Returns True if at least one ``milestones/*/REQUIREMENTS.md`` file
+    is present in the requirements directory.
+    """
+    milestones_dir = (
+        Path(cwd) / config.convergence.requirements_dir / "milestones"
+    )
+    if not milestones_dir.is_dir():
+        return False
+    return any(
+        (d / "REQUIREMENTS.md").is_file()
+        for d in milestones_dir.iterdir()
+        if d.is_dir()
+    )
+
+
 def _check_convergence_health(cwd: str, config: AgentTeamConfig) -> ConvergenceReport:
     """Check convergence health after orchestration completes.
 
@@ -1406,6 +1437,31 @@ def _check_convergence_health(cwd: str, config: AgentTeamConfig) -> ConvergenceR
         report.health = "failed"
 
     return report
+
+
+def _display_per_milestone_health(cwd: str, config: AgentTeamConfig) -> None:
+    """Display per-milestone convergence breakdown.
+
+    H2: Extracted helper to ensure per-milestone display happens in both
+    the main path (when milestone_convergence_report is not None) and
+    the fallback path (when it's None and we aggregate from disk).
+    """
+    from .milestone_manager import MilestoneManager
+
+    mm = MilestoneManager(Path(cwd))
+    ms_ids = mm._list_milestone_ids()
+    if ms_ids:
+        print_info(f"Per-milestone convergence ({len(ms_ids)} milestones):")
+        for mid in ms_ids:
+            mr = mm.check_milestone_health(
+                mid,
+                min_convergence_ratio=config.convergence.min_convergence_ratio,
+                degraded_threshold=config.convergence.degraded_threshold,
+            )
+            print_info(
+                f"  {mid}: {mr.checked_requirements}/{mr.total_requirements} "
+                f"({mr.health}, cycles: {mr.review_cycles})"
+            )
 
 
 def _run_review_only(
@@ -1481,17 +1537,30 @@ def _run_contract_generation(
     constraints: list | None = None,
     intervention: "InterventionQueue | None" = None,
     task_text: str | None = None,
+    milestone_mode: bool = False,
 ) -> float:
     """Run a contract-generation recovery pass when CONTRACTS.json is missing.
 
     Creates a focused orchestrator prompt that forces the contract-generator
-    deployment. Returns cost of the recovery pass.
+    deployment.  When *milestone_mode* is True, the prompt references
+    milestone-level REQUIREMENTS.md files instead of the top-level one.
+    Returns cost of the recovery pass.
     """
+    if milestone_mode:
+        req_source = (
+            f"the milestone-level REQUIREMENTS.md files under "
+            f"{config.convergence.requirements_dir}/milestones/*/REQUIREMENTS.md"
+        )
+    else:
+        req_source = (
+            f"{config.convergence.requirements_dir}/{config.convergence.requirements_file}"
+        )
+
     contract_prompt = (
         "CRITICAL RECOVERY: The previous orchestration run completed but CONTRACTS.json "
         "was never generated. The contract-generator agent was NEVER deployed.\n\n"
         "You MUST do the following NOW:\n"
-        f"1. Read {config.convergence.requirements_dir}/{config.convergence.requirements_file}\n"
+        f"1. Read {req_source}\n"
         "2. Focus on the Architecture Decision, Integration Roadmap, and Wiring Map sections\n"
         "3. Deploy the CONTRACT GENERATOR agent to generate .agent-team/CONTRACTS.json\n"
         "4. Verify the file was written successfully\n\n"
@@ -1653,6 +1722,14 @@ def _detect_backend(requested: str) -> str:
 
 def main() -> None:
     """CLI entry point."""
+    # Load .env file if python-dotenv is available (RC7).
+    # Must run before _detect_backend() reads ANTHROPIC_API_KEY.
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(override=False)
+    except ImportError:
+        pass
+
     # Reset globals at start to prevent stale state across multiple invocations
     global _interrupt_count, _current_state, _backend, _gemini_available
     _interrupt_count = 0
@@ -1975,6 +2052,14 @@ def main() -> None:
     _current_state.completed_phases.append("pre_orchestration")
     _current_state.current_phase = "orchestration"
 
+    # M1: Capture pre-orchestration review cycles for staleness detection (Issue #1, #2)
+    pre_orchestration_cycles = 0
+    try:
+        _pre_report = _check_convergence_health(cwd, config)
+        pre_orchestration_cycles = _pre_report.review_cycles
+    except Exception:
+        pass  # Best-effort — new projects have no REQUIREMENTS.md yet
+
     # -------------------------------------------------------------------
     # C5: Initialize and start InterventionQueue
     # -------------------------------------------------------------------
@@ -2008,6 +2093,8 @@ def main() -> None:
             _current_state.current_phase = "orchestration"
 
         run_cost = 0.0
+        _use_milestones = False
+        milestone_convergence_report: ConvergenceReport | None = None
         try:
             if interactive:
                 run_cost = asyncio.run(_run_interactive(
@@ -2058,7 +2145,7 @@ def main() -> None:
 
                 if _use_milestones:
                     print_info("Milestone orchestration enabled — entering per-milestone loop")
-                    run_cost = asyncio.run(_run_prd_milestones(
+                    run_cost, milestone_convergence_report = asyncio.run(_run_prd_milestones(
                         task=task,
                         config=config,
                         cwd=cwd,
@@ -2149,10 +2236,17 @@ def main() -> None:
                 complete_count = sum(1 for t in parsed_tasks if t.status == "COMPLETE")
                 total_tasks = len(parsed_tasks)
                 if pending_count > 0:
+                    # M2: Task Status Staleness Warning with IDs (Issue #3)
+                    pending_ids = [t.id for t in parsed_tasks if t.status == "PENDING"]
+                    id_preview = ", ".join(pending_ids[:5])
+                    if len(pending_ids) > 5:
+                        id_preview += f"... (+{len(pending_ids) - 5} more)"
                     print_warning(
-                        f"TASKS.md: {pending_count}/{total_tasks} tasks still PENDING "
-                        f"({complete_count} COMPLETE). Code-writers should have marked "
-                        f"their own tasks COMPLETE during execution."
+                        f"TASK STATUS WARNING: {pending_count}/{total_tasks} tasks still PENDING: "
+                        f"{id_preview}"
+                    )
+                    print_info(
+                        "Code-writers should have marked their own tasks COMPLETE during execution."
                     )
                 else:
                     print_info(f"TASKS.md: All {total_tasks} tasks marked COMPLETE.")
@@ -2177,7 +2271,7 @@ def main() -> None:
         generator_enabled = config.agents.get(
             "contract_generator", _AgentConfig()
         ).enabled
-        has_requirements = req_path.is_file()
+        has_requirements = req_path.is_file() or _has_milestone_requirements(cwd, config)
 
         if not contract_path.is_file() and has_requirements and generator_enabled:
             print_warning("RECOVERY PASS [contract_generation]: CONTRACTS.json not found after orchestration.")
@@ -2189,35 +2283,134 @@ def main() -> None:
                     constraints=constraints,
                     intervention=intervention,
                     task_text=args.task,
+                    milestone_mode=_use_milestones,
                 )
                 if _current_state:
                     _current_state.total_cost += recovery_cost
+                # H1: Post-recovery verification (Issue #4, #9)
+                if not contract_path.is_file():
+                    print_error(
+                        "CONTRACT RECOVERY FAILED: CONTRACTS.json not created after recovery pass"
+                    )
+                else:
+                    try:
+                        with open(contract_path, encoding="utf-8") as f:
+                            json.load(f)
+                        print_success(
+                            "Contract recovery verified: CONTRACTS.json created successfully"
+                        )
+                    except json.JSONDecodeError:
+                        print_error(
+                            "CONTRACT RECOVERY FAILED: CONTRACTS.json is invalid JSON"
+                        )
             except Exception as exc:
                 print_warning(f"Contract generation recovery failed: {exc}")
 
     # -------------------------------------------------------------------
     # Post-orchestration: Convergence health check (Root Cause #2)
     # -------------------------------------------------------------------
-    convergence_report = _check_convergence_health(cwd, config)
+    if _use_milestones:
+        if milestone_convergence_report is not None:
+            convergence_report = milestone_convergence_report
+        else:
+            # Milestones enabled but report not returned — aggregate from disk
+            from .milestone_manager import MilestoneManager, aggregate_milestone_convergence
+            _mm_fallback = MilestoneManager(Path(cwd))
+            convergence_report = aggregate_milestone_convergence(
+                _mm_fallback,
+                min_convergence_ratio=config.convergence.min_convergence_ratio,
+                degraded_threshold=config.convergence.degraded_threshold,
+            )
+            # H2: Per-milestone display in fallback path (Issue #7)
+            _display_per_milestone_health(cwd, config)
+    else:
+        convergence_report = _check_convergence_health(cwd, config)
     if _current_state:
         _current_state.convergence_cycles = convergence_report.review_cycles
         _current_state.requirements_checked = convergence_report.checked_requirements
         _current_state.requirements_total = convergence_report.total_requirements
 
     # Display convergence health panel
+    if _use_milestones and milestone_convergence_report is not None:
+        # Show per-milestone breakdown before the aggregate
+        _display_per_milestone_health(cwd, config)
+
     print_convergence_health(
         health=convergence_report.health,
         req_passed=convergence_report.checked_requirements,
         req_total=convergence_report.total_requirements,
         review_cycles=convergence_report.review_cycles,
         escalated_items=convergence_report.escalated_items,
+        zero_cycle_milestones=convergence_report.zero_cycle_milestones,
     )
+
+    # H3: Unknown Health Investigation (Issue #12)
+    # When health is unknown, investigate and log specific reason
+    if convergence_report.health == "unknown":
+        if _use_milestones:
+            milestones_dir = Path(cwd) / config.convergence.requirements_dir / "milestones"
+            if not milestones_dir.exists():
+                print_warning(
+                    "UNKNOWN HEALTH: .agent-team/milestones/ directory does not exist"
+                )
+            else:
+                ms_with_reqs = [
+                    d.name for d in milestones_dir.iterdir()
+                    if d.is_dir() and (d / config.convergence.requirements_file).is_file()
+                ]
+                if not ms_with_reqs:
+                    print_warning(
+                        f"UNKNOWN HEALTH: No milestone has {config.convergence.requirements_file}"
+                    )
+                else:
+                    print_warning(
+                        f"UNKNOWN HEALTH: Milestones exist ({len(ms_with_reqs)}) "
+                        "but aggregation returned 0 requirements"
+                    )
+        else:
+            req_path = (
+                Path(cwd) / config.convergence.requirements_dir
+                / config.convergence.requirements_file
+            )
+            if not req_path.is_file():
+                print_warning(
+                    f"UNKNOWN HEALTH: {config.convergence.requirements_dir}/"
+                    f"{config.convergence.requirements_file} does not exist"
+                )
+            else:
+                print_warning(
+                    f"UNKNOWN HEALTH: {config.convergence.requirements_file} exists "
+                    "but contains no checkable items"
+                )
 
     # Log escalated items if any
     if convergence_report.escalated_items:
         print_warning(
             f"Escalation-worthy items still unchecked ({len(convergence_report.escalated_items)}): "
             + ", ".join(convergence_report.escalated_items)
+        )
+
+    # Gate validation: log warning if review fleet was never deployed
+    if (
+        convergence_report.review_cycles == 0
+        and convergence_report.total_requirements > 0
+    ):
+        print_warning(
+            "GATE VIOLATION: Review fleet was never deployed "
+            f"({convergence_report.total_requirements} requirements, 0 review cycles). "
+            "GATE 5 enforcement will trigger recovery."
+        )
+
+    # M1: Review Cycles Staleness Detection (Issue #1, #2)
+    # Warn if review_cycles didn't increase during orchestration
+    if (
+        convergence_report.review_cycles == pre_orchestration_cycles
+        and convergence_report.total_requirements > 0
+        and pre_orchestration_cycles > 0  # Only if there were previous cycles
+    ):
+        print_warning(
+            f"STALENESS WARNING: review_cycles unchanged at {convergence_report.review_cycles}. "
+            "Review fleet may not have evaluated items this run."
         )
 
     recovery_threshold = config.convergence.recovery_threshold
@@ -2240,6 +2433,18 @@ def main() -> None:
                 f"{convergence_report.total_requirements} requirements checked "
                 f"({convergence_report.review_cycles} review cycles)."
             )
+    elif convergence_report.health == "unknown":
+        # PRD mode may return "unknown" if no top-level REQUIREMENTS.md exists
+        milestones_dir = Path(cwd) / config.convergence.requirements_dir / "milestones"
+        if milestones_dir.is_dir() and any(milestones_dir.iterdir()):
+            # Milestones exist but health is unknown — treat as potential failure
+            print_warning(
+                "Convergence health: unknown (milestone requirements may not have been aggregated). "
+                "Triggering recovery pass."
+            )
+            needs_recovery = True
+        else:
+            print_warning("Convergence health: unknown (no requirements found).")
     elif convergence_report.health == "degraded":
         if (
             convergence_report.total_requirements > 0
@@ -2276,7 +2481,15 @@ def main() -> None:
             if _current_state:
                 _current_state.total_cost += recovery_cost
             # Re-check health after recovery
-            convergence_report = _check_convergence_health(cwd, config)
+            if _use_milestones:
+                from .milestone_manager import MilestoneManager as _MM2, aggregate_milestone_convergence as _agg
+                convergence_report = _agg(
+                    _MM2(Path(cwd)),
+                    min_convergence_ratio=config.convergence.min_convergence_ratio,
+                    degraded_threshold=config.convergence.degraded_threshold,
+                )
+            else:
+                convergence_report = _check_convergence_health(cwd, config)
             if _current_state:
                 _current_state.convergence_cycles = convergence_report.review_cycles
                 _current_state.requirements_checked = convergence_report.checked_requirements

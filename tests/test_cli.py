@@ -249,7 +249,8 @@ class TestMain:
         """Neither API key nor CLI auth → exit code 1."""
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         with patch("agent_team.cli._parse_args") as mock_parse, \
-             patch("agent_team.cli._check_claude_cli_auth", return_value=False):
+             patch("agent_team.cli._check_claude_cli_auth", return_value=False), \
+             patch("dotenv.load_dotenv", return_value=None):
             mock_parse.return_value = argparse.Namespace(
                 task="test", prd=None, depth=None, agents=None,
                 model=None, max_turns=None, config=None, cwd=None,
@@ -1503,3 +1504,84 @@ class TestBuildResumeContextWithMilestones:
         assert "milestone-1" in ctx
         assert "milestone-2" in ctx
         assert "Milestone progress" in ctx
+
+
+# ===================================================================
+# E2E Bug Fixes
+# ===================================================================
+
+
+class TestE2EBugFixesCLI:
+    """Tests for CLI-level bugs identified during E2E testing."""
+
+    def test_health_gate_failure_saves_state(self, tmp_path):
+        """State is saved when milestone fails health gate.
+
+        This tests the fix for Issue 2: STATE.json milestone tracking empty.
+        When a milestone fails the health gate, we must call save_state()
+        to persist the FAILED status.
+        """
+        from agent_team.state import RunState, save_state, update_milestone_progress, update_completion_ratio
+
+        # Create initial state
+        state = RunState(task="build the app")
+        state.milestone_order = ["milestone-1", "milestone-2"]
+
+        # Create .agent-team directory
+        agent_team_dir = tmp_path / ".agent-team"
+        agent_team_dir.mkdir(parents=True)
+
+        # Simulate health gate failure (this is what the fix does)
+        update_milestone_progress(state, "milestone-1", "FAILED")
+        update_completion_ratio(state)  # This was missing before the fix
+        save_state(state, directory=str(agent_team_dir))  # This was missing before the fix
+
+        # Verify state was saved with the failure
+        state_file = agent_team_dir / "STATE.json"
+        assert state_file.exists()
+
+        import json
+        saved_state = json.loads(state_file.read_text(encoding="utf-8"))
+        assert saved_state["milestone_progress"]["milestone-1"]["status"] == "FAILED"
+        assert "completion_ratio" in saved_state
+
+    def test_health_gate_failure_updates_completion_ratio(self, tmp_path):
+        """Completion ratio is updated when milestone fails health gate."""
+        from agent_team.state import RunState, update_milestone_progress, update_completion_ratio
+
+        # Create initial state with 2 milestones
+        state = RunState(task="build the app")
+        state.milestone_order = ["milestone-1", "milestone-2"]
+
+        # Before the fix, only update_milestone_progress was called
+        # After the fix, update_completion_ratio is also called
+        update_milestone_progress(state, "milestone-1", "FAILED")
+        update_completion_ratio(state)
+
+        # Verify completion_ratio was calculated
+        # With 1 milestone failed out of 2, ratio should be 0.0 (0 complete / 2 total)
+        assert state.completion_ratio == 0.0
+
+    def test_health_gate_failure_persists_to_disk(self, tmp_path):
+        """State persistence at health gate failure allows resume."""
+        from agent_team.state import RunState, save_state, load_state, update_milestone_progress, update_completion_ratio
+
+        # Create .agent-team directory
+        agent_team_dir = tmp_path / ".agent-team"
+        agent_team_dir.mkdir(parents=True)
+
+        # Create and save initial state
+        state = RunState(task="build the app")
+        state.milestone_order = ["m1", "m2", "m3"]
+        save_state(state, directory=str(agent_team_dir))
+
+        # Simulate health gate failure
+        update_milestone_progress(state, "m1", "FAILED")
+        update_completion_ratio(state)
+        save_state(state, directory=str(agent_team_dir))
+
+        # Load state and verify persistence
+        loaded = load_state(directory=str(agent_team_dir))
+        assert loaded is not None
+        assert loaded.milestone_progress["m1"]["status"] == "FAILED"
+        assert loaded.completion_ratio == 0.0
