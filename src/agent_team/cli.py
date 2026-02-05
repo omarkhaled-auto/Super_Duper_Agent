@@ -628,6 +628,7 @@ async def _run_prd_milestones(
     codebase_map_summary: str | None = None,
     constraints: list | None = None,
     intervention: "InterventionQueue | None" = None,
+    design_reference_urls: list[str] | None = None,
 ) -> tuple[float, ConvergenceReport | None]:
     """Execute the per-milestone orchestration loop for PRD mode.
 
@@ -670,6 +671,7 @@ async def _run_prd_milestones(
             cwd=cwd,
             interview_doc=interview_doc,
             codebase_map_summary=codebase_map_summary,
+            design_reference_urls=design_reference_urls,
         )
 
         options = _build_options(config, cwd, constraints=constraints, task_text=task, depth=depth, backend=_backend)
@@ -788,6 +790,7 @@ async def _run_prd_milestones(
                 cwd=cwd,
                 codebase_map_summary=codebase_map_summary,
                 predecessor_context=predecessor_str,
+                design_reference_urls=design_reference_urls,
             )
 
             # Fresh session for this milestone
@@ -2161,6 +2164,7 @@ def main() -> None:
                         codebase_map_summary=codebase_map_summary,
                         constraints=constraints,
                         intervention=intervention,
+                        design_reference_urls=design_ref_urls or None,
                     ))
                 else:
                     # Format schedule for prompt injection (if available)

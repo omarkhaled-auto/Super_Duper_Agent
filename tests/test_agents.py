@@ -17,6 +17,8 @@ from agent_team.agents import (
     TASK_ASSIGNER_PROMPT,
     TEST_RUNNER_PROMPT,
     build_agent_definitions,
+    build_decomposition_prompt,
+    build_milestone_execution_prompt,
     build_orchestrator_prompt,
 )
 from agent_team.config import AgentConfig, AgentTeamConfig, ConstraintEntry, SchedulerConfig, VerificationConfig
@@ -1202,3 +1204,103 @@ class TestQualityConfigGating:
         cfg = AgentTeamConfig()
         agents = build_agent_definitions(cfg, {}, gemini_available=False)
         assert "CODE CRAFT REVIEW" in agents["code-reviewer"]["prompt"]
+
+
+# ===================================================================
+# PRD Mode Prompt Builders - Design Reference URL Tests
+# ===================================================================
+
+class TestBuildDecompositionPromptDesignRefs:
+    """Tests for design_reference_urls in build_decomposition_prompt."""
+
+    def test_contains_design_reference_urls(self):
+        """Decomposition prompt should include design reference URLs when provided."""
+        cfg = AgentTeamConfig()
+        urls = ["https://stripe.com", "https://linear.app"]
+        prompt = build_decomposition_prompt(
+            task="Build a dashboard",
+            depth="standard",
+            config=cfg,
+            design_reference_urls=urls,
+        )
+        assert "DESIGN REFERENCE" in prompt
+        assert "https://stripe.com" in prompt
+        assert "https://linear.app" in prompt
+
+    def test_no_design_reference_when_none(self):
+        """Decomposition prompt should NOT include design reference section when None."""
+        cfg = AgentTeamConfig()
+        prompt = build_decomposition_prompt(
+            task="Build a dashboard",
+            depth="standard",
+            config=cfg,
+            design_reference_urls=None,
+        )
+        assert "DESIGN REFERENCE" not in prompt
+
+    def test_design_reference_extraction_depth(self):
+        """Decomposition prompt should include extraction depth config."""
+        cfg = AgentTeamConfig()
+        cfg.design_reference.depth = "full"
+        urls = ["https://example.com"]
+        prompt = build_decomposition_prompt(
+            task="Build app",
+            depth="standard",
+            config=cfg,
+            design_reference_urls=urls,
+        )
+        assert "Extraction depth: full" in prompt
+
+
+class TestBuildMilestoneExecutionPromptDesignRefs:
+    """Tests for design_reference_urls in build_milestone_execution_prompt."""
+
+    def test_contains_design_reference_urls(self):
+        """Milestone execution prompt should include design reference URLs when provided."""
+        cfg = AgentTeamConfig()
+        urls = ["https://stripe.com/docs", "https://tailwindcss.com"]
+        prompt = build_milestone_execution_prompt(
+            task="Build UI components",
+            depth="standard",
+            config=cfg,
+            design_reference_urls=urls,
+        )
+        assert "DESIGN REFERENCE" in prompt
+        assert "https://stripe.com/docs" in prompt
+        assert "https://tailwindcss.com" in prompt
+
+    def test_no_design_reference_when_none(self):
+        """Milestone execution prompt should NOT include design reference section when None."""
+        cfg = AgentTeamConfig()
+        prompt = build_milestone_execution_prompt(
+            task="Build UI",
+            depth="standard",
+            config=cfg,
+            design_reference_urls=None,
+        )
+        assert "DESIGN REFERENCE" not in prompt
+
+    def test_design_reference_includes_cache_ttl(self):
+        """Milestone execution prompt should include cache TTL for Firecrawl."""
+        cfg = AgentTeamConfig()
+        cfg.design_reference.cache_ttl_seconds = 3600  # 1 hour
+        urls = ["https://example.com"]
+        prompt = build_milestone_execution_prompt(
+            task="Build app",
+            depth="standard",
+            config=cfg,
+            design_reference_urls=urls,
+        )
+        assert "Cache TTL (maxAge): 3600000 milliseconds" in prompt
+
+    def test_design_reference_researcher_instruction(self):
+        """Milestone execution prompt should instruct researcher assignment."""
+        cfg = AgentTeamConfig()
+        urls = ["https://example.com"]
+        prompt = build_milestone_execution_prompt(
+            task="Build app",
+            depth="standard",
+            config=cfg,
+            design_reference_urls=urls,
+        )
+        assert "researcher" in prompt.lower()

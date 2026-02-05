@@ -1647,6 +1647,7 @@ def build_decomposition_prompt(
     cwd: str | None = None,
     interview_doc: str | None = None,
     codebase_map_summary: str | None = None,
+    design_reference_urls: list[str] | None = None,
 ) -> str:
     """Build a prompt that instructs the orchestrator to ONLY decompose.
 
@@ -1679,6 +1680,18 @@ def build_decomposition_prompt(
         parts.append(f"\n[PRD FILE: {prd_path}]")
         parts.append("Read the PRD file to understand full requirements.")
 
+    # Design reference injection for PRD decomposition
+    if design_reference_urls:
+        parts.append("\n[DESIGN REFERENCE — UI inspiration from reference website(s)]")
+        parts.append("The user provided reference website(s) for design inspiration.")
+        parts.append("Include design reference analysis in milestone planning.")
+        parts.append("Reference URLs:")
+        for url in design_reference_urls:
+            parts.append(f"  - {url}")
+        dr_config = config.design_reference
+        parts.append(f"Extraction depth: {dr_config.depth}")
+        parts.append(f"Max pages per site: {dr_config.max_pages_per_site}")
+
     parts.append(f"\n[ORIGINAL USER REQUEST]\n{task}")
     parts.append(f"\n[TASK]\n{task}")
     parts.append("\n[INSTRUCTIONS]")
@@ -1699,6 +1712,7 @@ def build_milestone_execution_prompt(
     cwd: str | None = None,
     codebase_map_summary: str | None = None,
     predecessor_context: str = "",
+    design_reference_urls: list[str] | None = None,
 ) -> str:
     """Build a prompt for executing a single milestone.
 
@@ -1732,6 +1746,19 @@ def build_milestone_execution_prompt(
 
     if predecessor_context:
         parts.append(f"\n{predecessor_context}")
+
+    # Design reference injection for milestone execution
+    if design_reference_urls:
+        parts.append("\n[DESIGN REFERENCE — UI inspiration from reference website(s)]")
+        parts.append("The user provided reference website(s) for design inspiration.")
+        parts.append("During RESEARCH phase, assign researcher(s) to design reference analysis.")
+        parts.append("Reference URLs:")
+        for url in design_reference_urls:
+            parts.append(f"  - {url}")
+        dr_config = config.design_reference
+        parts.append(f"Extraction depth: {dr_config.depth}")
+        parts.append(f"Max pages per site: {dr_config.max_pages_per_site}")
+        parts.append(f"Cache TTL (maxAge): {dr_config.cache_ttl_seconds * 1000} milliseconds")
 
     parts.append(f"\n[ORIGINAL USER REQUEST]\n{task}")
     parts.append(f"\n[TASK]\n{task}")
