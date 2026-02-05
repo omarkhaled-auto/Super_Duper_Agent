@@ -472,6 +472,7 @@ def _detect_scope(doc_content: str, spec_text: str = "") -> str:
 def _build_interview_options(
     config: AgentTeamConfig,
     cwd: str | None = None,
+    backend: str | None = None,
 ) -> ClaudeAgentOptions:
     """Build ClaudeAgentOptions for the interviewer session."""
     opts_kwargs: dict[str, Any] = {
@@ -489,6 +490,10 @@ def _build_interview_options(
 
     if cwd:
         opts_kwargs["cwd"] = Path(cwd)
+
+    # Use subprocess CLI transport for subscription mode
+    if backend == "cli":
+        opts_kwargs["cli_path"] = "claude"
 
     return ClaudeAgentOptions(**opts_kwargs)
 
@@ -628,6 +633,7 @@ async def run_interview(
     config: AgentTeamConfig,
     cwd: str | None = None,
     initial_task: str | None = None,
+    backend: str | None = None,
 ) -> InterviewResult:
     """Run the interactive interview session.
 
@@ -637,7 +643,7 @@ async def run_interview(
     """
     print_interview_start(initial_task, min_exchanges=config.interview.min_exchanges)
 
-    options = _build_interview_options(config, cwd)
+    options = _build_interview_options(config, cwd, backend=backend)
     exchange_count = 0
     total_cost = 0.0
     transcript: list[dict[str, str]] = []  # backup transcript

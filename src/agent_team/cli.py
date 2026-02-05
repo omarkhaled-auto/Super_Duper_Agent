@@ -202,6 +202,7 @@ def _build_options(
     constraints: list | None = None,
     task_text: str | None = None,
     depth: str | None = None,
+    backend: str | None = None,
 ) -> ClaudeAgentOptions:
     """Build ClaudeAgentOptions with all agents and MCP servers."""
     # Auto-enable ST MCP server if orchestrator ST is active for this depth.
@@ -273,6 +274,10 @@ def _build_options(
 
     if cwd:
         opts_kwargs["cwd"] = Path(cwd)
+
+    # Use subprocess CLI transport for subscription mode (--backend cli)
+    if backend == "cli":
+        opts_kwargs["cli_path"] = "claude"
 
     return ClaudeAgentOptions(**opts_kwargs)
 
@@ -368,7 +373,7 @@ async def _run_interactive(
     apply_depth_quality_gating(depth_override or "standard", config)
     options = _build_options(
         config, cwd, constraints=constraints, task_text=task_text,
-        depth=depth_override or "standard",
+        depth=depth_override or "standard", backend=_backend,
     )
     phase_costs: dict[str, float] = {}
     total_cost = 0.0
@@ -488,7 +493,7 @@ async def _run_single(
     schedule_info: str | None = None,
 ) -> float:
     """Run a single task to completion. Returns total cost."""
-    options = _build_options(config, cwd, constraints=constraints, task_text=task_text or task, depth=depth)
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text or task, depth=depth, backend=_backend)
     phase_costs: dict[str, float] = {}
 
     if prd_path:
@@ -667,7 +672,7 @@ async def _run_prd_milestones(
             codebase_map_summary=codebase_map_summary,
         )
 
-        options = _build_options(config, cwd, constraints=constraints, task_text=task, depth=depth)
+        options = _build_options(config, cwd, constraints=constraints, task_text=task, depth=depth, backend=_backend)
         phase_costs: dict[str, float] = {}
 
         async with ClaudeSDKClient(options=options) as client:
@@ -788,7 +793,7 @@ async def _run_prd_milestones(
             # Fresh session for this milestone
             ms_options = _build_options(
                 config, cwd, constraints=constraints,
-                task_text=task, depth=depth,
+                task_text=task, depth=depth, backend=_backend,
             )
             ms_phase_costs: dict[str, float] = {}
             health_report: ConvergenceReport | None = None
@@ -946,7 +951,7 @@ async def _run_milestone_wiring_fix(
         f"\n[ORIGINAL USER REQUEST]\n{task}"
     )
 
-    options = _build_options(config, cwd, constraints=constraints, task_text=task, depth=depth)
+    options = _build_options(config, cwd, constraints=constraints, task_text=task, depth=depth, backend=_backend)
     phase_costs: dict[str, float] = {}
     cost = 0.0
 
@@ -1510,7 +1515,7 @@ def _run_review_only(
         "review pass is MANDATORY."
     )
 
-    options = _build_options(config, cwd, constraints=constraints, task_text=task_text)
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text, backend=_backend)
     phase_costs: dict[str, float] = {}
 
     async def _recovery() -> float:
@@ -1568,7 +1573,7 @@ def _run_contract_generation(
         "contract verification cannot proceed without it."
     )
 
-    options = _build_options(config, cwd, constraints=constraints, task_text=task_text)
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text, backend=_backend)
     phase_costs: dict[str, float] = {}
 
     async def _recovery() -> float:
@@ -1913,6 +1918,7 @@ def main() -> None:
                 config=config,
                 cwd=cwd,
                 initial_task=args.task,
+                backend=_backend,
             ))
             interview_doc = result.doc_content if result.doc_content else None
             interview_scope = result.scope
