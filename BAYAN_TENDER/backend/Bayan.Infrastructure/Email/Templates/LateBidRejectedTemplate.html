@@ -1,0 +1,126 @@
+<!-- Subject: Late Bid Rejection - {{TenderReference}} -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Late Bid Rejection</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; background-color: #f4f4f5;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f4f5;">
+        <tr>
+            <td style="padding: 40px 20px;">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background-color: #dc2626; padding: 30px 40px; border-radius: 8px 8px 0 0;">
+                            <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">Bayan Tender System</h1>
+                        </td>
+                    </tr>
+
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px;">
+                            <h2 style="margin: 0 0 20px; color: #1f2937; font-size: 20px;">Late Bid Rejection Notice</h2>
+
+                            <p style="margin: 0 0 20px; color: #4b5563;">
+                                Dear <strong>{{BidderName}}</strong>,
+                            </p>
+
+                            <p style="margin: 0 0 20px; color: #4b5563;">
+                                We regret to inform you that your late bid submission for the following tender has been rejected.
+                            </p>
+
+                            <!-- Tender Details Box -->
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #fef2f2; border-radius: 6px; margin: 0 0 30px; border: 1px solid #fecaca;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                            <tr>
+                                                <td style="padding: 8px 0;">
+                                                    <strong style="color: #374151;">Tender:</strong>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 0 0 16px; color: #1f2937; font-size: 16px;">
+                                                    {{TenderTitle}}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 8px 0; border-top: 1px solid #fecaca;">
+                                                    <strong style="color: #374151;">Reference:</strong>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 0 0 16px; color: #1f2937;">
+                                                    {{TenderReference}}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 8px 0; border-top: 1px solid #fecaca;">
+                                                    <strong style="color: #374151;">Your Submission Time:</strong>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 0 0 16px; color: #dc2626; font-weight: 600;">
+                                                    {{SubmissionTime}}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 8px 0; border-top: 1px solid #fecaca;">
+                                                    <strong style="color: #374151;">Decision Date:</strong>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 0 0 8px; color: #1f2937;">
+                                                    {{DecisionDate}}
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Rejection Reason Box -->
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f9fafb; border-radius: 6px; margin: 0 0 30px; border-left: 4px solid #dc2626;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <p style="margin: 0 0 10px; color: #374151; font-weight: 600;">Reason for Rejection:</p>
+                                        <p style="margin: 0; color: #4b5563;">
+                                            {{RejectionReason}}
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="margin: 0 0 20px; color: #4b5563;">
+                                According to our tender terms and conditions, late submissions may be rejected at the discretion of the procurement committee. This decision is final.
+                            </p>
+
+                            <p style="margin: 0 0 20px; color: #4b5563;">
+                                We appreciate your interest in participating in our tender process and encourage you to submit timely bids for future opportunities.
+                            </p>
+
+                            <p style="margin: 30px 0 0; color: #6b7280; font-size: 14px;">
+                                If you have any questions regarding this decision, please contact our procurement team through the portal.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding: 20px 40px; background-color: #f8fafc; border-radius: 0 0 8px 8px; border-top: 1px solid #e5e7eb;">
+                            <p style="margin: 0; color: #6b7280; font-size: 12px; text-align: center;">
+                                This is an automated message from the Bayan Tender System. Please do not reply to this email.
+                            </p>
+                            <p style="margin: 10px 0 0; color: #9ca3af; font-size: 11px; text-align: center;">
+                                &copy; 2024 Bayan Tender Management System. All rights reserved.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

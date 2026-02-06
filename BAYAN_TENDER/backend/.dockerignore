@@ -1,0 +1,84 @@
+# =============================================================================
+# Docker Ignore File for Bayan Backend (.NET 8)
+# =============================================================================
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Build outputs
+**/bin/
+**/obj/
+**/out/
+
+# IDE and Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Test projects and results
+**/*.Tests/
+**/TestResults/
+**/coverage/
+*.trx
+
+# Documentation
+*.md
+docs/
+
+# Environment files
+.env
+.env.*
+
+# Logs
+logs/
+*.log
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio
+.vs/
+[Bb]uild[Ll]og.*
+
+# NuGet
+*.nupkg
+.nuget/
+
+# Temporary
+tmp/
+temp/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Secrets (use Docker secrets or environment variables)
+secrets/
+*.pem
+*.key
+*.crt
+*.pfx
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.docker/
+
+# Analysis results
+*.dgml
+*.sarif
+
+# Database tools
+*.mdf
+*.ldf
+*.ndf
+
+# Local settings (should use appsettings.Production.json instead)
+appsettings.local.json

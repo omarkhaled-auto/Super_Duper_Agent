@@ -1,0 +1,85 @@
+version: '3.8'
+
+# =============================================================================
+# Development Overrides for Bayan Tender Management System
+# =============================================================================
+# This file is automatically merged with docker-compose.yml in development.
+# Use: docker-compose up
+# =============================================================================
+
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: build  # Use build stage for development
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - DOTNET_USE_POLLING_FILE_WATCHER=true
+    volumes:
+      - ./backend:/src
+      - /src/bin
+      - /src/obj
+    ports:
+      - "5000:80"
+      - "5001:443"
+    command: ["dotnet", "watch", "run", "--project", "Bayan.API/Bayan.API.csproj"]
+
+  ui:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: build  # Use build stage for development
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "4200:4200"
+    command: ["npm", "start", "--", "--host", "0.0.0.0", "--poll", "2000"]
+
+  db:
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_HOST_AUTH_METHOD=trust
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  minio:
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+  mailhog:
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  # Development-only services
+  adminer:
+    image: adminer:latest
+    container_name: bayan-adminer
+    ports:
+      - "8080:8080"
+    environment:
+      - ADMINER_DEFAULT_SERVER=db
+    depends_on:
+      - db
+    networks:
+      - bayan-network
+    restart: unless-stopped
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: bayan-redis-commander
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      - redis
+    networks:
+      - bayan-network
+    restart: unless-stopped

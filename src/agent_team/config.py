@@ -282,6 +282,20 @@ class MilestoneConfig:
 
 
 @dataclass
+class PRDChunkingConfig:
+    """Configuration for large PRD chunking.
+
+    When a PRD exceeds the size threshold, it is split into focused
+    chunks before the PRD Analyzer Fleet is deployed. This prevents
+    context overflow for very large PRDs.
+    """
+
+    enabled: bool = True
+    threshold: int = 50000  # bytes - PRDs larger trigger chunking
+    max_chunk_size: int = 20000  # bytes - target size per chunk
+
+
+@dataclass
 class AgentTeamConfig:
     orchestrator: OrchestratorConfig = field(default_factory=OrchestratorConfig)
     depth: DepthConfig = field(default_factory=DepthConfig)
@@ -295,6 +309,7 @@ class AgentTeamConfig:
     investigation: InvestigationConfig = field(default_factory=InvestigationConfig)
     orchestrator_st: OrchestratorSTConfig = field(default_factory=OrchestratorSTConfig)
     milestone: MilestoneConfig = field(default_factory=MilestoneConfig)
+    prd_chunking: PRDChunkingConfig = field(default_factory=PRDChunkingConfig)
     # Agent keys use underscores (Python convention) in config files.
     # The SDK uses hyphens (e.g., "code-writer"). See agents.py for the mapping.
     agents: dict[str, AgentConfig] = field(default_factory=lambda: {
@@ -801,6 +816,14 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
             max_milestones_warning=ms.get(
                 "max_milestones_warning", cfg.milestone.max_milestones_warning,
             ),
+        )
+
+    if "prd_chunking" in data and isinstance(data["prd_chunking"], dict):
+        pc = data["prd_chunking"]
+        cfg.prd_chunking = PRDChunkingConfig(
+            enabled=pc.get("enabled", cfg.prd_chunking.enabled),
+            threshold=pc.get("threshold", cfg.prd_chunking.threshold),
+            max_chunk_size=pc.get("max_chunk_size", cfg.prd_chunking.max_chunk_size),
         )
 
     if "agents" in data:

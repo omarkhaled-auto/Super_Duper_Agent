@@ -1,0 +1,189 @@
+using Bayan.Application.Common.Models;
+using Bayan.Application.Features.Approval.Commands.InitiateApproval;
+using Bayan.Application.Features.Approval.Commands.SubmitApprovalDecision;
+using Bayan.Application.Features.Approval.DTOs;
+using Bayan.Application.Features.Approval.Queries.GetApprovalHistory;
+using Bayan.Application.Features.Approval.Queries.GetApprovalStatus;
+using Bayan.Application.Features.Approval.Queries.GetPendingApprovals;
+using MediatR;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Bayan.API.Controllers;
+
+/// <summary>
+/// Controller for managing approval workflows.
+/// </summary>
+[ApiController]
+[Route("api")]
+[Authorize]
+public class ApprovalController : ControllerBase
+{
+    private readonly IMediator _mediator;
+
+    public ApprovalController(IMediator mediator)
+    {
+        _mediator = mediator;
+    }
+
+    /// <summary>
+    /// Gets the approval status for a specific tender.
+    /// </summary>
+    /// <param name="id">The tender's unique identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The approval workflow status if exists.</returns>
+    [HttpGet("tenders/{id:guid}/approval")]
+    [ProducesResponseType(typeof(ApprovalWorkflowDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ApprovalWorkflowDto>> GetApprovalStatus(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new GetApprovalStatusQuery(id);
+        var result = await _mediator.Send(query, cancellationToken);
+
+        if (result == null)
+        {
+            return NotFound(ApiResponse<object>.FailureResponse("No approval workflow found for this tender."));
+        }
+
+        return Ok(ApiResponse<ApprovalWorkflowDto>.SuccessResponse(result));
+    }
+
+    /// <summary>
+    /// Initiates an approval workflow for a tender.
+    /// Creates approval_workflows record and approval_levels records (3 sequential levels).
+    /// Notifies Level 1 approver via email.
+    /// </summary>
+    /// <param name="id">The tender's unique identifier.</param>
+    /// <param name="request">The initiation request with approver details.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The created approval workflow.</returns>
+    [HttpPost("tenders/{id:guid}/approval/initiate")]
+    [Authorize(Roles = "Admin,TenderManager")]
+    [ProducesResponseType(typeof(InitiateApprovalResult), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<InitiateApprovalResult>> InitiateApproval(
+        Guid id,
+        [FromBody] InitiateApprovalRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var command = new InitiateApprovalCommand
+        {
+            TenderId = id,
+            AwardPackPdfPath = request.AwardPackPdfPath,
+            ApproverUserIds = request.ApproverUserIds,
+            LevelDeadlines = request.LevelDeadlines
+        };
+
+        var result = await _mediator.Send(command, cancellationToken);
+        return CreatedAtAction(nameof(GetApprovalStatus), new { id }, ApiResponse<InitiateApprovalResult>.SuccessResponse(result));
+    }
+
+    /// <summary>
+    /// Submits an approval decision for the current active level.
+    /// Records decision (Approve, Reject, ReturnForRevision).
+    /// Requires comment for Reject/ReturnForRevision.
+    /// If Approve: progresses to next level or completes workflow.
+    /// If Reject: marks workflow as rejected.
+    /// If ReturnForRevision: sends back to Tender Manager.
+    /// Final approval: sets tender status to Awarded.
+    /// </summary>
+    /// <param name="id">The tender's unique identifier.</param>
+    /// <param name="request">The decision request with decision type and comment.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The result of the approval decision.</returns>
+    [HttpPost("tenders/{id:guid}/approval/decide")]
+    [Authorize(Roles = "Approver")]
+    [ProducesResponseType(typeof(SubmitApprovalDecisionResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<SubmitApprovalDecisionResult>> SubmitApprovalDecision(
+        Guid id,
+        [FromBody] ApprovalDecisionDto request,
+        CancellationToken cancellationToken = default)
+    {
+        var command = new SubmitApprovalDecisionCommand
+        {
+            TenderId = id,
+            Decision = request.Decision,
+            Comment = request.Comment
+        };
+
+        var result = await _mediator.Send(command, cancellationToken);
+        return Ok(ApiResponse<SubmitApprovalDecisionResult>.SuccessResponse(result));
+    }
+
+    /// <summary>
+    /// Gets the approval history for a specific tender.
+    /// </summary>
+    /// <param name="id">The tender's unique identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The approval history for the tender.</returns>
+    [HttpGet("tenders/{id:guid}/approval/history")]
+    [ProducesResponseType(typeof(List<ApprovalHistoryDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<ApprovalHistoryDto>>> GetApprovalHistory(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new GetApprovalHistoryQuery(id);
+        var result = await _mediator.Send(query, cancellationToken);
+        return Ok(ApiResponse<List<ApprovalHistoryDto>>.SuccessResponse(result));
+    }
+
+    /// <summary>
+    /// Gets pending approvals for the current user (for dashboard integration).
+    /// Returns approvals where the current user is the active approver.
+    /// </summary>
+    /// <param name="page">Page number (1-based).</param>
+    /// <param name="pageSize">Number of items per page.</param>
+    /// <param name="search">Optional search term for tender reference or title.</param>
+    /// <param name="overdueOnly">Optional filter to show only overdue items.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A paginated list of pending approvals.</returns>
+    [HttpGet("approvals/pending")]
+    [ProducesResponseType(typeof(PaginatedList<PendingApprovalDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PaginatedList<PendingApprovalDto>>> GetPendingApprovals(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? search = null,
+        [FromQuery] bool? overdueOnly = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new GetPendingApprovalsQuery
+        {
+            Page = page,
+            PageSize = pageSize,
+            Search = search,
+            OverdueOnly = overdueOnly
+        };
+
+        var result = await _mediator.Send(query, cancellationToken);
+        return Ok(ApiResponse<PaginatedList<PendingApprovalDto>>.SuccessResponse(result));
+    }
+}
+
+/// <summary>
+/// Request model for initiating an approval workflow.
+/// </summary>
+public class InitiateApprovalRequest
+{
+    /// <summary>
+    /// Optional path to the award pack PDF in storage.
+    /// </summary>
+    public string? AwardPackPdfPath { get; set; }
+
+    /// <summary>
+    /// List of approver user IDs in sequential order.
+    /// Must contain exactly 3 approvers (Level 1, Level 2, Level 3).
+    /// </summary>
+    public List<Guid> ApproverUserIds { get; set; } = new();
+
+    /// <summary>
+    /// Optional deadlines for each approval level.
+    /// If provided, must contain exactly 3 dates (one per level).
+    /// </summary>
+    public List<DateTime?>? LevelDeadlines { get; set; }
+}

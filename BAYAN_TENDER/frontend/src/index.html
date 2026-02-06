@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Bayan Tender Management System</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Bayan Tender Management System - A comprehensive platform for managing government tenders and procurement processes">
+  <meta name="keywords" content="tender, procurement, government, bayan, management, bidding">
+  <meta name="author" content="Bayan Team">
+  <meta name="theme-color" content="#1976D2">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/images/apple-touch-icon.png">
+
+  <!-- Preconnect to Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <!-- Google Fonts - Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Open Graph / Social Media Meta Tags -->
+  <meta property="og:title" content="Bayan Tender Management System">
+  <meta property="og:description" content="A comprehensive platform for managing government tenders and procurement processes">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="assets/images/og-image.png">
+
+  <!-- Loading indicator for initial page load -->
+  <style>
+    .app-loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background-color: #f5f7fa;
+      z-index: 9999;
+    }
+
+    .app-loading .spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid #e0e0e0;
+      border-top-color: #1976D2;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    .app-loading p {
+      margin-top: 1rem;
+      color: #666;
+      font-family: 'Inter', sans-serif;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <app-root>
+    <div class="app-loading">
+      <div class="spinner"></div>
+      <p>Loading Bayan Tender System...</p>
+    </div>
+  </app-root>
+</body>
+</html>

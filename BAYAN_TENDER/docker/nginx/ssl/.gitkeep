@@ -1,0 +1,5 @@
+# This file ensures the ssl directory is tracked by git
+# SSL certificates should NEVER be committed to version control
+# Place your certificates here:
+# - bayan.crt (certificate)
+# - bayan.key (private key)

@@ -71,6 +71,12 @@ from .display import (
 )
 from .interviewer import _detect_scope, run_interview
 from .mcp_servers import get_mcp_servers
+from .prd_chunking import (
+    build_prd_index,
+    create_prd_chunks,
+    detect_large_prd,
+    validate_chunks,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -384,6 +390,29 @@ async def _run_interactive(
         if prd_path:
             print_prd_mode(prd_path)
             prd_content = Path(prd_path).read_text(encoding="utf-8")
+
+            # Large PRD detection and chunking
+            prd_chunks = None
+            prd_index = None
+            if config.prd_chunking.enabled and detect_large_prd(
+                prd_content, config.prd_chunking.threshold
+            ):
+                prd_size_kb = len(prd_content.encode("utf-8")) // 1024
+                print_info(f"Large PRD detected ({prd_size_kb}KB). Using chunked decomposition.")
+                chunk_dir = Path(cwd) / config.convergence.requirements_dir / "prd-chunks"
+                prd_chunks = create_prd_chunks(
+                    prd_content,
+                    chunk_dir,
+                    max_chunk_size=config.prd_chunking.max_chunk_size,
+                )
+                if validate_chunks(prd_chunks, chunk_dir):
+                    prd_index = build_prd_index(prd_content)
+                    print_info(f"Created {len(prd_chunks)} PRD chunks in {chunk_dir}")
+                else:
+                    print_warning("Chunk validation failed. Falling back to standard decomposition.")
+                    prd_chunks = None
+                    prd_index = None
+
             task = f"Build this application from the following PRD:\n\n{prd_content}"
             depth = depth_override or "exhaustive"
             last_depth = depth
@@ -401,6 +430,8 @@ async def _run_interactive(
                 codebase_map_summary=codebase_map_summary,
                 constraints=constraints,
                 resume_context=resume_context,
+                prd_chunks=prd_chunks,
+                prd_index=prd_index,
             )
             # Clear resume_context after first use
             resume_context = None
@@ -496,9 +527,34 @@ async def _run_single(
     options = _build_options(config, cwd, constraints=constraints, task_text=task_text or task, depth=depth, backend=_backend)
     phase_costs: dict[str, float] = {}
 
+    # Large PRD detection and chunking
+    prd_chunks = None
+    prd_index = None
+
     if prd_path:
         print_prd_mode(prd_path)
         prd_content = Path(prd_path).read_text(encoding="utf-8")
+
+        # Chunk large PRDs to prevent context overflow
+        if config.prd_chunking.enabled and detect_large_prd(
+            prd_content, config.prd_chunking.threshold
+        ):
+            prd_size_kb = len(prd_content.encode("utf-8")) // 1024
+            print_info(f"Large PRD detected ({prd_size_kb}KB). Using chunked decomposition.")
+            chunk_dir = Path(cwd or ".") / config.convergence.requirements_dir / "prd-chunks"
+            prd_chunks = create_prd_chunks(
+                prd_content,
+                chunk_dir,
+                max_chunk_size=config.prd_chunking.max_chunk_size,
+            )
+            if validate_chunks(prd_chunks, chunk_dir):
+                prd_index = build_prd_index(prd_content)
+                print_info(f"Created {len(prd_chunks)} PRD chunks in {chunk_dir}")
+            else:
+                print_warning("Chunk validation failed. Falling back to standard decomposition.")
+                prd_chunks = None
+                prd_index = None
+
         task = f"Build this application from the following PRD:\n\n{prd_content}"
 
     prompt = build_orchestrator_prompt(
@@ -515,6 +571,8 @@ async def _run_single(
         constraints=constraints,
         resume_context=resume_context,
         schedule_info=schedule_info,
+        prd_chunks=prd_chunks,
+        prd_index=prd_index,
     )
 
     print_task_start(task, depth, agent_count)
@@ -663,6 +721,29 @@ async def _run_prd_milestones(
     if not master_plan_path.is_file():
         print_info("Phase 1: PRD Decomposition — creating MASTER_PLAN.md")
 
+        # Large PRD detection and chunking
+        prd_chunks = None
+        prd_index = None
+        prd_content_for_check = Path(prd_path).read_text(encoding="utf-8") if prd_path else task
+        if config.prd_chunking.enabled and detect_large_prd(
+            prd_content_for_check, config.prd_chunking.threshold
+        ):
+            prd_size_kb = len(prd_content_for_check.encode("utf-8")) // 1024
+            print_info(f"Large PRD detected ({prd_size_kb}KB). Using chunked decomposition.")
+            chunk_dir = req_dir / "prd-chunks"
+            prd_chunks = create_prd_chunks(
+                prd_content_for_check,
+                chunk_dir,
+                max_chunk_size=config.prd_chunking.max_chunk_size,
+            )
+            if validate_chunks(prd_chunks, chunk_dir):
+                prd_index = build_prd_index(prd_content_for_check)
+                print_info(f"Created {len(prd_chunks)} PRD chunks in {chunk_dir}")
+            else:
+                print_warning("Chunk validation failed. Falling back to standard decomposition.")
+                prd_chunks = None
+                prd_index = None
+
         decomp_prompt = build_decomposition_prompt(
             task=task,
             depth=depth,
@@ -672,6 +753,8 @@ async def _run_prd_milestones(
             interview_doc=interview_doc,
             codebase_map_summary=codebase_map_summary,
             design_reference_urls=design_reference_urls,
+            prd_chunks=prd_chunks,
+            prd_index=prd_index,
         )
 
         options = _build_options(config, cwd, constraints=constraints, task_text=task, depth=depth, backend=_backend)

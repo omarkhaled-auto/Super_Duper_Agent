@@ -1648,11 +1648,20 @@ def build_decomposition_prompt(
     interview_doc: str | None = None,
     codebase_map_summary: str | None = None,
     design_reference_urls: list[str] | None = None,
+    prd_chunks: list | None = None,
+    prd_index: dict | None = None,
 ) -> str:
     """Build a prompt that instructs the orchestrator to ONLY decompose.
 
     The orchestrator will create MASTER_PLAN.md and per-milestone
     REQUIREMENTS.md files, then STOP without writing code.
+
+    Parameters
+    ----------
+    prd_chunks : list, optional
+        List of PRDChunk objects (or dicts) for chunked large PRDs.
+    prd_index : dict, optional
+        Index mapping section names to metadata for large PRDs.
     """
     req_dir = config.convergence.requirements_dir
     master_plan = config.convergence.master_plan_file
@@ -1694,12 +1703,49 @@ def build_decomposition_prompt(
 
     parts.append(f"\n[ORIGINAL USER REQUEST]\n{task}")
     parts.append(f"\n[TASK]\n{task}")
+
     parts.append("\n[INSTRUCTIONS]")
     parts.append("You are in PRD DECOMPOSITION phase (Section 4).")
-    parts.append("1. Deploy the PRD ANALYZER FLEET (10+ planners in parallel).")
-    parts.append(f"2. Synthesize outputs into {master_plan} with ordered milestones.")
-    parts.append(f"3. Create per-milestone REQUIREMENTS.md files in {req_dir}/milestones/milestone-N/")
-    parts.append("4. STOP after creating the plan. Do NOT write implementation code.")
+
+    # Chunked decomposition for large PRDs
+    if prd_chunks and prd_index:
+        parts.append("\n[CHUNKED PRD MODE — Large PRD Detected]")
+        parts.append(f"The PRD has been pre-split into {len(prd_chunks)} focused chunks.")
+        parts.append("Chunk files are in: .agent-team/prd-chunks/")
+
+        parts.append("\n[PRD SECTION INDEX]")
+        for section_name, info in prd_index.items():
+            parts.append(f"  - {section_name}: {info['heading']} ({info['size_bytes']} bytes)")
+
+        parts.append("\n[CHUNKED DECOMPOSITION STRATEGY]")
+        parts.append("IMPORTANT: Do NOT read the full PRD. Use ONLY the chunk files.")
+        parts.append("")
+        parts.append("1. Deploy FOCUSED PRD ANALYZER FLEET — each planner reads ONE chunk:")
+        for i, chunk in enumerate(prd_chunks):
+            chunk_dict = chunk.to_dict() if hasattr(chunk, "to_dict") else chunk
+            parts.append(f"   - Planner {i + 1}: Read '{chunk_dict['file']}' → {chunk_dict['focus']}")
+
+        parts.append("")
+        parts.append("2. Each planner MUST:")
+        parts.append("   a. Read ONLY their assigned chunk file (NOT the full PRD)")
+        parts.append("   b. Write detailed analysis to .agent-team/analysis/{section_name}.md")
+        parts.append("   c. Return ONLY: 'Analysis complete. See .agent-team/analysis/{section_name}.md'")
+        parts.append("")
+        parts.append("3. After ALL planners complete, deploy SYNTHESIZER agent:")
+        parts.append("   - Read all files in .agent-team/analysis/")
+        parts.append(f"   - Create {master_plan} with ordered milestones")
+        parts.append("   - Create CONTRACTS.json with interface definitions")
+        parts.append("")
+        parts.append("4. STOP after creating the plan. Do NOT write implementation code.")
+        parts.append("")
+        parts.append("CRITICAL: This chunked approach prevents context overflow.")
+        parts.append("Any agent that reads the full PRD will cause failure.")
+    else:
+        # Standard fleet for smaller PRDs
+        parts.append("1. Deploy the PRD ANALYZER FLEET (10+ planners in parallel).")
+        parts.append(f"2. Synthesize outputs into {master_plan} with ordered milestones.")
+        parts.append(f"3. Create per-milestone REQUIREMENTS.md files in {req_dir}/milestones/milestone-N/")
+        parts.append("4. STOP after creating the plan. Do NOT write implementation code.")
 
     return "\n".join(parts)
 
@@ -1814,6 +1860,8 @@ def build_orchestrator_prompt(
     resume_context: str | None = None,
     milestone_context: "MilestoneContext | None" = None,
     schedule_info: Any = None,
+    prd_chunks: list | None = None,
+    prd_index: dict | None = None,
 ) -> str:
     """Build the full orchestrator prompt with task-specific context injected."""
     depth_str = str(depth) if not isinstance(depth, str) else depth
@@ -1897,7 +1945,20 @@ def build_orchestrator_prompt(
 
     if prd_path:
         parts.append(f"\n[PRD MODE ACTIVE — PRD file: {prd_path}]")
-        parts.append("Read the PRD file and enter PRD Mode as described in your instructions.")
+        if prd_chunks and prd_index:
+            # Chunked mode for large PRDs
+            parts.append("\n[CHUNKED PRD MODE — Large PRD Detected]")
+            parts.append(f"The PRD has been pre-split into {len(prd_chunks)} focused chunks.")
+            parts.append("Chunk files are in: .agent-team/prd-chunks/")
+            parts.append("IMPORTANT: Do NOT read the full PRD. Use ONLY the chunk files.")
+            parts.append("\n[PRD SECTION INDEX]")
+            for section_name, info in prd_index.items():
+                parts.append(f"  - {section_name}: {info['heading']} ({info['size_bytes']} bytes)")
+            parts.append("\nEach planner in the PRD ANALYZER FLEET should read ONE chunk file,")
+            parts.append("write analysis to .agent-team/analysis/{section_name}.md,")
+            parts.append("and return a short summary. Then a SYNTHESIZER agent creates the plan.")
+        else:
+            parts.append("Read the PRD file and enter PRD Mode as described in your instructions.")
         parts.append(f"Create {master_plan} in {req_dir}/ with milestones.")
         parts.append(f"Create per-milestone REQUIREMENTS.md files in {req_dir}/milestone-N/")
 
