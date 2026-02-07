@@ -373,6 +373,7 @@ async def _run_interactive(
     intervention: "InterventionQueue | None" = None,
     resume_context: str | None = None,
     task_text: str | None = None,
+    ui_requirements_content: str | None = None,
 ) -> float:
     """Run the interactive multi-turn conversation loop. Returns total cost."""
     # Apply depth-based quality gating for initial depth
@@ -432,6 +433,7 @@ async def _run_interactive(
                 resume_context=resume_context,
                 prd_chunks=prd_chunks,
                 prd_index=prd_index,
+                ui_requirements_content=ui_requirements_content,
             )
             # Clear resume_context after first use
             resume_context = None
@@ -476,6 +478,7 @@ async def _run_interactive(
                 design_reference_urls=design_reference_urls,
                 codebase_map_summary=codebase_map_summary,
                 constraints=constraints,
+                ui_requirements_content=ui_requirements_content,
             )
             # Clear interview doc after first query -- the orchestrator has
             # already received it. Re-injecting on every interactive query
@@ -522,6 +525,7 @@ async def _run_single(
     resume_context: str | None = None,
     task_text: str | None = None,
     schedule_info: str | None = None,
+    ui_requirements_content: str | None = None,
 ) -> float:
     """Run a single task to completion. Returns total cost."""
     options = _build_options(config, cwd, constraints=constraints, task_text=task_text or task, depth=depth, backend=_backend)
@@ -573,6 +577,7 @@ async def _run_single(
         schedule_info=schedule_info,
         prd_chunks=prd_chunks,
         prd_index=prd_index,
+        ui_requirements_content=ui_requirements_content,
     )
 
     print_task_start(task, depth, agent_count)
@@ -687,6 +692,7 @@ async def _run_prd_milestones(
     constraints: list | None = None,
     intervention: "InterventionQueue | None" = None,
     design_reference_urls: list[str] | None = None,
+    ui_requirements_content: str | None = None,
 ) -> tuple[float, ConvergenceReport | None]:
     """Execute the per-milestone orchestration loop for PRD mode.
 
@@ -755,6 +761,7 @@ async def _run_prd_milestones(
             design_reference_urls=design_reference_urls,
             prd_chunks=prd_chunks,
             prd_index=prd_index,
+            ui_requirements_content=ui_requirements_content,
         )
 
         options = _build_options(config, cwd, constraints=constraints, task_text=task, depth=depth, backend=_backend)
@@ -874,6 +881,7 @@ async def _run_prd_milestones(
                 codebase_map_summary=codebase_map_summary,
                 predecessor_context=predecessor_str,
                 design_reference_urls=design_reference_urls,
+                ui_requirements_content=ui_requirements_content,
             )
 
             # Fresh session for this milestone
@@ -1878,14 +1886,8 @@ def main() -> None:
     design_ref_urls = [u for u in design_ref_urls if u and u.strip()]
     design_ref_urls = list(dict.fromkeys(design_ref_urls))  # deduplicate preserving order
 
-    if design_ref_urls:
-        from .mcp_servers import is_firecrawl_available
-        if not is_firecrawl_available(config):
-            print_warning(
-                "Design reference URLs provided but Firecrawl is unavailable "
-                "(FIRECRAWL_API_KEY not set or firecrawl disabled). "
-                "Researchers will fall back to WebFetch with less detail."
-            )
+    # NOTE: Firecrawl availability checks moved to Phase 0.6 (design extraction).
+    # Phase 0.6 handles all error cases (hard-fail vs warn) based on require_ui_doc.
 
     # Detect Gemini CLI when investigation is enabled
     if config.investigation.enabled:
@@ -1950,6 +1952,12 @@ def main() -> None:
         print_info(f"Min exchanges: {config.interview.min_exchanges}")
         print_info(f"Model: {config.orchestrator.model}")
         print_info(f"Max turns: {config.orchestrator.max_turns}")
+        if design_ref_urls:
+            print_info(f"Design reference URLs: {len(design_ref_urls)}")
+            for url in design_ref_urls:
+                print_info(f"  - {url}")
+            print_info(f"Phase 0.6: Design extraction will run (require_ui_doc={config.design_reference.require_ui_doc})")
+            print_info(f"Output: {config.convergence.requirements_dir}/{config.design_reference.ui_requirements_file}")
         return
 
     # -------------------------------------------------------------------
@@ -2079,6 +2087,110 @@ def main() -> None:
             print_info("Proceeding without codebase map.")
 
     _current_state.completed_phases.append("codebase_map")
+
+    # -------------------------------------------------------------------
+    # Phase 0.6: Design Reference Extraction (UI_REQUIREMENTS.md)
+    # -------------------------------------------------------------------
+    ui_requirements_content: str | None = None
+
+    if design_ref_urls:
+        from .design_reference import (
+            DesignExtractionError,
+            load_ui_requirements,
+            run_design_extraction,
+            validate_ui_requirements,
+        )
+        from .mcp_servers import is_firecrawl_available
+
+        _current_state.current_phase = "design_extraction"
+        req_dir = config.convergence.requirements_dir
+        ui_file = config.design_reference.ui_requirements_file
+        _require = config.design_reference.require_ui_doc
+
+        # Check for existing valid UI_REQUIREMENTS.md (resume scenario)
+        existing = load_ui_requirements(cwd, config)
+        if existing:
+            missing = validate_ui_requirements(existing)
+            if not missing:
+                print_info(
+                    f"Phase 0.6: Reusing existing {req_dir}/{ui_file} "
+                    f"(all required sections present)"
+                )
+                ui_requirements_content = existing
+            else:
+                print_warning(
+                    f"Existing {req_dir}/{ui_file} is missing sections: "
+                    f"{', '.join(missing)}. Re-extracting."
+                )
+
+        # Only run extraction if we don't have valid content yet
+        if ui_requirements_content is None:
+            if not is_firecrawl_available(config):
+                if _require:
+                    print_error(
+                        "Phase 0.6: Design reference URLs provided but Firecrawl is unavailable "
+                        "(FIRECRAWL_API_KEY not set or firecrawl disabled). "
+                        "Set require_ui_doc: false in config to continue without extraction."
+                    )
+                    sys.exit(1)
+                else:
+                    print_warning(
+                        "Phase 0.6: Firecrawl unavailable — skipping design extraction. "
+                        "URLs will be passed as soft instructions to orchestrator."
+                    )
+            else:
+                print_info(
+                    f"Phase 0.6: Extracting design references → {req_dir}/{ui_file}"
+                )
+                for url in design_ref_urls:
+                    print_info(f"  - {url}")
+
+                try:
+                    content, extraction_cost = asyncio.run(run_design_extraction(
+                        urls=design_ref_urls,
+                        config=config,
+                        cwd=cwd,
+                        backend=_backend,
+                    ))
+                    # Validate output
+                    missing = validate_ui_requirements(content)
+                    if missing:
+                        msg = (
+                            f"Phase 0.6: {req_dir}/{ui_file} is missing required sections: "
+                            f"{', '.join(missing)}"
+                        )
+                        if _require:
+                            print_error(msg)
+                            sys.exit(1)
+                        else:
+                            print_warning(msg + " — continuing with partial content")
+
+                    ui_requirements_content = content
+                    cost_str = f" (${extraction_cost:.4f})" if _backend == "api" and extraction_cost > 0 else ""
+                    print_success(
+                        f"Phase 0.6: {req_dir}/{ui_file} created successfully{cost_str}"
+                    )
+                except DesignExtractionError as exc:
+                    if _require:
+                        print_error(f"Phase 0.6: Design extraction failed: {exc}")
+                        sys.exit(1)
+                    else:
+                        print_warning(
+                            f"Phase 0.6: Design extraction failed: {exc} — "
+                            f"continuing without UI requirements document"
+                        )
+                except Exception as exc:
+                    if _require:
+                        print_error(f"Phase 0.6: Unexpected error during extraction: {exc}")
+                        sys.exit(1)
+                    else:
+                        print_warning(
+                            f"Phase 0.6: Unexpected error: {exc} — "
+                            f"continuing without UI requirements document"
+                        )
+
+        _current_state.completed_phases.append("design_extraction")
+
     _current_state.current_phase = "pre_orchestration"
 
     # -------------------------------------------------------------------
@@ -2203,6 +2315,7 @@ def main() -> None:
                     intervention=intervention,
                     resume_context=_resume_ctx,
                     task_text=args.task,
+                    ui_requirements_content=ui_requirements_content,
                 ))
             else:
                 # Use the interview doc as the task if no explicit task was given
@@ -2248,6 +2361,7 @@ def main() -> None:
                         constraints=constraints,
                         intervention=intervention,
                         design_reference_urls=design_ref_urls or None,
+                        ui_requirements_content=ui_requirements_content,
                     ))
                 else:
                     # Format schedule for prompt injection (if available)
@@ -2274,6 +2388,7 @@ def main() -> None:
                         resume_context=_resume_ctx,
                         task_text=args.task,
                         schedule_info=_schedule_str,
+                        ui_requirements_content=ui_requirements_content,
                     ))
         except Exception as exc:
             # Root Cause #1: ProcessError (or any exception) during orchestration
@@ -2302,9 +2417,13 @@ def main() -> None:
             _current_state.completed_phases.append("orchestration")
             _current_state.current_phase = "post_orchestration"
         if design_ref_urls and _current_state:
-            req_path = Path(cwd) / config.convergence.requirements_dir / config.convergence.requirements_file
-            if req_path.is_file() and "## Design Reference" in req_path.read_text(encoding="utf-8"):
+            if ui_requirements_content:
+                # Phase 0.6 already produced the document — mark complete immediately
                 _current_state.artifacts["design_research_complete"] = "true"
+            else:
+                req_path = Path(cwd) / config.convergence.requirements_dir / config.convergence.requirements_file
+                if req_path.is_file() and "## Design Reference" in req_path.read_text(encoding="utf-8"):
+                    _current_state.artifacts["design_research_complete"] = "true"
 
     finally:
         # Stop intervention queue

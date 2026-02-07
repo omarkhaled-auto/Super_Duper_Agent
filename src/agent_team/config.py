@@ -168,6 +168,8 @@ class DesignReferenceConfig:
     max_pages_per_site: int = 5
     cache_ttl_seconds: int = 7200  # 2 hours
     standards_file: str = ""  # empty = built-in; path = custom file
+    require_ui_doc: bool = True          # Hard-fail when extraction fails
+    ui_requirements_file: str = "UI_REQUIREMENTS.md"  # Output filename
 
 
 @dataclass
@@ -707,6 +709,8 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
             max_pages_per_site=dr.get("max_pages_per_site", cfg.design_reference.max_pages_per_site),
             cache_ttl_seconds=dr.get("cache_ttl_seconds", cfg.design_reference.cache_ttl_seconds),
             standards_file=dr.get("standards_file", cfg.design_reference.standards_file),
+            require_ui_doc=dr.get("require_ui_doc", cfg.design_reference.require_ui_doc),
+            ui_requirements_file=dr.get("ui_requirements_file", cfg.design_reference.ui_requirements_file),
         )
 
         # Validate design_reference.depth enum value

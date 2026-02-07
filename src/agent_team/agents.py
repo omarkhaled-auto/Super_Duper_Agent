@@ -1650,6 +1650,7 @@ def build_decomposition_prompt(
     design_reference_urls: list[str] | None = None,
     prd_chunks: list | None = None,
     prd_index: dict | None = None,
+    ui_requirements_content: str | None = None,
 ) -> str:
     """Build a prompt that instructs the orchestrator to ONLY decompose.
 
@@ -1690,7 +1691,11 @@ def build_decomposition_prompt(
         parts.append("Read the PRD file to understand full requirements.")
 
     # Design reference injection for PRD decomposition
-    if design_reference_urls:
+    if ui_requirements_content:
+        from .design_reference import format_ui_requirements_block
+        parts.append(format_ui_requirements_block(ui_requirements_content))
+    elif design_reference_urls:
+        # Fallback: original URL injection for require_ui_doc=false case
         parts.append("\n[DESIGN REFERENCE — UI inspiration from reference website(s)]")
         parts.append("The user provided reference website(s) for design inspiration.")
         parts.append("Include design reference analysis in milestone planning.")
@@ -1759,6 +1764,7 @@ def build_milestone_execution_prompt(
     codebase_map_summary: str | None = None,
     predecessor_context: str = "",
     design_reference_urls: list[str] | None = None,
+    ui_requirements_content: str | None = None,
 ) -> str:
     """Build a prompt for executing a single milestone.
 
@@ -1794,7 +1800,11 @@ def build_milestone_execution_prompt(
         parts.append(f"\n{predecessor_context}")
 
     # Design reference injection for milestone execution
-    if design_reference_urls:
+    if ui_requirements_content:
+        from .design_reference import format_ui_requirements_block
+        parts.append(format_ui_requirements_block(ui_requirements_content))
+    elif design_reference_urls:
+        # Fallback: original URL injection for require_ui_doc=false case
         parts.append("\n[DESIGN REFERENCE — UI inspiration from reference website(s)]")
         parts.append("The user provided reference website(s) for design inspiration.")
         parts.append("During RESEARCH phase, assign researcher(s) to design reference analysis.")
@@ -1862,6 +1872,7 @@ def build_orchestrator_prompt(
     schedule_info: Any = None,
     prd_chunks: list | None = None,
     prd_index: dict | None = None,
+    ui_requirements_content: str | None = None,
 ) -> str:
     """Build the full orchestrator prompt with task-specific context injected."""
     depth_str = str(depth) if not isinstance(depth, str) else depth
@@ -1926,7 +1937,11 @@ def build_orchestrator_prompt(
         parts.append(f"Create per-milestone REQUIREMENTS.md files in {req_dir}/milestone-N/")
 
     # Design reference injection
-    if design_reference_urls:
+    if ui_requirements_content:
+        from .design_reference import format_ui_requirements_block
+        parts.append(format_ui_requirements_block(ui_requirements_content))
+    elif design_reference_urls:
+        # Fallback: original URL injection for require_ui_doc=false case
         parts.append("\n[DESIGN REFERENCE — UI inspiration from reference website(s)]")
         parts.append("The user provided reference website(s) for design inspiration.")
         parts.append("During RESEARCH phase, assign researcher(s) to design reference analysis.")
