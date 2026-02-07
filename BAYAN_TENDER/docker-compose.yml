@@ -60,8 +60,6 @@ services:
       args:
         - API_URL=${API_URL:-http://localhost:5000}
     container_name: bayan-ui
-    ports:
-      - "4200:80"
     environment:
       - API_URL=${API_URL:-http://localhost:5000}
     depends_on:

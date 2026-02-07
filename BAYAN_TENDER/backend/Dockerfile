@@ -15,14 +15,14 @@ COPY Bayan.Application/*.csproj ./Bayan.Application/
 COPY Bayan.Infrastructure/*.csproj ./Bayan.Infrastructure/
 COPY Bayan.API/*.csproj ./Bayan.API/
 
-# Restore dependencies
-RUN dotnet restore
+# Restore dependencies (API project only, skipping Tests which is excluded by .dockerignore)
+RUN dotnet restore Bayan.API/Bayan.API.csproj
 
 # Copy source code
 COPY . .
 
 # Build the application
-RUN dotnet build -c Release --no-restore
+RUN dotnet build Bayan.API/Bayan.API.csproj -c Release --no-restore
 
 # Publish the application
 RUN dotnet publish Bayan.API/Bayan.API.csproj -c Release -o /app/publish --no-build

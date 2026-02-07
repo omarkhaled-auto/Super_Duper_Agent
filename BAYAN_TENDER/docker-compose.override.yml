@@ -34,7 +34,7 @@ services:
       - ./frontend:/app
       - /app/node_modules
     ports:
-      - "4200:4200"
+      - "4201:4200"
     command: ["npm", "start", "--", "--host", "0.0.0.0", "--poll", "2000"]
 
   db:
@@ -56,6 +56,25 @@ services:
     ports:
       - "1025:1025"
       - "8025:8025"
+
+  # Production UI build (nginx serving static files)
+  ui-prod:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bayan-ui-prod
+    ports:
+      - "4200:80"
+    depends_on:
+      - api
+    networks:
+      - bayan-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Development-only services
   adminer:

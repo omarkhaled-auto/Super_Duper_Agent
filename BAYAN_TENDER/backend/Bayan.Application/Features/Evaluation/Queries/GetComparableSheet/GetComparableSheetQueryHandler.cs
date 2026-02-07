@@ -67,8 +67,8 @@ public class GetComparableSheetQueryHandler : IRequestHandler<GetComparableSheet
             new
             {
                 TenderId = request.TenderId,
-                ImportedStatus = (int)BidImportStatus.Imported,
-                DisqualifiedStatus = (int)BidSubmissionStatus.Disqualified
+                ImportedStatus = BidImportStatus.Imported.ToString(),
+                DisqualifiedStatus = BidSubmissionStatus.Disqualified.ToString()
             })).ToList();
 
         // Assign ranks
@@ -124,8 +124,8 @@ public class GetComparableSheetQueryHandler : IRequestHandler<GetComparableSheet
             new
             {
                 TenderId = request.TenderId,
-                ImportedStatus = (int)BidImportStatus.Imported,
-                DisqualifiedStatus = (int)BidSubmissionStatus.Disqualified
+                ImportedStatus = BidImportStatus.Imported.ToString(),
+                DisqualifiedStatus = BidSubmissionStatus.Disqualified.ToString()
             })).ToList();
 
         // Group pricing data by BOQ item
@@ -232,21 +232,21 @@ public class GetComparableSheetQueryHandler : IRequestHandler<GetComparableSheet
 
     private string BuildItemTypeFilter(GetComparableSheetQuery request)
     {
-        var excludedTypes = new List<int>();
+        var excludedTypes = new List<string>();
 
         if (!request.IncludeProvisionalSums)
         {
-            excludedTypes.Add((int)BoqItemType.ProvisionalSum);
+            excludedTypes.Add($"'{BoqItemType.ProvisionalSum}'");
         }
 
         if (!request.IncludeAlternates)
         {
-            excludedTypes.Add((int)BoqItemType.Alternate);
+            excludedTypes.Add($"'{BoqItemType.Alternate}'");
         }
 
         if (!request.IncludeDaywork)
         {
-            excludedTypes.Add((int)BoqItemType.Daywork);
+            excludedTypes.Add($"'{BoqItemType.Daywork}'");
         }
 
         if (excludedTypes.Count == 0)
@@ -278,7 +278,7 @@ public class GetComparableSheetQueryHandler : IRequestHandler<GetComparableSheet
             foreach (var bidder in bidders)
             {
                 var bidderTotal = section
-                    .SelectMany(item => item.BidderRates)
+                    .SelectMany(item => item.BidderRates ?? new List<BidderRateDto>())
                     .Where(r => r.BidderId == bidder.Id && r.Amount.HasValue)
                     .Sum(r => r.Amount ?? 0);
 
