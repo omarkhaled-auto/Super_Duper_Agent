@@ -14,7 +14,7 @@ import { Subject, takeUntil } from 'rxjs';
 import { DialogModule } from 'primeng/dialog';
 import { ButtonModule } from 'primeng/button';
 import { DropdownModule } from 'primeng/dropdown';
-import { CalendarModule } from 'primeng/calendar';
+import { DatePickerModule } from 'primeng/datepicker';
 import { DividerModule } from 'primeng/divider';
 import { MessageModule } from 'primeng/message';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
@@ -37,7 +37,7 @@ import {
     DialogModule,
     ButtonModule,
     DropdownModule,
-    CalendarModule,
+    DatePickerModule,
     DividerModule,
     MessageModule,
     ProgressSpinnerModule,
@@ -103,7 +103,7 @@ import {
               </div>
               <div class="form-field deadline-field">
                 <label for="level1Deadline">Deadline</label>
-                <p-calendar
+                <p-datepicker
                   id="level1Deadline"
                   formControlName="level1Deadline"
                   [minDate]="minDate"
@@ -113,7 +113,7 @@ import {
                   placeholder="Select deadline"
                   styleClass="w-full"
                   pTooltip="Optional deadline for this approval level"
-                ></p-calendar>
+                ></p-datepicker>
               </div>
             </div>
           </div>
@@ -154,7 +154,7 @@ import {
               </div>
               <div class="form-field deadline-field">
                 <label for="level2Deadline">Deadline</label>
-                <p-calendar
+                <p-datepicker
                   id="level2Deadline"
                   formControlName="level2Deadline"
                   [minDate]="getLevel2MinDate()"
@@ -164,7 +164,7 @@ import {
                   placeholder="Select deadline"
                   styleClass="w-full"
                   pTooltip="Optional deadline for this approval level"
-                ></p-calendar>
+                ></p-datepicker>
               </div>
             </div>
           </div>
@@ -205,7 +205,7 @@ import {
               </div>
               <div class="form-field deadline-field">
                 <label for="level3Deadline">Deadline</label>
-                <p-calendar
+                <p-datepicker
                   id="level3Deadline"
                   formControlName="level3Deadline"
                   [minDate]="getLevel3MinDate()"
@@ -215,7 +215,7 @@ import {
                   placeholder="Select deadline"
                   styleClass="w-full"
                   pTooltip="Optional deadline for this approval level"
-                ></p-calendar>
+                ></p-datepicker>
               </div>
             </div>
           </div>
@@ -245,6 +245,7 @@ import {
             type="submit"
             label="Initiate Workflow"
             icon="pi pi-play"
+            data-testid="initiate-approval-submit"
             [loading]="isSubmitting()"
             [disabled]="form.invalid || isSubmitting() || isLoadingApprovers()"
             (click)="onSubmit()"

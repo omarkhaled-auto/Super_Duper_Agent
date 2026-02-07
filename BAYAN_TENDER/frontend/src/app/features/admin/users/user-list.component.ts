@@ -40,13 +40,13 @@ import { UserFormDialogComponent, UserFormDialogData } from './user-form-dialog.
   providers: [ConfirmationService, MessageService, DialogService],
   template: `
     <p-toast></p-toast>
-    <div class="user-list-container">
+    <div class="user-list-container" data-testid="user-list">
       <div class="page-header">
         <div>
           <h1>User Management</h1>
           <p>Manage system users and their roles</p>
         </div>
-        <button pButton label="Add User" icon="pi pi-plus" (click)="showUserDialog()"></button>
+        <button pButton label="Add User" icon="pi pi-plus" (click)="showUserDialog()" data-testid="create-user-btn"></button>
       </div>
 
       <!-- Filters -->
@@ -60,6 +60,7 @@ import { UserFormDialogComponent, UserFormDialogData } from './user-form-dialog.
               [(ngModel)]="searchTerm"
               placeholder="Search users..."
               (input)="onSearch()"
+              data-testid="user-search"
             />
           </p-iconField>
 
@@ -84,6 +85,7 @@ import { UserFormDialogComponent, UserFormDialogData } from './user-form-dialog.
       <!-- Users Table -->
       <p-card styleClass="table-card">
         <p-table
+          data-testid="user-table"
           [value]="filteredUsers()"
           [paginator]="true"
           [rows]="10"
@@ -280,6 +282,10 @@ export class UserListComponent implements OnInit {
   roleOptions = [
     { label: 'Admin', value: UserRole.ADMIN },
     { label: 'Tender Manager', value: UserRole.TENDER_MANAGER },
+    { label: 'Commercial Analyst', value: UserRole.COMMERCIAL_ANALYST },
+    { label: 'Technical Panelist', value: UserRole.TECHNICAL_PANELIST },
+    { label: 'Approver', value: UserRole.APPROVER },
+    { label: 'Auditor', value: UserRole.AUDITOR },
     { label: 'Bidder', value: UserRole.BIDDER },
     { label: 'Viewer', value: UserRole.VIEWER }
   ];
@@ -471,9 +477,12 @@ export class UserListComponent implements OnInit {
     const labels: Record<UserRole, string> = {
       [UserRole.ADMIN]: 'Admin',
       [UserRole.TENDER_MANAGER]: 'Tender Manager',
+      [UserRole.COMMERCIAL_ANALYST]: 'Commercial Analyst',
+      [UserRole.TECHNICAL_PANELIST]: 'Technical Panelist',
+      [UserRole.APPROVER]: 'Approver',
+      [UserRole.AUDITOR]: 'Auditor',
       [UserRole.BIDDER]: 'Bidder',
-      [UserRole.VIEWER]: 'Viewer',
-      [UserRole.AUDITOR]: 'Auditor'
+      [UserRole.VIEWER]: 'Viewer'
     };
     return labels[role];
   }
@@ -482,9 +491,12 @@ export class UserListComponent implements OnInit {
     const severities: Record<UserRole, 'success' | 'secondary' | 'info' | 'warn' | 'danger' | 'contrast'> = {
       [UserRole.ADMIN]: 'danger',
       [UserRole.TENDER_MANAGER]: 'warn',
+      [UserRole.COMMERCIAL_ANALYST]: 'info',
+      [UserRole.TECHNICAL_PANELIST]: 'info',
+      [UserRole.APPROVER]: 'success',
+      [UserRole.AUDITOR]: 'contrast',
       [UserRole.BIDDER]: 'info',
-      [UserRole.VIEWER]: 'secondary',
-      [UserRole.AUDITOR]: 'contrast'
+      [UserRole.VIEWER]: 'secondary'
     };
     return severities[role];
   }

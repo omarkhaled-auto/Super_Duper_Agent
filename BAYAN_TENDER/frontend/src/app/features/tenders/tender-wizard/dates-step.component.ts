@@ -1,7 +1,7 @@
 import { Component, Input, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormGroup, FormControl, ReactiveFormsModule } from '@angular/forms';
-import { CalendarModule } from 'primeng/calendar';
+import { DatePickerModule } from 'primeng/datepicker';
 import { MessageModule } from 'primeng/message';
 import { TooltipModule } from 'primeng/tooltip';
 
@@ -11,7 +11,7 @@ import { TooltipModule } from 'primeng/tooltip';
   imports: [
     CommonModule,
     ReactiveFormsModule,
-    CalendarModule,
+    DatePickerModule,
     MessageModule,
     TooltipModule
   ],
@@ -26,7 +26,7 @@ import { TooltipModule } from 'primeng/tooltip';
             </span>
             Issue Date *
           </label>
-          <p-calendar
+          <p-datepicker
             id="issueDate"
             [formControl]="issueDateControl"
             [showIcon]="true"
@@ -36,7 +36,7 @@ import { TooltipModule } from 'primeng/tooltip';
             styleClass="w-full"
             [minDate]="today"
             (onSelect)="onDateChange()"
-          ></p-calendar>
+          ></p-datepicker>
           <small class="date-hint">When the tender will be officially issued</small>
           @if (datesGroup.get('issueDate')?.invalid && datesGroup.get('issueDate')?.touched) {
             <small class="p-error">Issue date is required</small>
@@ -51,7 +51,7 @@ import { TooltipModule } from 'primeng/tooltip';
             </span>
             Clarification Deadline
           </label>
-          <p-calendar
+          <p-datepicker
             id="clarificationDeadline"
             [formControl]="clarificationDeadlineControl"
             [showIcon]="true"
@@ -61,7 +61,7 @@ import { TooltipModule } from 'primeng/tooltip';
             styleClass="w-full"
             [minDate]="datesGroup.get('issueDate')?.value || today"
             (onSelect)="onDateChange()"
-          ></p-calendar>
+          ></p-datepicker>
           <small class="date-hint">Last date for bidders to submit questions</small>
         </div>
 
@@ -73,7 +73,7 @@ import { TooltipModule } from 'primeng/tooltip';
             </span>
             Submission Deadline *
           </label>
-          <p-calendar
+          <p-datepicker
             id="submissionDeadline"
             [formControl]="submissionDeadlineControl"
             [showIcon]="true"
@@ -83,7 +83,7 @@ import { TooltipModule } from 'primeng/tooltip';
             styleClass="w-full"
             [minDate]="minSubmissionDate()"
             (onSelect)="onDateChange()"
-          ></p-calendar>
+          ></p-datepicker>
           <small class="date-hint">Final deadline for bid submissions</small>
           @if (datesGroup.get('submissionDeadline')?.invalid && datesGroup.get('submissionDeadline')?.touched) {
             <small class="p-error">
@@ -109,7 +109,7 @@ import { TooltipModule } from 'primeng/tooltip';
             </span>
             Opening Date
           </label>
-          <p-calendar
+          <p-datepicker
             id="openingDate"
             [formControl]="openingDateControl"
             [showIcon]="true"
@@ -119,7 +119,7 @@ import { TooltipModule } from 'primeng/tooltip';
             styleClass="w-full"
             [minDate]="datesGroup.get('submissionDeadline')?.value || today"
             (onSelect)="onDateChange()"
-          ></p-calendar>
+          ></p-datepicker>
           <small class="date-hint">When bids will be officially opened</small>
         </div>
       </div>

@@ -54,7 +54,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
       </div>
 
       <!-- KPI Cards -->
-      <div class="kpi-grid">
+      <div class="kpi-grid" data-testid="kpi-grid">
         @if (isLoading()) {
           @for (i of [1, 2, 3, 4]; track i) {
             <p-card styleClass="kpi-card">
@@ -63,7 +63,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
           }
         } @else {
           @for (kpi of dashboardData()?.kpis; track kpi.name) {
-            <p-card [styleClass]="'kpi-card kpi-' + kpi.color">
+            <p-card [styleClass]="'kpi-card kpi-' + kpi.color" [attr.data-testid]="'kpi-card-' + kpi.name">
               <div class="kpi-content">
                 <div class="kpi-info">
                   <span class="kpi-title">{{ kpi.name }}</span>
@@ -89,7 +89,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
         <!-- Left Column: Active Tenders Table + Upcoming Deadlines -->
         <div class="left-column">
           <!-- Active Tenders Table -->
-          <p-card header="Active Tenders" styleClass="table-card">
+          <p-card header="Active Tenders" styleClass="table-card" data-testid="active-tenders-card">
             <ng-template pTemplate="header">
               <div class="card-header">
                 <h3>Active Tenders</h3>
@@ -208,7 +208,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
             @if (isLoading()) {
               <p-skeleton width="100%" height="400px"></p-skeleton>
             } @else {
-              <div class="activity-feed">
+              <div class="activity-feed" data-testid="activity-feed">
                 @for (activity of dashboardData()?.recentActivity; track activity.id) {
                   <div class="activity-item" [routerLink]="getActivityLink(activity)"
                        [class.clickable]="!!activity.entityId">

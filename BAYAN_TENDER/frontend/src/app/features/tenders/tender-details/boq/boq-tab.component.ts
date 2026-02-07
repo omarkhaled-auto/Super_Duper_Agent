@@ -64,7 +64,7 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
     <p-toast></p-toast>
     <p-confirmDialog></p-confirmDialog>
 
-    <div class="boq-tab-container">
+    <div class="boq-tab-container" data-testid="boq-tab">
       <!-- Toolbar -->
       <div class="boq-toolbar">
         <div class="toolbar-left">
@@ -73,6 +73,7 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
             icon="pi pi-upload"
             label="Import from Excel"
             class="p-button-outlined"
+            data-testid="import-boq-btn"
             (click)="showImportDialog = true"
           ></button>
           <button
@@ -80,6 +81,7 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
             icon="pi pi-download"
             label="Export Template"
             class="p-button-outlined"
+            data-testid="export-boq-btn"
             (click)="showExportDialog = true"
           ></button>
         </div>
@@ -89,12 +91,14 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
             icon="pi pi-folder-plus"
             label="Add Section"
             class="p-button-outlined"
+            data-testid="add-section-btn"
             (click)="openSectionDialog()"
           ></button>
           <button
             pButton
             icon="pi pi-plus"
             label="Add Item"
+            data-testid="add-item-btn"
             (click)="openItemDialog()"
           ></button>
         </div>
@@ -148,6 +152,7 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
           scrollHeight="calc(100vh - 400px)"
           [loading]="boqService.isLoading()"
           styleClass="p-treetable-sm"
+          data-testid="boq-tree-table"
         >
           <ng-template pTemplate="header">
             <tr>

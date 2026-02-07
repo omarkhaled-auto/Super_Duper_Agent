@@ -1,4 +1,4 @@
-import { Component, inject, Input, Output, EventEmitter } from '@angular/core';
+import { Component, inject, Input, Output, EventEmitter, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { PanelMenuModule } from 'primeng/panelmenu';
@@ -11,9 +11,9 @@ import { UserRole } from '../../core/models/user.model';
   standalone: true,
   imports: [CommonModule, RouterModule, PanelMenuModule],
   template: `
-    <div class="sidebar-container" [class.collapsed]="collapsed">
+    <div class="sidebar-container" [class.collapsed]="collapsed" data-testid="sidebar">
       <div class="sidebar-content">
-        <p-panelMenu [model]="menuItems" [multiple]="false" styleClass="sidebar-menu"></p-panelMenu>
+        <p-panelMenu [model]="menuItems()" [multiple]="false" styleClass="sidebar-menu" data-testid="sidebar-menu"></p-panelMenu>
       </div>
       <div class="sidebar-footer">
         <span class="version" *ngIf="!collapsed">v1.0.0</span>
@@ -117,7 +117,15 @@ export class SidebarComponent {
 
   currentUser = this.authService.currentUser;
 
-  get menuItems(): MenuItem[] {
+  /**
+   * Cached menu items using computed signal.
+   * IMPORTANT: Using a getter here would create new array references on every
+   * change detection cycle, causing PrimeNG PanelMenu to re-render infinitely.
+   */
+  menuItems = computed<MenuItem[]>(() => {
+    // Reading currentUser signal makes this recompute only when user changes
+    const user = this.currentUser();
+
     const baseItems: MenuItem[] = [
       {
         label: 'Dashboard',
@@ -210,5 +218,5 @@ export class SidebarComponent {
     }
 
     return baseItems;
-  }
+  });
 }

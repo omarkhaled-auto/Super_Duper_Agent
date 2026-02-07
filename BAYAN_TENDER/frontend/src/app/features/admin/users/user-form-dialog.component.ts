@@ -77,6 +77,7 @@ export interface UserFormDialogData {
               placeholder="Enter email address"
               class="w-full"
               [class.ng-invalid]="isFieldInvalid('email')"
+              data-testid="user-form-email"
             />
             @if (isFieldInvalid('email')) {
               <small class="p-error">
@@ -177,6 +178,7 @@ export interface UserFormDialogData {
             [label]="isCreateMode() ? 'Create User' : 'Update User'"
             [loading]="isLoading()"
             [disabled]="userForm.invalid || isLoading()"
+            data-testid="user-form-save"
           ></button>
         </div>
       </form>
@@ -260,6 +262,10 @@ export class UserFormDialogComponent implements OnInit {
   roleOptions = [
     { label: 'Admin', value: UserRole.ADMIN },
     { label: 'Tender Manager', value: UserRole.TENDER_MANAGER },
+    { label: 'Commercial Analyst', value: UserRole.COMMERCIAL_ANALYST },
+    { label: 'Technical Panelist', value: UserRole.TECHNICAL_PANELIST },
+    { label: 'Approver', value: UserRole.APPROVER },
+    { label: 'Auditor', value: UserRole.AUDITOR },
     { label: 'Bidder', value: UserRole.BIDDER },
     { label: 'Viewer', value: UserRole.VIEWER }
   ];

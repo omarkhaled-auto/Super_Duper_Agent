@@ -59,6 +59,7 @@ interface UploadSection {
           class="deadline-banner"
           [class.urgent]="countdown().totalSeconds < 86400"
           [class.critical]="countdown().totalSeconds < 3600"
+          data-testid="deadline-banner"
         >
           <div class="banner-icon">
             <i class="pi pi-clock"></i>
@@ -86,7 +87,7 @@ interface UploadSection {
         <!-- Commercial Bid Section -->
         <p-card styleClass="section-card mb-4">
           <ng-template pTemplate="header">
-            <div class="section-header commercial">
+            <div class="section-header commercial" data-testid="commercial-bid-section">
               <div class="header-info">
                 <i class="pi pi-dollar"></i>
                 <h3>Commercial Bid</h3>
@@ -149,7 +150,7 @@ interface UploadSection {
         <!-- Technical Bid Section -->
         <p-card styleClass="section-card mb-4">
           <ng-template pTemplate="header">
-            <div class="section-header technical">
+            <div class="section-header technical" data-testid="technical-bid-section">
               <div class="header-info">
                 <i class="pi pi-file"></i>
                 <h3>Technical Bid</h3>
@@ -215,7 +216,7 @@ interface UploadSection {
         <!-- Supporting Documents Section -->
         <p-card styleClass="section-card mb-4">
           <ng-template pTemplate="header">
-            <div class="section-header supporting">
+            <div class="section-header supporting" data-testid="supporting-docs-section">
               <div class="header-info">
                 <i class="pi pi-paperclip"></i>
                 <h3>Supporting Documents</h3>
@@ -323,6 +324,7 @@ interface UploadSection {
                 formControlName="termsAccepted"
                 [binary]="true"
                 inputId="terms"
+                data-testid="terms-checkbox"
               ></p-checkbox>
               <label for="terms" class="terms-label">
                 I confirm that:
@@ -342,6 +344,7 @@ interface UploadSection {
                 label="Submit Bid"
                 icon="pi pi-send"
                 class="submit-btn"
+                data-testid="submit-bid-btn"
                 [loading]="isSubmitting()"
                 [disabled]="!canSubmit()"
                 (click)="onSubmit()"

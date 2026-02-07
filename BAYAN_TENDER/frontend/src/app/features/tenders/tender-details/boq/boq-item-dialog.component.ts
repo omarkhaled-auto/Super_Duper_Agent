@@ -111,6 +111,7 @@ import {
               formControlName="description"
               placeholder="Enter item description"
               class="w-full"
+              data-testid="item-description"
               [rows]="3"
               [autoResize]="true"
               [class.ng-invalid]="isFieldInvalid('description')"
@@ -131,6 +132,7 @@ import {
               mode="decimal"
               styleClass="w-full"
               inputStyleClass="w-full"
+              data-testid="item-quantity"
               [class.ng-invalid]="isFieldInvalid('quantity')"
             ></p-inputNumber>
             @if (isFieldInvalid('quantity')) {
@@ -150,6 +152,7 @@ import {
               [filter]="true"
               filterPlaceholder="Search..."
               styleClass="w-full"
+              data-testid="item-uom"
               [class.ng-invalid]="isFieldInvalid('uom')"
             ></p-dropdown>
             @if (isFieldInvalid('uom')) {
@@ -205,6 +208,7 @@ import {
             [label]="mode === 'create' ? 'Add Item' : 'Update Item'"
             [loading]="isLoading"
             [disabled]="itemForm.invalid || isLoading"
+            data-testid="item-save-btn"
           ></button>
         </div>
       </form>

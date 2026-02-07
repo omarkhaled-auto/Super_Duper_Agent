@@ -73,7 +73,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
     <p-toast></p-toast>
     <p-confirmDialog></p-confirmDialog>
 
-    <div class="clarifications-tab-container">
+    <div class="clarifications-tab-container" data-testid="clarifications-tab">
       <!-- Toolbar -->
       <div class="clarifications-toolbar">
         <div class="toolbar-left">
@@ -81,6 +81,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
             pButton
             icon="pi pi-plus"
             label="New Internal RFI"
+            data-testid="create-question-btn"
             (click)="showRfiDialog = true"
           ></button>
           <button
@@ -115,6 +116,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
       <!-- Filters -->
       <div class="filters-row">
         <p-dropdown
+          data-testid="clarification-status-filter"
           [options]="statusOptions"
           [(ngModel)]="filterStatus"
           placeholder="All Statuses"
@@ -180,6 +182,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
       } @else {
         <!-- Clarifications Table with Row Expansion -->
         <p-table
+          data-testid="clarifications-table"
           [value]="clarifications()"
           dataKey="id"
           [expandedRowKeys]="expandedRows"
@@ -787,7 +790,7 @@ export class ClarificationsTabComponent implements OnInit, OnDestroy {
   }
 
   submitClarification(clarification: Clarification): void {
-    this.clarificationService.submitClarification(clarification.id)
+    this.clarificationService.submitClarification(this.tenderId, clarification.id)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {
@@ -809,7 +812,7 @@ export class ClarificationsTabComponent implements OnInit, OnDestroy {
   }
 
   startReview(clarification: Clarification): void {
-    this.clarificationService.startReview(clarification.id)
+    this.clarificationService.startReview(this.tenderId, clarification.id)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {
@@ -834,7 +837,7 @@ export class ClarificationsTabComponent implements OnInit, OnDestroy {
 
     this.isSavingAnswer.set(true);
 
-    this.clarificationService.answerClarification(this.selectedClarification.id, {
+    this.clarificationService.answerClarification(this.tenderId, this.selectedClarification.id, {
       answer: this.answerText.trim()
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
@@ -865,7 +868,7 @@ export class ClarificationsTabComponent implements OnInit, OnDestroy {
       icon: 'pi pi-exclamation-triangle',
       acceptButtonStyleClass: 'p-button-danger',
       accept: () => {
-        this.clarificationService.deleteClarification(clarification.id)
+        this.clarificationService.deleteClarification(this.tenderId, clarification.id)
           .pipe(takeUntil(this.destroy$))
           .subscribe({
             next: () => {
@@ -888,7 +891,7 @@ export class ClarificationsTabComponent implements OnInit, OnDestroy {
       icon: 'pi pi-exclamation-triangle',
       acceptButtonStyleClass: 'p-button-danger',
       accept: () => {
-        this.clarificationService.rejectClarification(clarification.id)
+        this.clarificationService.rejectClarification(this.tenderId, clarification.id)
           .pipe(takeUntil(this.destroy$))
           .subscribe({
             next: () => {

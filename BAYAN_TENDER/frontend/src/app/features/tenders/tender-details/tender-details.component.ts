@@ -101,12 +101,13 @@ interface CountdownTime {
         <div class="header-content">
           <button pButton icon="pi pi-arrow-left" class="p-button-text" routerLink="/tenders"></button>
           <div class="tender-title-section">
-            <h1>{{ tender()?.title }}</h1>
+            <h1 data-testid="tender-title">{{ tender()?.title }}</h1>
             <div class="tender-meta">
-              <span class="reference">{{ tender()?.referenceNumber }}</span>
+              <span class="reference" data-testid="tender-reference">{{ tender()?.referenceNumber }}</span>
               <p-tag
                 [value]="getStatusLabel(tender()?.status)"
                 [severity]="getStatusSeverity(tender()?.status)"
+                data-testid="tender-status"
               ></p-tag>
             </div>
           </div>
@@ -118,12 +119,14 @@ interface CountdownTime {
               label="Edit"
               icon="pi pi-pencil"
               class="p-button-outlined"
+              data-testid="edit-tender-btn"
               (click)="editTender()"
             ></button>
             <button
               pButton
               label="Publish"
               icon="pi pi-send"
+              data-testid="publish-tender-btn"
               (click)="publishTender()"
             ></button>
           }
@@ -934,7 +937,8 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
 
   private loadActivities(): void {
     const tenderId = this.route.snapshot.params['id'];
-    this.tenderService.getActivityLog(+tenderId).pipe(
+    if (!tenderId) return;
+    this.tenderService.getActivityLog(tenderId).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: (activities) => {
@@ -944,26 +948,50 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
   }
 
   private loadTenderDetails(): void {
-    // Mock tender data - in production, fetch from API using route param
     const tenderId = this.route.snapshot.params['id'];
+    if (!tenderId) return;
 
-    const mockTender: Tender = {
-      id: parseInt(tenderId) || 1,
-      title: 'IT Infrastructure Upgrade Project',
-      titleAr: 'مشروع تطوير البنية التحتية لتقنية المعلومات',
-      referenceNumber: 'TND-2026-001',
-      description: 'This tender is for the complete upgrade of IT infrastructure including servers, networking equipment, and security systems across all regional offices.',
-      status: 'open',
-      organization: 'Ministry of Finance',
-      category: 'IT & Technology',
-      publishDate: new Date('2026-01-15'),
-      deadline: new Date('2026-03-15'),
-      budget: 500000,
-      currency: 'SAR'
+    this.tenderService.getTenderById(tenderId).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (apiTender) => {
+        // Map service Tender model to local view model
+        const tender: Tender = {
+          id: apiTender.id as number,
+          title: apiTender.title,
+          referenceNumber: apiTender.reference,
+          description: apiTender.description,
+          status: this.mapServiceStatus(apiTender.status),
+          organization: apiTender.clientName || '',
+          category: apiTender.type || 'open',
+          publishDate: apiTender.dates?.issueDate ? new Date(String(apiTender.dates.issueDate)) : undefined,
+          deadline: apiTender.dates?.submissionDeadline ? new Date(String(apiTender.dates.submissionDeadline)) : new Date(),
+          budget: apiTender.estimatedValue || 0,
+          currency: apiTender.currency || 'AED'
+        };
+        this.tender.set(tender);
+        this.updateBreadcrumb(tender);
+      },
+      error: () => {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Failed to load tender details'
+        });
+      }
+    });
+  }
+
+  private mapServiceStatus(status: string): Tender['status'] {
+    const statusMap: Record<string, Tender['status']> = {
+      'draft': 'draft',
+      'active': 'open',
+      'evaluation': 'closed',
+      'awarded': 'awarded',
+      'closed': 'closed',
+      'cancelled': 'cancelled'
     };
-
-    this.tender.set(mockTender);
-    this.updateBreadcrumb(mockTender);
+    return statusMap[status] || 'draft';
   }
 
   private updateBreadcrumb(tender: Tender): void {

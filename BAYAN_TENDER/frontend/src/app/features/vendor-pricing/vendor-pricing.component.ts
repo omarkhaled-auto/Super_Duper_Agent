@@ -7,7 +7,7 @@ import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { DropdownModule } from 'primeng/dropdown';
 import { MultiSelectModule } from 'primeng/multiselect';
-import { CalendarModule } from 'primeng/calendar';
+import { DatePickerModule } from 'primeng/datepicker';
 import { ChartModule } from 'primeng/chart';
 import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
@@ -45,7 +45,7 @@ interface TradeOption {
     InputTextModule,
     DropdownModule,
     MultiSelectModule,
-    CalendarModule,
+    DatePickerModule,
     ChartModule,
     TagModule,
     TooltipModule,
@@ -95,7 +95,7 @@ interface TradeOption {
             (onChange)="onFilterChange()"
           ></p-dropdown>
 
-          <p-calendar
+          <p-datepicker
             [(ngModel)]="dateRange"
             selectionMode="range"
             [showIcon]="true"
@@ -103,7 +103,7 @@ interface TradeOption {
             dateFormat="yy-mm-dd"
             (onSelect)="onFilterChange()"
             (onClear)="onFilterChange()"
-          ></p-calendar>
+          ></p-datepicker>
 
           <button
             pButton

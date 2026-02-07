@@ -31,10 +31,11 @@ import { AuthService } from '../../core/auth/auth.service';
           type="button"
           icon="pi pi-bars"
           class="p-button-text p-button-rounded"
+          data-testid="sidebar-toggle"
           (click)="toggleSidebar.emit()"
         ></button>
         <div class="logo">
-          <img src="assets/images/logo.png" alt="Bayan" height="32" *ngIf="!collapsed" />
+          <i class="pi pi-briefcase logo-icon" *ngIf="!collapsed"></i>
           <span class="logo-text" *ngIf="!collapsed">Bayan Tender</span>
         </div>
       </div>
@@ -46,12 +47,13 @@ import { AuthService } from '../../core/auth/auth.service';
           type="button"
           icon="pi pi-bell"
           class="p-button-text p-button-rounded notification-btn"
+          data-testid="notification-btn"
           pBadge
           value="3"
           severity="danger"
         ></button>
 
-        <div class="user-menu">
+        <div class="user-menu" data-testid="user-menu">
           <p-avatar
             [label]="userInitials"
             shape="circle"
@@ -93,6 +95,11 @@ import { AuthService } from '../../core/auth/auth.service';
       display: flex;
       align-items: center;
       gap: 0.5rem;
+    }
+
+    .logo-icon {
+      font-size: 1.5rem;
+      color: #1976D2;
     }
 
     .logo-text {

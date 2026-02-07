@@ -58,6 +58,7 @@ import {
       [draggable]="false"
       (onHide)="onClose()"
     >
+      <div data-testid="sensitivity-analysis">
       @if (isLoading()) {
         <div class="loading-container">
           <p-progressSpinner
@@ -190,6 +191,7 @@ import {
           <p>Unable to load sensitivity analysis.</p>
         </div>
       }
+      </div>
 
       <ng-template pTemplate="footer">
         <button

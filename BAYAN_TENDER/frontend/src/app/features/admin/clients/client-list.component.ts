@@ -40,13 +40,13 @@ import { ClientFormDialogComponent, ClientFormDialogData } from './client-form-d
   providers: [ConfirmationService, MessageService, DialogService],
   template: `
     <p-toast></p-toast>
-    <div class="client-list-container">
+    <div class="client-list-container" data-testid="client-list">
       <div class="page-header">
         <div>
           <h1>Client Management</h1>
           <p>Manage client organizations and contacts</p>
         </div>
-        <button pButton label="Add Client" icon="pi pi-plus" (click)="showClientDialog()"></button>
+        <button pButton label="Add Client" icon="pi pi-plus" (click)="showClientDialog()" data-testid="create-client-btn"></button>
       </div>
 
       <!-- Filters -->
@@ -60,6 +60,7 @@ import { ClientFormDialogComponent, ClientFormDialogData } from './client-form-d
               [(ngModel)]="searchTerm"
               placeholder="Search clients..."
               (input)="onSearch()"
+              data-testid="client-search"
             />
           </p-iconField>
 
@@ -84,6 +85,7 @@ import { ClientFormDialogComponent, ClientFormDialogData } from './client-form-d
       <!-- Clients Table -->
       <p-card styleClass="table-card">
         <p-table
+          data-testid="client-table"
           [value]="filteredClients()"
           [paginator]="true"
           [rows]="10"

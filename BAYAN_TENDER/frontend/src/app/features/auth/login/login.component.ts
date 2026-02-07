@@ -36,7 +36,7 @@ import { AuthService } from '../../../core/auth/auth.service';
         </div>
 
         @if (errorMessage()) {
-          <p-message severity="error" [text]="errorMessage()!" styleClass="w-full mb-3"></p-message>
+          <p-message severity="error" [text]="errorMessage()!" styleClass="w-full mb-3" data-testid="login-error"></p-message>
         }
 
         <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
@@ -49,6 +49,7 @@ import { AuthService } from '../../../core/auth/auth.service';
               formControlName="email"
               placeholder="Enter your email"
               class="w-full"
+              data-testid="login-email"
               [class.ng-invalid]="isFieldInvalid('email')"
             />
             @if (isFieldInvalid('email')) {
@@ -73,6 +74,7 @@ import { AuthService } from '../../../core/auth/auth.service';
               [toggleMask]="true"
               styleClass="w-full"
               inputStyleClass="w-full"
+              data-testid="login-password"
               [class.ng-invalid]="isFieldInvalid('password')"
             ></p-password>
             @if (isFieldInvalid('password')) {
@@ -93,6 +95,7 @@ import { AuthService } from '../../../core/auth/auth.service';
                 formControlName="rememberMe"
                 [binary]="true"
                 inputId="rememberMe"
+                data-testid="login-remember"
               ></p-checkbox>
               <label for="rememberMe">Remember me</label>
             </div>
@@ -107,6 +110,7 @@ import { AuthService } from '../../../core/auth/auth.service';
             type="submit"
             label="Sign In"
             class="w-full"
+            data-testid="login-submit"
             [loading]="isLoading()"
             [disabled]="loginForm.invalid || isLoading()"
           ></button>

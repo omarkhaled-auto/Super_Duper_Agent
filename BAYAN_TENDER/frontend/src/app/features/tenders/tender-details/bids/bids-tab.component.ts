@@ -62,7 +62,7 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
     <p-toast></p-toast>
     <p-confirmDialog></p-confirmDialog>
 
-    <div class="bids-tab-container">
+    <div class="bids-tab-container" data-testid="bids-tab">
       <!-- Header Stats & Actions -->
       <div class="bids-header">
         <div class="header-stats">
@@ -84,6 +84,7 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
             icon="pi pi-download"
             label="Download All Bids"
             class="p-button-outlined"
+            data-testid="download-all-bids-btn"
             [disabled]="bids().length === 0"
             [loading]="isDownloading()"
             (click)="downloadAllBids()"
@@ -95,6 +96,7 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
               icon="pi pi-eye"
               label="Open Bids"
               class="p-button-warning"
+              data-testid="open-bids-btn"
               [disabled]="regularBids().length === 0"
               (click)="showOpenBidsDialog = true"
             ></button>
@@ -132,6 +134,7 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
       } @else {
         <!-- Bids Table -->
         <p-table
+          data-testid="bids-table"
           [value]="regularBids()"
           [(selection)]="selectedBids"
           dataKey="id"
@@ -593,7 +596,7 @@ export class BidsTabComponent implements OnInit, OnDestroy {
   }
 
   downloadBidFiles(bid: BidListItem): void {
-    this.bidService.downloadBidFiles(bid.id).pipe(
+    this.bidService.downloadBidFiles(this.tenderId, bid.id).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: (blob) => {
@@ -660,7 +663,7 @@ export class BidsTabComponent implements OnInit, OnDestroy {
       header: 'Confirm Import',
       icon: 'pi pi-file-import',
       accept: () => {
-        this.bidService.importBoq(bid.id).pipe(
+        this.bidService.importBoq(this.tenderId, bid.id).pipe(
           takeUntil(this.destroy$)
         ).subscribe({
           next: () => {
@@ -713,7 +716,7 @@ export class BidsTabComponent implements OnInit, OnDestroy {
       icon: 'pi pi-check',
       acceptButtonStyleClass: 'p-button-success',
       accept: () => {
-        this.bidService.acceptLateBid(bid.id).pipe(
+        this.bidService.acceptLateBid(this.tenderId, bid.id).pipe(
           takeUntil(this.destroy$)
         ).subscribe({
           next: () => {
@@ -744,7 +747,7 @@ export class BidsTabComponent implements OnInit, OnDestroy {
   onLateBidRejected(reason: string): void {
     if (!this.selectedLateBid) return;
 
-    this.bidService.rejectLateBid(this.selectedLateBid.id, { reason }).pipe(
+    this.bidService.rejectLateBid(this.tenderId, this.selectedLateBid.id, { reason }).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: () => {

@@ -86,6 +86,7 @@ import {
               formControlName="sectionNumber"
               placeholder="e.g., 1, 1.1, 2.1.1"
               class="w-full"
+              data-testid="section-number"
               [class.ng-invalid]="isFieldInvalid('sectionNumber')"
             />
             @if (isFieldInvalid('sectionNumber')) {
@@ -101,6 +102,7 @@ import {
               formControlName="title"
               placeholder="Enter section title"
               class="w-full"
+              data-testid="section-title"
               [class.ng-invalid]="isFieldInvalid('title')"
             />
             @if (isFieldInvalid('title')) {
@@ -136,6 +138,7 @@ import {
             [label]="mode === 'create' ? 'Add Section' : 'Update Section'"
             [loading]="isLoading"
             [disabled]="sectionForm.invalid || isLoading"
+            data-testid="section-save-btn"
           ></button>
         </div>
       </form>

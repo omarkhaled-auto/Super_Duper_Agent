@@ -14,7 +14,7 @@ import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { PanelModule } from 'primeng/panel';
 import { CheckboxModule } from 'primeng/checkbox';
-import { CalendarModule } from 'primeng/calendar';
+import { DatePickerModule } from 'primeng/datepicker';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { MessageModule } from 'primeng/message';
@@ -54,7 +54,7 @@ interface StatusOption {
     InputIconModule,
     PanelModule,
     CheckboxModule,
-    CalendarModule,
+    DatePickerModule,
     MultiSelectModule,
     ProgressSpinnerModule,
     MessageModule
@@ -72,6 +72,7 @@ interface StatusOption {
             icon="pi pi-file-excel"
             label="Export"
             class="p-button-outlined"
+            data-testid="export-btn"
             (click)="exportToExcel()"
             [loading]="exporting()"
           ></button>
@@ -79,6 +80,7 @@ interface StatusOption {
             pButton
             icon="pi pi-plus"
             label="New Tender"
+            data-testid="new-tender-btn"
             (click)="navigateToNewTender()"
           ></button>
         </div>
@@ -93,6 +95,7 @@ interface StatusOption {
             type="text"
             [(ngModel)]="searchTerm"
             placeholder="Search by title, reference, or client..."
+            data-testid="tender-search"
             (input)="onSearchInput()"
           />
         </p-iconField>
@@ -134,7 +137,7 @@ interface StatusOption {
           <div class="filter-group">
             <label class="filter-label">Deadline Range</label>
             <div class="date-range">
-              <p-calendar
+              <p-datepicker
                 [(ngModel)]="dateFrom"
                 placeholder="From"
                 [showIcon]="true"
@@ -142,9 +145,9 @@ interface StatusOption {
                 dateFormat="dd/mm/yy"
                 (onSelect)="onFilterChange()"
                 (onClear)="onFilterChange()"
-              ></p-calendar>
+              ></p-datepicker>
               <span class="date-separator">to</span>
-              <p-calendar
+              <p-datepicker
                 [(ngModel)]="dateTo"
                 placeholder="To"
                 [showIcon]="true"
@@ -153,7 +156,7 @@ interface StatusOption {
                 [minDate]="dateFrom"
                 (onSelect)="onFilterChange()"
                 (onClear)="onFilterChange()"
-              ></p-calendar>
+              ></p-datepicker>
             </div>
           </div>
 
@@ -756,11 +759,11 @@ export class TenderListComponent implements OnInit, OnDestroy {
     this.router.navigate(['/tenders/new']);
   }
 
-  navigateToDetails(id: number): void {
+  navigateToDetails(id: string | number): void {
     this.router.navigate(['/tenders', id]);
   }
 
-  navigateToEdit(id: number): void {
+  navigateToEdit(id: string | number): void {
     this.router.navigate(['/tenders', id, 'edit']);
   }
 

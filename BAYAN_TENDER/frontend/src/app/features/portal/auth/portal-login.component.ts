@@ -32,7 +32,7 @@ import { PortalService } from '../../../core/services/portal.service';
         <!-- Left Panel - Branding -->
         <div class="branding-panel">
           <div class="branding-content">
-            <img src="assets/images/logo-white.png" alt="Bayan" class="brand-logo" />
+            <i class="pi pi-briefcase" style="font-size: 2.5rem; margin-bottom: 1rem;"></i>
             <h1 class="brand-title">Bidder Portal</h1>
             <p class="brand-subtitle">
               Access tender documents, submit clarifications, and submit your bid through our secure portal.
@@ -67,7 +67,7 @@ import { PortalService } from '../../../core/services/portal.service';
             </div>
 
             @if (errorMessage()) {
-              <p-message severity="error" [text]="errorMessage()!" styleClass="w-full mb-4"></p-message>
+              <p-message severity="error" [text]="errorMessage()!" styleClass="w-full mb-4" data-testid="portal-login-error"></p-message>
             }
 
             <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
@@ -83,6 +83,7 @@ import { PortalService } from '../../../core/services/portal.service';
                     formControlName="tenderCode"
                     placeholder="Enter tender reference code"
                     class="w-full"
+                    data-testid="portal-tender-code"
                   />
                 </span>
                 <small class="field-hint">If you have a tender code, enter it to go directly to that tender</small>
@@ -102,6 +103,7 @@ import { PortalService } from '../../../core/services/portal.service';
                     formControlName="email"
                     placeholder="Enter your email"
                     class="w-full"
+                    data-testid="portal-login-email"
                     [class.ng-invalid]="isFieldInvalid('email')"
                   />
                 </span>
@@ -128,6 +130,7 @@ import { PortalService } from '../../../core/services/portal.service';
                   [toggleMask]="true"
                   styleClass="w-full"
                   inputStyleClass="w-full"
+                  data-testid="portal-login-password"
                   [class.ng-invalid]="isFieldInvalid('password')"
                 ></p-password>
                 @if (isFieldInvalid('password')) {
@@ -150,6 +153,7 @@ import { PortalService } from '../../../core/services/portal.service';
                 label="Sign In to Portal"
                 icon="pi pi-sign-in"
                 class="w-full submit-btn"
+                data-testid="portal-login-submit"
                 [loading]="isLoading()"
                 [disabled]="loginForm.invalid || isLoading()"
               ></button>

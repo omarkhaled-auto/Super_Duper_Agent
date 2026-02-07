@@ -1232,7 +1232,7 @@ export class BidImportDialogComponent implements OnChanges {
       type: this.bidDocument.mimeType
     });
 
-    this.bidImportService.parseFile(this.bidId, mockFile).subscribe({
+    this.bidImportService.parseFile(this.tenderId, this.bidId, mockFile).subscribe({
       next: (result) => {
         this.isParsing.set(false);
         this.parseResult.set(result);
@@ -1397,7 +1397,7 @@ export class BidImportDialogComponent implements OnChanges {
 
     const includedItems = this.matchResult()!.items.filter(i => i.isIncluded);
 
-    this.bidImportService.normalize(this.tenderId, includedItems).subscribe({
+    this.bidImportService.normalize(this.tenderId, this.bidId, includedItems).subscribe({
       next: (result) => {
         this.isNormalizing.set(false);
         this.normalizationResult.set(result);
@@ -1413,7 +1413,7 @@ export class BidImportDialogComponent implements OnChanges {
 
     this.isValidating.set(true);
 
-    this.bidImportService.validate(this.normalizationResult()!.normalizedItems).subscribe({
+    this.bidImportService.validate(this.tenderId, this.bidId, this.normalizationResult()!.normalizedItems).subscribe({
       next: (result) => {
         this.isValidating.set(false);
         this.validationResult.set(result);

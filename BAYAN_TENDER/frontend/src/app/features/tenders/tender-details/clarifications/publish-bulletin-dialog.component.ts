@@ -17,7 +17,7 @@ import { TableModule } from 'primeng/table';
 import { CheckboxModule } from 'primeng/checkbox';
 import { InputTextModule } from 'primeng/inputtext';
 import { InputTextarea } from 'primeng/inputtextarea';
-import { CalendarModule } from 'primeng/calendar';
+import { DatePickerModule } from 'primeng/datepicker';
 import { ButtonModule } from 'primeng/button';
 import { TagModule } from 'primeng/tag';
 import { MessageModule } from 'primeng/message';
@@ -44,7 +44,7 @@ import {
     CheckboxModule,
     InputTextModule,
     InputTextarea,
-    CalendarModule,
+    DatePickerModule,
     ButtonModule,
     TagModule,
     MessageModule,
@@ -154,13 +154,13 @@ import {
 
               <div class="form-field">
                 <label for="issueDate">Issue Date <span class="required">*</span></label>
-                <p-calendar
+                <p-datepicker
                   id="issueDate"
                   [(ngModel)]="issueDate"
                   [showIcon]="true"
                   dateFormat="dd/mm/yy"
                   styleClass="w-full"
-                ></p-calendar>
+                ></p-datepicker>
               </div>
 
               <div class="form-field full-width">
@@ -284,6 +284,7 @@ import {
               pButton
               label="Publish & Send"
               icon="pi pi-send"
+              data-testid="publish-bulletin-btn"
               [loading]="isPublishing()"
               (click)="publishBulletin()"
             ></button>
@@ -466,7 +467,7 @@ import {
     }
 
     :host ::ng-deep {
-      .p-calendar,
+      .p-datepicker,
       .p-inputtext,
       .p-inputtextarea {
         width: 100%;
@@ -598,7 +599,7 @@ export class PublishBulletinDialogComponent implements OnChanges {
     this.clarificationService.createBulletin(createDto).subscribe({
       next: (bulletin) => {
         // Now publish it
-        this.clarificationService.publishBulletin(bulletin.id).subscribe({
+        this.clarificationService.publishBulletin(this.tenderId, bulletin.id).subscribe({
           next: (publishedBulletin) => {
             this.isPublishing.set(false);
             this.published.emit(publishedBulletin);

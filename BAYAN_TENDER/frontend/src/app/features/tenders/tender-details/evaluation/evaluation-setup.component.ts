@@ -20,7 +20,7 @@ import { TableModule } from 'primeng/table';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { DropdownModule } from 'primeng/dropdown';
 import { CheckboxModule } from 'primeng/checkbox';
-import { CalendarModule } from 'primeng/calendar';
+import { DatePickerModule } from 'primeng/datepicker';
 import { ToastModule } from 'primeng/toast';
 import { TooltipModule } from 'primeng/tooltip';
 import { TagModule } from 'primeng/tag';
@@ -53,7 +53,7 @@ import {
     MultiSelectModule,
     DropdownModule,
     CheckboxModule,
-    CalendarModule,
+    DatePickerModule,
     ToastModule,
     TooltipModule,
     TagModule,
@@ -274,7 +274,7 @@ import {
 
                 <div class="form-field">
                   <label for="deadline">Evaluation Deadline *</label>
-                  <p-calendar
+                  <p-datepicker
                     id="deadline"
                     [(ngModel)]="deadline"
                     [showTime]="true"
@@ -283,7 +283,7 @@ import {
                     placeholder="Select deadline"
                     [showIcon]="true"
                     styleClass="w-full"
-                  ></p-calendar>
+                  ></p-datepicker>
                 </div>
               </div>
 
@@ -619,7 +619,7 @@ export class EvaluationSetupComponent implements OnInit, OnDestroy {
     this.isLoading.set(true);
 
     forkJoin({
-      panelMembers: this.evaluationService.getAvailablePanelMembers(),
+      panelMembers: this.evaluationService.getAvailablePanelMembers(this.tenderId),
       criteria: this.evaluationService.getEvaluationCriteria(this.tenderId),
       setup: this.evaluationService.getEvaluationSetup(this.tenderId)
     }).pipe(takeUntil(this.destroy$))

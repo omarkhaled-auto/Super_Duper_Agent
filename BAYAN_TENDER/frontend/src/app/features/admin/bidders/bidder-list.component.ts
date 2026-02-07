@@ -47,13 +47,13 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
   providers: [ConfirmationService, MessageService, DialogService],
   template: `
     <p-toast></p-toast>
-    <div class="bidder-list-container">
+    <div class="bidder-list-container" data-testid="bidder-list">
       <div class="page-header">
         <div>
           <h1>Bidder Management</h1>
           <p>Manage registered bidders and their prequalification status</p>
         </div>
-        <button pButton label="Add Bidder" icon="pi pi-plus" (click)="showBidderDialog()"></button>
+        <button pButton label="Add Bidder" icon="pi pi-plus" (click)="showBidderDialog()" data-testid="create-bidder-btn"></button>
       </div>
 
       <!-- Filters -->
@@ -67,6 +67,7 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
               [(ngModel)]="searchTerm"
               placeholder="Search by company name, email, or CR number..."
               (input)="onSearch()"
+              data-testid="bidder-search"
             />
           </p-iconField>
 
@@ -99,6 +100,7 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
       <!-- Bidders Table -->
       <p-card styleClass="table-card">
         <p-table
+          data-testid="bidder-table"
           [value]="filteredBidders()"
           [paginator]="true"
           [rows]="10"

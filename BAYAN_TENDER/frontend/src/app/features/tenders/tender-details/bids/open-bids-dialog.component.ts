@@ -89,6 +89,7 @@ import { MessageModule } from 'primeng/message';
             label="Confirm Open Bids"
             icon="pi pi-eye"
             class="p-button-warning"
+            data-testid="confirm-open-bids-btn"
             [disabled]="!confirmationChecked"
             (click)="onConfirm()"
           ></button>

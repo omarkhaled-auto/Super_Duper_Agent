@@ -114,7 +114,7 @@ interface GridRowData {
   template: `
     <p-toast></p-toast>
 
-    <div class="comparable-sheet-container">
+    <div class="comparable-sheet-container" data-testid="comparable-sheet">
       <!-- Toolbar -->
       <div class="toolbar">
         <div class="toolbar-left">
@@ -244,7 +244,7 @@ interface GridRowData {
         <!-- AG Grid -->
         <div class="grid-container">
           <!-- AG Grid placeholder - install ag-grid-angular and ag-grid-community to enable -->
-          <div class="ag-grid-placeholder" style="width: 100%; min-height: 200px; display: flex; align-items: center; justify-content: center; border: 1px dashed #ccc; border-radius: 8px; color: #999;">
+          <div class="ag-grid-placeholder" data-testid="comparable-sheet-table" style="width: 100%; min-height: 200px; display: flex; align-items: center; justify-content: center; border: 1px dashed #ccc; border-radius: 8px; color: #999;">
             <span>Comparable Sheet Grid (requires ag-grid installation)</span>
           </div>
         </div>

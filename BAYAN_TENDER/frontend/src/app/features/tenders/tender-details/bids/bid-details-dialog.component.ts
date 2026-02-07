@@ -659,7 +659,7 @@ export class BidDetailsDialogComponent implements OnChanges {
   downloadAllFiles(): void {
     if (!this.bid()) return;
 
-    this.bidService.downloadBidFiles(this.bid()!.id).pipe(
+    this.bidService.downloadBidFiles(this.tenderId, this.bid()!.id).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: (blob) => {
@@ -677,7 +677,7 @@ export class BidDetailsDialogComponent implements OnChanges {
     if (!this.bid()) return;
 
     this.isImporting.set(true);
-    this.bidService.importBoq(this.bid()!.id).pipe(
+    this.bidService.importBoq(this.tenderId, this.bid()!.id).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: (updatedBid) => {
@@ -695,7 +695,7 @@ export class BidDetailsDialogComponent implements OnChanges {
     if (!this.bid() || !this.disqualifyReason.trim()) return;
 
     this.isDisqualifying.set(true);
-    this.bidService.disqualifyBid(this.bid()!.id, { reason: this.disqualifyReason.trim() }).pipe(
+    this.bidService.disqualifyBid(this.tenderId, this.bid()!.id, { reason: this.disqualifyReason.trim() }).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: (updatedBid) => {

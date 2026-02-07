@@ -6,7 +6,7 @@ import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { DropdownModule } from 'primeng/dropdown';
-import { CalendarModule } from 'primeng/calendar';
+import { DatePickerModule } from 'primeng/datepicker';
 import { ToastModule } from 'primeng/toast';
 import { DialogModule } from 'primeng/dialog';
 import { TooltipModule } from 'primeng/tooltip';
@@ -49,7 +49,7 @@ interface UserOption {
     ButtonModule,
     InputTextModule,
     DropdownModule,
-    CalendarModule,
+    DatePickerModule,
     ToastModule,
     DialogModule,
     TooltipModule,
@@ -59,7 +59,7 @@ interface UserOption {
   providers: [MessageService],
   template: `
     <p-toast></p-toast>
-    <div class="audit-logs-container">
+    <div class="audit-logs-container" data-testid="audit-logs">
       <div class="page-header">
         <div>
           <h1>Audit Logs</h1>
@@ -109,7 +109,7 @@ interface UserOption {
             </div>
             <div class="filter-item">
               <label>Date Range</label>
-              <p-calendar
+              <p-datepicker
                 [(ngModel)]="filters.dateRange"
                 selectionMode="range"
                 [readonlyInput]="true"
@@ -119,7 +119,7 @@ interface UserOption {
                 styleClass="w-full"
                 (onSelect)="onFilterChange()"
                 (onClearClick)="onFilterChange()"
-              ></p-calendar>
+              ></p-datepicker>
             </div>
           </div>
           <div class="filter-row">
@@ -134,6 +134,7 @@ interface UserOption {
                   placeholder="Search by email, action..."
                   class="w-full"
                   (keyup.enter)="onFilterChange()"
+                  data-testid="audit-logs-search"
                 />
               </span>
             </div>
@@ -146,6 +147,7 @@ interface UserOption {
 
         <!-- Table -->
         <p-table
+          data-testid="audit-logs-table"
           [value]="auditLogs()"
           [lazy]="true"
           [paginator]="true"
@@ -379,7 +381,7 @@ interface UserOption {
         padding: 0;
       }
 
-      .p-calendar {
+      .p-datepicker {
         width: 100%;
       }
 

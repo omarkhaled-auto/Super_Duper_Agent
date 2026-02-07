@@ -65,7 +65,7 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
     <p-toast></p-toast>
     <p-confirmDialog></p-confirmDialog>
 
-    <div class="combined-scorecard-container">
+    <div class="combined-scorecard-container" data-testid="combined-scorecard">
       <!-- Loading State -->
       @if (isLoading()) {
         <div class="loading-container">

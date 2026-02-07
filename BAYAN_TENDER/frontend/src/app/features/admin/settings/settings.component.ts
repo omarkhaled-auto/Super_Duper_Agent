@@ -39,7 +39,7 @@ import {
   providers: [MessageService],
   template: `
     <p-toast></p-toast>
-    <div class="settings-container">
+    <div class="settings-container" data-testid="settings-page">
       <div class="page-header">
         <div>
           <h1>System Settings</h1>

@@ -90,6 +90,7 @@ interface ColumnMapping {
               (onSelect)="onFileSelect($event)"
               (onRemove)="onFileRemove()"
               styleClass="upload-zone"
+              data-testid="boq-import-upload"
             >
               <ng-template pTemplate="content">
                 <div class="upload-content">
@@ -300,6 +301,7 @@ interface ColumnMapping {
               icon="pi pi-check"
               [disabled]="!canImport()"
               [loading]="isImporting()"
+              data-testid="boq-import-execute"
               (click)="importItems()"
             ></button>
           }

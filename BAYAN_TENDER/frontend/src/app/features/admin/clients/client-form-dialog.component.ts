@@ -47,6 +47,7 @@ export interface ClientFormDialogData {
               placeholder="Enter company name"
               class="w-full"
               [class.ng-invalid]="isFieldInvalid('name')"
+              data-testid="client-form-name"
             />
             @if (isFieldInvalid('name')) {
               <small class="p-error">Company name is required</small>
@@ -228,6 +229,7 @@ export interface ClientFormDialogData {
             [label]="isCreateMode() ? 'Create Client' : 'Update Client'"
             [loading]="isLoading()"
             [disabled]="clientForm.invalid || isLoading()"
+            data-testid="client-form-save"
           ></button>
         </div>
       </form>

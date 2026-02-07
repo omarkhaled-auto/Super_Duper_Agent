@@ -70,7 +70,7 @@ interface BidderOption {
     <p-toast></p-toast>
     <p-confirmDialog></p-confirmDialog>
 
-    <div class="exceptions-panel-container">
+    <div class="exceptions-panel-container" data-testid="exceptions-panel">
       <!-- Add Exception Form -->
       <p-panel header="Log New Exception" [toggleable]="true" [collapsed]="!showForm">
         <div class="exception-form">
@@ -691,7 +691,7 @@ export class ExceptionsPanelComponent implements OnInit, OnDestroy {
   }
 
   private deleteException(exceptionId: number): void {
-    this.evaluationService.deleteException(exceptionId)
+    this.evaluationService.deleteException(this.tenderId, exceptionId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {

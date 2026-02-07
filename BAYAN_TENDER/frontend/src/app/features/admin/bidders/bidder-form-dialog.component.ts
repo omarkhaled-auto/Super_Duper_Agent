@@ -60,6 +60,7 @@ export interface BidderFormDialogData {
                   placeholder="Enter company name in English"
                   class="w-full"
                   [class.ng-invalid]="isFieldInvalid('companyNameEn')"
+                  data-testid="bidder-form-name"
                 />
                 @if (isFieldInvalid('companyNameEn')) {
                   <small class="p-error">Company name (English) is required</small>
@@ -248,6 +249,7 @@ export interface BidderFormDialogData {
             [label]="isCreateMode() ? 'Create Bidder' : 'Update Bidder'"
             [loading]="isLoading()"
             [disabled]="bidderForm.invalid || isLoading()"
+            data-testid="bidder-form-save"
           ></button>
         </div>
       </form>

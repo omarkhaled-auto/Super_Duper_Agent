@@ -152,6 +152,7 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
               optionLabel="label"
               optionValue="value"
               styleClass="w-full"
+              data-testid="boq-export-language"
             ></p-dropdown>
           </div>
         </div>
@@ -169,6 +170,7 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
           label="Download"
           icon="pi pi-download"
           [loading]="isExporting()"
+          data-testid="boq-export-btn"
           (click)="exportBoq()"
         ></button>
       </div>

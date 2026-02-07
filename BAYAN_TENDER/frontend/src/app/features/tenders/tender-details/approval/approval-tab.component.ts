@@ -65,7 +65,7 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
   template: `
     <p-toast></p-toast>
 
-    <div class="approval-tab-container">
+    <div class="approval-tab-container" data-testid="approval-tab">
       <!-- Loading State -->
       @if (approvalService.isLoading() && !workflow()) {
         <div class="loading-container">
@@ -86,13 +86,14 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
               pButton
               label="Initiate Approval Workflow"
               icon="pi pi-play"
+              data-testid="initiate-approval-btn"
               (click)="showInitiateDialog = true"
             ></button>
           </div>
         </div>
       } @else {
         <!-- Workflow Exists -->
-        <div class="workflow-container">
+        <div class="workflow-container" data-testid="approval-workflow">
           <!-- Header with Overall Status -->
           <div class="workflow-header">
             <div class="header-left">
@@ -202,7 +203,7 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
                 <div class="decision-options">
                   <div class="option-group">
                     @for (option of decisionOptions; track option.value) {
-                      <div class="decision-option">
+                      <div class="decision-option" [attr.data-testid]="option.value === 'approve' ? 'approve-btn' : option.value === 'reject' ? 'reject-btn' : null">
                         <p-radioButton
                           [inputId]="option.value"
                           [value]="option.value"
