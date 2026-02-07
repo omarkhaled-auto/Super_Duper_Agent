@@ -25,7 +25,7 @@ public class EvaluationStateConfiguration : IEntityTypeConfiguration<EvaluationS
             .HasColumnName("scoring_method")
             .HasMaxLength(20)
             .HasConversion<string>()
-            .HasDefaultValue("Numeric")
+            .HasDefaultValueSql("'Numeric'")
             .IsRequired();
 
         builder.Property(e => e.BlindMode)

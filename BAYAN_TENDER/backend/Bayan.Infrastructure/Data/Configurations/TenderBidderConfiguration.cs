@@ -40,7 +40,7 @@ public class TenderBidderConfiguration : IEntityTypeConfiguration<TenderBidder>
             .HasColumnName("nda_status")
             .HasMaxLength(50)
             .HasConversion<string>()
-            .HasDefaultValue("Pending");
+            .HasDefaultValueSql("'Pending'");
 
         builder.Property(e => e.NdaDocumentPath)
             .HasColumnName("nda_document_path")
@@ -56,7 +56,7 @@ public class TenderBidderConfiguration : IEntityTypeConfiguration<TenderBidder>
             .HasColumnName("qualification_status")
             .HasMaxLength(50)
             .HasConversion<string>()
-            .HasDefaultValue("Pending");
+            .HasDefaultValueSql("'Pending'");
 
         builder.Property(e => e.QualifiedAt)
             .HasColumnName("qualified_at");

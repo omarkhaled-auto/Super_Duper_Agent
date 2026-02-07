@@ -86,7 +86,7 @@ public class TenderConfiguration : IEntityTypeConfiguration<Tender>
             .HasColumnName("status")
             .HasMaxLength(50)
             .HasConversion<string>()
-            .HasDefaultValue("Draft")
+            .HasDefaultValueSql("'Draft'")
             .IsRequired();
 
         builder.Property(e => e.CreatedBy)
