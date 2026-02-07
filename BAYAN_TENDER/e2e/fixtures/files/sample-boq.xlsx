@@ -1,0 +1,3 @@
+PLACEHOLDER: This is a placeholder file for E2E upload tests.
+Replace with a real .xlsx file for full integration testing.
+Tests using this file should be marked with fixme until a valid Excel file is provided.

@@ -1,0 +1,13 @@
+{
+  "tenderId": "48c7b93b-2a94-42a4-9cd1-bec7c5662ecc",
+  "clientId": "a5c36806-583e-495d-b9fa-96e8278f2052",
+  "bidderId": "f758cadd-2831-4c5e-bbd8-17258d11c901",
+  "boqSectionIds": [
+    "520aef6f-9a52-4da1-8cd3-e561fed576b0",
+    "2ff51c94-ed91-4765-bd59-8928dba8c282"
+  ],
+  "boqItemIds": [
+    "f8a6390e-a83a-435a-8358-c8a8d141fb3f"
+  ],
+  "seeded": true
+}

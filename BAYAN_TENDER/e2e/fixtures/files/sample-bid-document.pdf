@@ -1,0 +1,3 @@
+PLACEHOLDER: This is a placeholder file for E2E upload tests.
+Replace with a real .pdf file for full integration testing.
+Tests using this file validate upload mechanics, not file content.
