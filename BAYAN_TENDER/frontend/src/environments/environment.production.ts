@@ -1,6 +1,6 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://api.bayan-tender.sa/api/v1',
+  apiUrl: '/api',
   appName: 'Bayan Tender Management System',
   appVersion: '1.0.0',
   defaultLanguage: 'en',

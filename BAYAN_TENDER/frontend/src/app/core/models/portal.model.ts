@@ -28,7 +28,19 @@ export interface PortalUser {
 export interface PortalAuthResponse {
   accessToken: string;
   refreshToken: string;
-  user: PortalUser;
+  user?: PortalUser;
+  bidder?: {
+    id: string;
+    companyName: string;
+    contactPerson: string;
+    email: string;
+    phone?: string;
+    tradeSpecialization?: string;
+    tenderAccess: Array<{ tenderId: string; tenderTitle: string; tenderReference: string; qualificationStatus: string }>;
+  };
+  accessTokenExpiresAt?: string;
+  refreshTokenExpiresAt?: string;
+  tokenType?: string;
   tenderId?: number;
 }
 

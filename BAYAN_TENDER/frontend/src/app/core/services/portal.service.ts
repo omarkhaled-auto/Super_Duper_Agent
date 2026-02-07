@@ -109,8 +109,22 @@ export class PortalService {
   private handleAuthSuccess(data: PortalAuthResponse): void {
     localStorage.setItem(PORTAL_TOKEN_KEY, data.accessToken);
     localStorage.setItem(PORTAL_REFRESH_TOKEN_KEY, data.refreshToken);
-    localStorage.setItem(PORTAL_USER_KEY, JSON.stringify(data.user));
-    this._currentUser.set(data.user);
+
+    // API returns "bidder" not "user" — map to PortalUser
+    const user: PortalUser = data.user ?? (data.bidder ? {
+      id: Number(data.bidder.id) || 0,
+      bidderId: Number(data.bidder.id) || 0,
+      companyName: data.bidder.companyName,
+      email: data.bidder.email,
+      contactPersonName: data.bidder.contactPerson,
+      phone: data.bidder.phone,
+      crNumber: undefined
+    } : { id: 0, bidderId: 0, companyName: '', email: '' });
+
+    // Store user with tenderAccess for the portal landing page
+    const userWithAccess = { ...user, tenderAccess: data.bidder?.tenderAccess || [] };
+    localStorage.setItem(PORTAL_USER_KEY, JSON.stringify(userWithAccess));
+    this._currentUser.set(user);
   }
 
   logout(): void {

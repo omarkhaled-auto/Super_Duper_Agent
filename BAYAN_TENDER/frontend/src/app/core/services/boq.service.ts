@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, tap, catchError, throwError, of, delay, map } from 'rxjs';
+import { Observable, tap, catchError, throwError, map, switchMap } from 'rxjs';
 import { ApiService } from './api.service';
 import {
   BoqSection,
@@ -17,290 +17,48 @@ import {
   BoqSummary
 } from '../models/boq.model';
 
+/** Maps backend numeric BoqItemType enum to frontend string values */
+const ITEM_TYPE_FROM_BACKEND: Record<number, BoqItemType> = {
+  0: 'base',
+  1: 'alternate',
+  2: 'provisional_sum',
+  3: 'daywork'
+};
+
+/** Maps frontend string BoqItemType to backend numeric enum */
+const ITEM_TYPE_TO_BACKEND: Record<BoqItemType, number> = {
+  base: 0,
+  alternate: 1,
+  provisional_sum: 2,
+  daywork: 3
+};
+
 @Injectable({
   providedIn: 'root'
 })
 export class BoqService {
   private readonly api = inject(ApiService);
-  private readonly endpoint = '/boq';
 
   private readonly _isLoading = signal<boolean>(false);
   private readonly _error = signal<string | null>(null);
 
+  /** Tracks the current tender context for operations that need tenderId in the URL. */
+  private _currentTenderId: number | null = null;
+
   readonly isLoading = this._isLoading.asReadonly();
   readonly error = this._error.asReadonly();
 
-  // Mock data for development
-  private mockSections: BoqSection[] = [
-    {
-      id: 1,
-      tenderId: 1,
-      parentSectionId: null,
-      sectionNumber: '1',
-      title: 'General Requirements',
-      description: 'General project requirements and preliminaries',
-      sortOrder: 1,
-      createdAt: new Date('2026-01-15'),
-      updatedAt: new Date('2026-01-15'),
-      itemCount: 5,
-      totalValue: 150000
-    },
-    {
-      id: 2,
-      tenderId: 1,
-      parentSectionId: 1,
-      sectionNumber: '1.1',
-      title: 'Site Mobilization',
-      description: 'Site setup and mobilization activities',
-      sortOrder: 1,
-      createdAt: new Date('2026-01-15'),
-      updatedAt: new Date('2026-01-15'),
-      itemCount: 3,
-      totalValue: 75000
-    },
-    {
-      id: 3,
-      tenderId: 1,
-      parentSectionId: 1,
-      sectionNumber: '1.2',
-      title: 'Temporary Facilities',
-      description: 'Temporary site facilities',
-      sortOrder: 2,
-      createdAt: new Date('2026-01-15'),
-      updatedAt: new Date('2026-01-15'),
-      itemCount: 2,
-      totalValue: 75000
-    },
-    {
-      id: 4,
-      tenderId: 1,
-      parentSectionId: null,
-      sectionNumber: '2',
-      title: 'Civil Works',
-      description: 'Civil and structural works',
-      sortOrder: 2,
-      createdAt: new Date('2026-01-15'),
-      updatedAt: new Date('2026-01-15'),
-      itemCount: 8,
-      totalValue: 500000
-    },
-    {
-      id: 5,
-      tenderId: 1,
-      parentSectionId: 4,
-      sectionNumber: '2.1',
-      title: 'Earthworks',
-      description: 'Excavation and earthworks',
-      sortOrder: 1,
-      createdAt: new Date('2026-01-15'),
-      updatedAt: new Date('2026-01-15'),
-      itemCount: 4,
-      totalValue: 200000
-    },
-    {
-      id: 6,
-      tenderId: 1,
-      parentSectionId: 4,
-      sectionNumber: '2.2',
-      title: 'Concrete Works',
-      description: 'Concrete supply and installation',
-      sortOrder: 2,
-      createdAt: new Date('2026-01-15'),
-      updatedAt: new Date('2026-01-15'),
-      itemCount: 4,
-      totalValue: 300000
-    }
-  ];
-
-  private mockItems: BoqItem[] = [
-    {
-      id: 1,
-      tenderId: 1,
-      sectionId: 2,
-      itemNumber: '1.1.1',
-      description: 'Site establishment including temporary office, storage, and welfare facilities',
-      quantity: 1,
-      uom: 'LS',
-      type: 'base',
-      notes: 'As per site layout drawing',
-      sortOrder: 1,
-      createdAt: new Date('2026-01-15'),
-      updatedAt: new Date('2026-01-15')
-    },
-    {
-      id: 2,
-      tenderId: 1,
-      sectionId: 2,
-      itemNumber: '1.1.2',
-      description: 'Site security and hoarding for the duration of the project',
-      quantity: 500,
-      uom: 'LM',
-      type: 'base',
-      sortOrder: 2,
-      createdAt: new Date('2026-01-15'),
-      updatedAt: new Date('2026-01-15')
-    },
-    {
-      id: 3,
-      tenderId: 1,
-      sectionId: 2,
-      itemNumber: '1.1.3',
-      description: 'Equipment mobilization and demobilization',
-      quantity: 1,
-      uom: 'LS',
-      type: 'base',
-      sortOrder: 3,
-      createdAt: new Date('2026-01-15'),
-      updatedAt: new Date('2026-01-15')
-    },
-    {
-      id: 4,
-      tenderId: 1,
-      sectionId: 3,
-      itemNumber: '1.2.1',
-      description: 'Portable toilets for site workers - monthly rental',
-      quantity: 12,
-      uom: 'MTH',
-      type: 'base',
-      sortOrder: 1,
-      createdAt: new Date('2026-01-15'),
-      updatedAt: new Date('2026-01-15')
-    },
-    {
-      id: 5,
-      tenderId: 1,
-      sectionId: 3,
-      itemNumber: '1.2.2',
-      description: 'Temporary power supply installation',
-      quantity: 1,
-      uom: 'LS',
-      type: 'provisional_sum',
-      notes: 'Subject to utility connection availability',
-      sortOrder: 2,
-      createdAt: new Date('2026-01-15'),
-      updatedAt: new Date('2026-01-15')
-    },
-    {
-      id: 6,
-      tenderId: 1,
-      sectionId: 5,
-      itemNumber: '2.1.1',
-      description: 'Excavation in ordinary soil including disposal',
-      quantity: 2500,
-      uom: 'M3',
-      type: 'base',
-      sortOrder: 1,
-      createdAt: new Date('2026-01-15'),
-      updatedAt: new Date('2026-01-15')
-    },
-    {
-      id: 7,
-      tenderId: 1,
-      sectionId: 5,
-      itemNumber: '2.1.2',
-      description: 'Excavation in rock including disposal',
-      quantity: 500,
-      uom: 'M3',
-      type: 'alternate',
-      notes: 'If encountered during excavation',
-      sortOrder: 2,
-      createdAt: new Date('2026-01-15'),
-      updatedAt: new Date('2026-01-15')
-    },
-    {
-      id: 8,
-      tenderId: 1,
-      sectionId: 5,
-      itemNumber: '2.1.3',
-      description: 'Backfilling with approved material',
-      quantity: 1800,
-      uom: 'M3',
-      type: 'base',
-      sortOrder: 3,
-      createdAt: new Date('2026-01-15'),
-      updatedAt: new Date('2026-01-15')
-    },
-    {
-      id: 9,
-      tenderId: 1,
-      sectionId: 5,
-      itemNumber: '2.1.4',
-      description: 'Dewatering - daywork rate',
-      quantity: 100,
-      uom: 'HR',
-      type: 'daywork',
-      notes: 'Rate per hour for dewatering equipment and operator',
-      sortOrder: 4,
-      createdAt: new Date('2026-01-15'),
-      updatedAt: new Date('2026-01-15')
-    },
-    {
-      id: 10,
-      tenderId: 1,
-      sectionId: 6,
-      itemNumber: '2.2.1',
-      description: 'Supply and place Grade 40 concrete for foundations',
-      quantity: 350,
-      uom: 'M3',
-      type: 'base',
-      sortOrder: 1,
-      createdAt: new Date('2026-01-15'),
-      updatedAt: new Date('2026-01-15')
-    },
-    {
-      id: 11,
-      tenderId: 1,
-      sectionId: 6,
-      itemNumber: '2.2.2',
-      description: 'Supply and place Grade 40 concrete for columns',
-      quantity: 200,
-      uom: 'M3',
-      type: 'base',
-      sortOrder: 2,
-      createdAt: new Date('2026-01-15'),
-      updatedAt: new Date('2026-01-15')
-    },
-    {
-      id: 12,
-      tenderId: 1,
-      sectionId: 6,
-      itemNumber: '2.2.3',
-      description: 'Steel reinforcement including cutting, bending and fixing',
-      quantity: 75000,
-      uom: 'KG',
-      type: 'base',
-      sortOrder: 3,
-      createdAt: new Date('2026-01-15'),
-      updatedAt: new Date('2026-01-15')
-    },
-    {
-      id: 13,
-      tenderId: 1,
-      sectionId: 6,
-      itemNumber: '2.2.4',
-      description: 'Formwork to concrete surfaces',
-      quantity: 1200,
-      uom: 'M2',
-      type: 'base',
-      sortOrder: 4,
-      createdAt: new Date('2026-01-15'),
-      updatedAt: new Date('2026-01-15')
-    }
-  ];
-
-  private lastSectionId = 6;
-  private lastItemId = 13;
-
   /**
-   * Get all BOQ sections for a tender
+   * Get all BOQ sections for a tender.
+   * Derives flat section list from the hierarchical tree endpoint.
    */
   getSections(tenderId: number): Observable<BoqSection[]> {
     this._isLoading.set(true);
     this._error.set(null);
+    this._currentTenderId = tenderId;
 
-    return of(null).pipe(
-      delay(300),
-      map(() => this.mockSections.filter(s => s.tenderId === tenderId)),
+    return this.api.get<any[]>(`/tenders/${tenderId}/boq`).pipe(
+      map(tree => this.flattenSectionsFromTree(tree, tenderId)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -311,15 +69,16 @@ export class BoqService {
   }
 
   /**
-   * Get all BOQ items for a tender
+   * Get all BOQ items for a tender.
+   * Derives flat item list from the hierarchical tree endpoint.
    */
   getItems(tenderId: number): Observable<BoqItem[]> {
     this._isLoading.set(true);
     this._error.set(null);
+    this._currentTenderId = tenderId;
 
-    return of(null).pipe(
-      delay(300),
-      map(() => this.mockItems.filter(i => i.tenderId === tenderId)),
+    return this.api.get<any[]>(`/tenders/${tenderId}/boq`).pipe(
+      map(tree => this.flattenItemsFromTree(tree, tenderId)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -335,14 +94,10 @@ export class BoqService {
   getBoqTree(tenderId: number): Observable<BoqTreeNode[]> {
     this._isLoading.set(true);
     this._error.set(null);
+    this._currentTenderId = tenderId;
 
-    return of(null).pipe(
-      delay(400),
-      map(() => {
-        const sections = this.mockSections.filter(s => s.tenderId === tenderId);
-        const items = this.mockItems.filter(i => i.tenderId === tenderId);
-        return this.buildTreeNodes(sections, items);
-      }),
+    return this.api.get<any[]>(`/tenders/${tenderId}/boq`).pipe(
+      map(backendNodes => backendNodes.map(node => this.mapBackendTreeNode(node, tenderId))),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -353,66 +108,139 @@ export class BoqService {
   }
 
   /**
-   * Build tree structure from flat sections and items
+   * Maps a backend BoqTreeNodeDto to the frontend BoqTreeNode.
+   * Backend returns sections with nested children and items arrays.
    */
-  private buildTreeNodes(sections: BoqSection[], items: BoqItem[]): BoqTreeNode[] {
-    const rootSections = sections
-      .filter(s => !s.parentSectionId)
-      .sort((a, b) => a.sortOrder - b.sortOrder);
+  private mapBackendTreeNode(node: any, tenderId: number): BoqTreeNode {
+    const section: BoqSection = {
+      id: node.id,
+      tenderId,
+      parentSectionId: node.parentSectionId ?? null,
+      sectionNumber: node.sectionNumber,
+      title: node.title,
+      sortOrder: node.sortOrder,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      itemCount: (node.items ?? []).length,
+      totalValue: 0
+    };
 
-    return rootSections.map(section => this.buildSectionNode(section, sections, items));
-  }
+    const childSectionNodes: BoqTreeNode[] = (node.children ?? [])
+      .map((child: any) => this.mapBackendTreeNode(child, tenderId));
 
-  private buildSectionNode(section: BoqSection, allSections: BoqSection[], allItems: BoqItem[]): BoqTreeNode {
-    const childSections = allSections
-      .filter(s => s.parentSectionId === section.id)
-      .sort((a, b) => a.sortOrder - b.sortOrder);
+    const itemNodes: BoqTreeNode[] = (node.items ?? [])
+      .map((item: any) => this.mapBackendItemToTreeNode(item, tenderId));
 
-    const sectionItems = allItems
-      .filter(i => i.sectionId === section.id)
-      .sort((a, b) => a.sortOrder - b.sortOrder);
-
-    const children: BoqTreeNode[] = [
-      ...childSections.map(child => this.buildSectionNode(child, allSections, allItems)),
-      ...sectionItems.map(item => this.buildItemNode(item))
-    ];
+    const children = [...childSectionNodes, ...itemNodes];
 
     return {
-      key: `section-${section.id}`,
+      key: `section-${node.id}`,
       data: section,
       type: 'section',
       children: children.length > 0 ? children : undefined,
       expanded: true,
-      itemNumber: section.sectionNumber,
-      description: section.title,
+      itemNumber: node.sectionNumber,
+      description: node.title,
       quantity: null,
       uom: '',
       itemType: null
     };
   }
 
-  private buildItemNode(item: BoqItem): BoqTreeNode {
+  /**
+   * Maps a backend BoqItemDto to a frontend BoqTreeNode of type 'item'.
+   */
+  private mapBackendItemToTreeNode(item: any, tenderId: number): BoqTreeNode {
+    const mapped = this.mapBackendItem(item, tenderId);
     return {
       key: `item-${item.id}`,
-      data: item,
+      data: mapped,
       type: 'item',
-      itemNumber: item.itemNumber,
-      description: item.description,
-      quantity: item.quantity,
-      uom: item.uom,
-      itemType: item.type
+      itemNumber: mapped.itemNumber,
+      description: mapped.description,
+      quantity: mapped.quantity,
+      uom: mapped.uom,
+      itemType: mapped.type
     };
   }
 
   /**
-   * Get BOQ summary statistics
+   * Maps a backend BoqItemDto to a frontend BoqItem.
+   */
+  private mapBackendItem(item: any, tenderId: number): BoqItem {
+    return {
+      id: item.id,
+      tenderId,
+      sectionId: item.sectionId,
+      itemNumber: item.itemNumber,
+      description: item.description,
+      quantity: item.quantity,
+      uom: item.uom,
+      type: ITEM_TYPE_FROM_BACKEND[item.itemType] ?? 'base',
+      notes: item.notes,
+      sortOrder: item.sortOrder,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Maps a backend BoqSectionDto to a frontend BoqSection.
+   */
+  private mapBackendSection(section: any, tenderId: number): BoqSection {
+    return {
+      id: section.id,
+      tenderId,
+      parentSectionId: section.parentSectionId ?? null,
+      sectionNumber: section.sectionNumber,
+      title: section.title,
+      sortOrder: section.sortOrder,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      itemCount: (section.items ?? []).length,
+      totalValue: 0
+    };
+  }
+
+  /**
+   * Recursively flattens the backend tree into a flat array of BoqSection.
+   */
+  private flattenSectionsFromTree(nodes: any[], tenderId: number): BoqSection[] {
+    const result: BoqSection[] = [];
+    for (const node of nodes) {
+      result.push(this.mapBackendSection(node, tenderId));
+      if (node.children?.length) {
+        result.push(...this.flattenSectionsFromTree(node.children, tenderId));
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Recursively flattens the backend tree into a flat array of BoqItem.
+   */
+  private flattenItemsFromTree(nodes: any[], tenderId: number): BoqItem[] {
+    const result: BoqItem[] = [];
+    for (const node of nodes) {
+      if (node.items?.length) {
+        result.push(...node.items.map((item: any) => this.mapBackendItem(item, tenderId)));
+      }
+      if (node.children?.length) {
+        result.push(...this.flattenItemsFromTree(node.children, tenderId));
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Get BOQ summary statistics.
+   * Computed client-side from the tree endpoint (no dedicated backend summary endpoint).
    */
   getSummary(tenderId: number): Observable<BoqSummary> {
-    return of(null).pipe(
-      delay(200),
-      map(() => {
-        const sections = this.mockSections.filter(s => s.tenderId === tenderId);
-        const items = this.mockItems.filter(i => i.tenderId === tenderId);
+    return this.api.get<any[]>(`/tenders/${tenderId}/boq`).pipe(
+      map(tree => {
+        const sections = this.flattenSectionsFromTree(tree, tenderId);
+        const items = this.flattenItemsFromTree(tree, tenderId);
 
         const rootSections = sections.filter(s => !s.parentSectionId);
         const subSections = sections.filter(s => s.parentSectionId);
@@ -445,23 +273,15 @@ export class BoqService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(300),
-      map(() => {
-        const newSection: BoqSection = {
-          ...data,
-          id: ++this.lastSectionId,
-          sortOrder: this.mockSections.filter(s =>
-            s.tenderId === data.tenderId && s.parentSectionId === data.parentSectionId
-          ).length + 1,
-          itemCount: 0,
-          totalValue: 0,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-        this.mockSections.push(newSection);
-        return newSection;
-      }),
+    const body = {
+      sectionNumber: data.sectionNumber,
+      title: data.title,
+      sortOrder: 0,
+      parentSectionId: data.parentSectionId ?? null
+    };
+
+    return this.api.post<any>(`/tenders/${data.tenderId}/boq/sections`, body).pipe(
+      map(result => this.mapBackendSection(result, data.tenderId as number)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -478,21 +298,16 @@ export class BoqService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(300),
-      map(() => {
-        const index = this.mockSections.findIndex(s => s.id === id);
-        if (index === -1) {
-          throw new Error('Section not found');
-        }
-        const updated: BoqSection = {
-          ...this.mockSections[index],
-          ...data,
-          updatedAt: new Date()
-        };
-        this.mockSections[index] = updated;
-        return updated;
-      }),
+    const tenderId = this._currentTenderId!;
+    const body = {
+      sectionNumber: data.sectionNumber ?? '',
+      title: data.title ?? '',
+      sortOrder: 0,
+      parentSectionId: data.parentSectionId ?? null
+    };
+
+    return this.api.put<any>(`/tenders/${tenderId}/boq/sections/${id}`, body).pipe(
+      map(result => this.mapBackendSection(result, tenderId)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -509,20 +324,9 @@ export class BoqService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(300),
-      map(() => {
-        const index = this.mockSections.findIndex(s => s.id === id);
-        if (index === -1) {
-          throw new Error('Section not found');
-        }
-        // Also delete child sections and items
-        const childSectionIds = this.getChildSectionIds(id);
-        const allSectionIds = [id, ...childSectionIds];
+    const tenderId = this._currentTenderId!;
 
-        this.mockSections = this.mockSections.filter(s => !allSectionIds.includes(s.id));
-        this.mockItems = this.mockItems.filter(i => !allSectionIds.includes(i.sectionId));
-      }),
+    return this.api.delete<void>(`/tenders/${tenderId}/boq/sections/${id}`).pipe(
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -532,11 +336,6 @@ export class BoqService {
     );
   }
 
-  private getChildSectionIds(parentId: number): number[] {
-    const children = this.mockSections.filter(s => s.parentSectionId === parentId);
-    return children.flatMap(child => [child.id, ...this.getChildSectionIds(child.id)]);
-  }
-
   /**
    * Create a new BOQ item
    */
@@ -544,19 +343,19 @@ export class BoqService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(300),
-      map(() => {
-        const newItem: BoqItem = {
-          ...data,
-          id: ++this.lastItemId,
-          sortOrder: this.mockItems.filter(i => i.sectionId === data.sectionId).length + 1,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-        this.mockItems.push(newItem);
-        return newItem;
-      }),
+    const body = {
+      sectionId: data.sectionId,
+      itemNumber: data.itemNumber,
+      description: data.description,
+      quantity: data.quantity,
+      uom: data.uom,
+      itemType: ITEM_TYPE_TO_BACKEND[data.type],
+      notes: data.notes ?? null,
+      sortOrder: 0
+    };
+
+    return this.api.post<any>(`/tenders/${data.tenderId}/boq/items`, body).pipe(
+      map(result => this.mapBackendItem(result, data.tenderId as number)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -573,21 +372,20 @@ export class BoqService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(300),
-      map(() => {
-        const index = this.mockItems.findIndex(i => i.id === id);
-        if (index === -1) {
-          throw new Error('Item not found');
-        }
-        const updated: BoqItem = {
-          ...this.mockItems[index],
-          ...data,
-          updatedAt: new Date()
-        };
-        this.mockItems[index] = updated;
-        return updated;
-      }),
+    const tenderId = this._currentTenderId!;
+    const body = {
+      sectionId: data.sectionId,
+      itemNumber: data.itemNumber ?? '',
+      description: data.description ?? '',
+      quantity: data.quantity ?? 0,
+      uom: data.uom ?? '',
+      itemType: data.type ? ITEM_TYPE_TO_BACKEND[data.type] : 0,
+      notes: data.notes ?? null,
+      sortOrder: 0
+    };
+
+    return this.api.put<any>(`/tenders/${tenderId}/boq/items/${id}`, body).pipe(
+      map(result => this.mapBackendItem(result, tenderId)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -604,15 +402,9 @@ export class BoqService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(300),
-      map(() => {
-        const index = this.mockItems.findIndex(i => i.id === id);
-        if (index === -1) {
-          throw new Error('Item not found');
-        }
-        this.mockItems.splice(index, 1);
-      }),
+    const tenderId = this._currentTenderId!;
+
+    return this.api.delete<void>(`/tenders/${tenderId}/boq/items/${id}`).pipe(
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -626,67 +418,41 @@ export class BoqService {
    * Duplicate a BOQ item
    */
   duplicateItem(id: number): Observable<BoqItem> {
-    const item = this.mockItems.find(i => i.id === id);
-    if (!item) {
-      return throwError(() => new Error('Item not found'));
-    }
+    const tenderId = this._currentTenderId!;
 
-    return this.createItem({
-      tenderId: item.tenderId,
-      sectionId: item.sectionId,
-      itemNumber: `${item.itemNumber}-copy`,
-      description: `${item.description} (Copy)`,
-      quantity: item.quantity,
-      uom: item.uom,
-      type: item.type,
-      notes: item.notes
-    });
+    return this.api.post<any>(`/tenders/${tenderId}/boq/items/${id}/duplicate`, {}).pipe(
+      map(result => this.mapBackendItem(result, tenderId))
+    );
   }
 
   /**
-   * Validate import data and return preview
+   * Validate import data and return preview.
+   * Uploads the file first, then validates with the provided column mapping.
    */
   validateImport(tenderId: number, file: File, mapping: BoqImportMapping): Observable<BoqImportResult> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    // Mock implementation - in production, this would parse the Excel file
-    return of(null).pipe(
-      delay(1000),
-      map(() => {
-        // Simulated import result
-        const result: BoqImportResult = {
-          totalRows: 25,
-          validRows: 20,
-          warningRows: 3,
-          errorRows: 2,
-          rows: [
-            {
-              rowNumber: 1,
-              data: { A: '3.1.1', B: 'New item description', C: 10, D: 'EA', E: 'Base' },
-              status: 'valid'
-            },
-            {
-              rowNumber: 2,
-              data: { A: '3.1.2', B: 'Another item', C: 5, D: 'LS', E: 'Alternate' },
-              status: 'valid'
-            },
-            {
-              rowNumber: 3,
-              data: { A: '3.1.3', B: 'Item with warning', C: 0, D: 'M2', E: 'Base' },
-              status: 'warning',
-              warnings: ['Quantity is zero']
-            },
-            {
-              rowNumber: 4,
-              data: { A: '', B: 'Missing item number', C: 10, D: 'EA', E: 'Base' },
-              status: 'error',
-              errors: ['Item number is required']
-            }
-          ],
-          detectedSections: ['Section 3 - Mechanical Works', 'Section 3.1 - HVAC']
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // Step 1: Upload file -> Step 2: Validate with mapping
+    return this.api.upload<any>(`/tenders/${tenderId}/boq/import/upload`, formData).pipe(
+      switchMap(preview => {
+        const mappings = this.buildColumnMappings(mapping, preview.columns ?? []);
+        const validateBody = {
+          importSessionId: preview.importSessionId,
+          mappings,
+          sheetIndex: 0,
+          headerRowOverride: null
         };
-        return result;
+
+        // Store session ID for the execute step
+        this._lastImportSessionId = preview.importSessionId;
+
+        return this.api.post<any>(`/tenders/${tenderId}/boq/import/validate`, validateBody).pipe(
+          map(validation => this.mapValidationToImportResult(validation, preview))
+        );
       }),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
@@ -697,22 +463,60 @@ export class BoqService {
     );
   }
 
+  /** Stored import session ID for the execute step. */
+  private _lastImportSessionId: string | null = null;
+
   /**
-   * Import validated items
+   * Maps backend ImportValidationResultDto + ExcelPreviewDto to frontend BoqImportResult.
+   */
+  private mapValidationToImportResult(validation: any, preview: any): BoqImportResult {
+    const issues: any[] = validation.issues ?? [];
+    const rows: BoqImportRow[] = (preview.previewRows ?? []).map((row: any, i: number) => {
+      const rowIssues = issues.filter((issue: any) => issue.rowNumber === i + 1);
+      const errors = rowIssues.filter((issue: any) => issue.severity === 2).map((issue: any) => issue.message);
+      const warnings = rowIssues.filter((issue: any) => issue.severity === 1).map((issue: any) => issue.message);
+      const status: 'valid' | 'warning' | 'error' = errors.length > 0 ? 'error' : warnings.length > 0 ? 'warning' : 'valid';
+
+      return {
+        rowNumber: i + 1,
+        data: row,
+        status,
+        errors: errors.length > 0 ? errors : undefined,
+        warnings: warnings.length > 0 ? warnings : undefined
+      };
+    });
+
+    return {
+      totalRows: validation.totalRows ?? preview.totalRowCount ?? rows.length,
+      validRows: validation.validCount ?? rows.filter(r => r.status === 'valid').length,
+      warningRows: validation.warningCount ?? rows.filter(r => r.status === 'warning').length,
+      errorRows: validation.errorCount ?? rows.filter(r => r.status === 'error').length,
+      rows,
+      detectedSections: (validation.detectedSections ?? []).map(
+        (s: any) => `${s.sectionNumber} - ${s.title}`
+      )
+    };
+  }
+
+  /**
+   * Import validated items (executes the import after validation)
    */
   importItems(tenderId: number, validRows: BoqImportRow[]): Observable<{ imported: number; failed: number }> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(1500),
-      map(() => {
-        // Mock implementation
-        return {
-          imported: validRows.filter(r => r.status === 'valid').length,
-          failed: validRows.filter(r => r.status === 'error').length
-        };
-      }),
+    const body = {
+      importSessionId: this._lastImportSessionId,
+      clearExisting: false,
+      defaultSectionTitle: null,
+      skipWarnings: false
+    };
+
+    return this.api.post<any>(`/tenders/${tenderId}/boq/import/execute`, body).pipe(
+      map(result => ({
+        imported: result.importedItems ?? 0,
+        failed: result.skippedRows ?? 0
+      })),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -729,14 +533,11 @@ export class BoqService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(1000),
-      map(() => {
-        // In production, this would generate an Excel file
-        return new Blob([''], {
-          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        });
-      }),
+    // Map frontend language option to backend TemplateLanguage enum (0=English, 1=Arabic, 2=Both)
+    const languageMap: Record<string, number> = { en: 0, ar: 1, both: 2 };
+    const language = languageMap[options.language] ?? 0;
+
+    return this.api.download(`/tenders/${tenderId}/boq/export-template?language=${language}&includeInstructions=${options.includeInstructions}`).pipe(
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -747,17 +548,49 @@ export class BoqService {
   }
 
   /**
-   * Download sample import template
+   * Download sample import template.
+   * Uses the current tender context or a generic template endpoint.
    */
   downloadTemplate(): Observable<Blob> {
-    return of(null).pipe(
-      delay(500),
-      map(() => {
-        return new Blob([''], {
-          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    const tenderId = this._currentTenderId;
+    if (!tenderId) {
+      return throwError(() => new Error('No tender context set. Load BOQ data first.'));
+    }
+
+    return this.api.download(`/tenders/${tenderId}/boq/export-template?language=0&includeInstructions=true`);
+  }
+
+  /**
+   * Builds backend ColumnMappingDto[] from frontend BoqImportMapping and detected columns.
+   * Maps field names to backend BoqField enum values.
+   */
+  private buildColumnMappings(mapping: BoqImportMapping, columns: any[]): any[] {
+    // Backend BoqField enum: None=0, ItemNumber=1, Description=2, Quantity=3,
+    // Uom=4, SectionTitle=5, Notes=6, UnitRate=7, Amount=8, Specification=9
+    const fieldMap: Record<string, number> = {
+      itemNumber: 1,
+      description: 2,
+      quantity: 3,
+      uom: 4,
+      sectionTitle: 5,
+      sectionNumber: 5,
+      notes: 6,
+      type: 0 // No direct backend mapping for 'type'
+    };
+
+    const result: any[] = [];
+    for (const [field, columnHeader] of Object.entries(mapping)) {
+      if (columnHeader && fieldMap[field] !== undefined && fieldMap[field] !== 0) {
+        result.push({
+          excelColumn: columnHeader,
+          boqField: fieldMap[field],
+          confidence: null,
+          isAutoDetected: false
         });
-      })
-    );
+      }
+    }
+
+    return result;
   }
 
   clearError(): void {

@@ -1,10 +1,11 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, tap, catchError, throwError, of, delay, map } from 'rxjs';
+import { Observable, tap, catchError, throwError, of, map } from 'rxjs';
 import { ApiService } from './api.service';
 import {
   ApprovalWorkflow,
   ApprovalWorkflowStatus,
   ApprovalLevelStatus,
+  ApprovalDecision,
   InitiateApprovalDto,
   SubmitDecisionDto,
   PendingApprovalItem,
@@ -25,8 +26,34 @@ export class ApprovalService {
   readonly isLoading = this._isLoading.asReadonly();
   readonly error = this._error.asReadonly();
 
-  // Mock data for development
-  private mockWorkflows: Map<number, ApprovalWorkflow> = new Map();
+  // Maps for converting backend numeric enums to frontend string types
+  private readonly workflowStatusMap: Record<number, ApprovalWorkflowStatus> = {
+    0: 'not_initiated',  // Pending
+    1: 'in_progress',    // InProgress
+    2: 'approved',       // Approved
+    3: 'rejected',       // Rejected
+    4: 'returned'        // RevisionNeeded
+  };
+
+  private readonly levelStatusMap: Record<number, ApprovalLevelStatus> = {
+    0: 'waiting',   // Waiting
+    1: 'active',    // Active
+    2: 'approved',  // Approved
+    3: 'rejected',  // Rejected
+    4: 'returned'   // Returned
+  };
+
+  private readonly decisionToBackendMap: Record<ApprovalDecision, number> = {
+    'approve': 0,            // Approve
+    'reject': 1,             // Reject
+    'return': 2              // ReturnForRevision
+  };
+
+  private readonly decisionFromBackendMap: Record<number, ApprovalDecision> = {
+    0: 'approve',
+    1: 'reject',
+    2: 'return'
+  };
 
   /**
    * Get approval workflow for a tender
@@ -36,18 +63,15 @@ export class ApprovalService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    // In production: return this.api.get<ApprovalWorkflow>(`/tenders/${tenderId}/approval`);
-
-    // Mock implementation
-    return of(null).pipe(
-      delay(300),
-      map(() => {
-        const workflow = this.mockWorkflows.get(tenderId);
-        return workflow || null;
-      }),
+    return this.api.get<any>(`/tenders/${tenderId}/approval`).pipe(
+      map(dto => this.mapWorkflowDtoToModel(dto)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
+        // 404 means no workflow exists yet — return null
+        if (error.status === 404) {
+          return of(null);
+        }
         this._error.set(error.message || 'Failed to load approval workflow');
         return throwError(() => error);
       })
@@ -62,66 +86,22 @@ export class ApprovalService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    // In production: return this.api.post<ApprovalWorkflow>(`/tenders/${tenderId}/approval/initiate`, data);
+    // Transform frontend DTO shape to backend request shape
+    const requestBody = {
+      approverUserIds: [
+        data.level1ApproverId,
+        data.level2ApproverId,
+        data.level3ApproverId
+      ],
+      levelDeadlines: [
+        data.level1Deadline || null,
+        data.level2Deadline || null,
+        data.level3Deadline || null
+      ]
+    };
 
-    // Mock implementation
-    return of(null).pipe(
-      delay(500),
-      map(() => {
-        const newWorkflow: ApprovalWorkflow = {
-          id: Date.now(),
-          tenderId,
-          status: 'in_progress',
-          currentLevel: 1,
-          levels: [
-            {
-              level: 1,
-              approver: {
-                id: data.level1ApproverId,
-                firstName: 'Ahmed',
-                lastName: 'Al-Rashid',
-                email: 'ahmed.rashid@company.com'
-              },
-              status: 'active',
-              deadline: data.level1Deadline
-            },
-            {
-              level: 2,
-              approver: {
-                id: data.level2ApproverId,
-                firstName: 'Sarah',
-                lastName: 'Al-Mahmoud',
-                email: 'sarah.mahmoud@company.com'
-              },
-              status: 'waiting',
-              deadline: data.level2Deadline
-            },
-            {
-              level: 3,
-              approver: {
-                id: data.level3ApproverId,
-                firstName: 'Mohammed',
-                lastName: 'Al-Hassan',
-                email: 'mohammed.hassan@company.com'
-              },
-              status: 'waiting',
-              deadline: data.level3Deadline
-            }
-          ],
-          initiatedBy: {
-            id: 1,
-            firstName: 'Admin',
-            lastName: 'User',
-            email: 'admin@company.com'
-          },
-          initiatedAt: new Date().toISOString(),
-          awardPackUrl: `/api/tenders/${tenderId}/award-pack.pdf`,
-          timeline: []
-        };
-
-        this.mockWorkflows.set(tenderId, newWorkflow);
-        return newWorkflow;
-      }),
+    return this.api.post<any>(`/tenders/${tenderId}/approval/initiate`, requestBody).pipe(
+      map(result => this.mapWorkflowDtoToModel(result.workflow)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -139,60 +119,14 @@ export class ApprovalService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    // In production: return this.api.post<ApprovalWorkflow>(`/tenders/${tenderId}/approval/decide`, data);
+    // Transform frontend decision string to backend numeric enum
+    const requestBody = {
+      decision: this.decisionToBackendMap[data.decision],
+      comment: data.comment
+    };
 
-    // Mock implementation
-    return of(null).pipe(
-      delay(500),
-      map(() => {
-        const workflow = this.mockWorkflows.get(tenderId);
-        if (!workflow) {
-          throw new Error('Workflow not found');
-        }
-
-        const currentLevel = workflow.levels.find(l => l.status === 'active');
-        if (!currentLevel) {
-          throw new Error('No active approval level');
-        }
-
-        // Update current level
-        currentLevel.status = data.decision === 'approve' ? 'approved' :
-                              data.decision === 'reject' ? 'rejected' : 'returned';
-        currentLevel.decision = data.decision;
-        currentLevel.comment = data.comment;
-        currentLevel.decidedAt = new Date().toISOString();
-
-        // Add timeline entry
-        const timelineEntry: ApprovalTimelineEntry = {
-          id: Date.now(),
-          level: currentLevel.level,
-          approverName: `${currentLevel.approver.firstName} ${currentLevel.approver.lastName}`,
-          decision: data.decision,
-          comment: data.comment,
-          timestamp: new Date().toISOString()
-        };
-        workflow.timeline.push(timelineEntry);
-
-        // Update workflow status
-        if (data.decision === 'reject') {
-          workflow.status = 'rejected';
-        } else if (data.decision === 'return') {
-          workflow.status = 'returned';
-        } else if (data.decision === 'approve') {
-          // Move to next level or complete
-          const nextLevel = workflow.levels.find(l => l.level === currentLevel.level + 1);
-          if (nextLevel) {
-            nextLevel.status = 'active';
-            workflow.currentLevel = nextLevel.level;
-          } else {
-            // All levels approved
-            workflow.status = 'approved';
-            workflow.completedAt = new Date().toISOString();
-          }
-        }
-
-        return workflow;
-      }),
+    return this.api.post<any>(`/tenders/${tenderId}/approval/decide`, requestBody).pipe(
+      map(result => this.mapWorkflowDtoToModel(result.workflow)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -210,67 +144,8 @@ export class ApprovalService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    // In production: return this.api.get<PendingApprovalsResponse>('/approvals/pending');
-
-    // Mock implementation
-    return of(null).pipe(
-      delay(300),
-      map(() => {
-        const now = new Date();
-        const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-        const mockPending: PendingApprovalItem[] = [
-          {
-            id: 1,
-            tenderId: 1,
-            tenderTitle: 'IT Infrastructure Upgrade Project',
-            tenderReference: 'TND-2026-0001',
-            tenderValue: 2500000,
-            currency: 'AED',
-            level: 1,
-            submittedAt: new Date('2026-02-01').toISOString(),
-            deadline: yesterday.toISOString(),
-            isOverdue: true,
-            isApproaching: false,
-            initiatorName: 'Admin User'
-          },
-          {
-            id: 2,
-            tenderId: 3,
-            tenderTitle: 'Building Security Services - 2026',
-            tenderReference: 'TND-2026-0003',
-            tenderValue: 1200000,
-            currency: 'AED',
-            level: 2,
-            submittedAt: new Date('2026-02-03').toISOString(),
-            deadline: tomorrow.toISOString(),
-            isOverdue: false,
-            isApproaching: true,
-            initiatorName: 'Manager User'
-          },
-          {
-            id: 3,
-            tenderId: 5,
-            tenderTitle: 'Data Center Equipment Maintenance',
-            tenderReference: 'TND-2026-0005',
-            tenderValue: 350000,
-            currency: 'AED',
-            level: 1,
-            submittedAt: new Date('2026-02-04').toISOString(),
-            deadline: nextWeek.toISOString(),
-            isOverdue: false,
-            isApproaching: false,
-            initiatorName: 'Admin User'
-          }
-        ];
-
-        return {
-          items: mockPending,
-          total: mockPending.length
-        };
-      }),
+    return this.api.get<any>('/approvals/pending').pipe(
+      map(paginated => this.mapPendingApprovalsResponse(paginated)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -282,29 +157,33 @@ export class ApprovalService {
 
   /**
    * Get users with Approver role for dropdown
+   * GET /api/admin/users?role=4&pageSize=100&isActive=true
+   * Backend UserRole.Approver = 4
    */
   getApprovers(): Observable<ApproverOption[]> {
-    // In production: return this.api.get<ApproverOption[]>('/users?role=approver');
-
-    // Mock implementation
-    return of([
-      { id: 10, firstName: 'Ahmed', lastName: 'Al-Rashid', email: 'ahmed.rashid@company.com', fullName: 'Ahmed Al-Rashid' },
-      { id: 11, firstName: 'Sarah', lastName: 'Al-Mahmoud', email: 'sarah.mahmoud@company.com', fullName: 'Sarah Al-Mahmoud' },
-      { id: 12, firstName: 'Mohammed', lastName: 'Al-Hassan', email: 'mohammed.hassan@company.com', fullName: 'Mohammed Al-Hassan' },
-      { id: 13, firstName: 'Fatima', lastName: 'Al-Farsi', email: 'fatima.farsi@company.com', fullName: 'Fatima Al-Farsi' },
-      { id: 14, firstName: 'Omar', lastName: 'Al-Qasim', email: 'omar.qasim@company.com', fullName: 'Omar Al-Qasim' },
-      { id: 15, firstName: 'Layla', lastName: 'Al-Nouri', email: 'layla.nouri@company.com', fullName: 'Layla Al-Nouri' }
-    ]).pipe(delay(200));
+    return this.api.get<any>('/admin/users', {
+      role: 4,
+      pageSize: 100,
+      isActive: true
+    }).pipe(
+      map(paginated => {
+        const users: any[] = paginated.items || [];
+        return users.map((u: any) => ({
+          id: u.id,
+          firstName: u.firstName,
+          lastName: u.lastName,
+          email: u.email,
+          fullName: u.fullName || `${u.firstName} ${u.lastName}`
+        }));
+      })
+    );
   }
 
   /**
    * Download award pack PDF
    */
   downloadAwardPack(tenderId: number): Observable<Blob> {
-    // In production: return this.api.download(`/tenders/${tenderId}/award-pack.pdf`);
-
-    // Mock implementation - return empty PDF blob
-    return of(new Blob(['Mock PDF content'], { type: 'application/pdf' })).pipe(delay(300));
+    return this.api.download(`/tenders/${tenderId}/award-pack.pdf`);
   }
 
   /**
@@ -317,5 +196,133 @@ export class ApprovalService {
 
   clearError(): void {
     this._error.set(null);
+  }
+
+  // ── Private mapping helpers ──────────────────────────────────────
+
+  /**
+   * Maps a backend ApprovalWorkflowDto to the frontend ApprovalWorkflow model.
+   * Handles numeric enum conversion, shape differences, and nested level mapping.
+   */
+  private mapWorkflowDtoToModel(dto: any): ApprovalWorkflow {
+    const levels = (dto.levels || []).map((l: any) => ({
+      level: l.levelNumber,
+      approver: {
+        id: l.approverUserId,
+        firstName: this.extractFirstName(l.approverName),
+        lastName: this.extractLastName(l.approverName),
+        email: l.approverEmail
+      },
+      status: this.mapLevelStatus(l.status),
+      deadline: l.deadline,
+      decidedAt: l.decidedAt,
+      decision: l.decision != null ? this.mapDecisionFromBackend(l.decision) : undefined,
+      comment: l.decisionComment
+    }));
+
+    // Build timeline from levels that have decisions
+    const timeline: ApprovalTimelineEntry[] = levels
+      .filter((l: any) => l.decision != null && l.decidedAt != null)
+      .map((l: any) => ({
+        id: l.level,
+        level: l.level,
+        approverName: `${l.approver.firstName} ${l.approver.lastName}`,
+        decision: l.decision,
+        comment: l.comment,
+        timestamp: l.decidedAt
+      }));
+
+    return {
+      id: dto.id,
+      tenderId: dto.tenderId,
+      status: this.mapWorkflowStatus(dto.status),
+      currentLevel: dto.currentLevel,
+      levels,
+      initiatedBy: {
+        id: dto.initiatedBy,
+        firstName: this.extractFirstName(dto.initiatedByName),
+        lastName: this.extractLastName(dto.initiatedByName),
+        email: ''
+      },
+      initiatedAt: dto.initiatedAt,
+      completedAt: dto.completedAt,
+      awardPackUrl: dto.awardPackPdfPath,
+      timeline
+    };
+  }
+
+  /**
+   * Maps backend PaginatedList<PendingApprovalDto> to frontend PendingApprovalsResponse.
+   */
+  private mapPendingApprovalsResponse(paginated: any): PendingApprovalsResponse {
+    const items: PendingApprovalItem[] = (paginated.items || []).map((p: any) => {
+      const deadline = p.deadline ? new Date(p.deadline) : null;
+      const now = new Date();
+      const isOverdue = deadline ? deadline < now : false;
+      const oneDayMs = 24 * 60 * 60 * 1000;
+      const isApproaching = deadline && !isOverdue
+        ? (deadline.getTime() - now.getTime()) < oneDayMs
+        : false;
+
+      return {
+        id: p.workflowId,
+        tenderId: p.tenderId,
+        tenderTitle: p.tenderTitle,
+        tenderReference: p.tenderReference,
+        tenderValue: 0,
+        currency: 'SAR',
+        level: p.levelNumber,
+        submittedAt: p.initiatedAt,
+        deadline: p.deadline,
+        isOverdue,
+        isApproaching,
+        initiatorName: p.initiatedByName
+      };
+    });
+
+    return {
+      items,
+      total: paginated.totalCount ?? items.length
+    };
+  }
+
+  private mapWorkflowStatus(status: number | string): ApprovalWorkflowStatus {
+    if (typeof status === 'string') {
+      // Already a string (in case backend ever adds JsonStringEnumConverter)
+      const lower = status.toLowerCase();
+      if (lower === 'pending') return 'not_initiated';
+      if (lower === 'inprogress') return 'in_progress';
+      if (lower === 'revisionneeded') return 'returned';
+      return lower as ApprovalWorkflowStatus;
+    }
+    return this.workflowStatusMap[status] ?? 'not_initiated';
+  }
+
+  private mapLevelStatus(status: number | string): ApprovalLevelStatus {
+    if (typeof status === 'string') {
+      return status.toLowerCase() as ApprovalLevelStatus;
+    }
+    return this.levelStatusMap[status] ?? 'waiting';
+  }
+
+  private mapDecisionFromBackend(decision: number | string): ApprovalDecision {
+    if (typeof decision === 'string') {
+      const lower = decision.toLowerCase();
+      if (lower === 'returnforrevision') return 'return';
+      return lower as ApprovalDecision;
+    }
+    return this.decisionFromBackendMap[decision] ?? 'approve';
+  }
+
+  private extractFirstName(fullName: string): string {
+    if (!fullName) return '';
+    const parts = fullName.trim().split(/\s+/);
+    return parts[0] || '';
+  }
+
+  private extractLastName(fullName: string): string {
+    if (!fullName) return '';
+    const parts = fullName.trim().split(/\s+/);
+    return parts.slice(1).join(' ') || '';
   }
 }

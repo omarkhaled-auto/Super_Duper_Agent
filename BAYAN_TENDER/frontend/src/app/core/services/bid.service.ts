@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, of, delay, map, tap, catchError, throwError } from 'rxjs';
+import { Observable, map, tap, catchError, throwError } from 'rxjs';
 import { ApiService } from './api.service';
 import {
   BidSubmission,
@@ -10,7 +10,8 @@ import {
   RejectLateBidDto,
   DisqualifyBidDto,
   BidDocument,
-  BidSummary
+  BidSummary,
+  BidStatus
 } from '../models/bid.model';
 import { PaginatedResponse, PaginationParams } from '../models';
 
@@ -28,170 +29,19 @@ export class BidService {
   readonly isLoading = this._isLoading.asReadonly();
   readonly error = this._error.asReadonly();
 
-  // Mock data for development
-  private mockBids: BidSubmission[] = [
-    {
-      id: 1,
-      tenderId: 1,
-      bidderId: 1,
-      bidderName: 'Tech Solutions Ltd',
-      bidderNameAr: 'حلول تقنية المحدودة',
-      bidderEmail: 'info@techsolutions.sa',
-      submissionTime: new Date('2026-02-25T14:30:00'),
-      status: 'submitted',
-      bidAmount: 485000,
-      currency: 'SAR',
-      isLate: false,
-      filesCount: 8,
-      documents: this.generateMockDocuments(1),
-      createdAt: new Date('2026-02-25T14:30:00'),
-      updatedAt: new Date('2026-02-25T14:30:00')
-    },
-    {
-      id: 2,
-      tenderId: 1,
-      bidderId: 2,
-      bidderName: 'SecureTech Solutions',
-      bidderEmail: 'bids@securetech.sa',
-      submissionTime: new Date('2026-02-26T09:15:00'),
-      status: 'submitted',
-      bidAmount: 512000,
-      currency: 'SAR',
-      isLate: false,
-      filesCount: 7,
-      documents: this.generateMockDocuments(2),
-      createdAt: new Date('2026-02-26T09:15:00'),
-      updatedAt: new Date('2026-02-26T09:15:00')
-    },
-    {
-      id: 3,
-      tenderId: 1,
-      bidderId: 3,
-      bidderName: 'Global IT Partners',
-      bidderEmail: 'tender@globalit.com',
-      submissionTime: new Date('2026-02-27T16:45:00'),
-      status: 'submitted',
-      bidAmount: 498500,
-      currency: 'SAR',
-      isLate: false,
-      filesCount: 9,
-      documents: this.generateMockDocuments(3),
-      createdAt: new Date('2026-02-27T16:45:00'),
-      updatedAt: new Date('2026-02-27T16:45:00')
-    },
-    {
-      id: 4,
-      tenderId: 1,
-      bidderId: 4,
-      bidderName: 'Network Systems LLC',
-      bidderEmail: 'procurement@networksys.sa',
-      submissionTime: new Date('2026-03-01T10:20:00'),
-      status: 'late',
-      bidAmount: 475000,
-      currency: 'SAR',
-      isLate: true,
-      lateReason: 'Technical issues with portal submission',
-      filesCount: 6,
-      documents: this.generateMockDocuments(4),
-      createdAt: new Date('2026-03-01T10:20:00'),
-      updatedAt: new Date('2026-03-01T10:20:00')
-    },
-    {
-      id: 5,
-      tenderId: 1,
-      bidderId: 5,
-      bidderName: 'Digital Infrastructure Co',
-      bidderEmail: 'bids@digitalinfra.sa',
-      submissionTime: new Date('2026-03-02T08:00:00'),
-      status: 'late',
-      bidAmount: 520000,
-      currency: 'SAR',
-      isLate: true,
-      lateReason: 'Delayed internal approvals',
-      filesCount: 8,
-      documents: this.generateMockDocuments(5),
-      createdAt: new Date('2026-03-02T08:00:00'),
-      updatedAt: new Date('2026-03-02T08:00:00')
+  /** Map backend numeric BidSubmissionStatus to frontend string BidStatus */
+  private readonly statusMap: Record<number, BidStatus> = {
+    0: 'submitted',
+    1: 'opened',
+    2: 'imported',
+    3: 'disqualified'
+  };
+
+  private mapStatus(status: number | string): BidStatus {
+    if (typeof status === 'number') {
+      return this.statusMap[status] ?? 'submitted';
     }
-  ];
-
-  private bidsOpened = false;
-
-  private generateMockDocuments(bidId: number): BidDocument[] {
-    return [
-      {
-        id: bidId * 10 + 1,
-        bidId,
-        filename: `bid_${bidId}_priced_boq.xlsx`,
-        originalFilename: 'Priced_BOQ.xlsx',
-        fileSize: 125000,
-        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        documentType: 'priced_boq',
-        category: 'commercial',
-        uploadedAt: new Date(),
-        isPreviewable: false
-      },
-      {
-        id: bidId * 10 + 2,
-        bidId,
-        filename: `bid_${bidId}_methodology.pdf`,
-        originalFilename: 'Technical_Methodology.pdf',
-        fileSize: 2500000,
-        mimeType: 'application/pdf',
-        documentType: 'methodology',
-        category: 'technical',
-        uploadedAt: new Date(),
-        isPreviewable: true
-      },
-      {
-        id: bidId * 10 + 3,
-        bidId,
-        filename: `bid_${bidId}_team_cvs.pdf`,
-        originalFilename: 'Team_CVs.pdf',
-        fileSize: 3200000,
-        mimeType: 'application/pdf',
-        documentType: 'team_cvs',
-        category: 'technical',
-        uploadedAt: new Date(),
-        isPreviewable: true
-      },
-      {
-        id: bidId * 10 + 4,
-        bidId,
-        filename: `bid_${bidId}_work_program.pdf`,
-        originalFilename: 'Work_Program.pdf',
-        fileSize: 1800000,
-        mimeType: 'application/pdf',
-        documentType: 'work_program',
-        category: 'technical',
-        uploadedAt: new Date(),
-        isPreviewable: true
-      },
-      {
-        id: bidId * 10 + 5,
-        bidId,
-        filename: `bid_${bidId}_hse_plan.pdf`,
-        originalFilename: 'HSE_Plan.pdf',
-        fileSize: 1200000,
-        mimeType: 'application/pdf',
-        documentType: 'hse_plan',
-        category: 'technical',
-        uploadedAt: new Date(),
-        isPreviewable: true
-      },
-      {
-        id: bidId * 10 + 6,
-        bidId,
-        filename: `bid_${bidId}_bid_bond.pdf`,
-        originalFilename: 'Bid_Bond.pdf',
-        fileSize: 500000,
-        mimeType: 'application/pdf',
-        documentType: 'bid_bond',
-        category: 'supporting',
-        uploadedAt: new Date(),
-        isPreviewable: true
-      }
-    ];
+    return (status as BidStatus) || 'submitted';
   }
 
   /**
@@ -201,60 +51,54 @@ export class BidService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    // Mock implementation
-    return of(null).pipe(
-      delay(500),
-      map(() => {
-        let filtered = this.mockBids.filter(b => b.tenderId === tenderId);
+    const queryParams: Record<string, string | number | boolean | undefined> = {
+      page: params?.page ?? 1,
+      pageSize: params?.pageSize ?? 10,
+      search: params?.search,
+      sortBy: params?.sortBy ?? 'SubmissionTime',
+      sortDescending: params?.sortOrder === 'asc' ? false : true
+    };
 
-        // Apply filters
-        if (params?.status) {
-          const statuses = Array.isArray(params.status) ? params.status : [params.status];
-          filtered = filtered.filter(b => statuses.includes(b.status));
-        }
+    if (params?.isLate !== undefined) {
+      queryParams['isLate'] = params.isLate;
+    }
 
-        if (params?.isLate !== undefined) {
-          filtered = filtered.filter(b => b.isLate === params.isLate);
-        }
+    // Backend uses enum-based status filter, pass first status if array
+    if (params?.status) {
+      const statusVal = Array.isArray(params.status) ? params.status[0] : params.status;
+      if (statusVal) {
+        queryParams['status'] = statusVal;
+      }
+    }
 
-        if (params?.search) {
-          const term = params.search.toLowerCase();
-          filtered = filtered.filter(b =>
-            b.bidderName.toLowerCase().includes(term) ||
-            b.bidderEmail.toLowerCase().includes(term)
-          );
-        }
-
-        // Apply pagination
-        const page = params?.page || 1;
-        const pageSize = params?.pageSize || 10;
-        const startIndex = (page - 1) * pageSize;
-        const paginatedItems = filtered.slice(startIndex, startIndex + pageSize);
-
-        const items: BidListItem[] = paginatedItems.map(b => ({
+    return this.api.get<any>(`/tenders/${tenderId}/bids`, queryParams as any).pipe(
+      map((result: any) => {
+        // Backend returns PaginatedList<BidListDto> with fields:
+        // items, pageNumber, totalPages, totalCount, pageSize, hasPreviousPage, hasNextPage
+        const items: BidListItem[] = (result.items || []).map((b: any) => ({
           id: b.id,
           tenderId: b.tenderId,
           bidderId: b.bidderId,
           bidderName: b.bidderName,
           submissionTime: b.submissionTime,
-          status: b.status,
-          bidAmount: this.bidsOpened ? b.bidAmount : undefined,
-          currency: b.currency,
-          filesCount: b.filesCount,
+          status: this.mapStatus(b.status),
+          bidAmount: b.nativeTotalAmount ?? undefined,
+          currency: b.nativeCurrency ?? undefined,
+          filesCount: b.totalFileCount ?? 0,
           isLate: b.isLate
         }));
 
         return {
           items,
           pagination: {
-            currentPage: page,
-            pageSize,
-            totalItems: filtered.length,
-            totalPages: Math.ceil(filtered.length / pageSize),
-            hasNextPage: page < Math.ceil(filtered.length / pageSize),
-            hasPreviousPage: page > 1
+            currentPage: result.pageNumber,
+            pageSize: result.pageSize,
+            totalItems: result.totalCount,
+            totalPages: result.totalPages,
+            hasNextPage: result.hasNextPage,
+            hasPreviousPage: result.hasPreviousPage
           }
-        };
+        } as PaginatedResponse<BidListItem>;
       }),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
@@ -272,22 +116,8 @@ export class BidService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(300),
-      map(() => {
-        const bid = this.mockBids.find(b => b.id === bidId && b.tenderId === tenderId);
-        if (!bid) {
-          throw new Error('Bid not found');
-        }
-
-        // Hide amount if bids not opened
-        const result = { ...bid };
-        if (!this.bidsOpened && !bid.isLate) {
-          result.bidAmount = undefined;
-        }
-
-        return result;
-      }),
+    return this.api.get<any>(`/tenders/${tenderId}/bids/${bidId}`).pipe(
+      map((b: any) => this.mapBidDetailToSubmission(b)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -297,22 +127,64 @@ export class BidService {
     );
   }
 
+  /** Maps backend BidDetailDto to frontend BidSubmission */
+  private mapBidDetailToSubmission(b: any): BidSubmission {
+    const status = this.mapStatus(b.status);
+    const documents: BidDocument[] = (b.documents || []).map((d: any) => ({
+      id: d.id,
+      bidId: b.id,
+      filename: d.fileName,
+      originalFilename: d.fileName,
+      fileSize: d.fileSizeBytes,
+      mimeType: d.contentType,
+      documentType: (d.documentTypeName || 'other').toLowerCase().replace(/\s+/g, '_'),
+      category: (d.category || 'supporting').toLowerCase(),
+      uploadedAt: d.uploadedAt,
+      isPreviewable: (d.contentType || '').includes('pdf')
+    }));
+
+    return {
+      id: b.id,
+      tenderId: b.tenderId,
+      bidderId: b.bidderId,
+      bidderName: b.bidderName,
+      bidderEmail: b.bidderEmail,
+      submissionTime: b.submissionTime,
+      status,
+      bidAmount: b.nativeTotalAmount ?? undefined,
+      currency: b.nativeCurrency ?? undefined,
+      isLate: b.isLate,
+      lateAcceptedBy: b.lateAcceptedBy ?? undefined,
+      lateAcceptedByName: b.lateAcceptedByName ?? undefined,
+      disqualificationReason: b.disqualificationReason ?? undefined,
+      lateRejectionReason: b.lateBidRejectionReason ?? undefined,
+      importedAt: b.importCompletedAt ?? undefined,
+      importedBy: b.importedBy ?? undefined,
+      importedByName: b.importedByName ?? undefined,
+      documents,
+      filesCount: documents.length,
+      createdAt: b.createdAt,
+      updatedAt: b.createdAt
+    };
+  }
+
   /**
-   * Get bid statistics for a tender
+   * Get bid statistics for a tender.
+   * Derived from the bids list since the backend has no dedicated statistics endpoint.
    */
   getStatistics(tenderId: number): Observable<BidStatistics> {
-    return of(null).pipe(
-      delay(200),
-      map(() => {
-        const bids = this.mockBids.filter(b => b.tenderId === tenderId);
+    return this.getBids(tenderId, { page: 1, pageSize: 1000 }).pipe(
+      map(result => {
+        const bids = result.items;
+        const openedCount = bids.filter(b => b.status === 'opened').length;
         return {
-          totalBids: bids.length,
+          totalBids: result.pagination.totalItems,
           lateBids: bids.filter(b => b.isLate).length,
-          openedBids: bids.filter(b => b.status === 'opened').length,
+          openedBids: openedCount,
           importedBids: bids.filter(b => b.status === 'imported').length,
           disqualifiedBids: bids.filter(b => b.status === 'disqualified').length,
-          pendingLateBids: bids.filter(b => b.status === 'late').length,
-          bidsOpened: this.bidsOpened
+          pendingLateBids: bids.filter(b => b.isLate && b.status === 'submitted').length,
+          bidsOpened: openedCount > 0 || bids.some(b => b.status === 'imported')
         };
       })
     );
@@ -325,32 +197,13 @@ export class BidService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(1000),
-      map(() => {
-        // Mark all non-late bids as opened
-        this.mockBids = this.mockBids.map(b => {
-          if (b.tenderId === tenderId && !b.isLate) {
-            return {
-              ...b,
-              status: 'opened' as const,
-              openedAt: new Date(),
-              openedBy: 1,
-              openedByName: 'Admin User'
-            };
-          }
-          return b;
-        });
-
-        this.bidsOpened = true;
-
-        return {
-          success: true,
-          openedCount: this.mockBids.filter(b => b.tenderId === tenderId && !b.isLate).length,
-          openedAt: new Date(),
-          openedBy: 'Admin User'
-        };
-      }),
+    return this.api.post<any>(`/tenders/${tenderId}/bids/open`, {}).pipe(
+      map((result: any) => ({
+        success: true,
+        openedCount: result.bidsOpenedCount,
+        openedAt: result.openedAt,
+        openedBy: result.openedByName
+      } as OpenBidsResponse)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -363,29 +216,27 @@ export class BidService {
   /**
    * Accept a late bid
    */
-  acceptLateBid(bidId: number): Observable<BidSubmission> {
+  acceptLateBid(tenderId: number, bidId: number): Observable<BidSubmission> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(500),
-      map(() => {
-        const bidIndex = this.mockBids.findIndex(b => b.id === bidId);
-        if (bidIndex === -1) {
-          throw new Error('Bid not found');
-        }
-
-        const updatedBid: BidSubmission = {
-          ...this.mockBids[bidIndex],
-          status: this.bidsOpened ? 'opened' : 'accepted',
-          lateAcceptedAt: new Date(),
-          lateAcceptedBy: 1,
-          lateAcceptedByName: 'Admin User'
-        };
-
-        this.mockBids[bidIndex] = updatedBid;
-        return updatedBid;
-      }),
+    return this.api.post<any>(`/tenders/${tenderId}/bids/${bidId}/accept-late`, {}).pipe(
+      map((result: any) => ({
+        id: result.bidId,
+        tenderId,
+        bidderId: 0,
+        bidderName: result.bidderName,
+        bidderEmail: result.bidderEmail,
+        submissionTime: result.decisionAt,
+        status: 'accepted' as BidStatus,
+        isLate: true,
+        lateAcceptedAt: result.decisionAt,
+        lateAcceptedByName: result.decisionByName,
+        documents: [],
+        filesCount: 0,
+        createdAt: result.decisionAt,
+        updatedAt: result.decisionAt
+      } as BidSubmission)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -398,30 +249,28 @@ export class BidService {
   /**
    * Reject a late bid
    */
-  rejectLateBid(bidId: number, data: RejectLateBidDto): Observable<BidSubmission> {
+  rejectLateBid(tenderId: number, bidId: number, data: RejectLateBidDto): Observable<BidSubmission> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(500),
-      map(() => {
-        const bidIndex = this.mockBids.findIndex(b => b.id === bidId);
-        if (bidIndex === -1) {
-          throw new Error('Bid not found');
-        }
-
-        const updatedBid: BidSubmission = {
-          ...this.mockBids[bidIndex],
-          status: 'rejected',
-          lateRejectedAt: new Date(),
-          lateRejectedBy: 1,
-          lateRejectedByName: 'Admin User',
-          lateRejectionReason: data.reason
-        };
-
-        this.mockBids[bidIndex] = updatedBid;
-        return updatedBid;
-      }),
+    return this.api.post<any>(`/tenders/${tenderId}/bids/${bidId}/reject-late`, { reason: data.reason }).pipe(
+      map((result: any) => ({
+        id: result.bidId,
+        tenderId,
+        bidderId: 0,
+        bidderName: result.bidderName,
+        bidderEmail: result.bidderEmail,
+        submissionTime: result.decisionAt,
+        status: 'rejected' as BidStatus,
+        isLate: true,
+        lateRejectedAt: result.decisionAt,
+        lateRejectedByName: result.decisionByName,
+        lateRejectionReason: result.reason,
+        documents: [],
+        filesCount: 0,
+        createdAt: result.decisionAt,
+        updatedAt: result.decisionAt
+      } as BidSubmission)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -434,30 +283,28 @@ export class BidService {
   /**
    * Disqualify a bid
    */
-  disqualifyBid(bidId: number, data: DisqualifyBidDto): Observable<BidSubmission> {
+  disqualifyBid(tenderId: number, bidId: number, data: DisqualifyBidDto): Observable<BidSubmission> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(500),
-      map(() => {
-        const bidIndex = this.mockBids.findIndex(b => b.id === bidId);
-        if (bidIndex === -1) {
-          throw new Error('Bid not found');
-        }
-
-        const updatedBid: BidSubmission = {
-          ...this.mockBids[bidIndex],
-          status: 'disqualified',
-          disqualifiedAt: new Date(),
-          disqualifiedBy: 1,
-          disqualifiedByName: 'Admin User',
-          disqualificationReason: data.reason
-        };
-
-        this.mockBids[bidIndex] = updatedBid;
-        return updatedBid;
-      }),
+    return this.api.post<any>(`/tenders/${tenderId}/bids/${bidId}/disqualify`, { reason: data.reason }).pipe(
+      map((result: any) => ({
+        id: result.bidId,
+        tenderId,
+        bidderId: 0,
+        bidderName: result.bidderName,
+        bidderEmail: '',
+        submissionTime: result.disqualifiedAt,
+        status: 'disqualified' as BidStatus,
+        isLate: false,
+        disqualifiedAt: result.disqualifiedAt,
+        disqualifiedByName: result.disqualifiedByName,
+        disqualificationReason: result.reason,
+        documents: [],
+        filesCount: 0,
+        createdAt: result.disqualifiedAt,
+        updatedAt: result.disqualifiedAt
+      } as BidSubmission)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -468,43 +315,35 @@ export class BidService {
   }
 
   /**
-   * Import BOQ from a bid
+   * Import BOQ from a bid.
+   * Calls the BidAnalysis execute-import endpoint.
    */
-  importBoq(bidId: number): Observable<BidSubmission> {
+  importBoq(tenderId: number, bidId: number): Observable<BidSubmission> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(1000),
-      map(() => {
-        const bidIndex = this.mockBids.findIndex(b => b.id === bidId);
-        if (bidIndex === -1) {
-          throw new Error('Bid not found');
-        }
-
-        const bid = this.mockBids[bidIndex];
-
-        const bidSummary: BidSummary = {
-          totalAmount: bid.bidAmount || 0,
-          currency: bid.currency || 'SAR',
-          validityDays: 90,
-          validUntil: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
-          exceptions: ['Subject to confirmation of delivery schedule'],
-          paymentTerms: 'Net 30 days from invoice date'
-        };
-
-        const updatedBid: BidSubmission = {
-          ...bid,
-          status: 'imported',
-          importedAt: new Date(),
-          importedBy: 1,
-          importedByName: 'Admin User',
-          bidSummary
-        };
-
-        this.mockBids[bidIndex] = updatedBid;
-        return updatedBid;
-      }),
+    return this.api.post<any>(`/tenders/${tenderId}/bids/${bidId}/import/execute`, {}).pipe(
+      map((result: any) => ({
+        id: bidId,
+        tenderId,
+        bidderId: 0,
+        bidderName: '',
+        bidderEmail: '',
+        submissionTime: '',
+        status: (result.status === 'Imported' || result.status === 8) ? 'imported' as BidStatus : 'submitted' as BidStatus,
+        isLate: false,
+        importedAt: result.completedAt ?? new Date().toISOString(),
+        bidSummary: result.totalAmount ? {
+          totalAmount: result.totalAmount,
+          currency: result.currency || 'SAR',
+          validityDays: 0,
+          validUntil: ''
+        } as BidSummary : undefined,
+        documents: [],
+        filesCount: 0,
+        createdAt: '',
+        updatedAt: ''
+      } as BidSubmission)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -515,42 +354,36 @@ export class BidService {
   }
 
   /**
-   * Download all bids as a ZIP file
+   * Download all bids as a ZIP file.
+   * Backend returns a presigned URL; we fetch the actual blob from that URL.
    */
   downloadAllBids(tenderId: number): Observable<Blob> {
-    return of(null).pipe(
-      delay(1500),
-      map(() => {
-        // In production, this would return the actual ZIP file
-        return new Blob([''], { type: 'application/zip' });
+    return this.api.get<any>(`/tenders/${tenderId}/bids/download-all`).pipe(
+      map((result: any) => {
+        // Open the presigned download URL in a new tab / trigger download
+        if (result.downloadUrl) {
+          window.open(result.downloadUrl, '_blank');
+        }
+        // Return an empty blob to satisfy the Observable<Blob> contract
+        return new Blob([], { type: 'application/zip' });
       })
     );
   }
 
   /**
-   * Download files for a specific bid
+   * Download files for a specific bid.
+   * TODO: Backend endpoint for per-bid file download not yet available.
+   * Uses api.download to the expected endpoint path.
    */
-  downloadBidFiles(bidId: number): Observable<Blob> {
-    return of(null).pipe(
-      delay(1000),
-      map(() => {
-        // In production, this would return the actual ZIP file
-        return new Blob([''], { type: 'application/zip' });
-      })
-    );
+  downloadBidFiles(tenderId: number, bidId: number): Observable<Blob> {
+    return this.api.download(`/tenders/${tenderId}/bids/${bidId}/download`);
   }
 
   /**
    * Download a single document
    */
   downloadDocument(documentId: number): Observable<Blob> {
-    return of(null).pipe(
-      delay(500),
-      map(() => {
-        // In production, this would return the actual file
-        return new Blob([''], { type: 'application/octet-stream' });
-      })
-    );
+    return this.api.download(`/documents/${documentId}/download`);
   }
 
   /**

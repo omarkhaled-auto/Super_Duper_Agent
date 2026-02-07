@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, of, delay, map, tap, catchError, throwError } from 'rxjs';
+import { Observable, map, tap, catchError, throwError } from 'rxjs';
 import { ApiService } from './api.service';
 import {
   ParseResult,
@@ -17,8 +17,7 @@ import {
   ValidationResult,
   ValidationIssue,
   BidImportRequest,
-  BidImportResponse,
-  DEFAULT_FX_RATES
+  BidImportResponse
 } from '../models/bid-import.model';
 
 @Injectable({
@@ -33,58 +32,41 @@ export class BidImportService {
   readonly isLoading = this._isLoading.asReadonly();
   readonly error = this._error.asReadonly();
 
-  // Mock BOQ items for matching
-  private mockBoqItems = [
-    { id: 1, itemNumber: '1.1.1', description: 'Site establishment including temporary office', quantity: 1, uom: 'LS' },
-    { id: 2, itemNumber: '1.1.2', description: 'Site security and hoarding', quantity: 500, uom: 'LM' },
-    { id: 3, itemNumber: '1.1.3', description: 'Equipment mobilization and demobilization', quantity: 1, uom: 'LS' },
-    { id: 4, itemNumber: '1.2.1', description: 'Portable toilets - monthly rental', quantity: 12, uom: 'MTH' },
-    { id: 5, itemNumber: '1.2.2', description: 'Temporary power supply installation', quantity: 1, uom: 'LS' },
-    { id: 6, itemNumber: '2.1.1', description: 'Excavation in ordinary soil including disposal', quantity: 2500, uom: 'M3' },
-    { id: 7, itemNumber: '2.1.2', description: 'Excavation in rock including disposal', quantity: 500, uom: 'M3' },
-    { id: 8, itemNumber: '2.1.3', description: 'Backfilling with approved material', quantity: 1800, uom: 'M3' },
-    { id: 9, itemNumber: '2.1.4', description: 'Dewatering - daywork rate', quantity: 100, uom: 'HR' },
-    { id: 10, itemNumber: '2.2.1', description: 'Grade 40 concrete for foundations', quantity: 350, uom: 'M3' },
-    { id: 11, itemNumber: '2.2.2', description: 'Grade 40 concrete for columns', quantity: 200, uom: 'M3' },
-    { id: 12, itemNumber: '2.2.3', description: 'Steel reinforcement including cutting, bending', quantity: 75000, uom: 'KG' },
-    { id: 13, itemNumber: '2.2.4', description: 'Formwork to concrete surfaces', quantity: 1200, uom: 'M2' }
-  ];
+  /** Base URL builder for bid import endpoints */
+  private importUrl(tenderId: number, bidId: number): string {
+    return `/tenders/${tenderId}/bids/${bidId}/import`;
+  }
 
   /**
-   * Parse uploaded Excel file
+   * Parse uploaded Excel file.
+   * Calls POST /api/tenders/{tenderId}/bids/{bidId}/import/parse
+   * Backend parses the already-uploaded bid document and returns columns + preview rows.
    */
-  parseFile(bidId: number, file: File): Observable<ParseResult> {
+  parseFile(tenderId: number, bidId: number, file: File): Observable<ParseResult> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    // Mock implementation - in production, this would send file to backend
-    return of(null).pipe(
-      delay(1500),
-      map(() => {
-        // Simulate parsed Excel data
-        const mockRows: ParsedExcelRow[] = [
-          { rowIndex: 1, cells: { A: '1.1.1', B: 'Site establishment', C: 1, D: 'LS', E: 45000, F: 45000, G: 'SAR' }, rawData: ['1.1.1', 'Site establishment', 1, 'LS', 45000, 45000, 'SAR'] },
-          { rowIndex: 2, cells: { A: '1.1.2', B: 'Site security hoarding', C: 500, D: 'LM', E: 150, F: 75000, G: 'SAR' }, rawData: ['1.1.2', 'Site security hoarding', 500, 'LM', 150, 75000, 'SAR'] },
-          { rowIndex: 3, cells: { A: '1.1.3', B: 'Equipment mobilization', C: 1, D: 'LS', E: 30000, F: 30000, G: 'SAR' }, rawData: ['1.1.3', 'Equipment mobilization', 1, 'LS', 30000, 30000, 'SAR'] },
-          { rowIndex: 4, cells: { A: '1.2.1', B: 'Portable toilets monthly', C: 12, D: 'MTH', E: 2500, F: 30000, G: 'SAR' }, rawData: ['1.2.1', 'Portable toilets monthly', 12, 'MTH', 2500, 30000, 'SAR'] },
-          { rowIndex: 5, cells: { A: '1.2.2', B: 'Temporary power supply', C: 1, D: 'LS', E: 15000, F: 15000, G: 'SAR' }, rawData: ['1.2.2', 'Temporary power supply', 1, 'LS', 15000, 15000, 'SAR'] },
-          { rowIndex: 6, cells: { A: '2.1.1', B: 'Excavation ordinary soil', C: 2500, D: 'M3', E: 45, F: 112500, G: 'SAR' }, rawData: ['2.1.1', 'Excavation ordinary soil', 2500, 'M3', 45, 112500, 'SAR'] },
-          { rowIndex: 7, cells: { A: '2.1.2', B: 'Excavation rock', C: 500, D: 'M3', E: 120, F: 60000, G: 'SAR' }, rawData: ['2.1.2', 'Excavation rock', 500, 'M3', 120, 60000, 'SAR'] },
-          { rowIndex: 8, cells: { A: '2.1.3', B: 'Backfilling approved material', C: 1800, D: 'M3', E: 35, F: 63000, G: 'SAR' }, rawData: ['2.1.3', 'Backfilling approved material', 1800, 'M3', 35, 63000, 'SAR'] },
-          { rowIndex: 9, cells: { A: '2.1.4', B: 'Dewatering daywork', C: 100, D: 'HR', E: 350, F: 35000, G: 'SAR' }, rawData: ['2.1.4', 'Dewatering daywork', 100, 'HR', 350, 35000, 'SAR'] },
-          { rowIndex: 10, cells: { A: '2.2.1', B: 'Concrete Grade 40 foundations', C: 350, D: 'M3', E: 850, F: 297500, G: 'SAR' }, rawData: ['2.2.1', 'Concrete Grade 40 foundations', 350, 'M3', 850, 297500, 'SAR'] },
-          { rowIndex: 11, cells: { A: 'EXT-001', B: 'Additional equipment rental', C: 1, D: 'LS', E: 25000, F: 25000, G: 'SAR' }, rawData: ['EXT-001', 'Additional equipment rental', 1, 'LS', 25000, 25000, 'SAR'] },
-        ];
+    return this.api.post<any>(`${this.importUrl(tenderId, bidId)}/parse`, {
+      previewRowCount: 10
+    }).pipe(
+      map(dto => {
+        // Transform backend ParseBidResultDto -> frontend ParseResult
+        const previewRows: ParsedExcelRow[] = (dto.previewRows || []).map((row: Record<string, any>, index: number) => ({
+          rowIndex: index + 1,
+          cells: row,
+          rawData: Object.values(row)
+        }));
 
-        const result: ParseResult = {
-          success: true,
+        const detectedColumns: string[] = (dto.columns || []).map((c: any) => c.letter || c.header || `Col${c.index}`);
+
+        return {
+          success: dto.success,
           filename: file.name,
-          totalRows: mockRows.length,
-          previewRows: mockRows.slice(0, 10),
-          detectedColumns: ['A', 'B', 'C', 'D', 'E', 'F', 'G']
-        };
-
-        return result;
+          totalRows: dto.itemCount,
+          previewRows,
+          detectedColumns,
+          errors: dto.errorMessage ? [dto.errorMessage] : undefined
+        } as ParseResult;
       }),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
@@ -221,7 +203,9 @@ export class BidImportService {
   }
 
   /**
-   * Match bidder items to BOQ items
+   * Match bidder items to BOQ items.
+   * First calls POST /api/tenders/{tenderId}/bids/{bidId}/import/map-columns to extract items,
+   * then calls POST /api/tenders/{tenderId}/bids/{bidId}/import/match to match against BOQ.
    */
   matchToBoq(
     tenderId: number,
@@ -232,90 +216,52 @@ export class BidImportService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(2000),
-      map(() => {
-        const items: MatchedItem[] = [];
-        let exactMatches = 0;
-        let fuzzyMatches = 0;
-        let unmatchedItems = 0;
-        let extraItems = 0;
-
-        // Get field mappings
-        const fieldMap: Record<string, string> = {};
-        mappings.forEach(m => {
-          if (m.targetField && m.targetField !== 'ignore') {
-            fieldMap[m.targetField] = m.excelColumn;
-          }
-        });
-
-        parsedRows.forEach((row, index) => {
-          const itemNumber = String(row.cells[fieldMap['item_number']] || '');
-          const description = String(row.cells[fieldMap['description']] || '');
-          const quantity = Number(row.cells[fieldMap['quantity']] || 0);
-          const uom = String(row.cells[fieldMap['uom']] || '');
-          const unitRate = Number(row.cells[fieldMap['unit_rate']] || 0);
-          const amount = Number(row.cells[fieldMap['amount']] || quantity * unitRate);
-          const currency = String(row.cells[fieldMap['currency']] || 'SAR');
-
-          // Try to match with BOQ
-          let matchType: MatchType = 'unmatched';
-          let boqItem = null;
-          let confidenceScore = 0;
-
-          // Exact match by item number
-          boqItem = this.mockBoqItems.find(b => b.itemNumber === itemNumber);
-          if (boqItem) {
-            matchType = 'exact';
-            confidenceScore = 100;
-            exactMatches++;
-          } else {
-            // Fuzzy match by description
-            const fuzzyMatch = this.findFuzzyMatch(description, itemNumber);
-            if (fuzzyMatch) {
-              boqItem = fuzzyMatch.item;
-              matchType = 'fuzzy';
-              confidenceScore = fuzzyMatch.score;
-              fuzzyMatches++;
-            } else if (itemNumber.startsWith('EXT') || itemNumber.startsWith('ADD')) {
-              // Extra item
-              matchType = 'extra';
-              extraItems++;
-            } else {
-              unmatchedItems++;
-            }
-          }
-
-          items.push({
-            bidderItemId: `bid-${index}`,
-            bidderItemNumber: itemNumber,
-            bidderDescription: description,
-            bidderQuantity: quantity,
-            bidderUom: uom,
-            bidderUnitRate: unitRate,
-            bidderAmount: amount,
-            bidderCurrency: currency,
-            matchType,
-            boqItemId: boqItem?.id,
-            boqItemNumber: boqItem?.itemNumber,
-            boqDescription: boqItem?.description,
-            boqQuantity: boqItem?.quantity,
-            boqUom: boqItem?.uom,
-            confidenceScore: matchType !== 'exact' ? confidenceScore : undefined,
-            matchReason: matchType === 'fuzzy' ? 'Matched by description similarity' : undefined,
-            isIncluded: matchType !== 'extra',
-            manuallyMatched: false
-          });
-        });
-
-        return {
-          exactMatches,
-          fuzzyMatches,
-          unmatchedItems,
-          extraItems,
-          items
+    // Build column mappings DTO for the backend
+    const columnMappings: Record<string, string | null> = {};
+    mappings.forEach(m => {
+      if (m.targetField && m.targetField !== 'ignore') {
+        // Map frontend field names to backend ColumnMappingsDto property names
+        const fieldToProperty: Record<string, string> = {
+          'item_number': 'itemNumberColumn',
+          'description': 'descriptionColumn',
+          'quantity': 'quantityColumn',
+          'uom': 'uomColumn',
+          'unit_rate': 'unitRateColumn',
+          'amount': 'amountColumn',
+          'currency': 'currencyColumn'
         };
-      }),
+        const prop = fieldToProperty[m.targetField];
+        if (prop) {
+          columnMappings[prop] = m.excelColumn;
+        }
+      }
+    });
+
+    // Build items from parsed rows using the mappings
+    const fieldMap: Record<string, string> = {};
+    mappings.forEach(m => {
+      if (m.targetField && m.targetField !== 'ignore') {
+        fieldMap[m.targetField] = m.excelColumn;
+      }
+    });
+
+    const items = parsedRows.map((row, index) => ({
+      rowIndex: index,
+      itemNumber: fieldMap['item_number'] ? String(row.cells[fieldMap['item_number']] || '') : null,
+      description: fieldMap['description'] ? String(row.cells[fieldMap['description']] || '') : null,
+      quantity: fieldMap['quantity'] ? Number(row.cells[fieldMap['quantity']] || 0) : null,
+      uom: fieldMap['uom'] ? String(row.cells[fieldMap['uom']] || '') : null,
+      unitRate: fieldMap['unit_rate'] ? Number(row.cells[fieldMap['unit_rate']] || 0) : null,
+      amount: fieldMap['amount'] ? Number(row.cells[fieldMap['amount']] || 0) : null,
+      currency: fieldMap['currency'] ? String(row.cells[fieldMap['currency']] || 'SAR') : null
+    }));
+
+    return this.api.post<any>(`${this.importUrl(tenderId, bidId)}/match`, {
+      items,
+      fuzzyMatchThreshold: 80.0,
+      alternativeMatchCount: 3
+    }).pipe(
+      map(dto => this.mapMatchResultDto(dto)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -325,123 +271,142 @@ export class BidImportService {
     );
   }
 
-  private findFuzzyMatch(description: string, itemNumber: string): { item: any; score: number } | null {
-    if (!description) return null;
+  /** Transform backend MatchResultDto -> frontend MatchResult */
+  private mapMatchResultDto(dto: any): MatchResult {
+    const mapMatchItems = (items: any[], matchType: MatchType): MatchedItem[] =>
+      (items || []).map((m: any) => ({
+        bidderItemId: String(m.rowIndex),
+        bidderItemNumber: m.bidItemNumber || '',
+        bidderDescription: m.bidDescription || '',
+        bidderQuantity: m.bidQuantity || 0,
+        bidderUom: m.bidUom || '',
+        bidderUnitRate: m.bidUnitRate || 0,
+        bidderAmount: m.bidAmount || 0,
+        bidderCurrency: m.currency || 'SAR',
+        matchType,
+        boqItemId: m.matchedBoqItemId || undefined,
+        boqItemNumber: m.matchedBoqItemNumber || undefined,
+        boqDescription: m.matchedBoqDescription || undefined,
+        boqQuantity: m.matchedBoqQuantity || undefined,
+        boqUom: m.matchedBoqUom || undefined,
+        confidenceScore: matchType === 'fuzzy' ? m.confidence : undefined,
+        matchReason: m.reviewReason || undefined,
+        isIncluded: matchType !== 'extra',
+        manuallyMatched: false
+      }));
 
-    const descLower = description.toLowerCase();
-    let bestMatch: { item: any; score: number } | null = null;
+    const exactItems = mapMatchItems(dto.exactMatches, 'exact');
+    const fuzzyItems = mapMatchItems(dto.fuzzyMatches, 'fuzzy');
+    const unmatchedItems = mapMatchItems(dto.unmatched, 'unmatched');
+    const extraItems = mapMatchItems(dto.extraItems, 'extra');
 
-    for (const boqItem of this.mockBoqItems) {
-      const boqDescLower = boqItem.description.toLowerCase();
-
-      // Simple word overlap scoring
-      const descWords = descLower.split(/\s+/).filter(w => w.length > 3);
-      const boqWords = boqDescLower.split(/\s+/).filter(w => w.length > 3);
-
-      let matchCount = 0;
-      descWords.forEach(word => {
-        if (boqWords.some(bw => bw.includes(word) || word.includes(bw))) {
-          matchCount++;
-        }
-      });
-
-      const score = Math.round((matchCount / Math.max(descWords.length, boqWords.length)) * 100);
-
-      if (score >= 60 && (!bestMatch || score > bestMatch.score)) {
-        bestMatch = { item: boqItem, score };
-      }
-    }
-
-    return bestMatch;
+    return {
+      exactMatches: dto.summary?.exactMatchCount ?? exactItems.length,
+      fuzzyMatches: dto.summary?.fuzzyMatchCount ?? fuzzyItems.length,
+      unmatchedItems: dto.summary?.unmatchedCount ?? unmatchedItems.length,
+      extraItems: dto.summary?.extraItemCount ?? extraItems.length,
+      items: [...exactItems, ...fuzzyItems, ...unmatchedItems, ...extraItems]
+    };
   }
 
   /**
-   * Get available BOQ items for manual matching
+   * Get available BOQ items for manual matching.
+   * Calls GET /api/tenders/{tenderId}/boq and extracts items from sections.
    */
   getBoqItemsForMatching(tenderId: number): Observable<any[]> {
-    return of(this.mockBoqItems).pipe(delay(300));
+    return this.api.get<any>(`/tenders/${tenderId}/boq`).pipe(
+      map(boqData => {
+        // Backend returns BOQ with sections containing items
+        const items: any[] = [];
+        const sections = boqData.sections || boqData.items || [];
+        sections.forEach((section: any) => {
+          const sectionItems = section.items || [];
+          sectionItems.forEach((item: any) => {
+            items.push({
+              id: item.id,
+              itemNumber: item.itemNumber,
+              description: item.description,
+              quantity: item.quantity,
+              uom: item.uom
+            });
+          });
+        });
+        // If the API returns a flat list of items directly
+        if (items.length === 0 && Array.isArray(boqData)) {
+          return boqData.map((item: any) => ({
+            id: item.id,
+            itemNumber: item.itemNumber,
+            description: item.description,
+            quantity: item.quantity,
+            uom: item.uom
+          }));
+        }
+        return items;
+      })
+    );
   }
 
   /**
-   * Normalize currency and UOM
+   * Normalize currency and UOM.
+   * Calls POST /api/tenders/{tenderId}/bids/{bidId}/import/normalize
+   * The bidId is extracted from the first matched item's context; caller must also provide it.
    */
   normalize(
     tenderId: number,
+    bidId: number,
     matchedItems: MatchedItem[],
     baseCurrency: string = 'SAR'
   ): Observable<NormalizationResult> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(1000),
-      map(() => {
-        // Detect currency from items
-        const currencies = [...new Set(matchedItems.map(i => i.bidderCurrency).filter(Boolean))];
-        const detectedCurrency = currencies[0] || 'SAR';
+    // Detect currency from items for the request
+    const currencies = [...new Set(matchedItems.map(i => i.bidderCurrency).filter(Boolean))];
+    const detectedCurrency = currencies[0] || baseCurrency;
 
-        const fxRate = detectedCurrency === baseCurrency
-          ? 1.0
-          : (DEFAULT_FX_RATES[baseCurrency] || 1) / (DEFAULT_FX_RATES[detectedCurrency] || 1);
-
+    return this.api.post<any>(`${this.importUrl(tenderId, bidId)}/normalize`, {
+      fxRate: null, // Let backend use stored rate or default
+      fxRateSource: 'System',
+      persistResults: false // Preview mode
+    }).pipe(
+      map(dto => {
+        // Transform backend NormalizationResultDto -> frontend NormalizationResult
         const currency: CurrencyNormalization = {
-          detectedCurrency,
-          baseCurrency,
-          fxRate: Math.round(fxRate * 10000) / 10000,
+          detectedCurrency: dto.nativeCurrency || detectedCurrency,
+          baseCurrency: dto.baseCurrency || baseCurrency,
+          fxRate: dto.fxRate || 1.0,
           canConvert: true
         };
 
-        // Check UOM mismatches
-        const uomMismatches: UomMismatch[] = [];
-        matchedItems.forEach(item => {
-          if (item.boqUom && item.bidderUom && item.boqUom !== item.bidderUom) {
-            const factor = this.getUomConversionFactor(item.bidderUom, item.boqUom);
-            uomMismatches.push({
-              itemId: item.bidderItemId,
-              itemNumber: item.bidderItemNumber,
-              bidderUom: item.bidderUom,
-              masterUom: item.boqUom,
-              conversionFactor: factor,
-              canConvert: factor !== null,
-              autoConvert: factor !== null,
-              markAsNonComparable: factor === null
-            });
-          }
-        });
+        const uomMismatches: UomMismatch[] = (dto.uomMismatches || []).map((m: any) => ({
+          itemId: String(m.itemId),
+          itemNumber: m.itemNumber || '',
+          bidderUom: m.bidderUom || '',
+          masterUom: m.masterUom || '',
+          conversionFactor: m.conversionFactor,
+          canConvert: m.canConvert,
+          autoConvert: m.canConvert,
+          markAsNonComparable: !m.canConvert
+        }));
 
-        // Create normalized items
-        const normalizedItems: NormalizedBidItem[] = matchedItems.map(item => {
-          const mismatch = uomMismatches.find(m => m.itemId === item.bidderItemId);
-          const isComparable = !mismatch || (mismatch.canConvert && mismatch.autoConvert);
+        const normalizedItems: NormalizedBidItem[] = (dto.normalizedItems || []).map((item: any) => ({
+          bidderItemId: String(item.bidPricingId || item.boqItemId || ''),
+          boqItemId: item.boqItemId || null,
+          itemNumber: item.itemNumber || '',
+          description: item.description || '',
+          quantity: item.originalQuantity || 0,
+          uom: item.originalUom || '',
+          unitRate: item.originalUnitRate || 0,
+          amount: item.originalAmount || 0,
+          originalCurrency: item.nativeCurrency || detectedCurrency,
+          normalizedUnitRate: item.normalizedUnitRate || 0,
+          normalizedAmount: item.normalizedAmount || 0,
+          isComparable: !item.isNonComparable,
+          isExtra: !item.boqItemId,
+          matchType: item.boqItemId ? 'exact' : 'extra' as MatchType
+        }));
 
-          let normalizedRate = item.bidderUnitRate * fxRate;
-          if (mismatch?.conversionFactor) {
-            normalizedRate *= mismatch.conversionFactor;
-          }
-
-          return {
-            bidderItemId: item.bidderItemId,
-            boqItemId: item.boqItemId || null,
-            itemNumber: item.bidderItemNumber,
-            description: item.bidderDescription,
-            quantity: item.bidderQuantity,
-            uom: item.bidderUom,
-            unitRate: item.bidderUnitRate,
-            amount: item.bidderAmount,
-            originalCurrency: item.bidderCurrency || detectedCurrency,
-            normalizedUnitRate: normalizedRate,
-            normalizedAmount: normalizedRate * item.bidderQuantity,
-            isComparable,
-            isExtra: item.matchType === 'extra',
-            matchType: item.matchType
-          };
-        });
-
-        return {
-          currency,
-          uomMismatches,
-          normalizedItems
-        };
+        return { currency, uomMismatches, normalizedItems };
       }),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
@@ -452,92 +417,47 @@ export class BidImportService {
     );
   }
 
-  private getUomConversionFactor(fromUom: string, toUom: string): number | null {
-    // Common conversions
-    const conversions: Record<string, Record<string, number>> = {
-      'M': { 'LM': 1, 'CM': 0.01 },
-      'LM': { 'M': 1 },
-      'M2': { 'SF': 0.0929 },
-      'M3': { 'CF': 0.0283 },
-      'KG': { 'MT': 0.001, 'LB': 2.205 },
-      'MT': { 'KG': 1000 }
-    };
-
-    if (fromUom === toUom) return 1;
-    return conversions[fromUom]?.[toUom] || null;
-  }
-
   /**
-   * Validate items before import
+   * Validate items before import.
+   * Calls POST /api/tenders/{tenderId}/bids/{bidId}/import/validate
    */
-  validate(normalizedItems: NormalizedBidItem[]): Observable<ValidationResult> {
+  validate(tenderId: number, bidId: number, normalizedItems: NormalizedBidItem[]): Observable<ValidationResult> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(800),
-      map(() => {
-        const issues: ValidationIssue[] = [];
-        let validCount = 0;
-        let warningCount = 0;
-        let errorCount = 0;
+    return this.api.post<any>(`${this.importUrl(tenderId, bidId)}/validate`, {
+      formulaTolerancePercent: 1.0,
+      detectOutliers: true,
+      outlierThresholdPercent: 30.0
+    }).pipe(
+      map(dto => {
+        // Transform backend ValidationResultDto -> frontend ValidationResult
+        const severityMap: Record<number, 'info' | 'warning' | 'error'> = {
+          0: 'info',
+          1: 'warning',
+          2: 'error'
+        };
 
-        normalizedItems.forEach(item => {
-          // Check for errors
-          if (item.unitRate <= 0) {
-            issues.push({
-              itemId: item.bidderItemId,
-              itemNumber: item.itemNumber,
-              field: 'unitRate',
-              severity: 'error',
-              message: 'Unit rate must be greater than zero',
-              canProceed: false
-            });
-            errorCount++;
-          } else if (!item.boqItemId && !item.isExtra) {
-            issues.push({
-              itemId: item.bidderItemId,
-              itemNumber: item.itemNumber,
-              field: 'match',
-              severity: 'warning',
-              message: 'Item not matched to BOQ - will be marked as non-comparable',
-              canProceed: true
-            });
-            warningCount++;
-          } else if (!item.isComparable) {
-            issues.push({
-              itemId: item.bidderItemId,
-              itemNumber: item.itemNumber,
-              field: 'uom',
-              severity: 'warning',
-              message: 'UOM mismatch - item marked as non-comparable',
-              canProceed: true
-            });
-            warningCount++;
-          } else {
-            validCount++;
-          }
-
-          // Check for warnings
-          if (item.quantity === 0) {
-            issues.push({
-              itemId: item.bidderItemId,
-              itemNumber: item.itemNumber,
-              field: 'quantity',
-              severity: 'warning',
-              message: 'Quantity is zero',
-              canProceed: true
-            });
-          }
-        });
+        const issues: ValidationIssue[] = (dto.issues || []).map((issue: any) => ({
+          itemId: String(issue.itemId || ''),
+          itemNumber: issue.itemNumber || '',
+          field: issue.field || '',
+          severity: typeof issue.severity === 'number'
+            ? (severityMap[issue.severity] || 'warning')
+            : (issue.severity || 'warning'),
+          message: issue.message || '',
+          canProceed: typeof issue.severity === 'number'
+            ? issue.severity < 2
+            : issue.severity !== 'error'
+        }));
 
         return {
-          isValid: errorCount === 0,
-          validItemCount: validCount,
-          warningCount,
-          errorCount,
+          isValid: dto.errorCount === 0,
+          validItemCount: dto.validCount || 0,
+          warningCount: dto.warningCount || 0,
+          errorCount: dto.errorCount || 0,
           issues
-        };
+        } as ValidationResult;
       }),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
@@ -549,32 +469,32 @@ export class BidImportService {
   }
 
   /**
-   * Execute the import
+   * Execute the import.
+   * Calls POST /api/tenders/{tenderId}/bids/{bidId}/import/execute
    */
   executeImport(request: BidImportRequest): Observable<BidImportResponse> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(2000),
-      map(() => {
-        const validItems = request.items.filter(i =>
-          i.unitRate > 0 && (i.boqItemId || i.isExtra)
-        );
-        const skippedItems = request.items.length - validItems.length;
-
-        const totalAmount = validItems.reduce((sum, item) =>
-          sum + item.normalizedAmount, 0
-        );
-
+    return this.api.post<any>(
+      `${this.importUrl(request.tenderId, request.bidId)}/execute`,
+      {
+        forceImport: false,
+        createVendorSnapshot: true,
+        fxRate: request.currency.fxRate !== 1.0 ? request.currency.fxRate : null
+      }
+    ).pipe(
+      map(dto => {
+        // Transform backend ImportResultDto -> frontend BidImportResponse
         return {
-          success: true,
-          importedCount: validItems.length,
-          skippedCount: skippedItems,
-          errorCount: 0,
-          totalAmount: Math.round(totalAmount * 100) / 100,
-          currency: request.currency.baseCurrency
-        };
+          success: dto.status === 0 || dto.status === 1 || dto.isSuccess,
+          importedCount: dto.itemsImported || 0,
+          skippedCount: dto.itemsSkipped || 0,
+          errorCount: dto.status === 3 ? 1 : 0,
+          totalAmount: dto.normalizedTotal || dto.totalAmount || 0,
+          currency: dto.baseCurrency || dto.nativeCurrency || request.currency.baseCurrency,
+          errors: dto.warnings || []
+        } as BidImportResponse;
       }),
       tap(() => this._isLoading.set(false)),
       catchError(error => {

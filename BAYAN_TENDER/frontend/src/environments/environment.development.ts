@@ -1,6 +1,6 @@
 export const environment = {
   production: false,
-  apiUrl: 'http://localhost:8000/api/v1',
+  apiUrl: 'http://localhost:5000/api',
   appName: 'Bayan Tender Management System (Development)',
   appVersion: '1.0.0-dev',
   defaultLanguage: 'en',
