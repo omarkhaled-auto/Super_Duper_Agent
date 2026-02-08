@@ -68,6 +68,16 @@ public class Bidder : BaseEntity
     /// </summary>
     public DateTime? LastLoginAt { get; set; }
 
+    /// <summary>
+    /// Secure token for account activation.
+    /// </summary>
+    public string? ActivationToken { get; set; }
+
+    /// <summary>
+    /// When the activation token expires.
+    /// </summary>
+    public DateTime? ActivationTokenExpiry { get; set; }
+
     // Navigation properties
     /// <summary>
     /// Tenders this bidder is invited to.

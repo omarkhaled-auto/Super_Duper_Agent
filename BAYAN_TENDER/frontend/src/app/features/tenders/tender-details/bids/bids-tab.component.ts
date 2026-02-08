@@ -127,7 +127,7 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
       } @else if (bids().length === 0) {
         <!-- Empty State -->
         <div class="empty-state">
-          <i class="pi pi-inbox" style="font-size: 3rem; color: #ccc;"></i>
+          <i class="pi pi-inbox" style="font-size: 3rem; color: var(--bayan-border, #e4e4e7);"></i>
           <h3>No Bids Received</h3>
           <p>No bids have been submitted for this tender yet.</p>
         </div>
@@ -349,19 +349,19 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
       justify-content: space-between;
       align-items: center;
       padding: 1rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
       flex-wrap: wrap;
       gap: 1rem;
     }
 
     .header-stats {
       font-size: 1rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .late-indicator {
-      color: #ef6c00;
+      color: #d97706;
     }
 
     .header-actions {
@@ -380,7 +380,7 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
     }
 
     .loading-container p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .empty-state {
@@ -395,12 +395,12 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
 
     .empty-state h3 {
       margin: 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .empty-state p {
       margin: 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .bidder-info {
@@ -410,19 +410,19 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
 
     .bidder-name {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .bid-amount {
       font-weight: 600;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .hidden-amount {
       display: flex;
       align-items: center;
       gap: 0.25rem;
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
       font-size: 0.875rem;
     }
 
@@ -430,7 +430,7 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
       display: flex;
       align-items: center;
       gap: 0.25rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .action-buttons {
@@ -444,7 +444,7 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
     }
 
     :host ::ng-deep .late-bids-panel .p-panel-header {
-      background-color: #fff3e0;
+      background-color: var(--bayan-warning-bg, #fffbeb);
       border-color: #ffcc02;
     }
 
@@ -452,7 +452,7 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      color: #ef6c00;
+      color: #d97706;
       font-weight: 600;
     }
 
@@ -468,8 +468,8 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
       align-items: center;
       padding: 1rem;
       background-color: #fff;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      border-radius: var(--bayan-radius, 0.5rem);
       flex-wrap: wrap;
       gap: 1rem;
     }
@@ -490,7 +490,7 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
       display: flex;
       gap: 1rem;
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .late-bid-meta span {

@@ -56,7 +56,7 @@ import { PortalService } from '../../../core/services/portal.service';
   styles: [`
     .portal-tenders-container {
       min-height: 100vh;
-      background: #f0f2f5;
+      background: var(--bayan-muted, #f4f4f5);
       padding: 2rem;
     }
 
@@ -64,10 +64,11 @@ import { PortalService } from '../../../core/services/portal.service';
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: white;
+      background: var(--bayan-card, #ffffff);
       padding: 1.5rem 2rem;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      border-radius: var(--bayan-radius, 0.5rem);
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
       margin-bottom: 2rem;
     }
 
@@ -79,22 +80,22 @@ import { PortalService } from '../../../core/services/portal.service';
 
     .header-icon {
       font-size: 2rem;
-      color: #1565C0;
+      color: var(--bayan-primary, #18181b);
     }
 
     .portal-header h1 {
       margin: 0;
       font-size: 1.5rem;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .portal-header p {
       margin: 0.25rem 0 0;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .section-title {
-      color: #334155;
+      color: var(--bayan-foreground, #09090b);
       margin-bottom: 1rem;
     }
 
@@ -106,11 +107,11 @@ import { PortalService } from '../../../core/services/portal.service';
 
     .tender-info h3 {
       margin: 0 0 0.5rem;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .tender-ref {
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
       margin: 0 0 0.75rem;
       font-family: monospace;
     }
@@ -124,25 +125,26 @@ import { PortalService } from '../../../core/services/portal.service';
     .empty-state {
       text-align: center;
       padding: 4rem 2rem;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      background: var(--bayan-card, #ffffff);
+      border-radius: var(--bayan-radius, 0.5rem);
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
       margin-top: 2rem;
     }
 
     .empty-icon {
       font-size: 4rem;
-      color: #cbd5e1;
+      color: var(--bayan-muted-foreground, #71717a);
       margin-bottom: 1rem;
     }
 
     .empty-state h2 {
-      color: #334155;
+      color: var(--bayan-foreground, #09090b);
       margin: 0 0 0.75rem;
     }
 
     .empty-state p {
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
       max-width: 480px;
       margin: 0 auto 1rem;
       line-height: 1.6;
@@ -156,7 +158,7 @@ import { PortalService } from '../../../core/services/portal.service';
     }
 
     .contact-info i {
-      color: #3b82f6;
+      color: var(--bayan-primary, #18181b);
     }
   `]
 })

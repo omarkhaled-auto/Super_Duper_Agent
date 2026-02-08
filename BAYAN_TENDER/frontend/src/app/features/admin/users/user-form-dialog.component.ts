@@ -206,8 +206,8 @@ export interface UserFormDialogData {
     }
 
     .form-field label {
-      font-weight: 500;
-      color: #333;
+      font-weight: 600;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .required {
@@ -230,7 +230,7 @@ export interface UserFormDialogData {
       gap: 0.5rem;
       margin-top: 1.5rem;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .p-error {

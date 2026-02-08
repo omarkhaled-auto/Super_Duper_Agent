@@ -265,7 +265,7 @@ import {
     }
 
     .loading-container p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .level-section {
@@ -292,7 +292,7 @@ import {
     }
 
     .level-badge.level-1 {
-      background-color: #1976D2;
+      background-color: var(--bayan-primary, #18181b);
     }
 
     .level-badge.level-2 {
@@ -305,7 +305,7 @@ import {
 
     .level-header h4 {
       margin: 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       font-size: 1rem;
     }
 
@@ -324,7 +324,7 @@ import {
 
     .form-field label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       font-size: 0.9rem;
     }
 
@@ -339,12 +339,12 @@ import {
 
     .approver-name {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .approver-email {
-      font-size: 0.85rem;
-      color: #666;
+      font-size: 0.875rem;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .dialog-footer {

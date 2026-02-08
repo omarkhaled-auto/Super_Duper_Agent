@@ -159,7 +159,7 @@ import {
 
     .form-field label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .required {
@@ -167,7 +167,7 @@ import {
     }
 
     .field-hint {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       font-size: 0.8rem;
     }
 
@@ -177,7 +177,7 @@ import {
       gap: 0.5rem;
       margin-top: 1.5rem;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     :host ::ng-deep {

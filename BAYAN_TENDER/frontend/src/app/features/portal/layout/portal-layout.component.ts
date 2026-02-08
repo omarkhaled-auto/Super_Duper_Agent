@@ -117,17 +117,18 @@ import { PortalTenderInfo } from '../../../core/models/portal.model';
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      background-color: #f8f9fa;
+      background-color: var(--bayan-muted, #f4f4f5);
     }
 
     /* Header Styles */
     .portal-header {
-      background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%);
+      background: var(--bayan-primary, #18181b);
       color: white;
       position: sticky;
       top: 0;
       z-index: 1000;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
+      box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
     }
 
     .header-content {
@@ -196,7 +197,7 @@ import { PortalTenderInfo } from '../../../core/models/portal.model';
       gap: 0.25rem;
       background: rgba(255, 255, 255, 0.1);
       padding: 0.5rem 0.75rem;
-      border-radius: 8px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .countdown-unit {
@@ -276,7 +277,7 @@ import { PortalTenderInfo } from '../../../core/models/portal.model';
           color: rgba(255, 255, 255, 0.7);
           border: none;
           padding: 1rem 1.5rem;
-          border-radius: 8px 8px 0 0;
+          border-radius: var(--bayan-radius-sm, 0.375rem) var(--bayan-radius-sm, 0.375rem) 0 0;
           transition: all 0.2s ease;
 
           .p-menuitem-icon {
@@ -294,11 +295,11 @@ import { PortalTenderInfo } from '../../../core/models/portal.model';
         }
 
         &.p-highlight .p-menuitem-link {
-          background: white;
-          color: #1565C0;
+          background: var(--bayan-card, #ffffff);
+          color: var(--bayan-primary, #18181b);
 
           .p-menuitem-icon {
-            color: #1565C0;
+            color: var(--bayan-primary, #18181b);
           }
         }
       }
@@ -317,7 +318,7 @@ import { PortalTenderInfo } from '../../../core/models/portal.model';
 
     /* Footer */
     .portal-footer {
-      background: #1e293b;
+      background: var(--bayan-foreground, #09090b);
       color: rgba(255, 255, 255, 0.7);
       padding: 1rem 2rem;
       margin-top: auto;

@@ -466,18 +466,18 @@ import {
     .page-header h1 {
       margin: 0;
       font-size: 1.75rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .page-header p {
       margin: 0.25rem 0 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .settings-section h3 {
       margin: 0 0 1rem;
-      font-size: 1.1rem;
-      color: #333;
+      font-size: 1.125rem;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .settings-grid {
@@ -493,8 +493,8 @@ import {
     }
 
     .setting-item label {
-      font-weight: 500;
-      color: #333;
+      font-weight: 600;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .setting-item.checkbox-item {
@@ -512,11 +512,18 @@ import {
       justify-content: flex-end;
       margin-top: 1.5rem;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     :host ::ng-deep {
-      .p-tabview-panels {
+      .p-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.25rem;
+      }
+
+      .p-tabpanels {
         padding: 1.5rem 0;
       }
 

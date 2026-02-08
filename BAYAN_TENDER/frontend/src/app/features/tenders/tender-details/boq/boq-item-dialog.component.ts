@@ -233,7 +233,7 @@ import {
 
     .form-field label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .required {
@@ -251,14 +251,14 @@ import {
       align-items: flex-start;
       gap: 0.5rem;
       padding: 0.75rem;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--bayan-border, #e4e4e7);
       border-radius: 6px;
       transition: all 0.2s;
     }
 
     .type-option:hover {
-      border-color: #1976D2;
-      background-color: #f8f9fa;
+      border-color: var(--bayan-primary, #18181b);
+      background-color: var(--bayan-accent, #f4f4f5);
     }
 
     .type-label {
@@ -270,12 +270,12 @@ import {
 
     .type-name {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .type-description {
       font-size: 0.75rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .dialog-actions {
@@ -284,7 +284,7 @@ import {
       gap: 0.5rem;
       margin-top: 1.5rem;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     :host ::ng-deep {

@@ -278,8 +278,8 @@ export interface BidderFormDialogData {
     }
 
     .form-field label {
-      font-weight: 500;
-      color: #333;
+      font-weight: 600;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .required {

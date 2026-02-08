@@ -160,12 +160,12 @@ import { CreateTenderDto, Tender, DEFAULT_EVALUATION_CRITERIA } from '../../../c
     .header-content h1 {
       margin: 0;
       font-size: 1.75rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .header-content p {
       margin: 0.25rem 0 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     :host ::ng-deep .wizard-steps {
@@ -201,7 +201,7 @@ import { CreateTenderDto, Tender, DEFAULT_EVALUATION_CRITERIA } from '../../../c
     }
 
     .loading-container p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .wizard-navigation {
@@ -209,7 +209,7 @@ import { CreateTenderDto, Tender, DEFAULT_EVALUATION_CRITERIA } from '../../../c
       justify-content: space-between;
       align-items: center;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .nav-left, .nav-right {

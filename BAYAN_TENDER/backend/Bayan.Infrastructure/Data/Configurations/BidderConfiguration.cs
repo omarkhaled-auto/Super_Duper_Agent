@@ -70,6 +70,13 @@ public class BidderConfiguration : IEntityTypeConfiguration<Bidder>
         builder.Property(e => e.LastLoginAt)
             .HasColumnName("last_login_at");
 
+        builder.Property(e => e.ActivationToken)
+            .HasColumnName("activation_token")
+            .HasMaxLength(500);
+
+        builder.Property(e => e.ActivationTokenExpiry)
+            .HasColumnName("activation_token_expiry");
+
         builder.Property(e => e.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();

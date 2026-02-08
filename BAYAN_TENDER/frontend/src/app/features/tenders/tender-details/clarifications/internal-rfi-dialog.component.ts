@@ -226,7 +226,7 @@ import { BoqSection } from '../../../../core/models/boq.model';
 
     .form-field label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .required {
@@ -245,14 +245,14 @@ import { BoqSection } from '../../../../core/models/boq.model';
       align-items: center;
       gap: 0.5rem;
       padding: 0.5rem;
-      background-color: #f8f9fa;
-      border-radius: 4px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .file-item span {
       flex: 1;
       font-size: 0.875rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .dialog-actions {
@@ -261,7 +261,7 @@ import { BoqSection } from '../../../../core/models/boq.model';
       gap: 0.5rem;
       margin-top: 1.5rem;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     :host ::ng-deep {
@@ -273,7 +273,7 @@ import { BoqSection } from '../../../../core/models/boq.model';
 
       .p-editor-container {
         .p-editor-toolbar {
-          background-color: #f8f9fa;
+          background-color: var(--bayan-accent, #f4f4f5);
         }
       }
     }

@@ -323,6 +323,23 @@ export class TenderService {
   }
 
   private mapCreateDtoToCommand(data: CreateTenderDto): any {
+    const issueDate = data.dates.issueDate || new Date();
+    const submissionDeadline = data.dates.submissionDeadline || new Date();
+    // Backend requires non-nullable DateTime — clarification must be AFTER issue date
+    let clarificationDeadline = data.dates.clarificationDeadline;
+    if (!clarificationDeadline) {
+      const d = new Date(typeof issueDate === 'string' ? issueDate : issueDate.getTime());
+      d.setDate(d.getDate() + 7);
+      clarificationDeadline = d;
+    }
+    // Opening date must be AFTER submission deadline
+    let openingDate = data.dates.openingDate;
+    if (!openingDate) {
+      const d = new Date(typeof submissionDeadline === 'string' ? submissionDeadline : submissionDeadline.getTime());
+      d.setDate(d.getDate() + 1);
+      openingDate = d;
+    }
+
     return {
       title: data.title,
       description: data.description,
@@ -330,10 +347,10 @@ export class TenderService {
       tenderType: TENDER_TYPE_TO_API[data.type] ?? 0,
       baseCurrency: data.currency || 'AED',
       bidValidityDays: data.bidValidityPeriod ?? 90,
-      issueDate: data.dates.issueDate,
-      clarificationDeadline: data.dates.clarificationDeadline,
-      submissionDeadline: data.dates.submissionDeadline,
-      openingDate: data.dates.openingDate,
+      issueDate,
+      clarificationDeadline,
+      submissionDeadline,
+      openingDate,
       technicalWeight: data.technicalWeight,
       commercialWeight: data.commercialWeight,
       evaluationCriteria: (data.evaluationCriteria || []).map((c, i) => ({

@@ -52,6 +52,27 @@ public class GetVendorPricingDashboardQueryHandler
 
         var snapshots = await snapshotsQuery.ToListAsync(cancellationToken);
 
+        // Early return for empty data — prevents downstream crashes on empty collections
+        if (snapshots.Count == 0)
+        {
+            dashboard.Summary = new VendorDashboardSummaryDto
+            {
+                TotalVendors = 0,
+                TotalSnapshots = 0,
+                TotalUniqueItems = 0,
+                TotalBidValue = 0,
+                AverageBidAmount = 0,
+                SnapshotsThisMonth = 0,
+                NewVendorsThisMonth = 0,
+                DefaultCurrency = "AED"
+            };
+            dashboard.TopVendors = new List<TopVendorDto>();
+            dashboard.RecentSnapshots = new List<RecentSnapshotDto>();
+            dashboard.RateTrends = new List<RateTrendDataPointDto>();
+            dashboard.TradeBreakdown = new List<TradeBreakdownDto>();
+            return dashboard;
+        }
+
         // Calculate summary statistics
         var uniqueBidderIds = snapshots.Select(s => s.BidderId).Distinct().ToList();
         var totalBidValue = snapshots.Sum(s => s.TotalBidAmount);

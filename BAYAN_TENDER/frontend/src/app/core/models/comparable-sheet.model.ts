@@ -42,12 +42,12 @@ export const OUTLIER_CONFIG: Record<OutlierSeverity, {
   no_bid: {
     label: 'No Bid',
     color: '#6c757d',
-    bgColor: '#e9ecef'
+    bgColor: '#f4f4f5'
   },
   non_comparable: {
     label: 'Non-Comparable',
-    color: '#6f42c1',
-    bgColor: '#f3e5f5'
+    color: '#9333ea',
+    bgColor: '#faf5ff'
   }
 };
 

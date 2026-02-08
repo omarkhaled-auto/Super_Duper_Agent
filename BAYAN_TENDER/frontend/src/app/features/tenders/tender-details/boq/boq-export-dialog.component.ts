@@ -185,7 +185,7 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
 
     .option-section h4 {
       margin: 0 0 1rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       font-size: 1rem;
     }
 
@@ -203,7 +203,7 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
 
     .checkbox-item label {
       cursor: pointer;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .dropdown-field {
@@ -215,7 +215,7 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
 
     .dropdown-field label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .dialog-footer {
@@ -224,7 +224,7 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
       gap: 0.5rem;
       margin-top: 1.5rem;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     :host ::ng-deep .p-dropdown {

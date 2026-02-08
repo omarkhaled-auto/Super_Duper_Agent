@@ -327,12 +327,12 @@ interface ColumnMapping {
 
     .upload-instructions h4 {
       margin: 0 0 0.5rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .upload-instructions p {
       margin: 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .template-link {
@@ -340,7 +340,7 @@ interface ColumnMapping {
       align-items: center;
       gap: 0.5rem;
       margin-top: 1rem;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
       text-decoration: none;
     }
 
@@ -354,14 +354,14 @@ interface ColumnMapping {
         display: flex;
         align-items: center;
         justify-content: center;
-        border: 2px dashed #ddd;
-        border-radius: 8px;
+        border: 2px dashed var(--bayan-border, #e4e4e7);
+        border-radius: var(--bayan-radius, 0.5rem);
         transition: all 0.2s;
       }
 
       .p-fileupload-content:hover {
-        border-color: #1976D2;
-        background-color: #f0f7ff;
+        border-color: var(--bayan-primary, #18181b);
+        background-color: var(--bayan-muted, #f4f4f5);
       }
     }
 
@@ -375,36 +375,36 @@ interface ColumnMapping {
 
     .upload-icon {
       font-size: 3rem;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .upload-text {
       margin: 0;
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .upload-hint {
       margin: 0;
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .file-icon {
       font-size: 3rem;
-      color: #4caf50;
+      color: var(--bayan-success, #22c55e);
     }
 
     .file-name {
       margin: 0;
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .file-size {
       margin: 0;
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .mapping-step {
@@ -423,13 +423,13 @@ interface ColumnMapping {
 
     .mapping-header h4 {
       margin: 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .mapping-header p {
       flex: 1 1 100%;
       margin: 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .column-header {
@@ -440,7 +440,7 @@ interface ColumnMapping {
 
     .excel-col {
       font-weight: 600;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     :host ::ng-deep .mapping-dropdown {
@@ -467,7 +467,7 @@ interface ColumnMapping {
 
     .validation-header h4 {
       margin: 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .validation-summary {
@@ -486,18 +486,18 @@ interface ColumnMapping {
     }
 
     .summary-badge.valid {
-      background-color: #e8f5e9;
-      color: #2e7d32;
+      background-color: var(--bayan-success-bg, #f0fdf4);
+      color: #16a34a;
     }
 
     .summary-badge.warning {
-      background-color: #fff3e0;
-      color: #ef6c00;
+      background-color: var(--bayan-warning-bg, #fffbeb);
+      color: #d97706;
     }
 
     .summary-badge.error {
-      background-color: #ffebee;
-      color: #c62828;
+      background-color: var(--bayan-danger-bg, #fef2f2);
+      color: #dc2626;
     }
 
     .validating-state {
@@ -510,18 +510,18 @@ interface ColumnMapping {
 
     .validating-state p {
       margin: 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .detected-sections {
       padding: 1rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .detected-sections h5 {
       margin: 0 0 0.5rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .section-tags {
@@ -532,11 +532,11 @@ interface ColumnMapping {
 
     :host ::ng-deep .validation-table {
       .status-error {
-        background-color: #ffebee !important;
+        background-color: var(--bayan-danger-bg, #fef2f2) !important;
       }
 
       .status-warning {
-        background-color: #fff3e0 !important;
+        background-color: var(--bayan-warning-bg, #fffbeb) !important;
       }
     }
 
@@ -546,12 +546,12 @@ interface ColumnMapping {
     }
 
     .error-text {
-      color: #c62828;
+      color: #dc2626;
       font-size: 0.8rem;
     }
 
     .warning-text {
-      color: #ef6c00;
+      color: #d97706;
       font-size: 0.8rem;
     }
 
@@ -560,7 +560,7 @@ interface ColumnMapping {
       justify-content: space-between;
       align-items: center;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
       margin-top: auto;
     }
 

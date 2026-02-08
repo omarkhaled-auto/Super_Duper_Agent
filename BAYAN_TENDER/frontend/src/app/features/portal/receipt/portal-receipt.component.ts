@@ -248,7 +248,7 @@ import { PortalBidReceipt, PORTAL_BID_DOCUMENT_TYPE_CONFIG } from '../../../core
       align-items: center;
       justify-content: center;
       padding: 4rem 2rem;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .loading-container p {
@@ -259,25 +259,27 @@ import { PortalBidReceipt, PORTAL_BID_DOCUMENT_TYPE_CONFIG } from '../../../core
     .success-header {
       text-align: center;
       padding: 3rem 2rem;
-      background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
-      border-radius: 16px;
+      background: #f0fdf4;
+      border-radius: var(--bayan-radius, 0.5rem);
       margin-bottom: 2rem;
+      border: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .success-header.late {
-      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      background: #fffbeb;
     }
 
     .success-icon {
       width: 100px;
       height: 100px;
       margin: 0 auto 1.5rem;
-      background: white;
+      background: var(--bayan-card, #ffffff);
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
       animation: scaleIn 0.5s ease;
     }
 
@@ -347,21 +349,21 @@ import { PortalBidReceipt, PORTAL_BID_DOCUMENT_TYPE_CONFIG } from '../../../core
       justify-content: space-between;
       align-items: flex-start;
       padding: 1.5rem;
-      background: #f8fafc;
-      border-bottom: 1px solid #e2e8f0;
+      background: var(--bayan-accent, #f4f4f5);
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .receipt-title h2 {
       margin: 0 0 0.25rem 0;
       font-size: 1.25rem;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .receipt-number {
       font-family: monospace;
       font-size: 1rem;
-      color: #1565C0;
+      color: var(--bayan-primary, #18181b);
       font-weight: 600;
     }
 
@@ -378,7 +380,7 @@ import { PortalBidReceipt, PORTAL_BID_DOCUMENT_TYPE_CONFIG } from '../../../core
       margin: 0 0 1rem 0;
       font-size: 0.875rem;
       font-weight: 600;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
@@ -396,12 +398,12 @@ import { PortalBidReceipt, PORTAL_BID_DOCUMENT_TYPE_CONFIG } from '../../../core
     }
 
     .info-label {
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
       font-size: 0.9375rem;
     }
 
     .info-value {
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
       font-weight: 500;
       text-align: right;
       max-width: 60%;
@@ -409,7 +411,7 @@ import { PortalBidReceipt, PORTAL_BID_DOCUMENT_TYPE_CONFIG } from '../../../core
 
     .info-value.reference {
       font-family: monospace;
-      color: #1565C0;
+      color: var(--bayan-primary, #18181b);
     }
 
     .info-value.timestamp {
@@ -420,10 +422,10 @@ import { PortalBidReceipt, PORTAL_BID_DOCUMENT_TYPE_CONFIG } from '../../../core
     .info-value.receipt-code {
       font-family: monospace;
       font-size: 1.125rem;
-      color: #1565C0;
-      background: #eff6ff;
+      color: var(--bayan-primary, #18181b);
+      background: var(--bayan-accent, #f4f4f5);
       padding: 0.25rem 0.75rem;
-      border-radius: 4px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     /* Documents Table */
@@ -434,7 +436,7 @@ import { PortalBidReceipt, PORTAL_BID_DOCUMENT_TYPE_CONFIG } from '../../../core
     }
 
     .doc-type i {
-      color: #1565C0;
+      color: var(--bayan-primary, #18181b);
     }
 
     .file-name {
@@ -450,20 +452,20 @@ import { PortalBidReceipt, PORTAL_BID_DOCUMENT_TYPE_CONFIG } from '../../../core
       align-items: flex-start;
       gap: 0.75rem;
       padding: 1.5rem;
-      background: #f8fafc;
-      border-top: 1px solid #e2e8f0;
+      background: var(--bayan-accent, #f4f4f5);
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
       margin-top: 1rem;
     }
 
     .legal-notice i {
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
       margin-top: 2px;
     }
 
     .legal-notice p {
       margin: 0;
-      color: #64748b;
-      font-size: 0.8125rem;
+      color: var(--bayan-muted-foreground, #71717a);
+      font-size: 0.8rem;
       line-height: 1.6;
     }
 
@@ -486,7 +488,7 @@ import { PortalBidReceipt, PORTAL_BID_DOCUMENT_TYPE_CONFIG } from '../../../core
 
       .p-datatable .p-datatable-tfoot > tr > td {
         padding: 0.75rem 1rem;
-        background: #f8fafc;
+        background: var(--bayan-accent, #f4f4f5);
       }
 
       .text-right {

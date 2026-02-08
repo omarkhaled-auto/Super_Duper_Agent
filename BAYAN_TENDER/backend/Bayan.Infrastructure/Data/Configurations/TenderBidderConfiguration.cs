@@ -61,6 +61,10 @@ public class TenderBidderConfiguration : IEntityTypeConfiguration<TenderBidder>
         builder.Property(e => e.QualifiedAt)
             .HasColumnName("qualified_at");
 
+        builder.Property(e => e.QualificationReason)
+            .HasColumnName("qualification_reason")
+            .HasMaxLength(1000);
+
         builder.Property(e => e.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();

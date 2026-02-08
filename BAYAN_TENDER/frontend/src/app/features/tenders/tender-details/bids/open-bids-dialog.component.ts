@@ -112,7 +112,7 @@ import { MessageModule } from 'primeng/message';
 
     .warning-content i {
       font-size: 1.5rem;
-      color: #ef6c00;
+      color: #d97706;
       flex-shrink: 0;
     }
 
@@ -122,19 +122,19 @@ import { MessageModule } from 'primeng/message';
 
     .info-section {
       padding: 1rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .info-section p {
       margin: 0 0 0.5rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .info-section ul {
       margin: 0;
       padding-left: 1.5rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .info-section li {
@@ -146,14 +146,14 @@ import { MessageModule } from 'primeng/message';
       align-items: center;
       gap: 0.75rem;
       padding: 1rem;
-      background-color: #fff3e0;
+      background-color: var(--bayan-warning-bg, #fffbeb);
       border: 1px solid #ffcc02;
-      border-radius: 8px;
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .confirmation-label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       cursor: pointer;
     }
 

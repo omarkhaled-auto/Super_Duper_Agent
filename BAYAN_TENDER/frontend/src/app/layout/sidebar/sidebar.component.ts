@@ -24,14 +24,14 @@ import { UserRole } from '../../core/models/user.model';
     .sidebar-container {
       width: 280px;
       height: calc(100vh - 64px);
-      background: #ffffff;
-      border-right: 1px solid #e0e0e0;
+      background: var(--bayan-sidebar-bg, #fafafa);
+      border-right: 1px solid var(--bayan-sidebar-border, #e4e4e7);
       position: fixed;
       left: 0;
       top: 64px;
       display: flex;
       flex-direction: column;
-      transition: width 0.3s ease;
+      transition: width 0.2s ease;
       overflow: hidden;
       z-index: 999;
     }
@@ -49,13 +49,13 @@ import { UserRole } from '../../core/models/user.model';
 
     .sidebar-footer {
       padding: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-sidebar-border, #e4e4e7);
       text-align: center;
     }
 
     .version {
       font-size: 0.75rem;
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     :host ::ng-deep {
@@ -73,18 +73,20 @@ import { UserRole } from '../../core/models/user.model';
         .p-panelmenu-header-content {
           border: none;
           background: transparent;
-          border-radius: 8px;
+          border-radius: 0.375rem;
           margin: 0 0.5rem;
-          transition: background-color 0.2s;
+          transition: background-color 150ms ease;
         }
 
         .p-panelmenu-header-content:hover {
-          background-color: #f5f5f5;
+          background-color: var(--bayan-sidebar-accent, #f4f4f5);
         }
 
         .p-panelmenu-header-link {
-          padding: 0.75rem 1rem;
-          color: #333;
+          padding: 0.5rem 0.75rem;
+          color: var(--bayan-muted-foreground, #71717a);
+          font-size: 0.875rem;
+          font-weight: 500;
         }
 
         .p-panelmenu-content {
@@ -93,17 +95,21 @@ import { UserRole } from '../../core/models/user.model';
         }
 
         .p-menuitem-link {
-          padding: 0.5rem 1rem 0.5rem 2.5rem;
-          border-radius: 8px;
+          padding: 0.5rem 0.75rem 0.5rem 2.5rem;
+          border-radius: 0.375rem;
           margin: 0 0.5rem;
+          color: var(--bayan-muted-foreground, #71717a);
+          font-size: 0.875rem;
         }
 
         .p-menuitem-link:hover {
-          background-color: #f5f5f5;
+          background-color: var(--bayan-sidebar-accent, #f4f4f5);
         }
 
         .p-menuitem-icon {
           margin-right: 0.75rem;
+          color: var(--bayan-muted-foreground, #71717a);
+          font-size: 1rem;
         }
       }
     }

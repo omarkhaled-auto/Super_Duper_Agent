@@ -27,6 +27,13 @@ import {
   BoqSectionOption
 } from '../models/portal.model';
 
+export interface ActivateAccountRequest {
+  email: string;
+  activationToken: string;
+  password: string;
+  confirmPassword: string;
+}
+
 const PORTAL_TOKEN_KEY = 'portal_access_token';
 const PORTAL_REFRESH_TOKEN_KEY = 'portal_refresh_token';
 const PORTAL_USER_KEY = 'portal_user';
@@ -175,6 +182,23 @@ export class PortalService {
 
   clearError(): void {
     this._error.set(null);
+  }
+
+  activateAccount(data: ActivateAccountRequest): Observable<any> {
+    this._isLoading.set(true);
+    this._error.set(null);
+
+    return this.http.post<ApiResponse<any>>(`${this.apiUrl}/auth/activate`, data).pipe(
+      tap(() => {
+        this._isLoading.set(false);
+      }),
+      map(response => response.data),
+      catchError(error => {
+        this._isLoading.set(false);
+        this._error.set(error.error?.message || 'Account activation failed. Please try again.');
+        return throwError(() => error);
+      })
+    );
   }
 
   // ============================================

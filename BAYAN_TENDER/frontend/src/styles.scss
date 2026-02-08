@@ -1,6 +1,94 @@
 /* Global Styles for Bayan Tender Management System */
+/* Design: shadcn/ui zinc palette */
 
-/* Reset and base styles */
+/* ============================================
+   CSS Custom Properties (Design Tokens)
+   ============================================ */
+:root {
+  // Colors - Zinc palette
+  --bayan-zinc-50: #fafafa;
+  --bayan-zinc-100: #f4f4f5;
+  --bayan-zinc-200: #e4e4e7;
+  --bayan-zinc-300: #d4d4d8;
+  --bayan-zinc-400: #a1a1aa;
+  --bayan-zinc-500: #71717a;
+  --bayan-zinc-600: #52525b;
+  --bayan-zinc-700: #3f3f46;
+  --bayan-zinc-800: #27272a;
+  --bayan-zinc-900: #18181b;
+  --bayan-zinc-950: #09090b;
+
+  // Semantic colors
+  --bayan-background: #ffffff;
+  --bayan-foreground: #09090b;
+  --bayan-card: #ffffff;
+  --bayan-card-foreground: #09090b;
+  --bayan-primary: #18181b;
+  --bayan-primary-foreground: #fafafa;
+  --bayan-secondary: #f4f4f5;
+  --bayan-secondary-foreground: #18181b;
+  --bayan-muted: #f4f4f5;
+  --bayan-muted-foreground: #71717a;
+  --bayan-muted-text: #a1a1aa;
+  --bayan-accent: #f4f4f5;
+  --bayan-accent-foreground: #18181b;
+  --bayan-border: #e4e4e7;
+  --bayan-input: #e4e4e7;
+  --bayan-ring: #a1a1aa;
+
+  // Status colors (preserved)
+  --bayan-success: #22c55e;
+  --bayan-success-bg: #f0fdf4;
+  --bayan-warning: #f59e0b;
+  --bayan-warning-bg: #fffbeb;
+  --bayan-danger: #ef4444;
+  --bayan-danger-bg: #fef2f2;
+  --bayan-info: #3b82f6;
+  --bayan-info-bg: #eff6ff;
+
+  // Sidebar
+  --bayan-sidebar-bg: #fafafa;
+  --bayan-sidebar-foreground: #09090b;
+  --bayan-sidebar-border: #e4e4e7;
+  --bayan-sidebar-accent: #f4f4f5;
+  --bayan-sidebar-accent-foreground: #18181b;
+
+  // Spacing scale (4px base)
+  --bayan-spacing-1: 0.25rem;
+  --bayan-spacing-2: 0.5rem;
+  --bayan-spacing-3: 0.75rem;
+  --bayan-spacing-4: 1rem;
+  --bayan-spacing-5: 1.25rem;
+  --bayan-spacing-6: 1.5rem;
+  --bayan-spacing-8: 2rem;
+  --bayan-spacing-10: 2.5rem;
+  --bayan-spacing-12: 3rem;
+  --bayan-spacing-16: 4rem;
+
+  // Border radius
+  --bayan-radius: 0.5rem;
+  --bayan-radius-sm: 0.375rem;
+  --bayan-radius-lg: 0.75rem;
+  --bayan-radius-xl: 1rem;
+  --bayan-radius-full: 9999px;
+
+  // Shadows
+  --bayan-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --bayan-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  --bayan-shadow-lg: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --bayan-shadow-dialog: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+
+  // Transitions
+  --bayan-transition-fast: 150ms ease;
+  --bayan-transition: 200ms ease;
+
+  // Container
+  --bayan-container-max: 1400px;
+}
+
+/* ============================================
+   Reset and base styles
+   ============================================ */
 *,
 *::before,
 *::after {
@@ -18,23 +106,28 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   font-size: 1rem;
   line-height: 1.5;
-  color: #333;
-  background-color: #f5f7fa;
+  color: var(--bayan-foreground);
+  background-color: var(--bayan-background);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* RTL Support */
+/* ============================================
+   RTL Support
+   ============================================ */
 [dir='rtl'] {
   direction: rtl;
   text-align: right;
 }
 
-/* Typography */
+/* ============================================
+   Typography
+   ============================================ */
 h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
   line-height: 1.25;
   margin-bottom: 0.5rem;
+  color: var(--bayan-foreground);
 }
 
 h1 { font-size: 2rem; }
@@ -49,17 +142,19 @@ p {
 }
 
 a {
-  color: #1976D2;
+  color: var(--bayan-primary);
   text-decoration: none;
   transition: color 0.2s ease;
 
   &:hover {
-    color: #1565C0;
-    text-decoration: underline;
+    color: var(--bayan-foreground);
+    text-decoration: none;
   }
 }
 
-/* Utility classes */
+/* ============================================
+   Utility classes - Layout
+   ============================================ */
 .w-full { width: 100%; }
 .h-full { height: 100%; }
 .min-h-screen { min-height: 100vh; }
@@ -93,7 +188,15 @@ a {
 .mt-2 { margin-top: 0.5rem; }
 .mt-3 { margin-top: 0.75rem; }
 .mt-4 { margin-top: 1rem; }
+.mb-6 { margin-bottom: 1.5rem; }
+.mt-6 { margin-top: 1.5rem; }
+.p-6 { padding: 1.5rem; }
+.gap-6 { gap: 1.5rem; }
+.gap-8 { gap: 2rem; }
 
+/* ============================================
+   Utility classes - Text
+   ============================================ */
 .text-center { text-align: center; }
 .text-left { text-align: left; }
 .text-right { text-align: right; }
@@ -108,29 +211,43 @@ a {
 .font-semibold { font-weight: 600; }
 .font-bold { font-weight: 700; }
 
-.text-primary { color: #1976D2; }
-.text-secondary { color: #64748b; }
-.text-success { color: #22c55e; }
-.text-warning { color: #f59e0b; }
-.text-danger { color: #ef4444; }
-.text-muted { color: #9ca3af; }
+/* ============================================
+   Utility classes - Colors
+   ============================================ */
+.text-primary { color: var(--bayan-primary); }
+.text-secondary { color: var(--bayan-muted-foreground); }
+.text-success { color: var(--bayan-success); }
+.text-warning { color: var(--bayan-warning); }
+.text-danger { color: var(--bayan-danger); }
+.text-muted { color: var(--bayan-muted-text); }
+.text-info { color: var(--bayan-info); }
 
-.bg-primary { background-color: #1976D2; }
-.bg-secondary { background-color: #64748b; }
-.bg-success { background-color: #22c55e; }
-.bg-warning { background-color: #f59e0b; }
-.bg-danger { background-color: #ef4444; }
-.bg-white { background-color: #ffffff; }
+.bg-primary { background-color: var(--bayan-primary); }
+.bg-secondary { background-color: var(--bayan-secondary); }
+.bg-success { background-color: var(--bayan-success); }
+.bg-warning { background-color: var(--bayan-warning); }
+.bg-danger { background-color: var(--bayan-danger); }
+.bg-info { background-color: var(--bayan-info); }
+.bg-white { background-color: var(--bayan-card); }
 
-.rounded { border-radius: 0.25rem; }
-.rounded-lg { border-radius: 0.5rem; }
-.rounded-xl { border-radius: 0.75rem; }
+/* ============================================
+   Utility classes - Border Radius
+   ============================================ */
+.rounded { border-radius: 0.375rem; }
+.rounded-lg { border-radius: var(--bayan-radius); }
+.rounded-xl { border-radius: var(--bayan-radius-xl); }
 .rounded-full { border-radius: 9999px; }
 
-.shadow { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); }
-.shadow-md { box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
-.shadow-lg { box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1); }
+/* ============================================
+   Utility classes - Shadows
+   ============================================ */
+.shadow { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+.shadow-md { box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1); }
+.shadow-lg { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1); }
 
+/* ============================================
+   Utility classes - Visibility & Cursor
+   ============================================ */
 .hidden { display: none; }
 .visible { visibility: visible; }
 .invisible { visibility: hidden; }
@@ -142,31 +259,118 @@ a {
 .overflow-auto { overflow: auto; }
 .overflow-scroll { overflow: scroll; }
 
-/* PrimeNG overrides */
+/* ============================================
+   PrimeNG overrides
+   ============================================ */
 .p-component {
   font-family: inherit;
 }
 
+/* --- Buttons --- */
 .p-button {
   font-weight: 500;
+  border-radius: var(--bayan-radius);
+  padding: 0.625rem 1.25rem;
+  transition: all var(--bayan-transition);
+  font-size: 0.875rem;
+  gap: 0.5rem;
+
+  &:not(.p-button-outlined):not(.p-button-text):not(.p-button-link) {
+    background-color: var(--bayan-primary);
+    border-color: var(--bayan-primary);
+    color: var(--bayan-primary-foreground);
+
+    &:enabled:hover {
+      background-color: var(--bayan-zinc-800);
+      border-color: var(--bayan-zinc-800);
+    }
+
+    &:enabled:active {
+      background-color: var(--bayan-zinc-700);
+      border-color: var(--bayan-zinc-700);
+    }
+  }
+
+  &:disabled,
+  &.p-disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  // Outlined variant
+  &.p-button-outlined {
+    background: transparent;
+    border: 1px solid var(--bayan-border);
+    color: var(--bayan-foreground);
+
+    &:enabled:hover {
+      background-color: var(--bayan-accent);
+      border-color: var(--bayan-zinc-300);
+    }
+  }
+
+  // Text variant
+  &.p-button-text {
+    background: transparent;
+    border: none;
+    color: var(--bayan-foreground);
+
+    &:enabled:hover {
+      background-color: var(--bayan-accent);
+    }
+  }
+
+  // Small size
+  &.p-button-sm {
+    font-size: 0.8rem;
+    padding: 0.375rem 0.75rem;
+  }
+
+  // Severity colors
+  &.p-button-success:not(.p-button-outlined):not(.p-button-text) {
+    background-color: var(--bayan-success);
+    border-color: var(--bayan-success);
+  }
+
+  &.p-button-danger:not(.p-button-outlined):not(.p-button-text) {
+    background-color: var(--bayan-danger);
+    border-color: var(--bayan-danger);
+  }
+
+  &.p-button-warning:not(.p-button-outlined):not(.p-button-text) {
+    background-color: var(--bayan-warning);
+    border-color: var(--bayan-warning);
+  }
 }
 
 .p-card {
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-radius: var(--bayan-radius-lg);
+  box-shadow: none;
+  border: 1px solid var(--bayan-border);
+  background-color: var(--bayan-card);
+  color: var(--bayan-card-foreground);
 }
 
 .p-datatable {
   .p-datatable-thead > tr > th {
     font-weight: 600;
-    background-color: #f8f9fa;
+    background-color: var(--bayan-accent);
+    color: var(--bayan-muted-foreground);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    padding: 0.75rem 1rem;
   }
 
   .p-datatable-tbody > tr {
-    transition: background-color 0.2s ease;
+    transition: background-color var(--bayan-transition);
+
+    > td {
+      padding: 0.75rem 1rem;
+      font-size: 0.875rem;
+    }
 
     &:hover {
-      background-color: #f8f9fa;
+      background-color: var(--bayan-accent);
     }
   }
 }
@@ -178,79 +382,236 @@ a {
 }
 
 .p-dialog {
-  border-radius: 12px;
+  border-radius: var(--bayan-radius-lg);
   overflow: hidden;
+  box-shadow: var(--bayan-shadow-dialog);
 }
 
 .p-toast {
   .p-toast-message {
-    border-radius: 8px;
+    border-radius: var(--bayan-radius);
+    border: 1px solid var(--bayan-border);
   }
 }
 
-/* Forms */
+/* ============================================
+   Forms
+   ============================================ */
 .p-inputtext,
 .p-dropdown,
 .p-multiselect,
-.p-calendar {
-  border-radius: 8px;
+.p-calendar,
+.p-textarea {
+  border-radius: var(--bayan-radius-sm);
+  border: 1px solid var(--bayan-input);
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  transition: border-color var(--bayan-transition-fast), box-shadow var(--bayan-transition-fast);
+  background-color: var(--bayan-card);
+  color: var(--bayan-foreground);
+
+  &::placeholder {
+    color: var(--bayan-muted-foreground);
+  }
+
+  &:enabled:hover {
+    border-color: var(--bayan-zinc-300);
+  }
 }
 
 .p-inputtext:enabled:focus,
-.p-dropdown:not(.p-disabled).p-focus {
-  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+.p-dropdown:not(.p-disabled).p-focus,
+.p-multiselect:not(.p-disabled).p-focus,
+.p-calendar .p-inputtext:enabled:focus {
+  box-shadow: 0 0 0 2px rgba(24, 24, 27, 0.1);
+  border-color: var(--bayan-ring);
+  outline: none;
 }
 
-/* Dark mode support (optional) */
-.dark-mode {
-  body {
-    background-color: #1a1a2e;
-    color: #e0e0e0;
+// Password input wrapper
+.p-password {
+  .p-inputtext {
+    padding-right: 2.5rem;
   }
+}
 
-  .p-card {
-    background-color: #16213e;
-    border-color: #0f3460;
+// Dropdown panel
+.p-dropdown-panel {
+  border-radius: var(--bayan-radius);
+  border: 1px solid var(--bayan-border);
+  box-shadow: var(--bayan-shadow-lg);
+}
+
+// Checkbox
+.p-checkbox .p-checkbox-box {
+  border-radius: var(--bayan-radius-sm);
+  border: 1px solid var(--bayan-input);
+  width: 1.125rem;
+  height: 1.125rem;
+
+  &.p-highlight {
+    background-color: var(--bayan-primary);
+    border-color: var(--bayan-primary);
   }
+}
 
-  .p-datatable {
-    .p-datatable-thead > tr > th {
-      background-color: #0f3460;
-      color: #e0e0e0;
+// Steps / Stepper
+.p-steps {
+  .p-steps-item {
+    .p-menuitem-link {
+      .p-steps-number {
+        border-color: var(--bayan-border);
+        color: var(--bayan-muted-foreground);
+        background-color: var(--bayan-card);
+        font-weight: 600;
+        font-size: 0.875rem;
+      }
+
+      .p-steps-title {
+        color: var(--bayan-muted-foreground);
+        font-weight: 500;
+        font-size: 0.875rem;
+      }
     }
 
-    .p-datatable-tbody > tr {
-      background-color: #16213e;
-      color: #e0e0e0;
+    &.p-highlight .p-menuitem-link {
+      .p-steps-number {
+        background-color: var(--bayan-primary);
+        border-color: var(--bayan-primary);
+        color: var(--bayan-primary-foreground);
+      }
 
-      &:hover {
-        background-color: #1f4068;
+      .p-steps-title {
+        color: var(--bayan-foreground);
+        font-weight: 600;
       }
     }
   }
 }
 
-/* Scrollbar styling */
+// TabView (PrimeNG v18 uses p-tablist/p-tab internally)
+.p-tablist-tab-list {
+  border-bottom: 1px solid var(--bayan-border);
+  gap: 0.25rem;
+}
+
+.p-tab {
+  padding: 0.75rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--bayan-muted-foreground);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  transition: all var(--bayan-transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+  cursor: pointer;
+
+  .p-tabview-left-icon {
+    font-size: 1rem;
+  }
+
+  &:hover {
+    color: var(--bayan-foreground);
+    border-bottom-color: var(--bayan-zinc-300);
+  }
+
+  &.p-tab-active {
+    color: var(--bayan-foreground);
+    border-bottom-color: var(--bayan-primary);
+    font-weight: 600;
+  }
+}
+
+.p-tabpanels {
+  padding: 1.5rem 0 0;
+}
+
+// Icon Input Fields (legacy p-input-icon-left pattern)
+.p-input-icon-left {
+  position: relative;
+  display: inline-flex;
+  width: 100%;
+
+  > i:first-of-type {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    left: 0.875rem;
+    color: var(--bayan-muted-foreground);
+    z-index: 1;
+  }
+}
+
+/* ============================================
+   Dark mode
+   ============================================ */
+.dark-mode {
+  --bayan-background: #09090b;
+  --bayan-foreground: #fafafa;
+  --bayan-card: #18181b;
+  --bayan-card-foreground: #fafafa;
+  --bayan-primary: #fafafa;
+  --bayan-primary-foreground: #18181b;
+  --bayan-secondary: #27272a;
+  --bayan-secondary-foreground: #fafafa;
+  --bayan-muted: #27272a;
+  --bayan-muted-foreground: #a1a1aa;
+  --bayan-accent: #27272a;
+  --bayan-accent-foreground: #fafafa;
+  --bayan-border: #27272a;
+  --bayan-input: #27272a;
+  --bayan-ring: #d4d4d8;
+  --bayan-sidebar-bg: #09090b;
+  --bayan-sidebar-foreground: #fafafa;
+  --bayan-sidebar-border: #27272a;
+  --bayan-sidebar-accent: #27272a;
+  --bayan-sidebar-accent-foreground: #fafafa;
+  --bayan-muted-text: #71717a;
+
+  // Dark mode specific component overrides
+  .p-datatable {
+    .p-datatable-thead > tr > th {
+      background-color: var(--bayan-muted);
+      color: var(--bayan-muted-foreground);
+    }
+
+    .p-datatable-tbody > tr {
+      &:hover {
+        background-color: var(--bayan-zinc-700);
+      }
+    }
+  }
+}
+
+/* ============================================
+   Scrollbar styling
+   ============================================ */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
+  background: var(--bayan-zinc-100);
+  border-radius: var(--bayan-radius-sm);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
+  background: var(--bayan-zinc-300);
+  border-radius: var(--bayan-radius-sm);
 
   &:hover {
-    background: #a1a1a1;
+    background: var(--bayan-zinc-400);
   }
 }
 
-/* Animation utilities */
+/* ============================================
+   Animation utilities
+   ============================================ */
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -275,7 +636,81 @@ a {
   animation: slideIn 0.3s ease-in-out;
 }
 
-/* Print styles */
+/* ============================================
+   Global Card Patterns
+   ============================================ */
+.table-card,
+.filter-card,
+.content-card {
+  &.p-card {
+    .p-card-header { padding: 0; }
+    .p-card-body { padding: 0; }
+    .p-card-content { padding: 0; }
+  }
+}
+
+.bayan-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--bayan-border);
+
+  h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--bayan-foreground);
+  }
+}
+
+/* ============================================
+   Global Empty State Pattern
+   ============================================ */
+.bayan-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  color: var(--bayan-muted-foreground);
+
+  i {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--bayan-border);
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.875rem;
+  }
+}
+
+/* ============================================
+   Global Form Field Pattern
+   ============================================ */
+.bayan-form-field {
+  margin-bottom: 1.25rem;
+
+  label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+    color: var(--bayan-foreground);
+  }
+
+  .field-hint {
+    font-size: 0.8rem;
+    color: var(--bayan-muted-foreground);
+    margin-top: 0.25rem;
+  }
+}
+
+/* ============================================
+   Print styles
+   ============================================ */
 @media print {
   .no-print {
     display: none !important;
@@ -283,11 +718,11 @@ a {
 
   body {
     background-color: white;
-    color: black;
+    color: var(--bayan-zinc-950);
   }
 
   .p-card {
     box-shadow: none;
-    border: 1px solid #ddd;
+    border: 1px solid var(--bayan-zinc-200);
   }
 }

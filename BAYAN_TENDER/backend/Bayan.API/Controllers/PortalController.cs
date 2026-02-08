@@ -144,6 +144,44 @@ public class PortalController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Activates a bidder account by setting the password.
+    /// </summary>
+    /// <param name="request">Activation request with token and new password.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Success response if activated.</returns>
+    [HttpPost("auth/activate")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ActivateAccount(
+        [FromBody] ActivateAccountRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var command = new ActivateBidderAccountCommand
+        {
+            Email = request.Email,
+            ActivationToken = request.ActivationToken,
+            Password = request.Password,
+            ConfirmPassword = request.ConfirmPassword
+        };
+
+        try
+        {
+            await _mediator.Send(command, cancellationToken);
+            return Ok(ApiResponse<object>.SuccessResponse(new { message = "Account activated successfully." }));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(ApiResponse<object>.FailureResponse(ex.Message));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.FailureResponse(ex.Message));
+        }
+    }
+
     #endregion
 
     #region Tender Information
@@ -770,6 +808,32 @@ public class SubmitBidRequestDto
     /// Bid validity period in days.
     /// </summary>
     public int BidValidityDays { get; set; } = 90;
+}
+
+/// <summary>
+/// Request DTO for bidder account activation.
+/// </summary>
+public class ActivateAccountRequest
+{
+    /// <summary>
+    /// Bidder's email address.
+    /// </summary>
+    public string Email { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The activation token from the invitation email.
+    /// </summary>
+    public string ActivationToken { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The new password.
+    /// </summary>
+    public string Password { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Confirmation of the new password.
+    /// </summary>
+    public string ConfirmPassword { get; set; } = string.Empty;
 }
 
 #endregion

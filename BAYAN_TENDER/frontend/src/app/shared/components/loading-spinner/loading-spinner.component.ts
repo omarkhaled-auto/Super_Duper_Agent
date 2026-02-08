@@ -54,8 +54,8 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
       gap: 1rem;
       background: white;
       padding: 2rem;
-      border-radius: 8px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      border-radius: var(--bayan-radius, 0.5rem);
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     }
 
     .spinner-inline {
@@ -68,8 +68,12 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
 
     .loading-message {
       margin: 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       font-size: 0.875rem;
+    }
+
+    :host ::ng-deep .p-progress-spinner-circle {
+      stroke: var(--bayan-primary, #18181b) !important;
     }
   `]
 })

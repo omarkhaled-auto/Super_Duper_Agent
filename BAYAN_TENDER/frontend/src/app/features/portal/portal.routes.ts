@@ -56,6 +56,13 @@ export const PORTAL_ROUTES: Routes = [
       import('./receipt/portal-receipt.component').then(m => m.PortalReceiptComponent)
   },
 
+  // Account activation route (public)
+  {
+    path: 'activate',
+    loadComponent: () =>
+      import('./activate/portal-activate.component').then(m => m.PortalActivateComponent)
+  },
+
   // Default redirect
   {
     path: '',

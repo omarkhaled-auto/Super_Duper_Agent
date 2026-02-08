@@ -257,18 +257,18 @@ interface UserOption {
     .page-header h1 {
       margin: 0;
       font-size: 1.75rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .page-header p {
       margin: 0.25rem 0 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .filters-section {
       margin-bottom: 1.5rem;
       padding-bottom: 1.5rem;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .filter-row {
@@ -292,7 +292,7 @@ interface UserOption {
 
     .filter-item label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       font-size: 0.875rem;
     }
 
@@ -318,7 +318,7 @@ interface UserOption {
 
     .user-email {
       font-size: 0.75rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .entity-id-cell {
@@ -331,7 +331,7 @@ interface UserOption {
     }
 
     .text-muted {
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .diff-container {
@@ -352,9 +352,9 @@ interface UserOption {
     }
 
     .json-display {
-      background: #f8f9fa;
-      border: 1px solid #e0e0e0;
-      border-radius: 4px;
+      background: var(--bayan-accent, #f4f4f5);
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
       padding: 1rem;
       font-size: 0.8rem;
       overflow-x: auto;

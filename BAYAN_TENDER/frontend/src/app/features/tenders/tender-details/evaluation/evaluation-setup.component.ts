@@ -337,7 +337,7 @@ import {
     }
 
     .loading-container p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       margin: 0;
     }
 
@@ -356,20 +356,20 @@ import {
 
     .config-item label {
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       font-weight: 500;
     }
 
     .config-item span {
       font-size: 1rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     /* Section Cards */
     :host ::ng-deep .section-card {
       .p-card-title {
         font-size: 1.125rem;
-        color: #333;
+        color: var(--bayan-foreground, #09090b);
       }
     }
 
@@ -395,20 +395,20 @@ import {
 
     .member-name {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .member-dept {
       font-size: 0.75rem;
-      color: #666;
-      background: #f0f0f0;
+      color: var(--bayan-muted-foreground, #71717a);
+      background: var(--bayan-accent, #f4f4f5);
       padding: 0.125rem 0.5rem;
-      border-radius: 4px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .member-email {
       font-size: 0.8rem;
-      color: #888;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .selection-info {
@@ -416,14 +416,14 @@ import {
       align-items: flex-start;
       gap: 0.5rem;
       padding: 0.75rem;
-      background: #f8f9fa;
+      background: var(--bayan-accent, #f4f4f5);
       border-radius: 6px;
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .selection-info i {
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
       margin-top: 0.125rem;
     }
 
@@ -439,9 +439,9 @@ import {
       align-items: center;
       gap: 0.75rem;
       padding: 0.75rem 1rem;
-      background: #f8f9fa;
+      background: var(--bayan-accent, #f4f4f5);
       border-radius: 6px;
-      border-left: 3px solid #1976D2;
+      border-left: 3px solid var(--bayan-primary, #18181b);
     }
 
     .selected-member .member-order {
@@ -450,7 +450,7 @@ import {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #1976D2;
+      background: var(--bayan-primary, #18181b);
       color: white;
       border-radius: 50%;
       font-size: 0.75rem;
@@ -483,7 +483,7 @@ import {
 
     .form-field label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       font-size: 0.9rem;
     }
 
@@ -492,7 +492,7 @@ import {
       align-items: flex-start;
       gap: 0.75rem;
       padding: 1rem;
-      background: #f8f9fa;
+      background: var(--bayan-accent, #f4f4f5);
       border-radius: 6px;
     }
 
@@ -505,12 +505,12 @@ import {
 
     .label-title {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .label-desc {
-      font-size: 0.85rem;
-      color: #666;
+      font-size: 0.875rem;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .method-option {
@@ -525,7 +525,7 @@ import {
 
     .method-desc {
       font-size: 0.8rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     /* Action Bar */
@@ -533,7 +533,7 @@ import {
       display: flex;
       justify-content: flex-end;
       padding: 1.5rem 0;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
       margin-top: 1rem;
     }
 

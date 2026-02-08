@@ -305,12 +305,12 @@ import {
 
     .step-header h4 {
       margin: 0 0 0.5rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .step-header p {
       margin: 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .loading-state {
@@ -323,25 +323,25 @@ import {
     }
 
     .loading-state p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .reference-badge {
       font-family: monospace;
-      font-size: 0.85rem;
-      background-color: #f0f0f0;
+      font-size: 0.875rem;
+      background-color: var(--bayan-accent, #f4f4f5);
       padding: 0.25rem 0.5rem;
-      border-radius: 4px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .selection-summary {
       padding: 1rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
       text-align: center;
       margin-top: 1rem;
       font-weight: 500;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .form-grid {
@@ -362,7 +362,7 @@ import {
 
     .form-field label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .required {
@@ -371,8 +371,8 @@ import {
 
     .bulletin-preview {
       background-color: white;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      border-radius: var(--bayan-radius, 0.5rem);
       padding: 2rem;
       max-height: 400px;
       overflow: auto;
@@ -385,26 +385,26 @@ import {
 
     .preview-header h2 {
       margin: 0 0 0.5rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .issue-date {
       margin: 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       font-size: 0.9rem;
     }
 
     .preview-intro,
     .preview-closing {
       padding: 1rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .preview-intro p,
     .preview-closing p {
       margin: 0;
-      color: #555;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .qa-list {
@@ -425,7 +425,7 @@ import {
       display: flex;
       align-items: center;
       justify-content: center;
-      background-color: #1976D2;
+      background-color: var(--bayan-primary, #18181b);
       color: white;
       border-radius: 50%;
       font-weight: 600;
@@ -442,13 +442,13 @@ import {
 
     .question strong,
     .answer strong {
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .question p,
     .answer p {
       margin: 0.25rem 0 0;
-      color: #555;
+      color: var(--bayan-muted-foreground, #71717a);
       line-height: 1.6;
     }
 
@@ -457,7 +457,7 @@ import {
       justify-content: space-between;
       align-items: center;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
       margin-top: auto;
     }
 

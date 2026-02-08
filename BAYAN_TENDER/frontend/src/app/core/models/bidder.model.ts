@@ -59,6 +59,7 @@ export interface Bidder {
   tendersCount?: number; // Number of tenders participated in
   activeTendersCount?: number;
   lastActivityDate?: Date;
+  qualificationStatus?: string;
 }
 
 /**
@@ -103,6 +104,8 @@ export interface TenderBidder {
   declineReason?: string;
   bidSubmittedAt?: Date;
   bidStatus?: BidStatus;
+  qualificationStatus?: QualificationStatus;
+  qualifiedAt?: Date;
 }
 
 /**
@@ -162,4 +165,14 @@ export interface InvitationEmailMergeFields {
   tenderTitle: string;
   deadlineDate: string;
   portalLink: string;
+}
+
+/**
+ * Qualification status for tender bidders
+ */
+export enum QualificationStatus {
+  PENDING = 'Pending',
+  QUALIFIED = 'Qualified',
+  REJECTED = 'Rejected',
+  REMOVED = 'Removed'
 }

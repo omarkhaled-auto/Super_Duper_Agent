@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using AutoMapper;
 using Bayan.Application.Common.Exceptions;
 using Bayan.Application.Common.Interfaces;
@@ -77,6 +78,13 @@ public class InviteBiddersCommandHandler : IRequestHandler<InviteBiddersCommand,
                 CreatedAt = DateTime.UtcNow
             };
 
+            // Generate activation token if bidder has no password set
+            if (string.IsNullOrEmpty(bidder.PasswordHash))
+            {
+                bidder.ActivationToken = GenerateSecureToken();
+                bidder.ActivationTokenExpiry = DateTime.UtcNow.AddHours(48);
+            }
+
             _context.TenderBidders.Add(tenderBidder);
             invitedTenderBidders.Add(tenderBidder);
 
@@ -89,6 +97,7 @@ public class InviteBiddersCommandHandler : IRequestHandler<InviteBiddersCommand,
                     tender.Title,
                     tender.Reference,
                     tender.SubmissionDeadline,
+                    bidder.ActivationToken,
                     cancellationToken);
             }
             catch
@@ -111,5 +120,16 @@ public class InviteBiddersCommandHandler : IRequestHandler<InviteBiddersCommand,
         result.InvitedBidders = _mapper.Map<List<TenderBidderDto>>(reloadedTenderBidders);
 
         return result;
+    }
+
+    private static string GenerateSecureToken()
+    {
+        var randomBytes = new byte[64];
+        using var rng = RandomNumberGenerator.Create();
+        rng.GetBytes(randomBytes);
+        return Convert.ToBase64String(randomBytes)
+            .Replace("+", "-")
+            .Replace("/", "_")
+            .Replace("=", "");
     }
 }

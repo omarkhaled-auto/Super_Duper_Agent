@@ -187,7 +187,7 @@ import {
         </div>
       } @else {
         <div class="empty-state">
-          <i class="pi pi-chart-line" style="font-size: 2rem; color: #ccc;"></i>
+          <i class="pi pi-chart-line" style="font-size: 2rem; color: var(--bayan-muted-foreground, #71717a); opacity: 0.5;"></i>
           <p>Unable to load sensitivity analysis.</p>
         </div>
       }
@@ -215,7 +215,7 @@ import {
     }
 
     .loading-container p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       margin: 0;
     }
 
@@ -232,7 +232,7 @@ import {
     }
 
     .info-content i {
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
       margin-top: 0.125rem;
     }
 
@@ -249,7 +249,7 @@ import {
 
     :host ::ng-deep .sensitivity-table {
       .p-datatable-thead > tr > th {
-        background: #f8f9fa;
+        background: var(--bayan-accent, #f4f4f5);
         padding: 0.75rem 0.5rem;
       }
 
@@ -272,7 +272,7 @@ import {
     }
 
     .tech-weight {
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .comm-weight {
@@ -280,14 +280,14 @@ import {
     }
 
     .separator {
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .weight-labels {
       display: flex;
       justify-content: space-around;
       font-size: 0.7rem;
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
       font-weight: 400;
       margin-top: 0.25rem;
     }
@@ -313,11 +313,11 @@ import {
 
     .rank-value {
       font-weight: 600;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .rank-value.rank-1 {
-      color: #2e7d32;
+      color: #16a34a;
       font-size: 1.125rem;
     }
 
@@ -333,8 +333,8 @@ import {
     .winner-changes {
       background: #fff8e1;
       padding: 1rem;
-      border-radius: 8px;
-      border-left: 4px solid #ff9800;
+      border-radius: var(--bayan-radius, 0.5rem);
+      border-left: 4px solid var(--bayan-warning, #f59e0b);
     }
 
     .winner-changes h4 {
@@ -358,26 +358,26 @@ import {
       gap: 0.5rem;
       padding: 0.5rem;
       background: white;
-      border-radius: 4px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .change-split {
       font-weight: 600;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       min-width: 80px;
     }
 
     .change-from {
-      color: #c62828;
+      color: #dc2626;
       text-decoration: line-through;
     }
 
     .change-item i {
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .change-to {
-      color: #2e7d32;
+      color: #16a34a;
       font-weight: 600;
     }
 
@@ -393,7 +393,7 @@ import {
     }
 
     .empty-state p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       margin: 0;
     }
   `]

@@ -186,7 +186,7 @@ interface DialogData {
       display: block;
       margin-bottom: 0.5rem;
       font-weight: 500;
-      color: #334155;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .field-footer {
@@ -197,7 +197,7 @@ interface DialogData {
     }
 
     .char-count {
-      color: #94a3b8;
+      color: var(--bayan-muted-foreground, #71717a);
       font-size: 0.75rem;
       margin-left: auto;
     }
@@ -205,8 +205,8 @@ interface DialogData {
     .field-hint {
       display: block;
       margin-top: 0.25rem;
-      color: #64748b;
-      font-size: 0.8125rem;
+      color: var(--bayan-muted-foreground, #71717a);
+      font-size: 0.8rem;
     }
 
     .checkbox-field {
@@ -224,8 +224,8 @@ interface DialogData {
 
     .hint-text {
       font-weight: 400;
-      color: #64748b;
-      font-size: 0.8125rem;
+      color: var(--bayan-muted-foreground, #71717a);
+      font-size: 0.8rem;
       margin-top: 0.25rem;
     }
 
@@ -237,12 +237,12 @@ interface DialogData {
 
     .section-number {
       font-weight: 600;
-      color: #1565C0;
+      color: var(--bayan-primary, #18181b);
       min-width: 60px;
     }
 
     .section-title {
-      color: #334155;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .dialog-actions {
@@ -251,7 +251,7 @@ interface DialogData {
       gap: 0.75rem;
       margin-top: 2rem;
       padding-top: 1rem;
-      border-top: 1px solid #e2e8f0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .p-error {

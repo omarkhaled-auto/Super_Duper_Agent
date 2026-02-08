@@ -265,7 +265,7 @@ import {
       } @else {
         <!-- No Data -->
         <div class="empty-state">
-          <i class="pi pi-chart-bar" style="font-size: 3rem; color: #ccc;"></i>
+          <i class="pi pi-chart-bar" style="font-size: 3rem; color: var(--bayan-border, #e4e4e7);"></i>
           <h3>No Summary Available</h3>
           <p>Technical evaluation data is not yet available.</p>
         </div>
@@ -312,7 +312,7 @@ import {
         </div>
       } @else {
         <div class="empty-comments">
-          <i class="pi pi-comments" style="font-size: 2rem; color: #ccc;"></i>
+          <i class="pi pi-comments" style="font-size: 2rem; color: var(--bayan-border, #e4e4e7);"></i>
           <p>No comments have been submitted yet.</p>
         </div>
       }
@@ -344,7 +344,7 @@ import {
     }
 
     .loading-container p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       margin: 0;
     }
 
@@ -363,13 +363,13 @@ import {
 
     .status-label {
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .status-value {
       font-size: 1.125rem;
       font-weight: 600;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     :host ::ng-deep .completion-bar .p-progressbar {
@@ -383,13 +383,13 @@ import {
     }
 
     .bidder-header {
-      background: #f0f7ff !important;
-      border-bottom: 2px solid #1976D2;
+      background: var(--bayan-accent, #f4f4f5) !important;
+      border-bottom: 2px solid var(--bayan-primary, #18181b);
     }
 
     .criterion-header {
       font-size: 0.75rem;
-      background: #fafafa;
+      background: var(--bayan-muted, #f4f4f5);
       min-width: 50px;
     }
 
@@ -417,12 +417,12 @@ import {
 
     .weight-label {
       font-size: 0.75rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       font-weight: 400;
     }
 
     .winner-row {
-      background: #e8f5e9 !important;
+      background: var(--bayan-success-bg, #f0fdf4) !important;
     }
 
     .rank-badge {
@@ -432,14 +432,14 @@ import {
       width: 32px;
       height: 32px;
       border-radius: 50%;
-      background: #e0e0e0;
+      background: var(--bayan-border, #e4e4e7);
       font-weight: 600;
       font-size: 0.875rem;
     }
 
     .rank-badge.rank-1 {
-      background: linear-gradient(135deg, #ffd700, #ffaa00);
-      color: #333;
+      background: var(--bayan-warning-bg, #fffbeb); border: 1px solid var(--bayan-warning, #f59e0b);
+      color: var(--bayan-foreground, #09090b);
     }
 
     .bidder-cell {
@@ -474,11 +474,11 @@ import {
     .total-average {
       font-size: 1.125rem;
       font-weight: 700;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .no-alerts {
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .variance-info {
@@ -513,12 +513,12 @@ import {
 
     .empty-state h3 {
       margin: 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .empty-state p {
       margin: 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     /* Comments Dialog */
@@ -532,9 +532,9 @@ import {
 
     .comment-item {
       padding: 1rem;
-      background: #f8f9fa;
-      border-radius: 8px;
-      border-left: 3px solid #1976D2;
+      background: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
+      border-left: 3px solid var(--bayan-primary, #18181b);
     }
 
     .comment-header {
@@ -553,11 +553,11 @@ import {
 
     .comment-meta .panelist-name {
       font-weight: 600;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .comment-meta i {
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
       font-size: 0.75rem;
     }
 
@@ -566,22 +566,22 @@ import {
     }
 
     .comment-meta .criterion-name {
-      color: #666;
-      background: #e0e0e0;
+      color: var(--bayan-muted-foreground, #71717a);
+      background: var(--bayan-border, #e4e4e7);
       padding: 0.125rem 0.5rem;
-      border-radius: 4px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
       font-size: 0.8rem;
     }
 
     .comment-body {
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       line-height: 1.5;
       margin-bottom: 0.5rem;
     }
 
     .comment-footer {
       font-size: 0.8rem;
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .empty-comments {
@@ -595,7 +595,7 @@ import {
     }
 
     .empty-comments p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       margin: 0;
     }
 

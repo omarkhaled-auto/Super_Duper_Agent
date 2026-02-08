@@ -250,7 +250,7 @@ import {
       align-items: center;
       justify-content: center;
       padding: 4rem 2rem;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .loading-container p {
@@ -263,8 +263,8 @@ import {
       justify-content: space-between;
       align-items: center;
       padding: 1rem 1.5rem;
-      background: #f8fafc;
-      border-bottom: 1px solid #e2e8f0;
+      background: var(--bayan-accent, #f4f4f5);
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .card-header h3 {
@@ -274,21 +274,21 @@ import {
       margin: 0;
       font-size: 1.125rem;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .card-header h3 i {
-      color: #1565C0;
+      color: var(--bayan-primary, #18181b);
     }
 
     .total-size {
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
       font-size: 0.875rem;
     }
 
     /* Addenda Styles */
     .addenda-header {
-      background: #fef3c7 !important;
+      background: #fffbeb !important;
       border-bottom-color: #fcd34d !important;
     }
 
@@ -312,8 +312,8 @@ import {
       align-items: center;
       gap: 0.5rem;
       padding: 0.75rem 1rem;
-      background: #fef3c7;
-      border-radius: 8px;
+      background: #fffbeb;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
       margin-bottom: 1.5rem;
       color: #92400e;
       font-size: 0.875rem;
@@ -326,10 +326,10 @@ import {
     }
 
     .addendum-item {
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
       padding: 1.25rem;
-      background: white;
+      background: var(--bayan-card, #ffffff);
       transition: all 0.2s ease;
     }
 
@@ -353,16 +353,16 @@ import {
 
     .addendum-title strong {
       font-size: 1rem;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .addendum-date {
-      font-size: 0.8125rem;
-      color: #64748b;
+      font-size: 0.8rem;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .addendum-description {
-      color: #475569;
+      color: var(--bayan-muted-foreground, #71717a);
       margin: 0.75rem 0;
       font-size: 0.9375rem;
     }
@@ -373,8 +373,8 @@ import {
 
     .documents-label {
       display: block;
-      font-size: 0.8125rem;
-      color: #64748b;
+      font-size: 0.8rem;
+      color: var(--bayan-muted-foreground, #71717a);
       margin-bottom: 0.5rem;
     }
 
@@ -387,7 +387,7 @@ import {
     .addendum-actions {
       margin-top: 1rem;
       padding-top: 1rem;
-      border-top: 1px solid #e2e8f0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .acknowledged-info {
@@ -396,7 +396,7 @@ import {
       gap: 0.5rem;
       margin-top: 0.75rem;
       color: #16a34a;
-      font-size: 0.8125rem;
+      font-size: 0.8rem;
     }
 
     /* Documents Table */
@@ -409,7 +409,7 @@ import {
 
     .folder-header i {
       font-size: 1.25rem;
-      color: #1565C0;
+      color: var(--bayan-primary, #18181b);
     }
 
     .folder-name {
@@ -425,7 +425,7 @@ import {
 
     .file-info i {
       font-size: 1.25rem;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .file-name {
@@ -442,7 +442,7 @@ import {
       align-items: center;
       justify-content: center;
       padding: 4rem 2rem;
-      color: #94a3b8;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .empty-state i {

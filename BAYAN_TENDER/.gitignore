@@ -117,6 +117,13 @@ appsettings.*.local.json
 *.bak
 *.cache
 
+# Screenshots (test artifacts)
+*.png
+e2e/screenshots/
+
+# Test result JSON files
+e2e/*-results.json
+
 # MinIO data (local development)
 minio-data/
 

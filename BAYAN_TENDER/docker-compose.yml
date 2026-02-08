@@ -16,23 +16,24 @@ services:
       - ASPNETCORE_URLS=http://+:80
       - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=bayan;Username=bayan_user;Password=${POSTGRES_PASSWORD:-BayanSecure123!}
       - ConnectionStrings__Redis=redis:6379,abortConnect=false
-      - MinIO__Endpoint=minio:9000
-      - MinIO__AccessKey=${MINIO_ACCESS_KEY:-minioadmin}
-      - MinIO__SecretKey=${MINIO_SECRET_KEY:-minioadmin}
-      - MinIO__BucketName=bayan-documents
-      - MinIO__UseSSL=false
-      - Jwt__Secret=${JWT_SECRET:-YourSuperSecretKeyForBayanTenderManagementSystem2024!}
-      - Jwt__Issuer=Bayan.API
-      - Jwt__Audience=Bayan.Client
-      - Jwt__ExpirationInMinutes=60
-      - Jwt__RefreshTokenExpirationInDays=7
-      - Smtp__Host=mailhog
-      - Smtp__Port=1025
-      - Smtp__Username=
-      - Smtp__Password=
-      - Smtp__FromEmail=noreply@bayan.ae
-      - Smtp__FromName=Bayan Tender System
-      - Smtp__EnableSsl=false
+      - MinioSettings__Endpoint=minio:9000
+      - MinioSettings__AccessKey=${MINIO_ACCESS_KEY:-minioadmin}
+      - MinioSettings__SecretKey=${MINIO_SECRET_KEY:-minioadmin}
+      - MinioSettings__BucketName=bayan-documents
+      - MinioSettings__UseSSL=false
+      - JwtSettings__SecretKey=${JWT_SECRET:-YourSuperSecretKeyForBayanTenderManagementSystem2024!}
+      - JwtSettings__Issuer=BayanTenderAPI-Dev
+      - JwtSettings__Audience=BayanTenderClient-Dev
+      - JwtSettings__ExpirationInMinutes=120
+      - JwtSettings__RefreshTokenExpirationInDays=30
+      - SmtpSettings__Host=mailhog
+      - SmtpSettings__Port=1025
+      - SmtpSettings__Username=
+      - SmtpSettings__Password=
+      - SmtpSettings__FromEmail=noreply@bayan.ae
+      - SmtpSettings__FromName=Bayan Tender System
+      - SmtpSettings__UseSsl=false
+      - SmtpSettings__EnableSending=true
     depends_on:
       db:
         condition: service_healthy
@@ -105,8 +106,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: bayan-redis
-    ports:
-      - "6379:6379"
+    # ports:
+    #   - "6379:6379"
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data

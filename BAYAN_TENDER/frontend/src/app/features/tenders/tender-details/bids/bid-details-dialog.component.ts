@@ -305,7 +305,7 @@ import {
     }
 
     .loading-container p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .bid-details-content {
@@ -329,18 +329,18 @@ import {
 
     .header-info h3 {
       margin: 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .bidder-name-ar {
       font-size: 0.95rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       direction: rtl;
     }
 
     .bidder-email {
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .submission-info {
@@ -348,8 +348,8 @@ import {
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 1rem;
       padding: 1rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .info-item {
@@ -361,21 +361,21 @@ import {
     .info-item label {
       font-size: 0.75rem;
       font-weight: 500;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       text-transform: uppercase;
     }
 
     .info-item span {
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .late-reason {
-      color: #ef6c00 !important;
+      color: #d97706 !important;
     }
 
     .documents-section h4 {
       margin: 0 0 1rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     :host ::ng-deep .documents-panel {
@@ -384,7 +384,7 @@ import {
 
     :host ::ng-deep .documents-panel .p-panel-header {
       padding: 0.75rem 1rem;
-      background-color: #f8f9fa;
+      background-color: var(--bayan-accent, #f4f4f5);
     }
 
     :host ::ng-deep .documents-panel .p-panel-content {
@@ -403,8 +403,8 @@ import {
       align-items: center;
       padding: 0.75rem;
       background-color: #fff;
-      border: 1px solid #e0e0e0;
-      border-radius: 4px;
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .document-info {
@@ -415,7 +415,7 @@ import {
 
     .document-info > i {
       font-size: 1.5rem;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .document-details {
@@ -425,12 +425,12 @@ import {
 
     .document-name {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .document-meta {
       font-size: 0.8rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .separator {
@@ -444,7 +444,7 @@ import {
 
     .bid-summary-section h4 {
       margin: 0 0 1rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .summary-grid {
@@ -452,8 +452,8 @@ import {
       grid-template-columns: repeat(3, 1fr);
       gap: 1rem;
       padding: 1rem;
-      background-color: #e8f5e9;
-      border-radius: 8px;
+      background-color: var(--bayan-success-bg, #f0fdf4);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .summary-item {
@@ -469,20 +469,20 @@ import {
     .summary-item label {
       font-size: 0.75rem;
       font-weight: 500;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       text-transform: uppercase;
     }
 
     .summary-item .amount {
       font-size: 1.25rem;
       font-weight: 600;
-      color: #2e7d32;
+      color: #16a34a;
     }
 
     .exceptions-list {
       margin: 0;
       padding-left: 1.25rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .disqualification-info {
@@ -497,19 +497,19 @@ import {
 
     .disqualification-info .meta {
       font-size: 0.8rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .disqualify-form {
       padding: 1rem;
-      background-color: #ffebee;
+      background-color: var(--bayan-danger-bg, #fef2f2);
       border: 1px solid #ef5350;
-      border-radius: 8px;
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .disqualify-form h4 {
       margin: 0 0 1rem;
-      color: #c62828;
+      color: #dc2626;
     }
 
     .form-field {
@@ -520,7 +520,7 @@ import {
 
     .form-field label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .required {

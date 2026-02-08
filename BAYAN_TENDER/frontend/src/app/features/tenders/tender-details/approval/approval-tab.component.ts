@@ -326,7 +326,7 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
     }
 
     .loading-container p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .no-workflow-state {
@@ -346,17 +346,18 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
 
     .empty-icon {
       font-size: 4rem;
-      color: #ccc;
+      color: var(--bayan-muted-foreground, #71717a);
+      opacity: 0.5;
     }
 
     .empty-state-content h3 {
       margin: 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .empty-state-content p {
       margin: 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .workflow-container {
@@ -381,7 +382,7 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
 
     .header-left h3 {
       margin: 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .initiator-info {
@@ -389,23 +390,23 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
       align-items: center;
       gap: 0.5rem;
       padding: 0.75rem 1rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
       font-size: 0.9rem;
       flex-wrap: wrap;
     }
 
     .info-label {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .info-value {
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       font-weight: 500;
     }
 
     .info-separator {
-      color: #ccc;
+      color: var(--bayan-border, #e4e4e7);
     }
 
     .stepper-container {
@@ -428,17 +429,17 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
     }
 
     :host ::ng-deep .level-card {
-      border: 2px solid #e0e0e0;
+      border: 2px solid var(--bayan-border, #e4e4e7);
       transition: border-color 0.2s;
     }
 
     :host ::ng-deep .level-card.active {
-      border-color: #2196F3;
-      box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+      border-color: var(--bayan-primary, #18181b);
+      box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.1);
     }
 
     :host ::ng-deep .level-card.approved {
-      border-color: #4CAF50;
+      border-color: var(--bayan-success, #22c55e);
     }
 
     :host ::ng-deep .level-card.rejected {
@@ -446,13 +447,13 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
     }
 
     :host ::ng-deep .level-card.returned {
-      border-color: #ff9800;
+      border-color: var(--bayan-warning, #f59e0b);
     }
 
     :host ::ng-deep .level-card .p-card-header {
       padding: 1rem;
-      background-color: #f8f9fa;
-      border-bottom: 1px solid #e0e0e0;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .level-header {
@@ -463,7 +464,7 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
 
     .level-number {
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .level-content {
@@ -485,12 +486,12 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
 
     .approver-name {
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .approver-email {
-      font-size: 0.85rem;
-      color: #666;
+      font-size: 0.875rem;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .level-deadline,
@@ -500,7 +501,7 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
       align-items: flex-start;
       gap: 0.5rem;
       font-size: 0.9rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .level-deadline i,
@@ -510,7 +511,7 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
     }
 
     .level-comment {
-      background-color: #f8f9fa;
+      background-color: var(--bayan-accent, #f4f4f5);
       padding: 0.75rem;
       border-radius: 6px;
       font-style: italic;
@@ -518,8 +519,8 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
 
     /* Decision Form Styles */
     :host ::ng-deep .decision-card {
-      background-color: #f0f7ff;
-      border: 2px solid #2196F3;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border: 2px solid var(--bayan-primary, #18181b);
     }
 
     .decision-options {
@@ -555,7 +556,7 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
 
     .comment-section label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .required {
@@ -574,7 +575,7 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
 
     .timeline-section h4 {
       margin: 0 0 1rem 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .timeline-marker {
@@ -584,12 +585,12 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
       width: 32px;
       height: 32px;
       border-radius: 50%;
-      background-color: #e0e0e0;
-      color: #666;
+      background-color: var(--bayan-border, #e4e4e7);
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .timeline-marker.approved {
-      background-color: #4CAF50;
+      background-color: var(--bayan-success, #22c55e);
       color: white;
     }
 
@@ -599,7 +600,7 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
     }
 
     .timeline-marker.returned {
-      background-color: #ff9800;
+      background-color: var(--bayan-warning, #f59e0b);
       color: white;
     }
 
@@ -618,14 +619,14 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
 
     .event-approver {
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .event-meta {
       display: flex;
       gap: 1rem;
-      font-size: 0.85rem;
-      color: #666;
+      font-size: 0.875rem;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .event-comment {
@@ -633,15 +634,15 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
       align-items: flex-start;
       gap: 0.5rem;
       padding: 0.75rem;
-      background-color: #f8f9fa;
+      background-color: var(--bayan-accent, #f4f4f5);
       border-radius: 6px;
       font-size: 0.9rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .event-comment i {
       margin-top: 2px;
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .w-full {
@@ -695,9 +696,9 @@ export class ApprovalTabComponent implements OnInit, OnDestroy {
   decisionForm: FormGroup;
 
   decisionOptions = [
-    { value: 'approve', label: 'Approve', icon: 'pi-check', color: '#4CAF50' },
+    { value: 'approve', label: 'Approve', icon: 'pi-check', color: '#22c55e' },
     { value: 'reject', label: 'Reject', icon: 'pi-times', color: '#f44336' },
-    { value: 'return', label: 'Return for Revision', icon: 'pi-replay', color: '#ff9800' }
+    { value: 'return', label: 'Return for Revision', icon: 'pi-replay', color: '#f59e0b' }
   ];
 
   // Computed
@@ -855,7 +856,7 @@ export class ApprovalTabComponent implements OnInit, OnDestroy {
   }
 
   getAvatarColor(level: number): string {
-    const colors = ['#1976D2', '#388E3C', '#7B1FA2'];
+    const colors = ['#18181b', '#71717a', '#a1a1aa'];
     return colors[(level - 1) % colors.length];
   }
 

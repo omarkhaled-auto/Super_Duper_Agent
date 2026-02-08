@@ -21,7 +21,7 @@ import { TooltipModule } from 'primeng/tooltip';
         <!-- Issue Date -->
         <div class="date-field">
           <label for="issueDate">
-            <span class="date-icon" style="background-color: #e3f2fd;">
+            <span class="date-icon" style="background-color: var(--bayan-muted, #f4f4f5);">
               <i class="pi pi-calendar"></i>
             </span>
             Issue Date *
@@ -46,7 +46,7 @@ import { TooltipModule } from 'primeng/tooltip';
         <!-- Clarification Deadline -->
         <div class="date-field">
           <label for="clarificationDeadline">
-            <span class="date-icon" style="background-color: #fff3e0;">
+            <span class="date-icon" style="background-color: #fef3c7;">
               <i class="pi pi-question-circle"></i>
             </span>
             Clarification Deadline
@@ -68,7 +68,7 @@ import { TooltipModule } from 'primeng/tooltip';
         <!-- Submission Deadline -->
         <div class="date-field">
           <label for="submissionDeadline">
-            <span class="date-icon" style="background-color: #e8f5e9;">
+            <span class="date-icon" style="background-color: var(--bayan-success-bg, #f0fdf4);">
               <i class="pi pi-send"></i>
             </span>
             Submission Deadline *
@@ -104,7 +104,7 @@ import { TooltipModule } from 'primeng/tooltip';
         <!-- Opening Date -->
         <div class="date-field">
           <label for="openingDate">
-            <span class="date-icon" style="background-color: #fce4ec;">
+            <span class="date-icon" style="background-color: #ffe4e6;">
               <i class="pi pi-folder-open"></i>
             </span>
             Opening Date
@@ -202,7 +202,7 @@ import { TooltipModule } from 'primeng/tooltip';
       align-items: center;
       gap: 0.75rem;
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       font-size: 0.9rem;
     }
 
@@ -212,16 +212,16 @@ import { TooltipModule } from 'primeng/tooltip';
       justify-content: center;
       width: 32px;
       height: 32px;
-      border-radius: 8px;
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .date-icon i {
       font-size: 1rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .date-hint {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       font-size: 0.8rem;
     }
 
@@ -231,14 +231,14 @@ import { TooltipModule } from 'primeng/tooltip';
 
     .timeline-container {
       padding: 1.5rem;
-      background-color: #f8f9fa;
-      border-radius: 12px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .timeline-container h3 {
       margin: 0 0 1.5rem 0;
       font-size: 1rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .timeline {
@@ -259,12 +259,12 @@ import { TooltipModule } from 'primeng/tooltip';
       width: 16px;
       height: 16px;
       border-radius: 50%;
-      background-color: #e0e0e0;
+      background-color: var(--bayan-border, #e4e4e7);
       z-index: 1;
     }
 
     .timeline-item.active .timeline-marker {
-      box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.2);
+      box-shadow: 0 0 0 4px rgba(24, 24, 27, 0.1);
     }
 
     .timeline-content {
@@ -277,24 +277,24 @@ import { TooltipModule } from 'primeng/tooltip';
 
     .timeline-label {
       font-weight: 600;
-      color: #333;
-      font-size: 0.85rem;
+      color: var(--bayan-foreground, #09090b);
+      font-size: 0.875rem;
     }
 
     .timeline-date {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       font-size: 0.8rem;
       margin-top: 0.25rem;
     }
 
     .timeline-date.not-set {
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
       font-style: italic;
     }
 
     .timeline-days {
       font-size: 0.75rem;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
       margin-top: 0.25rem;
     }
 
@@ -304,12 +304,12 @@ import { TooltipModule } from 'primeng/tooltip';
       left: 50%;
       width: 100%;
       height: 2px;
-      background-color: #e0e0e0;
+      background-color: var(--bayan-border, #e4e4e7);
       z-index: 0;
     }
 
     .timeline-connector.has-date {
-      background-color: #90caf9;
+      background-color: var(--bayan-primary, #18181b);
     }
 
     .timeline-item:last-child .timeline-connector {
@@ -328,13 +328,13 @@ import { TooltipModule } from 'primeng/tooltip';
       gap: 1rem;
       padding: 1rem;
       background-color: #fff;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .duration-card i {
       font-size: 1.5rem;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .duration-content {
@@ -344,13 +344,13 @@ import { TooltipModule } from 'primeng/tooltip';
 
     .duration-value {
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       font-size: 1.1rem;
     }
 
     .duration-label {
       font-size: 0.8rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     @media (max-width: 768px) {
@@ -427,19 +427,19 @@ export class DatesStepComponent implements OnInit {
       {
         label: 'Issue',
         date: issueDate,
-        color: '#1976D2',
+        color: '#18181b',
         daysFromNow: issueDate ? this.getDaysFromNow(issueDate) : null
       },
       {
         label: 'Clarification',
         date: clarificationDeadline,
-        color: '#ff9800',
+        color: '#f59e0b',
         daysFromNow: clarificationDeadline ? this.getDaysFromNow(clarificationDeadline) : null
       },
       {
         label: 'Submission',
         date: submissionDeadline,
-        color: '#4caf50',
+        color: '#22c55e',
         daysFromNow: submissionDeadline ? this.getDaysFromNow(submissionDeadline) : null
       },
       {
