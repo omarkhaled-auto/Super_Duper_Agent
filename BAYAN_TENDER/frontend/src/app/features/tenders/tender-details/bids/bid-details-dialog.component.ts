@@ -31,6 +31,8 @@ import {
   BID_DOCUMENT_TYPE_LABELS,
   BID_DOCUMENT_CATEGORY_LABELS
 } from '../../../../core/models/bid.model';
+import { BidImportDialogComponent } from './bid-import-dialog.component';
+import { BidImportResponse } from '../../../../core/models/bid-import.model';
 
 @Component({
   selector: 'app-bid-details-dialog',
@@ -46,7 +48,8 @@ import {
     TooltipModule,
     ProgressSpinnerModule,
     InputTextarea,
-    MessageModule
+    MessageModule,
+    BidImportDialogComponent
   ],
   template: `
     <p-dialog
@@ -273,11 +276,10 @@ import {
           @if (bidsOpened && bid()?.status !== 'imported' && bid()?.status !== 'disqualified') {
             <button
               pButton
-              label="Import BOQ"
+              label="Import BOQ Wizard"
               icon="pi pi-file-import"
               class="p-button-success"
-              [loading]="isImporting()"
-              (click)="importBoq()"
+              (click)="showImportWizard = true"
             ></button>
           }
 
@@ -293,6 +295,16 @@ import {
         </div>
       </ng-template>
     </p-dialog>
+
+    <!-- Bid Import Wizard Dialog -->
+    <app-bid-import-dialog
+      [visible]="showImportWizard"
+      [tenderId]="tenderId"
+      [bidId]="bid()?.id || 0"
+      [bidDocument]="pricedBoqDocument"
+      (visibleChange)="showImportWizard = $event"
+      (imported)="onWizardImported($event)"
+    ></app-bid-import-dialog>
   `,
   styles: [`
     .loading-container {
@@ -567,8 +579,20 @@ export class BidDetailsDialogComponent implements OnChanges {
 
   showDisqualifyForm = false;
   disqualifyReason = '';
+  showImportWizard = false;
 
   documentCategories: BidDocumentCategory[] = ['commercial', 'technical', 'supporting'];
+
+  get pricedBoqDocument(): BidDocument | null {
+    if (!this.bid()) return null;
+    // Look for Excel file in commercial category (priced BOQ)
+    const docs = this.bid()!.documents;
+    const excelDoc = docs.find(d =>
+      d.mimeType.includes('spreadsheet') || d.mimeType.includes('excel') ||
+      d.originalFilename.toLowerCase().endsWith('.xlsx') || d.originalFilename.toLowerCase().endsWith('.xls')
+    );
+    return excelDoc || docs[0] || null;
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['visible'] && this.visible && this.bidId) {
@@ -689,6 +713,12 @@ export class BidDetailsDialogComponent implements OnChanges {
         this.isImporting.set(false);
       }
     });
+  }
+
+  onWizardImported(result: BidImportResponse): void {
+    this.showImportWizard = false;
+    this.loadBidDetails(); // Refresh bid details
+    this.imported.emit(this.bid()?.id || 0);
   }
 
   confirmDisqualify(): void {

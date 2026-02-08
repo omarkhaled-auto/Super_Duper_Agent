@@ -37,7 +37,13 @@ import { BoqTabComponent } from './boq/boq-tab.component';
 import { ClarificationsTabComponent } from './clarifications/clarifications-tab.component';
 import { BidsTabComponent } from './bids/bids-tab.component';
 import { ComparableSheetComponent } from './evaluation/comparable-sheet.component';
+import { EvaluationSetupComponent } from './evaluation/evaluation-setup.component';
+import { TechnicalScoringComponent } from './evaluation/technical-scoring.component';
+import { CombinedScorecardComponent } from './evaluation/combined-scorecard.component';
 import { ApprovalTabComponent } from './approval/approval-tab.component';
+import { DocumentsTabComponent } from './documents/documents-tab.component';
+import { EvaluationService } from '../../../core/services/evaluation.service';
+import { EvaluationSetup } from '../../../core/models/evaluation.model';
 
 interface Tender {
   id: number;
@@ -50,7 +56,7 @@ interface Tender {
   category: string;
   publishDate?: Date;
   deadline: Date;
-  budget: number;
+  budget: number | null;
   currency: string;
 }
 
@@ -87,7 +93,11 @@ interface CountdownTime {
     ClarificationsTabComponent,
     BidsTabComponent,
     ComparableSheetComponent,
-    ApprovalTabComponent
+    EvaluationSetupComponent,
+    TechnicalScoringComponent,
+    CombinedScorecardComponent,
+    ApprovalTabComponent,
+    DocumentsTabComponent
   ],
   providers: [MessageService, ConfirmationService],
   template: `
@@ -222,7 +232,11 @@ interface CountdownTime {
                 </div>
                 <div class="info-item">
                   <label>Budget</label>
-                  <span>{{ tender()?.budget | currency:tender()?.currency:'symbol':'1.0-0' }}</span>
+                  @if (tender()?.budget) {
+                    <span>{{ tender()?.budget | currency:tender()?.currency:'symbol':'1.0-0' }}</span>
+                  } @else {
+                    <span>Not specified</span>
+                  }
                 </div>
                 <div class="info-item">
                   <label>Currency</label>
@@ -230,7 +244,11 @@ interface CountdownTime {
                 </div>
                 <div class="info-item full-width">
                   <label>Description</label>
-                  <p>{{ tender()?.description || 'No description provided.' }}</p>
+                  @if (tender()?.description) {
+                    <div class="description-content" [innerHTML]="tender()!.description"></div>
+                  } @else {
+                    <p>No description provided.</p>
+                  }
                 </div>
               </div>
             </p-card>
@@ -414,11 +432,11 @@ interface CountdownTime {
 
         <!-- Documents Tab -->
         <p-tabPanel header="Documents">
-          <div class="empty-state">
-            <i class="pi pi-file" style="font-size: 3rem; color: var(--bayan-border, #e4e4e7);"></i>
-            <h3>Documents</h3>
-            <p>Document management will be implemented in a future milestone.</p>
-          </div>
+          @if (tender()) {
+            <app-documents-tab
+              [tenderId]="tender()!.id"
+            ></app-documents-tab>
+          }
         </p-tabPanel>
 
         <!-- Clarifications Tab -->
@@ -451,9 +469,53 @@ interface CountdownTime {
         <!-- Evaluation Tab -->
         <p-tabPanel header="Evaluation">
           @if (tender()) {
-            <app-comparable-sheet
-              [tenderId]="tender()!.id"
-            ></app-comparable-sheet>
+            <div class="evaluation-sub-nav">
+              <button pButton
+                label="Comparable Sheet"
+                [outlined]="evaluationSubView() !== 'comparable'"
+                icon="pi pi-table"
+                class="p-button-sm"
+                (click)="evaluationSubView.set('comparable')"></button>
+              <button pButton
+                label="Evaluation Setup"
+                [outlined]="evaluationSubView() !== 'setup'"
+                icon="pi pi-cog"
+                class="p-button-sm"
+                (click)="evaluationSubView.set('setup')"></button>
+              <button pButton
+                label="Technical Scoring"
+                [outlined]="evaluationSubView() !== 'technical'"
+                icon="pi pi-check-square"
+                class="p-button-sm"
+                (click)="evaluationSubView.set('technical')"></button>
+              <button pButton
+                label="Combined Scorecard"
+                [outlined]="evaluationSubView() !== 'scorecard'"
+                icon="pi pi-chart-bar"
+                class="p-button-sm"
+                (click)="evaluationSubView.set('scorecard')"></button>
+            </div>
+            @switch (evaluationSubView()) {
+              @case ('comparable') {
+                <app-comparable-sheet [tenderId]="tender()!.id"></app-comparable-sheet>
+              }
+              @case ('setup') {
+                <app-evaluation-setup [tenderId]="tender()!.id"></app-evaluation-setup>
+              }
+              @case ('technical') {
+                @if (evaluationSetup()) {
+                  <app-technical-scoring [tenderId]="tender()!.id" [setup]="evaluationSetup()!"></app-technical-scoring>
+                } @else {
+                  <div class="empty-state">
+                    <i class="pi pi-spin pi-spinner" style="font-size: 2rem; color: var(--bayan-muted-foreground, #71717a);"></i>
+                    <p>Loading evaluation configuration...</p>
+                  </div>
+                }
+              }
+              @case ('scorecard') {
+                <app-combined-scorecard [tenderId]="tender()!.id"></app-combined-scorecard>
+              }
+            }
           }
         </p-tabPanel>
 
@@ -849,6 +911,15 @@ interface CountdownTime {
       margin: 0;
     }
 
+    .evaluation-sub-nav {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
+      flex-wrap: wrap;
+    }
+
     :host ::ng-deep .p-tabview-panels {
       padding: 1rem 0;
     }
@@ -859,6 +930,7 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly bidderService = inject(BidderService);
   private readonly tenderService = inject(TenderService);
+  private readonly evaluationService = inject(EvaluationService);
   private readonly messageService = inject(MessageService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly destroy$ = new Subject<void>();
@@ -869,6 +941,8 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
   submissionCountdown = signal<CountdownTime | null>(null);
   activeTabIndex = 0;
   showInviteBiddersDialog = false;
+  evaluationSubView = signal<'comparable' | 'setup' | 'technical' | 'scorecard'>('comparable');
+  evaluationSetup = signal<EvaluationSetup | null>(null);
 
   breadcrumbItems: MenuItem[] = [];
   homeItem: MenuItem = { icon: 'pi pi-home', routerLink: '/dashboard' };
@@ -908,6 +982,7 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
     this.loadTenderDetails();
     this.loadInvitedBidders();
     this.loadActivities();
+    this.loadEvaluationSetup();
     this.startCountdown();
   }
 
@@ -957,6 +1032,22 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
     });
   }
 
+  private loadEvaluationSetup(): void {
+    const tenderId = this.route.snapshot.params['id'];
+    if (!tenderId) return;
+    this.evaluationService.getEvaluationSetup(tenderId).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (setup) => {
+        this.evaluationSetup.set(setup);
+      },
+      error: () => {
+        // Evaluation setup not configured yet - leave as null
+        this.evaluationSetup.set(null);
+      }
+    });
+  }
+
   private loadTenderDetails(): void {
     const tenderId = this.route.snapshot.params['id'];
     if (!tenderId) return;
@@ -976,7 +1067,7 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
           category: apiTender.type || 'open',
           publishDate: apiTender.dates?.issueDate ? new Date(String(apiTender.dates.issueDate)) : undefined,
           deadline: apiTender.dates?.submissionDeadline ? new Date(String(apiTender.dates.submissionDeadline)) : new Date(),
-          budget: apiTender.estimatedValue || 0,
+          budget: apiTender.estimatedValue ?? null,
           currency: apiTender.currency || 'AED'
         };
         this.tender.set(tender);
@@ -1026,11 +1117,22 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
       accept: () => {
         const t = this.tender();
         if (t) {
-          this.tender.set({ ...t, status: 'open' });
-          this.messageService.add({
-            severity: 'success',
-            summary: 'Success',
-            detail: 'Tender published successfully'
+          this.tenderService.updateTenderStatus(t.id, 'active').subscribe({
+            next: () => {
+              this.tender.set({ ...t, status: 'open' });
+              this.messageService.add({
+                severity: 'success',
+                summary: 'Success',
+                detail: 'Tender published successfully'
+              });
+            },
+            error: (err: any) => {
+              this.messageService.add({
+                severity: 'error',
+                summary: 'Error',
+                detail: err?.message || 'Failed to publish tender'
+              });
+            }
           });
         }
       }
@@ -1045,11 +1147,22 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
       accept: () => {
         const t = this.tender();
         if (t) {
-          this.tender.set({ ...t, status: 'closed' });
-          this.messageService.add({
-            severity: 'success',
-            summary: 'Success',
-            detail: 'Tender closed successfully'
+          this.tenderService.updateTenderStatus(t.id, 'closed').subscribe({
+            next: () => {
+              this.tender.set({ ...t, status: 'closed' });
+              this.messageService.add({
+                severity: 'success',
+                summary: 'Success',
+                detail: 'Tender closed successfully'
+              });
+            },
+            error: (err: any) => {
+              this.messageService.add({
+                severity: 'error',
+                summary: 'Error',
+                detail: err?.message || 'Failed to close tender'
+              });
+            }
           });
         }
       }
@@ -1064,11 +1177,22 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
       accept: () => {
         const t = this.tender();
         if (t) {
-          this.tender.set({ ...t, status: 'cancelled' });
-          this.messageService.add({
-            severity: 'success',
-            summary: 'Success',
-            detail: 'Tender archived successfully'
+          this.tenderService.updateTenderStatus(t.id, 'cancelled').subscribe({
+            next: () => {
+              this.tender.set({ ...t, status: 'cancelled' });
+              this.messageService.add({
+                severity: 'success',
+                summary: 'Success',
+                detail: 'Tender archived successfully'
+              });
+            },
+            error: (err: any) => {
+              this.messageService.add({
+                severity: 'error',
+                summary: 'Error',
+                detail: err?.message || 'Failed to archive tender'
+              });
+            }
           });
         }
       }
@@ -1115,7 +1239,8 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
           } as any,
           invitedAt: new Date(tib.invitedAt),
           invitedBy: 0,
-          invitationStatus: this.mapToInvitationStatus(tib.status)
+          invitationStatus: this.mapToInvitationStatus(tib.status),
+          bidSubmittedAt: tib.status === 'submitted' ? (tib.submittedAt ? new Date(String(tib.submittedAt)) : new Date()) : undefined
         }));
         this.invitedBidders.set(bidders);
       },
@@ -1135,7 +1260,7 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
     }
   }
 
-  getExistingBidderIds(): number[] {
+  getExistingBidderIds(): (number | string)[] {
     return this.invitedBidders().map(tb => tb.bidderId);
   }
 
@@ -1147,7 +1272,7 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
 
   getSubmittedCount(): number {
     return this.invitedBidders().filter(
-      tb => tb.bidSubmittedAt !== undefined
+      tb => tb.bidSubmittedAt !== undefined || tb.invitationStatus === InvitationStatus.ACCEPTED
     ).length;
   }
 
