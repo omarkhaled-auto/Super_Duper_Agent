@@ -175,6 +175,7 @@ export interface BidImportRequest {
   items: NormalizedBidItem[];
   currency: CurrencyNormalization;
   includeExtras: boolean;
+  forceImport?: boolean;
 }
 
 export interface BidImportResponse {

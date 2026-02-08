@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, map, tap, catchError, throwError } from 'rxjs';
+import { Observable, map, tap, catchError, throwError, switchMap } from 'rxjs';
 import { ApiService } from './api.service';
 import {
   ParseResult,
@@ -256,11 +256,15 @@ export class BidImportService {
       currency: fieldMap['currency'] ? String(row.cells[fieldMap['currency']] || 'SAR') : null
     }));
 
-    return this.api.post<any>(`${this.importUrl(tenderId, bidId)}/match`, {
-      items,
-      fuzzyMatchThreshold: 80.0,
-      alternativeMatchCount: 3
+    // First call map-columns to transition bid to 'Mapped' status, then match
+    return this.api.post<any>(`${this.importUrl(tenderId, bidId)}/map-columns`, {
+      columnMappings: columnMappings
     }).pipe(
+      switchMap(() => this.api.post<any>(`${this.importUrl(tenderId, bidId)}/match`, {
+        items,
+        fuzzyMatchThreshold: 80.0,
+        alternativeMatchCount: 3
+      })),
       map(dto => this.mapMatchResultDto(dto)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
@@ -479,7 +483,7 @@ export class BidImportService {
     return this.api.post<any>(
       `${this.importUrl(request.tenderId, request.bidId)}/execute`,
       {
-        forceImport: false,
+        forceImport: request.forceImport ?? false,
         createVendorSnapshot: true,
         fxRate: request.currency.fxRate !== 1.0 ? request.currency.fxRate : null
       }

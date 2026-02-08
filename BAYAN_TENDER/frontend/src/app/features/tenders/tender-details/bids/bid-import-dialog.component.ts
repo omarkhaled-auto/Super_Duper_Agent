@@ -1429,12 +1429,15 @@ export class BidImportDialogComponent implements OnChanges {
 
     this.isImporting.set(true);
 
+    const hasWarnings = (this.validationResult()?.warningCount ?? 0) > 0;
+
     this.bidImportService.executeImport({
       bidId: this.bidId,
       tenderId: this.tenderId,
       items: this.normalizationResult()!.normalizedItems,
       currency: this.normalizationResult()!.currency,
-      includeExtras: true
+      includeExtras: true,
+      forceImport: hasWarnings
     }).subscribe({
       next: (result) => {
         this.isImporting.set(false);
