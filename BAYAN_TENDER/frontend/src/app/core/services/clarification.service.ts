@@ -17,6 +17,14 @@ import {
   ClarificationSummary
 } from '../models/clarification.model';
 
+// Backend ClarificationPriority enum: Low=0, Normal=1, High=2, Urgent=3
+const PRIORITY_TO_API: Record<string, number> = {
+  'low': 0,
+  'medium': 1,
+  'high': 2,
+  'urgent': 3
+};
+
 export interface ClarificationQueryParams extends PaginationParams, ClarificationFilterParams {}
 
 @Injectable({
@@ -162,7 +170,7 @@ export class ClarificationService {
       subject: data.subject,
       question: data.question,
       relatedBoqSection: data.relatedBoqSectionId ? String(data.relatedBoqSectionId) : undefined,
-      priority: data.priority,
+      priority: PRIORITY_TO_API[data.priority || 'medium'] ?? 1,
       attachmentIds: data.attachmentIds || []
     }).pipe(
       tap(() => this._isLoading.set(false)),

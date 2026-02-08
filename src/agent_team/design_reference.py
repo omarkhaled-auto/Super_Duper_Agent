@@ -194,7 +194,14 @@ async def run_design_extraction(
     }
 
     if backend == "cli":
-        opts_kwargs["cli_path"] = "claude"
+        import shutil
+        import sys
+        _cli_name = "claude.exe" if sys.platform == "win32" else "claude"
+        _resolved = shutil.which(_cli_name)
+        if not _resolved:
+            _home_path = Path.home() / ".local" / "bin" / _cli_name
+            _resolved = str(_home_path) if _home_path.exists() else _cli_name
+        opts_kwargs["cli_path"] = _resolved
 
     options = ClaudeAgentOptions(**opts_kwargs)
     cost = 0.0
