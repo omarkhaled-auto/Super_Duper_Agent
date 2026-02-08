@@ -619,7 +619,7 @@ export class InviteBiddersComponent implements OnInit {
   private readonly http = inject(HttpClient);
 
   @Input() tender?: Tender;
-  @Input() existingBidderIds: number[] = [];
+  @Input() existingBidderIds: (number | string)[] = [];
   @Output() invitationsSent = new EventEmitter<Bidder[]>();
   @Output() cancelled = new EventEmitter<void>();
 
@@ -663,71 +663,45 @@ export class InviteBiddersComponent implements OnInit {
   }
 
   private loadAvailableBidders(): void {
-    // Mock data - in production, fetch from API excluding already invited bidders
-    const mockBidders: Bidder[] = [
-      {
-        id: 1,
-        companyNameEn: 'Tech Solutions Ltd',
-        companyNameAr: 'حلول تقنية المحدودة',
-        email: 'info@techsolutions.sa',
-        phone: '+966 11 234 5678',
-        crNumber: '1010123456',
-        tradeSpecializations: [TradeSpecialization.IT_SERVICES, TradeSpecialization.TELECOMMUNICATIONS],
-        prequalificationStatus: PrequalificationStatus.APPROVED,
-        ndaStatus: 'signed' as any,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
+    this.bidderService.getBidders({ pageSize: 100, isActive: true }).subscribe({
+      next: (response) => {
+        const bidders: Bidder[] = ((response as any).items || [])
+          .map((b: any) => ({
+            id: b.id,
+            companyNameEn: b.companyName || b.companyNameEn || '',
+            companyNameAr: b.companyNameAr || '',
+            email: b.email || '',
+            phone: b.phone || '',
+            crNumber: b.crNumber || '',
+            contactPersonName: b.contactPerson || '',
+            tradeSpecializations: b.tradeSpecialization
+              ? [b.tradeSpecialization as TradeSpecialization]
+              : (b.tradeSpecializations || []),
+            prequalificationStatus: this.mapPrequalStatus(b.prequalificationStatus),
+            ndaStatus: b.ndaStatus || 'pending' as any,
+            isActive: b.isActive ?? true,
+            createdAt: b.createdAt ? new Date(b.createdAt) : new Date(),
+            updatedAt: b.updatedAt ? new Date(b.updatedAt) : new Date()
+          }))
+          .filter((b: Bidder) => !this.existingBidderIds.includes(b.id));
+        this.availableBidders.set(bidders);
+        this.filteredAvailableBidders.set(bidders);
       },
-      {
-        id: 2,
-        companyNameEn: 'Al-Bina Construction',
-        companyNameAr: 'البناء للمقاولات',
-        email: 'contact@albina.sa',
-        tradeSpecializations: [TradeSpecialization.CONSTRUCTION, TradeSpecialization.ENGINEERING],
-        prequalificationStatus: PrequalificationStatus.APPROVED,
-        ndaStatus: 'signed' as any,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      },
-      {
-        id: 3,
-        companyNameEn: 'Global Supplies Co',
-        email: 'sales@globalsupplies.sa',
-        tradeSpecializations: [TradeSpecialization.SUPPLIES, TradeSpecialization.LOGISTICS],
-        prequalificationStatus: PrequalificationStatus.PENDING,
-        ndaStatus: 'sent' as any,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      },
-      {
-        id: 4,
-        companyNameEn: 'Strategic Consulting Group',
-        email: 'hello@strategicconsulting.sa',
-        tradeSpecializations: [TradeSpecialization.CONSULTING, TradeSpecialization.FINANCIAL],
-        prequalificationStatus: PrequalificationStatus.APPROVED,
-        ndaStatus: 'signed' as any,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      },
-      {
-        id: 5,
-        companyNameEn: 'SecureTech Solutions',
-        email: 'info@securetech.sa',
-        tradeSpecializations: [TradeSpecialization.SECURITY, TradeSpecialization.IT_SERVICES],
-        prequalificationStatus: PrequalificationStatus.APPROVED,
-        ndaStatus: 'signed' as any,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
+      error: (err) => {
+        console.error('Failed to load available bidders:', err);
+        this.availableBidders.set([]);
+        this.filteredAvailableBidders.set([]);
       }
-    ].filter(b => !this.existingBidderIds.includes(b.id));
+    });
+  }
 
-    this.availableBidders.set(mockBidders);
-    this.filteredAvailableBidders.set(mockBidders);
+  private mapPrequalStatus(status: number | string): PrequalificationStatus {
+    if (typeof status === 'number') {
+      return status === 1 ? PrequalificationStatus.APPROVED
+        : status === 2 ? PrequalificationStatus.REJECTED
+        : PrequalificationStatus.PENDING;
+    }
+    return (status as PrequalificationStatus) || PrequalificationStatus.PENDING;
   }
 
   onSearch(): void {
@@ -846,13 +820,25 @@ export class InviteBiddersComponent implements OnInit {
       header: 'Confirm Send Invitations',
       icon: 'pi pi-send',
       accept: () => {
-        // In production: call bidderService.inviteBiddersToTender()
-        this.messageService.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: `Invitations sent to ${this.selectedBidders().length} bidder(s)`
+        const bidderIds = this.selectedBidders().map(b => b.id);
+        this.bidderService.inviteBiddersToTender(this.tender!.id, bidderIds).subscribe({
+          next: (result: any) => {
+            const count = result?.invitedCount ?? this.selectedBidders().length;
+            this.messageService.add({
+              severity: 'success',
+              summary: 'Success',
+              detail: `${count} bidder(s) invited successfully`
+            });
+            this.invitationsSent.emit(this.selectedBidders());
+          },
+          error: (err: any) => {
+            this.messageService.add({
+              severity: 'error',
+              summary: 'Error',
+              detail: err?.message || 'Failed to send invitations'
+            });
+          }
         });
-        this.invitationsSent.emit(this.selectedBidders());
       }
     });
   }

@@ -792,11 +792,11 @@ export class PortalSubmitComponent implements OnInit, OnDestroy {
 
   allSections: UploadSection[] = [];
 
-  private tenderId!: number;
+  private tenderId!: string | number;
   private fileInputRefs = new Map<PortalBidDocumentType, HTMLInputElement>();
 
   ngOnInit(): void {
-    this.tenderId = parseInt(this.route.snapshot.params['tenderId'], 10);
+    this.tenderId = this.route.parent?.snapshot.params['tenderId'] || this.route.snapshot.params['tenderId'];
     this.initForm();
     this.initSections();
     this.startCountdown();
@@ -928,6 +928,8 @@ export class PortalSubmitComponent implements OnInit, OnDestroy {
       this.portalService.uploadBidDocument(this.tenderId, documentType, file).subscribe({
         next: (doc) => {
           if (doc) {
+            // Normalize documentType to frontend format (backend returns PascalCase e.g. "PricedBOQ")
+            doc.documentType = documentType;
             const current = this.uploadedDocuments();
             // For non-supporting docs, replace existing
             if (documentType !== 'supporting_documents') {

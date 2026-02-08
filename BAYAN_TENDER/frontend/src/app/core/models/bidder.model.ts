@@ -40,7 +40,7 @@ export enum TradeSpecialization {
  * Main Bidder interface representing a registered bidder/vendor
  */
 export interface Bidder {
-  id: number;
+  id: number | string;
   companyNameEn: string;
   companyNameAr?: string;
   email: string;
@@ -91,9 +91,9 @@ export interface UpdateBidderDto extends Partial<CreateBidderDto> {
  * Represents a bidder invited to a specific tender
  */
 export interface TenderBidder {
-  id: number;
-  tenderId: number;
-  bidderId: number;
+  id: number | string;
+  tenderId: number | string;
+  bidderId: number | string;
   bidder: Bidder;
   invitedAt: Date;
   invitedBy: number;

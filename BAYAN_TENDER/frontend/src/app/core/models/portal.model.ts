@@ -15,8 +15,8 @@ export interface PortalLoginCredentials {
 }
 
 export interface PortalUser {
-  id: number;
-  bidderId: number;
+  id: string | number;
+  bidderId: string | number;
   companyName: string;
   companyNameAr?: string;
   email: string;
@@ -45,7 +45,7 @@ export interface PortalAuthResponse {
 }
 
 export interface PortalTenderInfo {
-  id: number;
+  id: string | number;
   title: string;
   reference: string;
   clientName: string;
@@ -145,7 +145,7 @@ export interface PortalBulletin {
 }
 
 export interface SubmitQuestionDto {
-  tenderId: number;
+  tenderId: string | number;
   subject: string;
   question: string;
   relatedBoqSectionId?: number;
@@ -214,7 +214,7 @@ export interface PortalBidSubmission {
 }
 
 export interface SubmitBidDto {
-  tenderId: number;
+  tenderId: string | number;
   bidValidityDays: number;
   termsAccepted: boolean;
   documentIds: number[];

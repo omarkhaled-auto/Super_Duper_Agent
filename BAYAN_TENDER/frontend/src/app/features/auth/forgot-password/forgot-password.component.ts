@@ -24,7 +24,7 @@ import { AuthService } from '../../../core/auth/auth.service';
     <div class="forgot-container">
       <div class="forgot-card">
         <div class="forgot-header">
-          <img src="assets/images/logo.png" alt="Bayan" class="logo" />
+          <img src="assets/images/logo.svg" alt="Bayan" class="logo" />
           <h1>Forgot Password</h1>
           <p>Enter your email to receive a password reset link</p>
         </div>

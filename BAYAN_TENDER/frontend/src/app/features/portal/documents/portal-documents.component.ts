@@ -503,10 +503,10 @@ export class PortalDocumentsComponent implements OnInit {
   downloadingId = signal<number | null>(null);
   acknowledgingId = signal<number | null>(null);
 
-  private tenderId!: number;
+  private tenderId!: string | number;
 
   ngOnInit(): void {
-    this.tenderId = parseInt(this.route.snapshot.params['tenderId'], 10);
+    this.tenderId = this.route.parent?.snapshot.params['tenderId'] || this.route.snapshot.params['tenderId'];
     this.loadData();
   }
 

@@ -30,7 +30,7 @@ import { AuthService } from '../../../core/auth/auth.service';
     <div class="login-container">
       <div class="login-card">
         <div class="login-header">
-          <img src="assets/images/logo.png" alt="Bayan" class="logo" />
+          <img src="assets/images/logo.svg" alt="Bayan" class="logo" />
           <h1>Welcome Back</h1>
           <p>Sign in to your Bayan Tender account</p>
         </div>

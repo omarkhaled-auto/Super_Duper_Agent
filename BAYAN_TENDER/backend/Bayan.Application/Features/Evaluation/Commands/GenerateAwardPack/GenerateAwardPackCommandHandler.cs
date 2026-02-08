@@ -148,12 +148,15 @@ public class GenerateAwardPackCommandHandler : IRequestHandler<GenerateAwardPack
         // Get commercial evaluation results
         if (request.IncludeCommercialDetails)
         {
-            var commercialScores = await _context.CommercialScores
+            var allCommercialScores = await _context.CommercialScores
                 .Include(cs => cs.Bidder)
                 .Where(cs => cs.TenderId == request.TenderId)
+                .ToListAsync(cancellationToken);
+
+            var commercialScores = allCommercialScores
                 .GroupBy(cs => cs.BidderId)
                 .Select(g => g.OrderByDescending(x => x.CalculatedAt).First())
-                .ToListAsync(cancellationToken);
+                .ToList();
 
             awardPackData.CommercialResults = commercialScores
                 .OrderByDescending(cs => cs.CommercialScoreValue)
@@ -179,12 +182,16 @@ public class GenerateAwardPackCommandHandler : IRequestHandler<GenerateAwardPack
 
         if (combinedScorecards.Any())
         {
-            // Get commercial scores for total prices
-            var commercialPrices = await _context.CommercialScores
+            // Get commercial scores for total prices (materialize before GroupBy to avoid EF Core SQL translation issues)
+            var allCommercialPriceScores = await _context.CommercialScores
                 .Where(cs => cs.TenderId == request.TenderId)
+                .ToListAsync(cancellationToken);
+
+            var commercialPrices = allCommercialPriceScores
                 .GroupBy(cs => cs.BidderId)
-                .Select(g => new { BidderId = g.Key, TotalPrice = g.OrderByDescending(x => x.CalculatedAt).First().NormalizedTotalPrice })
-                .ToDictionaryAsync(x => x.BidderId, x => x.TotalPrice, cancellationToken);
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderByDescending(x => x.CalculatedAt).First().NormalizedTotalPrice);
 
             awardPackData.CombinedScorecard = new CombinedScorecardDto
             {
@@ -233,34 +240,44 @@ public class GenerateAwardPackCommandHandler : IRequestHandler<GenerateAwardPack
         }
 
         // Get bid exceptions if requested
+        // Note: bid_exceptions table schema uses bid_submission_id (not tender_id/bidder_id),
+        // so we gracefully degrade if the query fails due to schema mismatch
         if (request.IncludeExceptions)
         {
-            var exceptions = await _context.BidExceptions
-                .Include(be => be.Bidder)
-                .Include(be => be.LoggedByUser)
-                .Where(be => be.TenderId == request.TenderId)
-                .OrderByDescending(be => be.RiskLevel)
-                .ThenByDescending(be => be.CreatedAt)
-                .ToListAsync(cancellationToken);
-
-            awardPackData.Exceptions = exceptions.Select(e => new BidExceptionDto
+            try
             {
-                Id = e.Id,
-                TenderId = e.TenderId,
-                BidderId = e.BidderId,
-                BidderCompanyName = e.Bidder.CompanyName,
-                ExceptionType = e.ExceptionType,
-                Description = e.Description,
-                CostImpact = e.CostImpact,
-                TimeImpactDays = e.TimeImpactDays,
-                RiskLevel = e.RiskLevel,
-                Mitigation = e.Mitigation,
-                LoggedBy = e.LoggedBy,
-                LoggedByName = e.LoggedByUser != null
-                    ? $"{e.LoggedByUser.FirstName} {e.LoggedByUser.LastName}".Trim()
-                    : "Unknown",
-                CreatedAt = e.CreatedAt
-            }).ToList();
+                var exceptions = await _context.BidExceptions
+                    .Include(be => be.Bidder)
+                    .Include(be => be.LoggedByUser)
+                    .Where(be => be.TenderId == request.TenderId)
+                    .OrderByDescending(be => be.RiskLevel)
+                    .ThenByDescending(be => be.CreatedAt)
+                    .ToListAsync(cancellationToken);
+
+                awardPackData.Exceptions = exceptions.Select(e => new BidExceptionDto
+                {
+                    Id = e.Id,
+                    TenderId = e.TenderId,
+                    BidderId = e.BidderId,
+                    BidderCompanyName = e.Bidder?.CompanyName ?? "Unknown",
+                    ExceptionType = e.ExceptionType,
+                    Description = e.Description,
+                    CostImpact = e.CostImpact,
+                    TimeImpactDays = e.TimeImpactDays,
+                    RiskLevel = e.RiskLevel,
+                    Mitigation = e.Mitigation,
+                    LoggedBy = e.LoggedBy,
+                    LoggedByName = e.LoggedByUser != null
+                        ? $"{e.LoggedByUser.FirstName} {e.LoggedByUser.LastName}".Trim()
+                        : "Unknown",
+                    CreatedAt = e.CreatedAt
+                }).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load bid exceptions for tender {TenderId}. Continuing without exceptions.", request.TenderId);
+                awardPackData.Exceptions = new List<BidExceptionDto>();
+            }
         }
 
         // Generate PDF
@@ -348,13 +365,16 @@ public class GenerateAwardPackCommandHandler : IRequestHandler<GenerateAwardPack
             .Select(g => new { BidderId = g.Key, AverageScore = g.Average(ts => ts.Score) })
             .ToDictionaryAsync(x => x.BidderId, x => x.AverageScore, cancellationToken);
 
-        // Get commercial scores with bidder info
-        var commercialScores = await _context.CommercialScores
+        // Get commercial scores with bidder info (materialize before GroupBy to avoid EF Core SQL translation issues)
+        var allSensitivityCommScores = await _context.CommercialScores
             .Include(cs => cs.Bidder)
             .Where(cs => cs.TenderId == tenderId)
+            .ToListAsync(cancellationToken);
+
+        var commercialScores = allSensitivityCommScores
             .GroupBy(cs => cs.BidderId)
             .Select(g => g.OrderByDescending(x => x.CalculatedAt).First())
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         if (!commercialScores.Any())
         {

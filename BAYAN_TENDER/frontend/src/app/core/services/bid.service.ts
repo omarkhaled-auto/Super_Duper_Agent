@@ -173,7 +173,7 @@ export class BidService {
    * Derived from the bids list since the backend has no dedicated statistics endpoint.
    */
   getStatistics(tenderId: number): Observable<BidStatistics> {
-    return this.getBids(tenderId, { page: 1, pageSize: 1000 }).pipe(
+    return this.getBids(tenderId, { page: 1, pageSize: 100 }).pipe(
       map(result => {
         const bids = result.items;
         const openedCount = bids.filter(b => b.status === 'opened').length;

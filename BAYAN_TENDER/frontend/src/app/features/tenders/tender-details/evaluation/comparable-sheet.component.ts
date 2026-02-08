@@ -13,15 +13,18 @@ import { CommonModule, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
 
-// AG Grid type stubs (ag-grid not installed)
-type ColDef = any;
-type GridApi = any;
-type GridReadyEvent = any;
-type CellClassParams = any;
-type ValueFormatterParams = any;
-type ITooltipParams = any;
-type RowClassParams = any;
-type GetRowIdParams = any;
+// AG Grid
+import { AgGridAngular } from 'ag-grid-angular';
+import type {
+  ColDef,
+  GridApi,
+  GridReadyEvent,
+  CellClassParams,
+  ValueFormatterParams,
+  ITooltipParams,
+  RowClassParams,
+  GetRowIdParams
+} from 'ag-grid-community';
 
 // PrimeNG
 import { ButtonModule } from 'primeng/button';
@@ -97,6 +100,7 @@ interface GridRowData {
   imports: [
     CommonModule,
     FormsModule,
+    AgGridAngular,
     ButtonModule,
     DropdownModule,
     InputTextModule,
@@ -243,10 +247,18 @@ interface GridRowData {
       } @else {
         <!-- AG Grid -->
         <div class="grid-container">
-          <!-- AG Grid placeholder - install ag-grid-angular and ag-grid-community to enable -->
-          <div class="ag-grid-placeholder" data-testid="comparable-sheet-table" style="width: 100%; min-height: 200px; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--bayan-border, #e4e4e7); border-radius: var(--bayan-radius, 0.5rem); color: var(--bayan-muted-foreground, #71717a);">
-            <span>Comparable Sheet Grid (requires ag-grid installation)</span>
-          </div>
+          <ag-grid-angular
+            class="ag-theme-alpine"
+            style="width: 100%; height: 500px;"
+            data-testid="comparable-sheet-table"
+            [rowData]="filteredGridData()"
+            [columnDefs]="columnDefs()"
+            [defaultColDef]="defaultColDef"
+            [getRowId]="getRowId"
+            [getRowClass]="getRowClass"
+            [tooltipShowDelay]="500"
+            (gridReady)="onGridReady($event)"
+          />
         </div>
 
         <!-- Legend -->

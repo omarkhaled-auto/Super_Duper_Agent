@@ -47,6 +47,7 @@ public class UpdateTenderCommandHandler : IRequestHandler<UpdateTenderCommand, T
         tender.ClientId = request.ClientId;
         tender.TenderType = request.TenderType;
         tender.BaseCurrency = request.BaseCurrency;
+        tender.EstimatedValue = request.EstimatedValue;
         tender.BidValidityDays = request.BidValidityDays;
         tender.IssueDate = request.IssueDate;
         tender.ClarificationDeadline = request.ClarificationDeadline;
@@ -133,6 +134,7 @@ public class UpdateTenderCommandHandler : IRequestHandler<UpdateTenderCommand, T
             ClientName = tender.Client.Name,
             TenderType = tender.TenderType,
             BaseCurrency = tender.BaseCurrency,
+            EstimatedValue = tender.EstimatedValue,
             Status = tender.Status,
             SubmissionDeadline = tender.SubmissionDeadline,
             BidderCount = tender.TenderBidders.Count,

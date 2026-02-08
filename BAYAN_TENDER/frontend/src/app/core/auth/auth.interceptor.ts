@@ -5,13 +5,20 @@ import { AuthService } from './auth.service';
 
 export const authInterceptor: HttpInterceptorFn = (req: HttpRequest<unknown>, next: HttpHandlerFn) => {
   const authService = inject(AuthService);
-  const token = authService.getAccessToken();
 
   // Skip auth header for auth endpoints
   const isAuthEndpoint = req.url.includes('/auth/login') ||
                          req.url.includes('/auth/register') ||
                          req.url.includes('/auth/refresh') ||
                          req.url.includes('/auth/forgot-password');
+
+  // Determine if this is a portal request
+  const isPortalRequest = req.url.includes('/portal/');
+
+  // Use portal token for portal requests, admin token otherwise
+  const token = isPortalRequest
+    ? localStorage.getItem('portal_access_token')
+    : authService.getAccessToken();
 
   if (token && !isAuthEndpoint) {
     req = addTokenToRequest(req, token);
@@ -20,7 +27,16 @@ export const authInterceptor: HttpInterceptorFn = (req: HttpRequest<unknown>, ne
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
       if (error.status === 401 && !isAuthEndpoint) {
-        // Token expired, try to refresh
+        if (isPortalRequest) {
+          // Portal token expired - redirect to portal login
+          localStorage.removeItem('portal_access_token');
+          localStorage.removeItem('portal_refresh_token');
+          localStorage.removeItem('portal_user');
+          localStorage.removeItem('portal_tender');
+          window.location.href = '/portal/login';
+          return throwError(() => error);
+        }
+        // Admin token expired, try to refresh
         return authService.refreshToken().pipe(
           switchMap((response) => {
             const newReq = addTokenToRequest(req, response.accessToken);

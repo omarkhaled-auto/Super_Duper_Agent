@@ -128,21 +128,22 @@ export interface BoqSummary {
 
 // Dropdown options
 export const UOM_OPTIONS: { label: string; value: string }[] = [
-  { label: 'Each (EA)', value: 'EA' },
+  { label: 'Numbers (nos)', value: 'nos' },
   { label: 'Lump Sum (LS)', value: 'LS' },
-  { label: 'Square Meter (M2)', value: 'M2' },
-  { label: 'Cubic Meter (M3)', value: 'M3' },
-  { label: 'Linear Meter (LM)', value: 'LM' },
-  { label: 'Kilogram (KG)', value: 'KG' },
-  { label: 'Metric Ton (MT)', value: 'MT' },
-  { label: 'Hour (HR)', value: 'HR' },
-  { label: 'Day (DAY)', value: 'DAY' },
-  { label: 'Week (WK)', value: 'WK' },
-  { label: 'Month (MTH)', value: 'MTH' },
-  { label: 'Set (SET)', value: 'SET' },
-  { label: 'Lot (LOT)', value: 'LOT' },
-  { label: 'Number (NO)', value: 'NO' },
-  { label: 'Pair (PR)', value: 'PR' }
+  { label: 'Square Meter (m2)', value: 'm2' },
+  { label: 'Cubic Meter (m3)', value: 'm3' },
+  { label: 'Linear Meter (lm)', value: 'lm' },
+  { label: 'Kilogram (kg)', value: 'kg' },
+  { label: 'Metric Ton (ton)', value: 'ton' },
+  { label: 'Meter (m)', value: 'm' },
+  { label: 'Day (day)', value: 'day' },
+  { label: 'Week (week)', value: 'week' },
+  { label: 'Month (month)', value: 'month' },
+  { label: 'Set (set)', value: 'set' },
+  { label: 'Lot (lot)', value: 'lot' },
+  { label: 'Liter (ltr)', value: 'ltr' },
+  { label: 'Square Foot (sqft)', value: 'sqft' },
+  { label: 'Percentage (%)', value: '%' }
 ];
 
 export const BOQ_ITEM_TYPE_OPTIONS: { label: string; value: BoqItemType; description: string }[] = [

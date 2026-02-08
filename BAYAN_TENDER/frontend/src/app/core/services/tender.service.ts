@@ -192,6 +192,14 @@ export class TenderService {
         catchError(error => throwError(() => error))
       );
     }
+    if (status === 'closed') {
+      // TODO: Backend needs a dedicated /close endpoint that transitions to Evaluation status
+      // For now, using /cancel as the closest available endpoint
+      return this.api.post<any>(`${this.endpoint}/${id}/cancel`, {}).pipe(
+        map((result: any) => this.mapTenderDtoToTender(result)),
+        catchError(error => throwError(() => error))
+      );
+    }
     if (status === 'cancelled') {
       return this.api.post<any>(`${this.endpoint}/${id}/cancel`, {}).pipe(
         map((result: any) => this.mapTenderDtoToTender(result)),
@@ -346,6 +354,7 @@ export class TenderService {
       clientId: data.clientId,
       tenderType: TENDER_TYPE_TO_API[data.type] ?? 0,
       baseCurrency: data.currency || 'AED',
+      estimatedValue: data.estimatedValue || null,
       bidValidityDays: data.bidValidityPeriod ?? 90,
       issueDate,
       clarificationDeadline,
@@ -369,6 +378,7 @@ export class TenderService {
     if (data.clientId !== undefined) command.clientId = data.clientId;
     if (data.type !== undefined) command.tenderType = TENDER_TYPE_TO_API[data.type] ?? 0;
     if (data.currency !== undefined) command.baseCurrency = data.currency;
+    if (data.estimatedValue !== undefined) command.estimatedValue = data.estimatedValue;
     if (data.bidValidityPeriod !== undefined) command.bidValidityDays = data.bidValidityPeriod;
     if (data.dates) {
       if (data.dates.issueDate !== undefined) command.issueDate = data.dates.issueDate;

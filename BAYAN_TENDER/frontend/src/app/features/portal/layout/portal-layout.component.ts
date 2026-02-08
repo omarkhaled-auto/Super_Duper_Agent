@@ -27,7 +27,7 @@ import { PortalTenderInfo } from '../../../core/models/portal.model';
       <header class="portal-header">
         <div class="header-content">
           <div class="header-left">
-            <img src="assets/images/logo-white.png" alt="Bayan" class="portal-logo" />
+            <img src="assets/images/logo-white.svg" alt="Bayan" class="portal-logo" />
             <div class="tender-info" *ngIf="tender()">
               <h1 class="tender-title">{{ tender()?.title }}</h1>
               <span class="tender-reference">{{ tender()?.reference }}</span>
@@ -464,11 +464,11 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
     }
   }
 
-  private getTenderId(): number {
+  private getTenderId(): string | number {
     // Try to get from route params first, then from stored tender
-    const routeTenderId = this.route.firstChild?.snapshot.params['tenderId'];
+    const routeTenderId = this.route.snapshot.params['tenderId'];
     if (routeTenderId) {
-      return parseInt(routeTenderId, 10);
+      return routeTenderId;
     }
     return this.tender()?.id || 0;
   }

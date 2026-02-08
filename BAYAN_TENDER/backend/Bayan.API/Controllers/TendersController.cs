@@ -30,7 +30,7 @@ namespace Bayan.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin,TenderManager,CommercialAnalyst,Approver,Auditor")]
+[Authorize(Roles = "Admin,TenderManager,CommercialAnalyst,Approver,Auditor,TechnicalPanelist")]
 public class TendersController : ControllerBase
 {
     private readonly IMediator _mediator;

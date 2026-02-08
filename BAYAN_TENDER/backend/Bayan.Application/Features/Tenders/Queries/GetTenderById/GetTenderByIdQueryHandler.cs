@@ -51,6 +51,7 @@ public class GetTenderByIdQueryHandler : IRequestHandler<GetTenderByIdQuery, Ten
             ClientName = tender.Client.Name,
             TenderType = tender.TenderType,
             BaseCurrency = tender.BaseCurrency,
+            EstimatedValue = tender.EstimatedValue,
             BidValidityDays = tender.BidValidityDays,
             IssueDate = tender.IssueDate,
             ClarificationDeadline = tender.ClarificationDeadline,

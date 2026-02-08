@@ -96,7 +96,7 @@ import { PortalBidReceipt, PORTAL_BID_DOCUMENT_TYPE_CONFIG } from '../../../core
                   <span class="receipt-number">{{ receipt()!.receiptNumber }}</span>
                 </div>
                 <div class="receipt-logo">
-                  <img src="assets/images/logo.png" alt="Bayan" />
+                  <img src="assets/images/logo.svg" alt="Bayan" />
                 </div>
               </div>
             </ng-template>
@@ -564,10 +564,10 @@ export class PortalReceiptComponent implements OnInit {
   isDownloading = signal(false);
   error = signal<string | null>(null);
 
-  private bidId!: number;
+  private bidId!: string | number;
 
   ngOnInit(): void {
-    this.bidId = parseInt(this.route.snapshot.params['bidId'], 10);
+    this.bidId = this.route.snapshot.params['bidId'];
     this.loadReceipt();
   }
 

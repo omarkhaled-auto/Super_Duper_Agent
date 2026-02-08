@@ -5,6 +5,9 @@ using Bayan.Application.Features.Approval.DTOs;
 using Bayan.Application.Features.Approval.Queries.GetApprovalHistory;
 using Bayan.Application.Features.Approval.Queries.GetApprovalStatus;
 using Bayan.Application.Features.Approval.Queries.GetPendingApprovals;
+using Bayan.Application.Features.Admin.Users;
+using Bayan.Application.Features.Admin.Users.Queries.GetUsers;
+using Bayan.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -162,6 +165,30 @@ public class ApprovalController : ControllerBase
 
         var result = await _mediator.Send(query, cancellationToken);
         return Ok(ApiResponse<PaginatedList<PendingApprovalDto>>.SuccessResponse(result));
+    }
+
+    /// <summary>
+    /// Gets users with Approver role for approval workflow dropdowns.
+    /// Accessible by Admin and TenderManager roles.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A paginated list of active approver users.</returns>
+    [HttpGet("approvers")]
+    [Authorize(Roles = "Admin,TenderManager")]
+    [ProducesResponseType(typeof(PaginatedList<UserDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PaginatedList<UserDto>>> GetApprovers(
+        CancellationToken cancellationToken = default)
+    {
+        var query = new GetUsersQuery
+        {
+            Page = 1,
+            PageSize = 100,
+            Role = UserRole.Approver,
+            IsActive = true
+        };
+
+        var result = await _mediator.Send(query, cancellationToken);
+        return Ok(ApiResponse<PaginatedList<UserDto>>.SuccessResponse(result));
     }
 }
 

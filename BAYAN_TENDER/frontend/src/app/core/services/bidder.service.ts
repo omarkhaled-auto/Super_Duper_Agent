@@ -119,11 +119,11 @@ export class BidderService {
   /**
    * Invite bidders to a specific tender
    */
-  inviteBiddersToTender(tenderId: number, data: InviteBiddersDto): Observable<TenderBidder[]> {
+  inviteBiddersToTender(tenderId: number | string, bidderIds: (number | string)[]): Observable<any> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return this.api.post<TenderBidder[]>(`/tenders/${tenderId}/bidders/invite`, data).pipe(
+    return this.api.post<any>(`/tenders/${tenderId}/invite`, bidderIds).pipe(
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);

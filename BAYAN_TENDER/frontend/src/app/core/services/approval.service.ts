@@ -156,16 +156,12 @@ export class ApprovalService {
   }
 
   /**
-   * Get users with Approver role for dropdown
-   * GET /api/admin/users?role=4&pageSize=100&isActive=true
-   * Backend UserRole.Approver = 4
+   * Get users with Approver role for dropdown.
+   * GET /api/approvers
+   * Dedicated endpoint accessible to Admin and TenderManager roles.
    */
   getApprovers(): Observable<ApproverOption[]> {
-    return this.api.get<any>('/admin/users', {
-      role: 4,
-      pageSize: 100,
-      isActive: true
-    }).pipe(
+    return this.api.get<any>('/approvers').pipe(
       map(paginated => {
         const users: any[] = paginated.items || [];
         return users.map((u: any) => ({

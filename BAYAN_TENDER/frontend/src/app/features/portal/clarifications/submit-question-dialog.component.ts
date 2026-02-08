@@ -12,7 +12,7 @@ import { PortalService } from '../../../core/services/portal.service';
 import { BoqSectionOption, SubmitQuestionDto } from '../../../core/models/portal.model';
 
 interface DialogData {
-  tenderId: number;
+  tenderId: string | number;
   clarificationDeadline?: Date | string;
 }
 
