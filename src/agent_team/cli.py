@@ -283,35 +283,7 @@ def _build_options(
 
     # Use subprocess CLI transport for subscription mode (--backend cli)
     if backend == "cli":
-        _cli_name = "claude.exe" if sys.platform == "win32" else "claude"
-        _resolved = shutil.which(_cli_name)
-        if not _resolved:
-            # Fallback: check common install locations
-            _home_path = Path.home() / ".local" / "bin" / _cli_name
-            _resolved = str(_home_path) if _home_path.exists() else _cli_name
-        opts_kwargs["cli_path"] = _resolved
-
-        # Windows CreateProcess has a 32,767 char command-line limit.
-        # The system prompt can exceed this.  When it does, write the full
-        # prompt to a temp file and replace it with a short directive that
-        # tells the orchestrator (which has Read access) to load the file.
-        _WIN_CMD_LIMIT = 30000  # conservative margin
-        if sys.platform == "win32" and len(opts_kwargs.get("system_prompt", "")) > _WIN_CMD_LIMIT:
-            import tempfile as _tf
-            _sp_file = _tf.NamedTemporaryFile(
-                mode="w", suffix=".md", delete=False,
-                encoding="utf-8", prefix="agent_team_sp_",
-            )
-            _sp_file.write(opts_kwargs["system_prompt"])
-            _sp_file.close()
-            _sp_path = _sp_file.name.replace("\\", "/")
-            opts_kwargs["system_prompt"] = (
-                "CRITICAL: Your full system instructions are in a file. "
-                f"You MUST read the file at '{_sp_path}' using the Read tool "
-                "BEFORE doing anything else. Those instructions define your "
-                "role, capabilities, agent fleet, and convergence rules. "
-                "Do NOT proceed without reading them first."
-            )
+        opts_kwargs["cli_path"] = "claude"
 
     return ClaudeAgentOptions(**opts_kwargs)
 
