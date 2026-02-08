@@ -423,37 +423,47 @@ interface CountdownTime {
 
         <!-- Clarifications Tab -->
         <p-tabPanel header="Clarifications">
-          <app-clarifications-tab
-            [tenderId]="tender()?.id || 0"
-          ></app-clarifications-tab>
+          @if (tender()) {
+            <app-clarifications-tab
+              [tenderId]="tender()!.id"
+            ></app-clarifications-tab>
+          }
         </p-tabPanel>
 
         <!-- BOQ Tab -->
         <p-tabPanel header="BOQ">
-          <app-boq-tab
-            [tenderId]="tender()?.id || 0"
-          ></app-boq-tab>
+          @if (tender()) {
+            <app-boq-tab
+              [tenderId]="tender()!.id"
+            ></app-boq-tab>
+          }
         </p-tabPanel>
 
         <!-- Bids Tab -->
         <p-tabPanel header="Bids">
-          <app-bids-tab
-            [tenderId]="tender()?.id || 0"
-          ></app-bids-tab>
+          @if (tender()) {
+            <app-bids-tab
+              [tenderId]="tender()!.id"
+            ></app-bids-tab>
+          }
         </p-tabPanel>
 
         <!-- Evaluation Tab -->
         <p-tabPanel header="Evaluation">
-          <app-comparable-sheet
-            [tenderId]="tender()?.id || 0"
-          ></app-comparable-sheet>
+          @if (tender()) {
+            <app-comparable-sheet
+              [tenderId]="tender()!.id"
+            ></app-comparable-sheet>
+          }
         </p-tabPanel>
 
         <!-- Approval Tab -->
         <p-tabPanel header="Approval">
-          <app-approval-tab
-            [tenderId]="tender()?.id || 0"
-          ></app-approval-tab>
+          @if (tender()) {
+            <app-approval-tab
+              [tenderId]="tender()!.id"
+            ></app-approval-tab>
+          }
         </p-tabPanel>
       </p-tabView>
 
@@ -1081,52 +1091,48 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
   }
 
   private loadInvitedBidders(): void {
-    // Mock invited bidders - in production, fetch from API
-    const mockInvitedBidders: TenderBidder[] = [
-      {
-        id: 1,
-        tenderId: 1,
-        bidderId: 1,
-        bidder: {
-          id: 1,
-          companyNameEn: 'Tech Solutions Ltd',
-          companyNameAr: 'حلول تقنية المحدودة',
-          email: 'info@techsolutions.sa',
-          tradeSpecializations: [],
-          prequalificationStatus: PrequalificationStatus.APPROVED,
-          ndaStatus: 'signed' as any,
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        invitedAt: new Date('2026-01-20'),
-        invitedBy: 1,
-        invitationStatus: InvitationStatus.ACCEPTED,
-        invitationSentAt: new Date('2026-01-20')
-      },
-      {
-        id: 2,
-        tenderId: 1,
-        bidderId: 2,
-        bidder: {
-          id: 2,
-          companyNameEn: 'SecureTech Solutions',
-          email: 'info@securetech.sa',
-          tradeSpecializations: [],
-          prequalificationStatus: PrequalificationStatus.APPROVED,
-          ndaStatus: 'signed' as any,
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        invitedAt: new Date('2026-01-22'),
-        invitedBy: 1,
-        invitationStatus: InvitationStatus.SENT,
-        invitationSentAt: new Date('2026-01-22')
-      }
-    ];
+    const tenderId = this.route.snapshot.params['id'];
+    if (!tenderId) return;
 
-    this.invitedBidders.set(mockInvitedBidders);
+    this.tenderService.getInvitedBidders(tenderId).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (invitedList) => {
+        // Map TenderInvitedBidder to TenderBidder for template compatibility
+        const bidders: TenderBidder[] = invitedList.map(tib => ({
+          id: tib.id,
+          tenderId: tib.tenderId,
+          bidderId: tib.bidderId,
+          bidder: {
+            id: tib.bidderId,
+            companyNameEn: tib.bidderName,
+            email: tib.bidderEmail,
+            tradeSpecializations: [],
+            prequalificationStatus: PrequalificationStatus.APPROVED,
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          } as any,
+          invitedAt: new Date(tib.invitedAt),
+          invitedBy: 0,
+          invitationStatus: this.mapToInvitationStatus(tib.status)
+        }));
+        this.invitedBidders.set(bidders);
+      },
+      error: () => {
+        // No bidders or endpoint not available - show empty state
+        this.invitedBidders.set([]);
+      }
+    });
+  }
+
+  private mapToInvitationStatus(status: string): InvitationStatus {
+    switch (status) {
+      case 'viewed': return InvitationStatus.VIEWED;
+      case 'declined': return InvitationStatus.DECLINED;
+      case 'submitted': return InvitationStatus.ACCEPTED;
+      default: return InvitationStatus.SENT;
+    }
   }
 
   getExistingBidderIds(): number[] {

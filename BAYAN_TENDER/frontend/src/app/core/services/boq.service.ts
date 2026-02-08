@@ -537,7 +537,35 @@ export class BoqService {
     const languageMap: Record<string, number> = { en: 0, ar: 1, both: 2 };
     const language = languageMap[options.language] ?? 0;
 
-    return this.api.download(`/tenders/${tenderId}/boq/export-template?language=${language}&includeInstructions=${options.includeInstructions}`).pipe(
+    // Map frontend boolean columns to backend string array
+    const columnNameMap: Record<string, string> = {
+      itemNumber: 'ItemNumber',
+      description: 'Description',
+      quantity: 'Quantity',
+      uom: 'Uom',
+      type: 'Type',
+      notes: 'Notes',
+      unitRate: 'UnitRate',
+      totalAmount: 'Amount'
+    };
+    const includeColumns = Object.entries(options.columns)
+      .filter(([, enabled]) => enabled)
+      .map(([key]) => columnNameMap[key])
+      .filter(Boolean);
+
+    // When lockColumns is true, lock the read-only columns; otherwise empty array
+    const lockColumns = options.lockColumns
+      ? includeColumns.filter(c => ['ItemNumber', 'Description', 'Quantity', 'Uom'].includes(c))
+      : [];
+
+    const dto = {
+      includeColumns,
+      lockColumns,
+      includeInstructions: options.includeInstructions,
+      language
+    };
+
+    return this.api.downloadPost(`/tenders/${tenderId}/boq/export-template`, dto).pipe(
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);

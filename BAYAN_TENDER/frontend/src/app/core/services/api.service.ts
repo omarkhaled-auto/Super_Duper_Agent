@@ -115,4 +115,12 @@ export class ApiService {
       catchError(this.handleError)
     );
   }
+
+  downloadPost(endpoint: string, data: unknown): Observable<Blob> {
+    return this.http.post(`${this.baseUrl}${endpoint}`, data, {
+      responseType: 'blob'
+    }).pipe(
+      catchError(this.handleError)
+    );
+  }
 }
