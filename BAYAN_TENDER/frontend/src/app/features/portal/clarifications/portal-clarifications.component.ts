@@ -747,7 +747,7 @@ export class PortalClarificationsComponent implements OnInit {
   downloadBulletinPdf(bulletin: PortalBulletin, event: Event): void {
     event.stopPropagation();
 
-    this.portalService.downloadBulletinPdf(bulletin.id).subscribe({
+    this.portalService.downloadBulletinPdf(this.tenderId, bulletin.id).subscribe({
       next: (blob) => {
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -777,17 +777,25 @@ export class PortalClarificationsComponent implements OnInit {
   getStatusLabel(status: string): string {
     const labels: Record<string, string> = {
       submitted: 'Submitted',
+      pending: 'Pending',
+      draft_answer: 'Draft Answer',
       answered: 'Answered',
-      published: 'Published'
+      published: 'Published',
+      duplicate: 'Duplicate',
+      rejected: 'Rejected'
     };
-    return labels[status] || status;
+    return labels[status] || status || 'Unknown';
   }
 
   getStatusSeverity(status: string): 'secondary' | 'success' | 'info' | 'warn' | 'danger' | 'contrast' {
     const severities: Record<string, 'secondary' | 'success' | 'info' | 'warn' | 'danger' | 'contrast'> = {
       submitted: 'info',
+      pending: 'warn',
+      draft_answer: 'secondary',
       answered: 'success',
-      published: 'contrast'
+      published: 'contrast',
+      duplicate: 'secondary',
+      rejected: 'danger'
     };
     return severities[status] || 'secondary';
   }

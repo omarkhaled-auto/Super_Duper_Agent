@@ -240,37 +240,93 @@ export class PortalService {
   }
 
   private organizeDocumentsByCategory(documents: TenderDocument[]): DocumentFolder[] {
-    const folderMap = new Map<DocumentCategory, TenderDocument[]>();
+    // Group documents by folderPath from backend
+    const folderMap = new Map<string, TenderDocument[]>();
 
-    // Initialize all categories
-    Object.keys(DOCUMENT_CATEGORY_CONFIG).forEach(cat => {
-      folderMap.set(cat as DocumentCategory, []);
-    });
-
-    // Distribute documents to categories
     documents.forEach(doc => {
-      const category = doc.category || 'other';
-      const existing = folderMap.get(category) || [];
+      const folderKey = doc.folderPath || 'other';
+      const existing = folderMap.get(folderKey) || [];
       existing.push(doc);
-      folderMap.set(category, existing);
+      folderMap.set(folderKey, existing);
     });
 
     // Convert to DocumentFolder array
     const folders: DocumentFolder[] = [];
-    folderMap.forEach((docs, category) => {
-      if (docs.length > 0) {
-        const config = DOCUMENT_CATEGORY_CONFIG[category];
-        folders.push({
-          category,
-          displayName: config.label,
-          icon: config.icon,
-          documents: docs.sort((a, b) => a.fileName.localeCompare(b.fileName)),
-          totalSize: docs.reduce((sum, d) => sum + d.fileSize, 0)
-        });
-      }
+    folderMap.forEach((docs, folderPath) => {
+      // Try to match folderPath to a known category
+      const category = this.folderPathToCategory(folderPath);
+      const config = DOCUMENT_CATEGORY_CONFIG[category];
+      folders.push({
+        category,
+        displayName: config?.label || folderPath,
+        icon: config?.icon || 'pi-folder',
+        documents: docs.sort((a, b) => a.fileName.localeCompare(b.fileName)),
+        totalSize: docs.reduce((sum, d) => sum + (d.fileSizeBytes || 0), 0)
+      });
     });
 
     return folders;
+  }
+
+  /**
+   * Normalize a clarification response from either GET (PortalClarificationDto)
+   * or POST (BidderQuestionDto) into a consistent PortalClarification shape.
+   *
+   * GET returns status as integer enum (0=Submitted, 1=Pending, ...)
+   * POST returns statusDisplay as string, no status field
+   */
+  private normalizeClarification(raw: any): PortalClarification {
+    // Map integer enum values to lowercase string names
+    const statusMap: Record<number, string> = {
+      0: 'submitted',
+      1: 'pending',
+      2: 'draft_answer',
+      3: 'answered',
+      4: 'published',
+      5: 'duplicate',
+      6: 'rejected'
+    };
+
+    let status: string;
+    if (raw.status !== undefined && raw.status !== null) {
+      if (typeof raw.status === 'number') {
+        status = statusMap[raw.status] || 'submitted';
+      } else {
+        // Could be PascalCase string — normalize to lowercase
+        status = String(raw.status).toLowerCase();
+      }
+    } else if (raw.statusDisplay) {
+      // POST response has statusDisplay instead of status
+      status = String(raw.statusDisplay).toLowerCase();
+    } else {
+      status = 'submitted';
+    }
+
+    return {
+      id: raw.id,
+      referenceNumber: raw.referenceNumber || '',
+      subject: raw.subject || '',
+      question: raw.question || '',
+      answer: raw.answer,
+      status,
+      statusDisplay: raw.statusDisplay,
+      submittedAt: raw.submittedAt,
+      answeredAt: raw.answeredAt,
+      relatedBoqSection: raw.relatedBoqSection || raw.relatedBoqSectionTitle,
+      relatedBoqSectionTitle: raw.relatedBoqSection || raw.relatedBoqSectionTitle,
+      isAnonymous: raw.isAnonymous ?? false
+    };
+  }
+
+  private folderPathToCategory(folderPath: string): DocumentCategory {
+    const lower = folderPath.toLowerCase();
+    if (lower.includes('drawing')) return 'drawings';
+    if (lower.includes('spec')) return 'specifications';
+    if (lower.includes('boq') || lower.includes('bill')) return 'boq';
+    if (lower.includes('contract')) return 'contract_documents';
+    if (lower.includes('addend')) return 'addenda';
+    if (lower.includes('tender') || lower.includes('rfp')) return 'tender_documents';
+    return 'other';
   }
 
   getAddenda(tenderId: string | number): Observable<TenderAddendum[]> {
@@ -290,8 +346,8 @@ export class PortalService {
     );
   }
 
-  downloadDocument(documentId: number): Observable<Blob> {
-    return this.http.get(`${this.apiUrl}/documents/${documentId}/download`, {
+  downloadDocument(tenderId: string | number, documentId: string | number): Observable<Blob> {
+    return this.http.get(`${this.apiUrl}/tenders/${tenderId}/documents/${documentId}/download`, {
       responseType: 'blob'
     }).pipe(
       catchError(error => throwError(() => error))
@@ -303,10 +359,10 @@ export class PortalService {
   // ============================================
 
   getClarifications(tenderId: string | number): Observable<PortalClarification[]> {
-    return this.http.get<ApiResponse<PortalClarification[]>>(
+    return this.http.get<ApiResponse<any[]>>(
       `${this.apiUrl}/tenders/${tenderId}/clarifications`
     ).pipe(
-      map(response => response.data),
+      map(response => (response.data || []).map(c => this.normalizeClarification(c))),
       catchError(error => throwError(() => error))
     );
   }
@@ -321,11 +377,11 @@ export class PortalService {
   }
 
   submitQuestion(data: SubmitQuestionDto): Observable<PortalClarification> {
-    return this.http.post<ApiResponse<PortalClarification>>(
+    return this.http.post<ApiResponse<any>>(
       `${this.apiUrl}/tenders/${data.tenderId}/clarifications`,
       data
     ).pipe(
-      map(response => response.data),
+      map(response => this.normalizeClarification(response.data)),
       catchError(error => throwError(() => error))
     );
   }
@@ -339,8 +395,8 @@ export class PortalService {
     );
   }
 
-  downloadBulletinPdf(bulletinId: number): Observable<Blob> {
-    return this.http.get(`${this.apiUrl}/bulletins/${bulletinId}/pdf`, {
+  downloadBulletinPdf(tenderId: string | number, bulletinId: string | number): Observable<Blob> {
+    return this.http.get(`${this.apiUrl}/tenders/${tenderId}/bulletins/${bulletinId}/download`, {
       responseType: 'blob'
     }).pipe(
       catchError(error => throwError(() => error))

@@ -72,19 +72,17 @@ export type DocumentCategory =
   | 'other';
 
 export interface TenderDocument {
-  id: number;
-  tenderId: number;
-  category: DocumentCategory;
-  folderName?: string;
+  id: string;
+  folderPath: string;
   fileName: string;
-  fileSize: number;
-  mimeType: string;
-  url: string;
+  fileSizeBytes: number;
+  fileSizeDisplay: string;
+  contentType: string;
   version: number;
-  uploadedAt: Date | string;
-  uploadedByName?: string;
-  description?: string;
-  isRequired: boolean;
+  createdAt: Date | string;
+  isLatest: boolean;
+  // Computed on frontend
+  category?: DocumentCategory;
 }
 
 export interface TenderAddendum {
@@ -122,16 +120,18 @@ export const DOCUMENT_CATEGORY_CONFIG: Record<DocumentCategory, { label: string;
 // ============================================
 
 export interface PortalClarification {
-  id: number;
+  id: number | string;
   referenceNumber: string;
   subject: string;
   question: string;
   answer?: string;
-  status: 'submitted' | 'answered' | 'published';
+  status: string;
+  statusDisplay?: string;
   submittedAt: Date | string;
   answeredAt?: Date | string;
+  relatedBoqSection?: string;
   relatedBoqSectionTitle?: string;
-  isAnonymous: boolean;
+  isAnonymous?: boolean;
 }
 
 export interface PortalBulletin {

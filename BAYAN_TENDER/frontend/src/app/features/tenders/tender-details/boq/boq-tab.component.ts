@@ -3,6 +3,7 @@ import {
   Input,
   OnInit,
   OnDestroy,
+  ViewChild,
   inject,
   signal,
   computed
@@ -22,6 +23,7 @@ import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { MessageModule } from 'primeng/message';
 import { MenuItem, MessageService, ConfirmationService, TreeNode } from 'primeng/api';
+import { Menu } from 'primeng/menu';
 
 import { BoqService } from '../../../../core/services/boq.service';
 import {
@@ -436,6 +438,8 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
 export class BoqTabComponent implements OnInit, OnDestroy {
   @Input() tenderId!: number;
 
+  @ViewChild('rowMenu') rowMenu!: Menu;
+
   readonly boqService = inject(BoqService);
   private readonly messageService = inject(MessageService);
   private readonly confirmationService = inject(ConfirmationService);
@@ -573,11 +577,8 @@ export class BoqTabComponent implements OnInit, OnDestroy {
       ];
     }
 
-    // Get reference to the menu and toggle it
-    const menuElement = document.querySelector('p-menu');
-    if (menuElement) {
-      (menuElement as any).toggle(event);
-    }
+    // Toggle the popup menu
+    this.rowMenu.toggle(event);
   }
 
   openSectionDialog(parentSection?: BoqSection): void {

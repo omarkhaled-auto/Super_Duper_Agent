@@ -20,14 +20,28 @@ import { TagModule } from 'primeng/tag';
 import { MessageModule } from 'primeng/message';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { TooltipModule } from 'primeng/tooltip';
+import { CheckboxModule } from 'primeng/checkbox';
 import { MenuItem } from 'primeng/api';
 
 import { BoqService } from '../../../../core/services/boq.service';
-import { BoqImportMapping, BoqImportResult, BoqImportRow } from '../../../../core/models/boq.model';
+import { BoqImportRow } from '../../../../core/models/boq.model';
 
-interface ColumnMapping {
-  excelColumn: string;
-  boqField: string | null;
+/** Backend BoqField enum values */
+const BOQ_FIELD: Record<string, number> = {
+  itemNumber: 1,
+  description: 2,
+  quantity: 3,
+  uom: 4,
+  sectionTitle: 5,
+  notes: 6,
+  unitRate: 7,
+  totalAmount: 8
+};
+
+/** Reverse map: BoqField numeric value → frontend field key */
+const BOQ_FIELD_REVERSE: Record<number, string> = {};
+for (const [key, val] of Object.entries(BOQ_FIELD)) {
+  BOQ_FIELD_REVERSE[val] = key;
 }
 
 @Component({
@@ -45,7 +59,8 @@ interface ColumnMapping {
     TagModule,
     MessageModule,
     ProgressBarModule,
-    TooltipModule
+    TooltipModule,
+    CheckboxModule
   ],
   template: `
     <p-dialog
@@ -184,19 +199,19 @@ interface ColumnMapping {
           <div class="validation-step">
             <div class="validation-header">
               <h4>Validation Results</h4>
-              @if (importResult()) {
+              @if (validationResult()) {
                 <div class="validation-summary">
                   <div class="summary-badge valid">
                     <i class="pi pi-check-circle"></i>
-                    <span>{{ importResult()!.validRows }} Valid</span>
+                    <span>{{ validationResult()!.validCount }} Valid</span>
                   </div>
                   <div class="summary-badge warning">
                     <i class="pi pi-exclamation-triangle"></i>
-                    <span>{{ importResult()!.warningRows }} Warnings</span>
+                    <span>{{ validationResult()!.warningCount }} Warnings</span>
                   </div>
                   <div class="summary-badge error">
                     <i class="pi pi-times-circle"></i>
-                    <span>{{ importResult()!.errorRows }} Errors</span>
+                    <span>{{ validationResult()!.errorCount }} Errors</span>
                   </div>
                 </div>
               }
@@ -207,22 +222,34 @@ interface ColumnMapping {
                 <p-progressBar mode="indeterminate" [style]="{ height: '6px' }"></p-progressBar>
                 <p>Validating data...</p>
               </div>
-            } @else if (importResult()) {
+            } @else if (validationResult()) {
               <!-- Detected Sections -->
-              @if (importResult()!.detectedSections.length > 0) {
+              @if (validationResult()!.detectedSections?.length) {
                 <div class="detected-sections">
                   <h5>Detected Sections</h5>
                   <div class="section-tags">
-                    @for (section of importResult()!.detectedSections; track section) {
-                      <p-tag [value]="section" severity="info"></p-tag>
+                    @for (section of validationResult()!.detectedSections; track section.sectionNumber) {
+                      <p-tag [value]="section.sectionNumber + ' - ' + section.title" severity="info"></p-tag>
                     }
                   </div>
                 </div>
               }
 
+              <!-- Import Options -->
+              <div class="import-options">
+                <div class="checkbox-item">
+                  <p-checkbox
+                    [(ngModel)]="clearExisting"
+                    [binary]="true"
+                    inputId="opt-clear"
+                  ></p-checkbox>
+                  <label for="opt-clear">Replace existing BOQ (delete all current sections &amp; items before import)</label>
+                </div>
+              </div>
+
               <!-- Validation Table -->
               <p-table
-                [value]="importResult()!.rows"
+                [value]="validationRows()"
                 [scrollable]="true"
                 scrollHeight="250px"
                 styleClass="p-datatable-sm validation-table"
@@ -246,7 +273,7 @@ interface ColumnMapping {
                     </td>
                     <td>
                       <span class="data-preview" [pTooltip]="getRowPreview(row)">
-                        {{ getRowPreview(row) | slice:0:50 }}...
+                        {{ getRowPreview(row) | slice:0:50 }}{{ getRowPreview(row).length > 50 ? '...' : '' }}
                       </span>
                     </td>
                     <td>
@@ -282,16 +309,18 @@ interface ColumnMapping {
               icon="pi pi-arrow-left"
               class="p-button-outlined"
               (click)="previousStep()"
+              [disabled]="isUploading()"
             ></button>
           }
 
           @if (activeStep < 2) {
             <button
               pButton
-              label="Next"
+              [label]="activeStep === 0 && isUploading() ? 'Uploading...' : 'Next'"
               icon="pi pi-arrow-right"
               iconPos="right"
               [disabled]="!canProceed()"
+              [loading]="isUploading()"
               (click)="nextStep()"
             ></button>
           } @else {
@@ -555,6 +584,25 @@ interface ColumnMapping {
       font-size: 0.8rem;
     }
 
+    .import-options {
+      padding: 0.75rem 1rem;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
+      margin-bottom: 0.5rem;
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .checkbox-item label {
+      cursor: pointer;
+      color: var(--bayan-foreground, #09090b);
+      font-size: 0.875rem;
+    }
+
     .dialog-footer {
       display: flex;
       justify-content: space-between;
@@ -589,28 +637,34 @@ export class BoqImportDialogComponent implements OnChanges {
   // Step 1: Upload
   selectedFile = signal<File | null>(null);
   uploadError = signal<string | null>(null);
+  isUploading = signal<boolean>(false);
 
-  // Step 2: Mapping
-  excelColumns: string[] = ['A', 'B', 'C', 'D', 'E', 'F'];
+  // Step 2: Mapping — populated from backend preview
+  excelColumns: string[] = [];
   previewRows: Record<string, any>[] = [];
   columnMappings: Record<string, string | null> = {};
   mappingError = signal<string | null>(null);
+
+  /** Stored backend preview response (ExcelPreviewDto) */
+  private uploadPreview: any = null;
 
   boqFieldOptions = [
     { label: 'Item Number', value: 'itemNumber' },
     { label: 'Description', value: 'description' },
     { label: 'Quantity', value: 'quantity' },
     { label: 'UOM', value: 'uom' },
-    { label: 'Type', value: 'type' },
     { label: 'Notes', value: 'notes' },
-    { label: 'Section Number', value: 'sectionNumber' },
+    { label: 'Unit Rate', value: 'unitRate' },
+    { label: 'Total Amount', value: 'totalAmount' },
     { label: 'Section Title', value: 'sectionTitle' }
   ];
 
   // Step 3: Validation
   isValidating = signal<boolean>(false);
-  importResult = signal<BoqImportResult | null>(null);
+  validationResult = signal<any | null>(null);
+  validationRows = signal<BoqImportRow[]>([]);
   isImporting = signal<boolean>(false);
+  clearExisting = true;
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['visible'] && this.visible) {
@@ -622,18 +676,17 @@ export class BoqImportDialogComponent implements OnChanges {
     this.activeStep = 0;
     this.selectedFile.set(null);
     this.uploadError.set(null);
+    this.isUploading.set(false);
     this.columnMappings = {};
     this.mappingError.set(null);
-    this.importResult.set(null);
+    this.validationResult.set(null);
+    this.validationRows.set([]);
     this.isValidating.set(false);
     this.isImporting.set(false);
-
-    // Mock preview data
-    this.previewRows = [
-      { A: '1.1.1', B: 'Sample item description', C: '10', D: 'EA', E: 'Base', F: '' },
-      { A: '1.1.2', B: 'Another item', C: '5', D: 'LS', E: 'Alternate', F: 'Notes here' },
-      { A: '1.1.3', B: 'Third item', C: '100', D: 'M2', E: 'Base', F: '' }
-    ];
+    this.clearExisting = true;
+    this.uploadPreview = null;
+    this.excelColumns = [];
+    this.previewRows = [];
   }
 
   onFileSelect(event: FileSelectEvent): void {
@@ -666,24 +719,28 @@ export class BoqImportDialogComponent implements OnChanges {
     });
   }
 
+  /**
+   * Auto-map columns using the backend's suggested mappings,
+   * or fall back to header-name matching.
+   */
   autoMapColumns(): void {
-    // Auto-map based on common patterns
-    const autoMappings: Record<string, string> = {
-      'A': 'itemNumber',
-      'B': 'description',
-      'C': 'quantity',
-      'D': 'uom',
-      'E': 'type',
-      'F': 'notes'
-    };
+    this.columnMappings = {};
 
-    this.columnMappings = { ...autoMappings };
+    // Use backend suggestedMappings if available
+    if (this.uploadPreview?.suggestedMappings?.length) {
+      for (const mapping of this.uploadPreview.suggestedMappings) {
+        const fieldKey = BOQ_FIELD_REVERSE[mapping.boqField];
+        if (fieldKey && mapping.excelColumn) {
+          this.columnMappings[mapping.excelColumn] = fieldKey;
+        }
+      }
+    }
   }
 
   canProceed(): boolean {
     switch (this.activeStep) {
       case 0:
-        return !!this.selectedFile();
+        return !!this.selectedFile() && !this.isUploading();
       case 1:
         return this.hasRequiredMappings();
       default:
@@ -698,12 +755,15 @@ export class BoqImportDialogComponent implements OnChanges {
   }
 
   canImport(): boolean {
-    const result = this.importResult();
-    return !!result && result.validRows > 0;
+    const result = this.validationResult();
+    return !!result && (result.validCount > 0 || result.warningCount > 0);
   }
 
   nextStep(): void {
-    if (this.activeStep === 1) {
+    if (this.activeStep === 0) {
+      // Upload file to backend, then move to mapping step
+      this.uploadFile();
+    } else if (this.activeStep === 1) {
       // Validate mapping
       if (!this.hasRequiredMappings()) {
         this.mappingError.set('Please map all required fields: Item Number, Description, Quantity, and UOM');
@@ -711,11 +771,9 @@ export class BoqImportDialogComponent implements OnChanges {
       }
       this.mappingError.set(null);
 
-      // Start validation
+      // Move to validation step and run validation
       this.activeStep++;
       this.validateData();
-    } else {
-      this.activeStep++;
     }
   }
 
@@ -723,45 +781,138 @@ export class BoqImportDialogComponent implements OnChanges {
     this.activeStep--;
   }
 
-  private validateData(): void {
-    this.isValidating.set(true);
-    this.importResult.set(null);
+  /**
+   * Upload the file to the backend, parse the preview response,
+   * populate excelColumns/previewRows/suggestedMappings, then advance.
+   */
+  private uploadFile(): void {
+    const file = this.selectedFile();
+    if (!file) return;
 
-    const mapping: BoqImportMapping = {};
-    Object.entries(this.columnMappings).forEach(([col, field]) => {
-      if (field) {
-        (mapping as any)[field] = col;
+    this.isUploading.set(true);
+    this.uploadError.set(null);
+
+    this.boqService.uploadForPreview(this.tenderId, file).subscribe({
+      next: (preview) => {
+        this.isUploading.set(false);
+        this.uploadPreview = preview;
+
+        // Extract column headers from the backend preview
+        const columns: any[] = preview.columns ?? [];
+        this.excelColumns = columns.map((c: any) => c.header);
+
+        // Extract preview rows — backend sends Dict<string, object?>[]
+        this.previewRows = (preview.previewRows ?? []).map((row: any) => {
+          const mapped: Record<string, any> = {};
+          for (const col of this.excelColumns) {
+            mapped[col] = row[col] ?? '';
+          }
+          return mapped;
+        });
+
+        // Auto-apply suggested mappings
+        this.columnMappings = {};
+        this.autoMapColumns();
+
+        // Advance to mapping step
+        this.activeStep = 1;
+      },
+      error: (error) => {
+        this.isUploading.set(false);
+        this.uploadError.set(error.message || 'Failed to upload and parse file');
       }
     });
+  }
 
-    this.boqService.validateImport(this.tenderId, this.selectedFile()!, mapping).subscribe({
-      next: (result) => {
+  /**
+   * Build column mappings from the user's selections and send to the validate endpoint.
+   */
+  private validateData(): void {
+    this.isValidating.set(true);
+    this.validationResult.set(null);
+    this.validationRows.set([]);
+
+    const sessionId = this.uploadPreview?.importSessionId;
+    if (!sessionId) {
+      this.isValidating.set(false);
+      return;
+    }
+
+    // Build ColumnMappingDto[] from the user's selections
+    const mappings: any[] = [];
+    for (const [excelColumn, fieldKey] of Object.entries(this.columnMappings)) {
+      if (fieldKey && BOQ_FIELD[fieldKey] !== undefined) {
+        mappings.push({
+          excelColumn,
+          boqField: BOQ_FIELD[fieldKey],
+          confidence: null,
+          isAutoDetected: false
+        });
+      }
+    }
+
+    this.boqService.validateSession(this.tenderId, sessionId, mappings).subscribe({
+      next: (validation) => {
         this.isValidating.set(false);
-        this.importResult.set(result);
+        this.validationResult.set(validation);
+
+        // Build row-level display from the validation issues
+        const issues: any[] = validation.issues ?? [];
+        const totalRows = validation.totalRows ?? 0;
+        const rows: BoqImportRow[] = [];
+
+        // Group issues by row number
+        const issuesByRow = new Map<number, any[]>();
+        for (const issue of issues) {
+          const rn = issue.rowNumber ?? 0;
+          if (!issuesByRow.has(rn)) issuesByRow.set(rn, []);
+          issuesByRow.get(rn)!.push(issue);
+        }
+
+        // Build rows using preview data for display
+        const previewData = this.uploadPreview?.previewRows ?? [];
+        for (let i = 0; i < totalRows; i++) {
+          const rowNum = i + 1;
+          const rowIssues = issuesByRow.get(rowNum) ?? [];
+          const errors = rowIssues.filter((iss: any) => iss.severity === 2).map((iss: any) => iss.message);
+          const warnings = rowIssues.filter((iss: any) => iss.severity === 1).map((iss: any) => iss.message);
+          const status: 'valid' | 'warning' | 'error' = errors.length > 0 ? 'error' : warnings.length > 0 ? 'warning' : 'valid';
+
+          rows.push({
+            rowNumber: rowNum,
+            data: previewData[i] ?? {},
+            status,
+            errors: errors.length > 0 ? errors : undefined,
+            warnings: warnings.length > 0 ? warnings : undefined
+          });
+        }
+
+        this.validationRows.set(rows);
       },
       error: (error) => {
         this.isValidating.set(false);
-        this.importResult.set({
+        this.validationResult.set({
+          validCount: 0,
+          warningCount: 0,
+          errorCount: 0,
           totalRows: 0,
-          validRows: 0,
-          warningRows: 0,
-          errorRows: 0,
-          rows: [],
+          issues: [],
           detectedSections: []
         });
+        this.validationRows.set([]);
       }
     });
   }
 
   importItems(): void {
-    const result = this.importResult();
+    const result = this.validationResult();
     if (!result) return;
 
     this.isImporting.set(true);
 
-    const validRows = result.rows.filter(r => r.status === 'valid' || r.status === 'warning');
+    const validRows = this.validationRows().filter(r => r.status === 'valid' || r.status === 'warning');
 
-    this.boqService.importItems(this.tenderId, validRows).subscribe({
+    this.boqService.importItems(this.tenderId, validRows, this.clearExisting).subscribe({
       next: (importResult) => {
         this.isImporting.set(false);
         this.imported.emit(importResult);
@@ -782,7 +933,8 @@ export class BoqImportDialogComponent implements OnChanges {
   }
 
   getRowPreview(row: BoqImportRow): string {
-    return Object.values(row.data).filter(v => v).join(' | ');
+    if (!row.data) return '';
+    return Object.values(row.data).filter(v => v != null && v !== '').join(' | ');
   }
 
   formatFileSize(bytes: number): string {

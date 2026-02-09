@@ -297,20 +297,9 @@ public class PortalController : ControllerBase
                 return NotFound(ApiResponse<object>.FailureResponse("Document not found."));
             }
 
-            // Generate presigned URL
-            var downloadUrl = await _fileStorage.GetPresignedUrlAsync(
-                document.FilePath,
-                TimeSpan.FromMinutes(15),
-                cancellationToken);
-
-            return Ok(ApiResponse<DocumentDownloadResponse>.SuccessResponse(new DocumentDownloadResponse
-            {
-                DocumentId = document.Id,
-                FileName = document.FileName,
-                ContentType = document.ContentType,
-                DownloadUrl = downloadUrl,
-                ExpiresAt = DateTime.UtcNow.AddMinutes(15)
-            }));
+            // Stream file directly from storage
+            var stream = await _fileStorage.DownloadFileAsync(document.FilePath, cancellationToken);
+            return File(stream, document.ContentType, document.FileName);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -383,6 +372,48 @@ public class PortalController : ControllerBase
 
             await _mediator.Send(command, cancellationToken);
             return Ok(ApiResponse<object>.SuccessResponse(new { message = "Addendum acknowledged successfully." }));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(ApiResponse<object>.FailureResponse(ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Gets BOQ sections for a tender (used in clarification question dropdown).
+    /// </summary>
+    [HttpGet("tenders/{tenderId:guid}/boq-sections")]
+    [Authorize(Roles = "Bidder")]
+    [ProducesResponseType(typeof(List<object>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetBoqSections(
+        Guid tenderId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var bidderId = GetBidderId();
+
+            // Validate bidder access
+            var tenderBidder = await _context.TenderBidders
+                .FirstOrDefaultAsync(tb => tb.TenderId == tenderId && tb.BidderId == bidderId, cancellationToken);
+
+            if (tenderBidder == null)
+            {
+                return Unauthorized(ApiResponse<object>.FailureResponse("You do not have access to this tender."));
+            }
+
+            var sections = await _context.BoqSections
+                .Where(s => s.TenderId == tenderId)
+                .OrderBy(s => s.SortOrder)
+                .Select(s => new
+                {
+                    id = s.Id,
+                    sectionNumber = s.SectionNumber,
+                    title = s.Title
+                })
+                .ToListAsync(cancellationToken);
+
+            return Ok(ApiResponse<object>.SuccessResponse(sections));
         }
         catch (UnauthorizedAccessException ex)
         {

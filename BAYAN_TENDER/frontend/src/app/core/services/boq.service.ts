@@ -426,6 +426,55 @@ export class BoqService {
   }
 
   /**
+   * Upload an Excel file for import preview.
+   * Returns the parsed preview with columns, sample rows, and suggested mappings.
+   */
+  uploadForPreview(tenderId: number, file: File): Observable<any> {
+    this._isLoading.set(true);
+    this._error.set(null);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return this.api.upload<any>(`/tenders/${tenderId}/boq/import/upload`, formData).pipe(
+      tap(preview => {
+        this._lastImportSessionId = preview.importSessionId;
+        this._isLoading.set(false);
+      }),
+      catchError(error => {
+        this._isLoading.set(false);
+        this._error.set(error.message || 'Failed to upload file');
+        return throwError(() => error);
+      })
+    );
+  }
+
+  /**
+   * Validate an already-uploaded import session with column mappings.
+   * Returns validation results with row-level issues.
+   */
+  validateSession(tenderId: number, sessionId: string, mappings: any[]): Observable<any> {
+    this._isLoading.set(true);
+    this._error.set(null);
+
+    const validateBody = {
+      importSessionId: sessionId,
+      mappings,
+      sheetIndex: 0,
+      headerRowOverride: null
+    };
+
+    return this.api.post<any>(`/tenders/${tenderId}/boq/import/validate`, validateBody).pipe(
+      tap(() => this._isLoading.set(false)),
+      catchError(error => {
+        this._isLoading.set(false);
+        this._error.set(error.message || 'Failed to validate import');
+        return throwError(() => error);
+      })
+    );
+  }
+
+  /**
    * Validate import data and return preview.
    * Uploads the file first, then validates with the provided column mapping.
    */
@@ -501,13 +550,13 @@ export class BoqService {
   /**
    * Import validated items (executes the import after validation)
    */
-  importItems(tenderId: number, validRows: BoqImportRow[]): Observable<{ imported: number; failed: number }> {
+  importItems(tenderId: number, validRows: BoqImportRow[], clearExisting = false): Observable<{ imported: number; failed: number }> {
     this._isLoading.set(true);
     this._error.set(null);
 
     const body = {
       importSessionId: this._lastImportSessionId,
-      clearExisting: false,
+      clearExisting,
       defaultSectionTitle: null,
       skipWarnings: false
     };
@@ -539,11 +588,11 @@ export class BoqService {
 
     // Map frontend boolean columns to backend string array
     const columnNameMap: Record<string, string> = {
+      section: 'Section',
       itemNumber: 'ItemNumber',
       description: 'Description',
       quantity: 'Quantity',
       uom: 'Uom',
-      type: 'Type',
       notes: 'Notes',
       unitRate: 'UnitRate',
       totalAmount: 'Amount'

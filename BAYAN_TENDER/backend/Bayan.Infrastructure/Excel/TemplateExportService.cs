@@ -27,6 +27,7 @@ public class TemplateExportService : ITemplateExportService
     // Column header translations
     private static readonly Dictionary<string, (string English, string Arabic)> ColumnHeaders = new()
     {
+        ["Section"] = ("Section", "القسم"),
         ["ItemNumber"] = ("Item #", "رقم البند"),
         ["Description"] = ("Description", "الوصف"),
         ["Quantity"] = ("Qty", "الكمية"),
@@ -103,37 +104,44 @@ public class TemplateExportService : ITemplateExportService
         }
 
         int dataEndRow = currentRow - 1;
+        bool hasData = dataEndRow >= dataStartRow;
 
-        // Add summary row
-        currentRow += 1; // Empty row
-        AddSummaryRow(worksheet, request, currentRow, dataStartRow, dataEndRow);
-
-        // Apply formatting
-        ApplyWorksheetFormatting(worksheet, request, headerRow, dataEndRow);
-
-        // Add UOM data validation
-        if (request.IncludeColumns.Contains("Uom") && request.AvailableUoms.Any())
+        if (hasData)
         {
-            AddUomDataValidation(worksheet, request, dataStartRow, dataEndRow);
-        }
+            // Add summary row
+            currentRow += 1; // Empty row
+            AddSummaryRow(worksheet, request, currentRow, dataStartRow, dataEndRow);
 
-        // Add conditional formatting for empty Unit Rate
-        if (request.IncludeColumns.Contains("UnitRate"))
-        {
-            AddConditionalFormatting(worksheet, dataStartRow, dataEndRow);
-        }
+            // Apply formatting
+            ApplyWorksheetFormatting(worksheet, request, headerRow, dataEndRow);
 
-        // Lock specified columns
-        ApplyColumnProtection(worksheet, request, dataStartRow, dataEndRow);
+            // Add UOM data validation
+            if (request.IncludeColumns.Contains("Uom") && request.AvailableUoms.Any())
+            {
+                AddUomDataValidation(worksheet, request, dataStartRow, dataEndRow);
+            }
+
+            // Add conditional formatting for empty Unit Rate
+            if (request.IncludeColumns.Contains("UnitRate"))
+            {
+                AddConditionalFormatting(worksheet, dataStartRow, dataEndRow);
+            }
+
+            // Lock specified columns
+            ApplyColumnProtection(worksheet, request, dataStartRow, dataEndRow);
+        }
 
         // Freeze header rows
         worksheet.SheetView.FreezeRows(headerRow);
 
-        // Enable auto-filter
-        var filterRange = worksheet.Range(
-            headerRow, 1,
-            dataEndRow, request.IncludeColumns.Count);
-        filterRange.SetAutoFilter();
+        if (hasData)
+        {
+            // Enable auto-filter
+            var filterRange = worksheet.Range(
+                headerRow, 1,
+                dataEndRow, request.IncludeColumns.Count);
+            filterRange.SetAutoFilter();
+        }
 
         // Auto-fit columns
         worksheet.Columns().AdjustToContents();
@@ -225,22 +233,27 @@ public class TemplateExportService : ITemplateExportService
         int dataStartRow)
     {
         int row = startRow;
+        bool hasSectionColumn = request.IncludeColumns.Contains("Section");
+        string sectionTitle = $"{section.SectionNumber} - {section.Title}";
 
-        // Add section header row
-        var sectionCell = worksheet.Cell(row, 1);
-        sectionCell.Value = $"{section.SectionNumber} - {section.Title}";
-        sectionCell.Style.Font.Bold = true;
-        sectionCell.Style.Fill.BackgroundColor = SectionBackgroundColor;
+        // Only add merged section header row if there is no Section column
+        if (!hasSectionColumn)
+        {
+            var sectionCell = worksheet.Cell(row, 1);
+            sectionCell.Value = sectionTitle;
+            sectionCell.Style.Font.Bold = true;
+            sectionCell.Style.Fill.BackgroundColor = SectionBackgroundColor;
 
-        var sectionRange = worksheet.Range(row, 1, row, request.IncludeColumns.Count);
-        sectionRange.Merge();
-        sectionRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-        row++;
+            var sectionRange = worksheet.Range(row, 1, row, request.IncludeColumns.Count);
+            sectionRange.Merge();
+            sectionRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            row++;
+        }
 
         // Add items
         foreach (var item in section.Items)
         {
-            row = AddItem(worksheet, item, request, row, dataStartRow);
+            row = AddItem(worksheet, item, request, row, dataStartRow, sectionTitle);
         }
 
         return row;
@@ -251,7 +264,8 @@ public class TemplateExportService : ITemplateExportService
         BoqItemExportDto item,
         BoqTemplateGenerationRequest request,
         int row,
-        int dataStartRow)
+        int dataStartRow,
+        string sectionTitle = "")
     {
         int col = 1;
         foreach (var column in request.IncludeColumns)
@@ -260,6 +274,10 @@ public class TemplateExportService : ITemplateExportService
 
             switch (column)
             {
+                case "Section":
+                    cell.Value = sectionTitle;
+                    break;
+
                 case "ItemNumber":
                     cell.Value = item.ItemNumber;
                     cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;

@@ -185,7 +185,7 @@ import {
                       <tr>
                         <td>
                           <div class="file-info">
-                            <i class="pi {{ getFileIcon(doc.mimeType) }}"></i>
+                            <i class="pi {{ getFileIcon(doc.contentType) }}"></i>
                             <span class="file-name" [pTooltip]="doc.fileName" tooltipPosition="top">
                               {{ doc.fileName }}
                             </span>
@@ -198,8 +198,8 @@ import {
                             }
                           </div>
                         </td>
-                        <td>{{ formatFileSize(doc.fileSize) }}</td>
-                        <td>{{ doc.uploadedAt | date:'mediumDate' }}</td>
+                        <td>{{ doc.fileSizeDisplay }}</td>
+                        <td>{{ doc.createdAt | date:'mediumDate' }}</td>
                         <td>
                           <button
                             pButton
@@ -217,7 +217,7 @@ import {
                             tooltipPosition="top"
                             class="p-button-sm p-button-text"
                             (click)="previewDocument(doc)"
-                            *ngIf="canPreview(doc.mimeType)"
+                            *ngIf="canPreview(doc.contentType)"
                           ></button>
                         </td>
                       </tr>
@@ -500,7 +500,7 @@ export class PortalDocumentsComponent implements OnInit {
   addenda = signal<TenderAddendum[]>([]);
   isLoading = signal(true);
   error = signal<string | null>(null);
-  downloadingId = signal<number | null>(null);
+  downloadingId = signal<string | number | null>(null);
   acknowledgingId = signal<number | null>(null);
 
   private tenderId!: string | number;
@@ -533,7 +533,7 @@ export class PortalDocumentsComponent implements OnInit {
   downloadDocument(doc: TenderDocument): void {
     this.downloadingId.set(doc.id);
 
-    this.portalService.downloadDocument(doc.id).subscribe({
+    this.portalService.downloadDocument(this.tenderId, doc.id).subscribe({
       next: (blob) => {
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -555,10 +555,20 @@ export class PortalDocumentsComponent implements OnInit {
   }
 
   previewDocument(doc: TenderDocument): void {
-    // Open document URL in new tab for preview
-    if (doc.url) {
-      window.open(doc.url, '_blank');
-    }
+    // Download and open in new tab for preview
+    this.portalService.downloadDocument(this.tenderId, doc.id).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        window.open(url, '_blank');
+      },
+      error: () => {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Preview Failed',
+          detail: 'Failed to preview the document.'
+        });
+      }
+    });
   }
 
   acknowledgeAddendum(addendum: TenderAddendum): void {

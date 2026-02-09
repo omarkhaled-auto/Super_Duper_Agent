@@ -148,17 +148,17 @@ const DOCUMENT_CATEGORIES: CategoryOption[] = [
         >
           <ng-template pTemplate="header">
             <tr>
-              <th pSortableColumn="fileName" style="width: 30%">
+              <th pSortableColumn="name" style="width: 30%">
                 Name
-                <p-sortIcon field="fileName"></p-sortIcon>
+                <p-sortIcon field="name"></p-sortIcon>
               </th>
-              <th pSortableColumn="folderPath" style="width: 20%">
+              <th pSortableColumn="folder" style="width: 20%">
                 Category / Folder
-                <p-sortIcon field="folderPath"></p-sortIcon>
+                <p-sortIcon field="folder"></p-sortIcon>
               </th>
-              <th pSortableColumn="fileSize" style="width: 12%">
+              <th pSortableColumn="size" style="width: 12%">
                 Size
-                <p-sortIcon field="fileSize"></p-sortIcon>
+                <p-sortIcon field="size"></p-sortIcon>
               </th>
               <th pSortableColumn="uploadedAt" style="width: 18%">
                 Uploaded Date
@@ -172,13 +172,13 @@ const DOCUMENT_CATEGORIES: CategoryOption[] = [
             <tr>
               <td>
                 <div class="doc-name-cell">
-                  <i [class]="getFileIcon(doc.fileName)" class="doc-icon"></i>
+                  <i [class]="getFileIcon(doc.name)" class="doc-icon"></i>
                   <div class="doc-name-info">
                     <span
                       class="doc-name"
-                      [pTooltip]="doc.fileName"
+                      [pTooltip]="doc.name"
                       tooltipPosition="top"
-                    >{{ doc.fileName }}</span>
+                    >{{ doc.name }}</span>
                     @if (doc.version > 1) {
                       <span class="doc-version">v{{ doc.version }}</span>
                     }
@@ -187,11 +187,11 @@ const DOCUMENT_CATEGORIES: CategoryOption[] = [
               </td>
               <td>
                 <p-tag
-                  [value]="doc.folderPath || 'General'"
-                  [severity]="getCategorySeverity(doc.folderPath)"
+                  [value]="doc.folder || 'General'"
+                  [severity]="getCategorySeverity(doc.folder)"
                 ></p-tag>
               </td>
-              <td>{{ formatFileSize(doc.fileSize) }}</td>
+              <td>{{ formatFileSize(doc.size) }}</td>
               <td>{{ doc.uploadedAt | date:'medium' }}</td>
               <td>
                 <div class="action-buttons">
@@ -557,7 +557,7 @@ export class DocumentsTabComponent implements OnInit, OnDestroy {
       next: (result) => {
         this.documents.set(result.items);
         this.totalRecords.set(result.pagination?.totalItems ?? result.items.length);
-        const size = result.items.reduce((sum, doc) => sum + (doc.fileSize || 0), 0);
+        const size = result.items.reduce((sum, doc) => sum + (doc.size || 0), 0);
         this.totalSize.set(size);
       },
       error: (error) => {
@@ -634,9 +634,13 @@ export class DocumentsTabComponent implements OnInit, OnDestroy {
     this.documentService.downloadDocument(this.tenderId, doc.id).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
-      next: (result) => {
-        // Open the presigned URL in a new tab to trigger download
-        window.open(result.url, '_blank');
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = doc.name;
+        link.click();
+        window.URL.revokeObjectURL(url);
       },
       error: (error) => {
         this.messageService.add({
@@ -650,7 +654,7 @@ export class DocumentsTabComponent implements OnInit, OnDestroy {
 
   confirmDelete(doc: TenderDocument): void {
     this.confirmationService.confirm({
-      message: `Are you sure you want to delete "${doc.fileName}"?`,
+      message: `Are you sure you want to delete "${doc.name}"?`,
       header: 'Confirm Delete',
       icon: 'pi pi-exclamation-triangle',
       acceptButtonStyleClass: 'p-button-danger',

@@ -12,7 +12,7 @@ public class ExportBoqTemplateCommandValidator : AbstractValidator<ExportBoqTemp
     /// </summary>
     private static readonly HashSet<string> AllowedColumns = new(StringComparer.OrdinalIgnoreCase)
     {
-        "ItemNumber", "Description", "Quantity", "Uom", "UnitRate", "Amount", "Notes"
+        "Section", "ItemNumber", "Description", "Quantity", "Uom", "UnitRate", "Amount", "Notes"
     };
 
     public ExportBoqTemplateCommandValidator()

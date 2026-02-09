@@ -49,6 +49,14 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
           <div class="checkbox-grid">
             <div class="checkbox-item">
               <p-checkbox
+                [(ngModel)]="options.columns.section"
+                [binary]="true"
+                inputId="col-section"
+              ></p-checkbox>
+              <label for="col-section">Section</label>
+            </div>
+            <div class="checkbox-item">
+              <p-checkbox
                 [(ngModel)]="options.columns.itemNumber"
                 [binary]="true"
                 inputId="col-itemNumber"
@@ -78,14 +86,6 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
                 inputId="col-uom"
               ></p-checkbox>
               <label for="col-uom">Unit of Measure</label>
-            </div>
-            <div class="checkbox-item">
-              <p-checkbox
-                [(ngModel)]="options.columns.type"
-                [binary]="true"
-                inputId="col-type"
-              ></p-checkbox>
-              <label for="col-type">Item Type</label>
             </div>
             <div class="checkbox-item">
               <p-checkbox
@@ -244,11 +244,11 @@ export class BoqExportDialogComponent implements OnChanges {
 
   options: BoqExportOptions = {
     columns: {
+      section: true,
       itemNumber: true,
       description: true,
       quantity: true,
       uom: true,
-      type: true,
       notes: true,
       unitRate: true,
       totalAmount: true
@@ -273,11 +273,11 @@ export class BoqExportDialogComponent implements OnChanges {
   private resetOptions(): void {
     this.options = {
       columns: {
+        section: true,
         itemNumber: true,
         description: true,
         quantity: true,
         uom: true,
-        type: true,
         notes: true,
         unitRate: true,
         totalAmount: true

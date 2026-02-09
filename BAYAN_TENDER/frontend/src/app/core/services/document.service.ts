@@ -6,14 +6,16 @@ import { PaginatedResponse, QueryParams } from '../models';
 export interface TenderDocument {
   id: string;
   tenderId: string;
-  fileName: string;
+  name: string;
   contentType: string;
-  fileSize: number;
-  folderPath: string;
+  size: number;
+  sizeFormatted: string;
+  folder: string;
   version: number;
+  isLatest: boolean;
   uploadedBy: string;
+  uploadedByName: string;
   uploadedAt: string;
-  isLatestVersion: boolean;
 }
 
 export interface DocumentFolder {
@@ -24,7 +26,11 @@ export interface DocumentFolder {
 }
 
 export interface DocumentDownloadResult {
-  url: string;
+  documentId: string;
+  fileName: string;
+  contentType: string;
+  downloadUrl: string;
+  expiresAt: string;
 }
 
 export interface DocumentQueryParams extends QueryParams {
@@ -83,12 +89,12 @@ export class DocumentService {
   }
 
   /**
-   * Get a presigned download URL for a document.
+   * Download a document file directly as a blob.
    */
-  downloadDocument(tenderId: number, docId: string): Observable<DocumentDownloadResult> {
-    return this.api.get<DocumentDownloadResult>(`/tenders/${tenderId}/documents/${docId}/download`).pipe(
+  downloadDocument(tenderId: number, docId: string): Observable<Blob> {
+    return this.api.download(`/tenders/${tenderId}/documents/${docId}/download`).pipe(
       catchError(error => {
-        this._error.set(error.message || 'Failed to get download URL');
+        this._error.set(error.message || 'Failed to download document');
         return throwError(() => error);
       })
     );

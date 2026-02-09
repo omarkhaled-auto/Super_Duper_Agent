@@ -4,6 +4,17 @@ using Bayan.Application.Features.Boq.DTOs;
 namespace Bayan.Application.Features.Boq.Services;
 
 /// <summary>
+/// Row context for section detection with full row data.
+/// </summary>
+public class BoqRowContext
+{
+    public string ItemNumber { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? Quantity { get; set; }
+    public string? Uom { get; set; }
+}
+
+/// <summary>
 /// Service for detecting sections from BOQ item numbers.
 /// </summary>
 public interface IBoqSectionDetectionService
@@ -17,6 +28,23 @@ public interface IBoqSectionDetectionService
     /// Detects all sections from a list of item numbers.
     /// </summary>
     List<DetectedSectionDto> DetectSections(IEnumerable<string> itemNumbers);
+
+    /// <summary>
+    /// Detects sections using full row context (item number, description, quantity, uom).
+    /// Section header rows are identified by having no quantity/uom, and their descriptions become section titles.
+    /// </summary>
+    List<DetectedSectionDto> DetectSectionsFromRows(IEnumerable<BoqRowContext> rows);
+
+    /// <summary>
+    /// Checks if a row is a section header based on its data.
+    /// </summary>
+    bool IsSectionHeaderRow(string? itemNumber, string? quantity, string? uom);
+
+    /// <summary>
+    /// Finds the best matching section for an item number given known sections.
+    /// Handles dash-to-dot conversion (E-001 → section E.001).
+    /// </summary>
+    string FindBestSection(string itemNumber, ISet<string> knownSectionNumbers);
 
     /// <summary>
     /// Gets the parent section number for a given section number.
@@ -75,9 +103,9 @@ public class ItemNumberParseResult
 /// </summary>
 public class BoqSectionDetectionService : IBoqSectionDetectionService
 {
-    // Pattern to match item numbers like "1", "1.1", "1.1.1", "1-1", "1-1-1", "A.1", etc.
+    // Pattern to match item numbers like "1", "1.1", "1.1.1", "1-1", "E-001", "F-004", "A.1", etc.
     private static readonly Regex ItemNumberPattern = new(
-        @"^([A-Za-z]?\d+)([.\-/]([A-Za-z]?\d+))*$",
+        @"^([A-Za-z0-9]+)([.\-/]([A-Za-z0-9]+))*$",
         RegexOptions.Compiled);
 
     // Pattern to split item numbers
@@ -198,6 +226,150 @@ public class BoqSectionDetectionService : IBoqSectionDetectionService
             .OrderBy(s => s.Level)
             .ThenBy(s => s.SectionNumber, new NaturalSortComparer())
             .ToList();
+    }
+
+    public bool IsSectionHeaderRow(string? itemNumber, string? quantity, string? uom)
+    {
+        if (string.IsNullOrWhiteSpace(itemNumber))
+            return false;
+
+        // A row is a section header if it has an item number but no quantity and no UOM
+        var hasQuantity = !string.IsNullOrWhiteSpace(quantity) &&
+                          decimal.TryParse(quantity, out var qty) && qty != 0;
+        var hasUom = !string.IsNullOrWhiteSpace(uom);
+
+        return !hasQuantity && !hasUom;
+    }
+
+    public List<DetectedSectionDto> DetectSectionsFromRows(IEnumerable<BoqRowContext> rows)
+    {
+        var sectionDict = new Dictionary<string, DetectedSectionDto>(StringComparer.OrdinalIgnoreCase);
+
+        // Pass 1: Identify section header rows and build section hierarchy
+        foreach (var row in rows.Where(r => !string.IsNullOrWhiteSpace(r.ItemNumber)))
+        {
+            var parseResult = ParseItemNumber(row.ItemNumber);
+            if (!parseResult.Success)
+                continue;
+
+            var isSectionHeader = IsSectionHeaderRow(row.ItemNumber, row.Quantity, row.Uom);
+
+            if (isSectionHeader)
+            {
+                // This row is a section header — use its description as the title
+                var sectionNumber = string.Join(".", parseResult.Parts);
+                var parentNumber = parseResult.Parts.Count > 1
+                    ? string.Join(".", parseResult.Parts.Take(parseResult.Parts.Count - 1))
+                    : null;
+
+                sectionDict[sectionNumber] = new DetectedSectionDto
+                {
+                    SectionNumber = sectionNumber,
+                    Title = !string.IsNullOrWhiteSpace(row.Description)
+                        ? row.Description
+                        : $"Section {sectionNumber}",
+                    ParentSectionNumber = parentNumber,
+                    Level = parseResult.Parts.Count - 1,
+                    ItemCount = 0
+                };
+
+                // Also ensure parent sections exist in the hierarchy
+                for (var i = 1; i < parseResult.Parts.Count; i++)
+                {
+                    var ancestorNumber = string.Join(".", parseResult.Parts.Take(i));
+                    var ancestorParent = i > 1 ? string.Join(".", parseResult.Parts.Take(i - 1)) : null;
+
+                    if (!sectionDict.ContainsKey(ancestorNumber))
+                    {
+                        sectionDict[ancestorNumber] = new DetectedSectionDto
+                        {
+                            SectionNumber = ancestorNumber,
+                            Title = $"Section {ancestorNumber}",
+                            ParentSectionNumber = ancestorParent,
+                            Level = i - 1,
+                            ItemCount = 0
+                        };
+                    }
+                }
+            }
+        }
+
+        // Pass 2: Count items per section and create missing parent sections
+        var knownSections = new HashSet<string>(sectionDict.Keys, StringComparer.OrdinalIgnoreCase);
+        var itemCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var row in rows.Where(r => !string.IsNullOrWhiteSpace(r.ItemNumber)))
+        {
+            var isSectionHeader = IsSectionHeaderRow(row.ItemNumber, row.Quantity, row.Uom);
+            if (isSectionHeader)
+                continue;
+
+            var sectionKey = FindBestSection(row.ItemNumber, knownSections);
+            if (!itemCounts.ContainsKey(sectionKey))
+                itemCounts[sectionKey] = 0;
+            itemCounts[sectionKey]++;
+
+            // Ensure this section exists
+            if (!sectionDict.ContainsKey(sectionKey))
+            {
+                var parts = SplitPattern.Split(sectionKey);
+                var parentNumber = parts.Length > 1
+                    ? string.Join(".", parts.Take(parts.Length - 1))
+                    : null;
+
+                sectionDict[sectionKey] = new DetectedSectionDto
+                {
+                    SectionNumber = sectionKey,
+                    Title = $"Section {sectionKey}",
+                    ParentSectionNumber = parentNumber,
+                    Level = parts.Length - 1,
+                    ItemCount = 0
+                };
+                knownSections.Add(sectionKey);
+            }
+        }
+
+        // Update item counts
+        foreach (var (section, count) in itemCounts)
+        {
+            if (sectionDict.TryGetValue(section, out var sectionDto))
+            {
+                sectionDict[section] = sectionDto with { ItemCount = count };
+            }
+        }
+
+        return sectionDict.Values
+            .OrderBy(s => s.Level)
+            .ThenBy(s => s.SectionNumber, new NaturalSortComparer())
+            .ToList();
+    }
+
+    public string FindBestSection(string itemNumber, ISet<string> knownSectionNumbers)
+    {
+        var parseResult = ParseItemNumber(itemNumber);
+        if (!parseResult.Success || parseResult.Parts.Count <= 1)
+            return parseResult.Parts.Count == 1 ? parseResult.Parts[0] : "1";
+
+        // Try converting item number to dot-notation as a section key
+        // E.g., "E-001" → parts ["E","001"] → try "E.001" as section
+        var dotNotation = string.Join(".", parseResult.Parts);
+        if (knownSectionNumbers.Contains(dotNotation))
+            return dotNotation;
+
+        // Try parent: all parts except last joined with dots
+        var parentSection = string.Join(".", parseResult.Parts.Take(parseResult.Parts.Count - 1));
+        if (knownSectionNumbers.Contains(parentSection))
+            return parentSection;
+
+        // Try matching by converting the last numeric part
+        // E.g., item "E-001" → try finding section "E.001"
+        // Already covered by dotNotation above
+
+        // Fall back to top-level
+        if (knownSectionNumbers.Contains(parseResult.Parts[0]))
+            return parseResult.Parts[0];
+
+        return parentSection; // best guess
     }
 
     public string? GetParentSectionNumber(string sectionNumber)

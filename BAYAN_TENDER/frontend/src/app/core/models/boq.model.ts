@@ -105,11 +105,11 @@ export interface BoqImportResult {
 
 export interface BoqExportOptions {
   columns: {
+    section: boolean;
     itemNumber: boolean;
     description: boolean;
     quantity: boolean;
     uom: boolean;
-    type: boolean;
     notes: boolean;
     unitRate: boolean;
     totalAmount: boolean;

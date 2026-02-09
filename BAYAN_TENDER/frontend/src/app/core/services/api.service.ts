@@ -96,7 +96,7 @@ export class ApiService {
 
   delete<T>(endpoint: string): Observable<T> {
     return this.http.delete<ApiResponse<T>>(`${this.baseUrl}${endpoint}`).pipe(
-      map(response => response.data),
+      map(response => (response?.data ?? undefined) as T),
       catchError(this.handleError)
     );
   }
