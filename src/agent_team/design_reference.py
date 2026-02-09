@@ -248,6 +248,363 @@ def validate_ui_requirements(content: str) -> list[str]:
     return missing
 
 
+def _split_into_sections(content: str) -> dict[str, str]:
+    """Split markdown content by ## headers into a dict of section_name -> section_body.
+
+    Parameters
+    ----------
+    content : str
+        Markdown text with ## headers.
+
+    Returns
+    -------
+    dict[str, str]
+        Mapping of lowercase section name to the text under that heading.
+    """
+    sections: dict[str, str] = {}
+    current_name = ""
+    current_lines: list[str] = []
+
+    for line in content.splitlines():
+        if line.startswith("## "):
+            if current_name:
+                sections[current_name] = "\n".join(current_lines)
+            current_name = line.lstrip("#").strip().lower()
+            current_lines = []
+        else:
+            current_lines.append(line)
+
+    if current_name:
+        sections[current_name] = "\n".join(current_lines)
+
+    return sections
+
+
+# Regex patterns for content quality validation
+_RE_HEX_COLOR = re.compile(r'#[0-9a-fA-F]{3,8}\b')
+_RE_FONT_FAMILY = re.compile(
+    r'(?:font[-_]?family|fontFamily|font:|typeface)\s*[:=]?\s*["\']?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+    re.IGNORECASE,
+)
+_RE_SPACING_VALUE = re.compile(r'\b\d+(?:px|rem|em)\b')
+_RE_COMPONENT_TYPE = re.compile(
+    r'\b(?:buttons?|cards?|inputs?|modals?|dialogs?|tables?|lists?|navs?|headers?|sidebars?|badges?|avatars?|toasts?|tabs?)\b',
+    re.IGNORECASE,
+)
+_RE_NOT_FOUND = re.compile(r'NOT\s+FOUND', re.IGNORECASE)
+
+
+def validate_ui_requirements_content(content: str) -> list[str]:
+    """Validate that UI_REQUIREMENTS.md sections contain ACTUAL values, not just headers.
+
+    Unlike :func:`validate_ui_requirements` which checks for section header presence,
+    this function checks that each section contains meaningful design tokens:
+    - Color System: at least 3 hex color codes
+    - Typography: at least 1 font family declaration
+    - Spacing: at least 3 spacing values (px/rem)
+    - Component Patterns: at least 2 component type mentions
+
+    Also counts "NOT FOUND" occurrences as a negative signal.
+
+    Parameters
+    ----------
+    content : str
+        The content of UI_REQUIREMENTS.md.
+
+    Returns
+    -------
+    list[str]
+        List of quality issue descriptions. Empty = good quality.
+    """
+    issues: list[str] = []
+    sections = _split_into_sections(content)
+
+    # Check Color System section
+    color_section = sections.get("color system", "")
+    hex_colors = _RE_HEX_COLOR.findall(color_section)
+    if len(hex_colors) < 3:
+        issues.append(
+            f"Color System: only {len(hex_colors)} hex color(s) found (minimum 3 required)"
+        )
+
+    # Check Typography section
+    typo_section = sections.get("typography", "")
+    font_families = _RE_FONT_FAMILY.findall(typo_section)
+    if len(font_families) < 1:
+        issues.append(
+            "Typography: no font family declarations found (minimum 1 required)"
+        )
+
+    # Check Spacing section
+    spacing_section = sections.get("spacing", "")
+    spacing_values = _RE_SPACING_VALUE.findall(spacing_section)
+    if len(spacing_values) < 3:
+        issues.append(
+            f"Spacing: only {len(spacing_values)} spacing value(s) found (minimum 3 required)"
+        )
+
+    # Check Component Patterns section
+    component_section = sections.get("component patterns", "")
+    component_types = set(_RE_COMPONENT_TYPE.findall(component_section.lower()))
+    if len(component_types) < 2:
+        issues.append(
+            f"Component Patterns: only {len(component_types)} component type(s) found (minimum 2 required)"
+        )
+
+    # Check for excessive NOT FOUND markers (negative signal)
+    not_found_count = len(_RE_NOT_FOUND.findall(content))
+    if not_found_count > 5:
+        issues.append(
+            f"Excessive 'NOT FOUND' markers ({not_found_count}) — extraction quality is poor"
+        )
+
+    return issues
+
+
+async def run_design_extraction_with_retry(
+    urls: list[str],
+    config: AgentTeamConfig,
+    cwd: str,
+    backend: str,
+    max_retries: int = 2,
+    base_delay: float = 5.0,
+) -> tuple[str, float]:
+    """Wrap :func:`run_design_extraction` with exponential backoff retry.
+
+    Parameters
+    ----------
+    urls : list[str]
+        Design reference URLs.
+    config : AgentTeamConfig
+        Full config.
+    cwd : str
+        Working directory.
+    backend : str
+        "api" or "cli".
+    max_retries : int
+        Number of retry attempts (default 2).
+    base_delay : float
+        Base delay in seconds between retries (doubles each attempt).
+
+    Returns
+    -------
+    tuple[str, float]
+        (content, accumulated_cost)
+
+    Raises
+    ------
+    DesignExtractionError
+        If ALL attempts fail.
+    """
+    total_cost = 0.0
+    last_error: Exception | None = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            content, cost = await run_design_extraction(
+                urls=urls, config=config, cwd=cwd, backend=backend,
+            )
+            total_cost += cost
+            return content, total_cost
+        except DesignExtractionError as exc:
+            # Expected failure — retry
+            last_error = exc
+            if attempt < max_retries:
+                delay = base_delay * (2 ** attempt)
+                await asyncio.sleep(delay)
+            continue
+        except (OSError, ConnectionError, TimeoutError) as exc:
+            # Network/IO failures — retry
+            last_error = exc
+            if attempt < max_retries:
+                delay = base_delay * (2 ** attempt)
+                await asyncio.sleep(delay)
+            continue
+        except Exception as exc:
+            # Unexpected error (bug) — don't retry, surface immediately
+            raise DesignExtractionError(
+                f"Unexpected error during design extraction: {exc}"
+            ) from exc
+
+    raise DesignExtractionError(
+        f"Design extraction failed after {max_retries + 1} attempts. "
+        f"Last error: {last_error}"
+    )
+
+
+# Direction inference table for fallback generation
+_DIRECTION_TABLE: dict[str, dict[str, str]] = {
+    "brutalist": {
+        "keywords": "developer,cli,terminal,tool,hacker,code,devtool",
+        "primary": "#000000",
+        "secondary": "#FFFFFF",
+        "accent": "#FF3333",
+        "heading_font": "Space Grotesk",
+        "body_font": "IBM Plex Mono",
+        "base_unit": "8px",
+    },
+    "luxury": {
+        "keywords": "premium,fintech,fashion,luxury,boutique,exclusive,wealth",
+        "primary": "#1A1A2E",
+        "secondary": "#E8D5B7",
+        "accent": "#C9A96E",
+        "heading_font": "Cormorant Garamond",
+        "body_font": "Outfit",
+        "base_unit": "8px",
+    },
+    "industrial": {
+        "keywords": "enterprise,erp,logistics,warehouse,manufacturing,supply",
+        "primary": "#1E293B",
+        "secondary": "#F1F5F9",
+        "accent": "#F59E0B",
+        "heading_font": "Space Grotesk",
+        "body_font": "Inter",
+        "base_unit": "4px",
+    },
+    "minimal_modern": {
+        "keywords": "saas,dashboard,startup,app,platform,analytics,crm",
+        "primary": "#0F172A",
+        "secondary": "#F8FAFC",
+        "accent": "#6366F1",
+        "heading_font": "Plus Jakarta Sans",
+        "body_font": "Outfit",
+        "base_unit": "4px",
+    },
+    "editorial": {
+        "keywords": "blog,news,content,magazine,media,publication,article",
+        "primary": "#111827",
+        "secondary": "#FFFBEB",
+        "accent": "#B91C1C",
+        "heading_font": "Playfair Display",
+        "body_font": "Newsreader",
+        "base_unit": "8px",
+    },
+}
+
+
+def _infer_design_direction(task: str) -> str:
+    """Infer design direction from task keywords.
+
+    Returns the direction name that best matches the task text.
+    Falls back to 'minimal_modern' if no keywords match.
+    """
+    task_lower = task.lower()
+    best_match = "minimal_modern"
+    best_score = 0
+
+    for direction, info in _DIRECTION_TABLE.items():
+        keywords = info["keywords"].split(",")
+        score = sum(
+            1 for kw in keywords
+            if re.search(rf"\b{re.escape(kw)}\b", task_lower)
+        )
+        if score > best_score:
+            best_score = score
+            best_match = direction
+
+    return best_match
+
+
+def generate_fallback_ui_requirements(
+    task: str,
+    config: AgentTeamConfig,
+    cwd: str,
+) -> str:
+    """Generate a heuristic UI_REQUIREMENTS.md when extraction fails.
+
+    Infers a design direction from task keywords and populates all required
+    sections with direction-appropriate defaults. Writes to disk with a
+    FALLBACK-GENERATED warning header.
+
+    Parameters
+    ----------
+    task : str
+        The user's task description (used for direction inference).
+    config : AgentTeamConfig
+        Config with requirements_dir and ui_requirements_file.
+    cwd : str
+        Project working directory.
+
+    Returns
+    -------
+    str
+        Content of the generated fallback UI_REQUIREMENTS.md.
+    """
+    direction = _infer_design_direction(task)
+    d = _DIRECTION_TABLE[direction]
+
+    content = f'''# UI Requirements — Fallback Generated
+> **WARNING: FALLBACK-GENERATED** — This document was auto-generated because
+> design reference extraction failed. Values are heuristic defaults based on
+> detected project direction: **{direction}**. Review and customize these values.
+
+Generated direction: {direction}
+
+## Color System
+- Primary: {d["primary"]}
+- Secondary: {d["secondary"]}
+- Accent: {d["accent"]}
+- Background (light): #FFFFFF
+- Background (dark): {d["primary"]}
+- Surface: {d["secondary"]}
+- Text Primary: {d["primary"]}
+- Text Secondary: #64748B
+- Text Muted: #94A3B8
+- Border: #E2E8F0
+- Error: #EF4444
+- Success: #22C55E
+- Warning: #F59E0B
+- Info: #3B82F6
+
+## Typography
+- Heading font: {d["heading_font"]}
+- Body font: {d["body_font"]}
+- Mono font: JetBrains Mono
+- Font sizes: xs=12px, sm=14px, base=16px, lg=18px, xl=20px, 2xl=24px, 3xl=30px, 4xl=36px
+- Font weights: light=300, normal=400, medium=500, semibold=600, bold=700, extrabold=800
+- Line heights: tight=1.25, normal=1.5, relaxed=1.75
+
+## Spacing
+- Base unit: {d["base_unit"]}
+- Scale: xs=4px, sm=8px, md=16px, lg=24px, xl=32px, 2xl=48px, 3xl=64px, 4xl=96px
+- Container max-width: 1280px
+- Section padding: 64px vertical, 24px horizontal
+- Card padding: 24px
+
+## Component Patterns
+- Buttons: primary (filled), secondary (outlined), ghost (text-only), destructive (red)
+  - Border radius: 8px
+  - Padding: 10px 20px
+  - States: default, hover, focus, active, disabled, loading
+- Cards: shadow-sm, border-radius 12px, padding 24px
+- Inputs: border 1px, border-radius 8px, padding 10px 14px, focus ring
+- Navigation: sticky header, mobile hamburger at 768px
+- Modals: backdrop blur, centered, max-width 520px
+- Tables: alternating row colors, sticky header
+- Badges: rounded-full, padding 2px 10px
+
+## Design Requirements Checklist
+- [ ] DR-001: Color system tokens defined
+- [ ] DR-002: Typography scale defined
+- [ ] DR-003: Spacing system defined
+- [ ] DR-004: Component patterns documented
+- [ ] DR-005: Interactive states documented (hover, focus, active, disabled)
+- [ ] DR-006: Responsive breakpoints identified
+- [ ] DR-007: Animation/transition patterns noted
+- [ ] DR-008: Dark mode considerations (if applicable)
+'''
+
+    # Write to disk
+    req_dir = config.convergence.requirements_dir
+    ui_file = config.design_reference.ui_requirements_file
+    output_dir = Path(cwd) / req_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / ui_file
+    output_path.write_text(content, encoding="utf-8")
+
+    return content
+
+
 def load_ui_requirements(cwd: str, config: AgentTeamConfig) -> str | None:
     """Load existing UI_REQUIREMENTS.md for resume scenarios.
 

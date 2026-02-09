@@ -86,8 +86,13 @@ If NO reference URLs: apply standards with project-appropriate color/typography 
 |----|--------|--------|-----------|---------|
 | WIRE-001 | <source file/component> | <target file/component> | <exact mechanism: import, route mount, component render, middleware chain, event listener, config entry, state connection> | <why this connection exists> |
 
+### Service-to-API Wiring Map (Full-Stack Projects)
+| SVC-ID | Frontend Service.Method | Backend Endpoint | HTTP Method | Request DTO | Response DTO |
+|--------|------------------------|------------------|-------------|-------------|--------------|
+| SVC-001 | <service.method()> | <METHOD /api/path> | <GET/POST/PUT/DELETE> | <request type> | <response type> |
+
 ### Wiring Anti-Patterns to Avoid
-<Architect identifies specific risks for this project — orphaned exports, unregistered routes, unmounted components, etc.>
+<Architect identifies specific risks for this project — orphaned exports, unregistered routes, unmounted components, mock data in services, etc.>
 
 ### Initialization Order
 <If order matters, document the required initialization sequence — e.g., database before server, middleware before routes>
@@ -106,6 +111,9 @@ If NO reference URLs: apply standards with project-appropriate color/typography 
 
 ### Wiring Requirements
 - [ ] WIRE-001: <Source wired to Target via Mechanism> (review_cycles: 0)
+
+### Service-to-API Wiring Requirements (Full-Stack Projects)
+- [ ] SVC-001: <FrontendService.method() wired to Backend endpoint via HTTP method> (review_cycles: 0)
 
 ### Design Requirements
 - [ ] DESIGN-001: <Description — only if design reference URLs were provided> (review_cycles: 0)
@@ -342,9 +350,25 @@ You are executing a SINGLE milestone.  Your context includes:
 Execute the full workflow for THIS milestone ONLY:
    a. Research Fleet → gather knowledge for this milestone's tech
    b. Architecture Fleet → design implementation for this milestone
-   c. FULL CONVERGENCE LOOP (code → review → debug → until all [x])
-   d. Testing Fleet → write and run tests
-   e. Mark milestone COMPLETE only when ALL its items are [x]
+      Include API Wiring Map (SVC-xxx entries) for all frontend-to-backend connections
+   c. TASK ASSIGNER → decompose this milestone's requirements into
+      .agent-team/milestones/{milestone_id}/TASKS.md (uses architecture decisions)
+   d. CONTRACT GENERATOR → generate contracts for this milestone's scope
+   e. FULL CONVERGENCE LOOP:
+      - Assign code-writer tasks from this milestone's TASKS.md (by dependency graph)
+      - MOCK DATA GATE: After each coding wave, scan services for of(), delay(), mockData
+        patterns. If found, send violating files back to code-writers for replacement before
+        proceeding to review
+      - Review Fleet → adversarial verification of ALL requirements + SVC-xxx wiring
+      - Debug Fleet → fix issues found by reviewers
+      - Repeat until ALL items in REQUIREMENTS.md are [x] AND all TASKS.md tasks COMPLETE
+   f. Testing Fleet → write and run tests
+   f2. INTEGRATION VERIFICATION (when milestone has predecessors):
+       - Deploy reviewers to verify cross-milestone API contract alignment
+       - Verify frontend API calls match backend endpoints from earlier milestones
+       - Verify no mock data remains — all connections use real API calls
+       - Fix any mismatches before proceeding to completion
+   g. Mark milestone COMPLETE only when ALL its items are [x]
 
 CONSTRAINTS:
 - Do NOT modify files that belong to completed milestones unless fixing a wiring issue
@@ -473,6 +497,15 @@ Use the `code-reviewer` agent. CRITICAL RULES:
 - They EDIT REQUIREMENTS.md to mark items [x] or document failures
 - They ADD entries to the Review Log table
 - Reviewers MUST verify WIRE-xxx (wiring) items — check that imports resolve, routes are registered, components are mounted, state is connected
+- Reviewers MUST verify SVC-xxx (service-to-API wiring) items:
+  1. Open the frontend service file
+  2. Verify EVERY method makes a REAL HTTP call (HttpClient.get/post/put/delete, fetch, axios)
+  3. REJECT if ANY method contains: of(), delay(), mockData, fakeData, hardcoded arrays/objects
+  4. Verify the URL path matches an actual backend controller endpoint
+  5. Verify the response DTO shape matches what the frontend expects
+  6. Check enum mapping: if backend returns numeric enums, frontend must have a mapper
+- MOCK DATA IS THE #1 ANTI-PATTERN. Finding even ONE mock service method = AUTOMATIC FAILURE of that SVC-xxx item
+- After reviewing all SVC-xxx items, SCAN for any service methods NOT covered by SVC-xxx. If found, CREATE new SVC-xxx items and verify their wiring
 - Reviewers perform ORPHAN DETECTION: flag any new code that exists but isn't wired into the application
 
 ### Debugger Fleet
@@ -529,6 +562,24 @@ Execute this workflow for every task:
 3. Deploy RESEARCH FLEET (if needed) → adds research findings
    - If design reference URLs are provided, dedicate researcher(s) to design analysis
 3.5. Deploy ARCHITECTURE FLEET → adds architecture decision, Integration Roadmap (entry points, wiring map, anti-patterns, initialization order), tech + wiring requirements
+3.7. [UI DESIGN SYSTEM SETUP — MANDATORY when project has UI components]
+     After architecture fleet completes, deploy architect with this FOCUSED task:
+     1. Read UI_REQUIREMENTS.md for extracted design tokens (colors, fonts, spacing)
+     2. Choose a BOLD design direction (NOT "generic SaaS" — pick a personality)
+     3. Create the design tokens implementation file:
+        - React/Next.js: extend `tailwind.config.ts` theme with custom colors/fonts/spacing
+        - Angular: create `_variables.scss` or CSS custom properties file
+        - Vue/Nuxt: extend `tailwind.config` or create CSS variables file
+        - Vanilla: create `css/variables.css` with custom properties
+     4. Add DESIGN-001..005 requirements to REQUIREMENTS.md:
+        - DESIGN-001: Design tokens file created with color palette from UI_REQUIREMENTS.md
+        - DESIGN-002: Typography tokens (font families, sizes, weights) defined
+        - DESIGN-003: Spacing scale tokens defined (based on UI_REQUIREMENTS.md grid)
+        - DESIGN-004: Component base styles match design direction
+        - DESIGN-005: All UI files import/use design tokens (no hardcoded values)
+     5. Design tokens file MUST be created BEFORE code-writers start
+     6. Task assigner references design tokens file in every UI task description
+     Skip this step ONLY if the project has NO UI components (pure backend/CLI).
 4. Deploy TASK ASSIGNER → decomposes requirements into .agent-team/TASKS.md (uses architecture decisions)
 4.5. **MANDATORY BLOCKING GATE**: Deploy CONTRACT GENERATOR
      - Reads architecture decisions + wiring map from REQUIREMENTS.md.
@@ -543,7 +594,16 @@ Execute this workflow for every task:
       - Writers READ their task + REQUIREMENTS.md context
       - Each code-writer updates their own task in TASKS.md: PENDING → COMPLETE
       - After each wave: verify TASKS.md reflects all completions before next wave
-   b. REVIEW FLEET → adversarial check (uses REQUIREMENTS.md)
+   a2. MOCK DATA GATE (MANDATORY for full-stack projects — runs BETWEEN coding and review):
+       After the coding fleet completes each wave, scan all service/client files for:
+       of(, delay(, mockData, fakeData, Promise.resolve([, hardcoded return values.
+       If ANY service file contains mock data patterns:
+       - Do NOT proceed to review fleet
+       - Send each violating file back to a code-writer with instruction:
+         "Replace mock data in [file]:[line] with real HTTP call to [endpoint] per SVC-xxx entry"
+       - After fix, re-scan to confirm mocks are eliminated
+       - ONLY THEN proceed to review fleet
+   b. REVIEW FLEET → adversarial check (uses REQUIREMENTS.md) — includes SVC-xxx wiring verification
    c. Check completion → if not done, DEBUGGER FLEET → loop
    d. ESCALATION if items stuck 3+ cycles
 6. TESTING FLEET → write/run tests
@@ -855,8 +915,59 @@ Do NOT edit the Requirements Checklist in REQUIREMENTS.md -- only code-reviewer 
 - The Wiring Map must be EXHAUSTIVE — if a file imports from another file, it needs a WIRE-xxx entry
 - Consider error handling, edge cases, and failure modes
 - Be specific — vague architecture leads to implementation problems
+- **Every frontend service method MUST have a SVC-xxx entry** mapping it to a real backend endpoint
+- **NEVER design services that return mock/stub data** — the API Wiring Map IS the contract
+
+## Service-to-API Wiring Plan (MANDATORY for full-stack apps with frontend + backend)
+After identifying all frontend services and backend controllers, you MUST:
+1. List EVERY frontend service method that needs to call a backend API
+2. Map each method to its corresponding backend controller action
+3. Create SVC-xxx entries in REQUIREMENTS.md for EACH mapping
+4. Create a **Service-to-API Wiring Map** table in the Integration Roadmap:
+   | SVC-ID | Frontend Service.Method | Backend Endpoint | HTTP Method | Request DTO | Response DTO |
+   |--------|------------------------|------------------|-------------|-------------|--------------|
+5. Note any DTO shape differences that require mapping functions
+6. Note any enum translation needs (numeric ↔ string)
+7. Add SVC-xxx requirements to the checklist:
+   `- [ ] SVC-001: <Service.method()> wired to <endpoint> (review_cycles: 0)`
+
+The SVC-xxx section is as important as FUNC-xxx and WIRE-xxx.
 
 Define module contracts: for each new module, specify its exported symbols (name, kind, signature). For module wiring, specify which modules import what from where. Output these as a contracts section in REQUIREMENTS.md.
+
+## Status/Enum Registry (MANDATORY for projects with status or enum fields)
+You MUST produce a STATUS_REGISTRY section in your architecture document that defines:
+
+1. **Entity Inventory:** Every entity that has a status, state, type, or enum field
+2. **Complete Value List:** Every possible value for each enum — the COMPLETE list, not "Draft, Published, etc."
+3. **State Transitions:** Every valid state transition:
+   - Draft -> Published: YES (via publish action)
+   - Published -> Draft: NO (cannot unpublish)
+   - Format: `FROM -> TO: YES/NO (trigger/reason)`
+4. **Cross-Layer Representation:**
+   - Database type: string enum, integer, varchar(50), etc.
+   - Backend API: exact string values in request/response JSON
+   - Frontend: exact string values used in UI state and API calls
+   ALL THREE MUST MATCH. If the DB stores "Opened" but the frontend sends "Open" = BUG.
+5. **Validation Rules:** Backend MUST validate incoming status strings against the enum.
+   A status value not in the registry MUST be rejected with 400 Bad Request.
+
+VIOLATION IDs:
+- ENUM-001: Entity with status/enum field but no registry entry → HARD FAILURE
+- ENUM-002: Frontend status string doesn't match backend enum value → HARD FAILURE
+- ENUM-003: State transition not defined in registry → HARD FAILURE
+
+Every architect MUST produce this registry. Every code-writer MUST consult it.
+Every code-reviewer MUST verify code matches it.
+
+## Milestone Handoff Preparation
+When designing the architecture for a milestone that creates API endpoints:
+- Document EVERY endpoint in a format suitable for MILESTONE_HANDOFF.md:
+  Endpoint | Method | Auth | Request Body Schema | Response Schema
+- Be SPECIFIC about response shapes — include field names and types
+- This documentation will be used by subsequent milestones to wire frontend services
+- Vague documentation ("returns tender object") is NOT acceptable
+- Specify: `{ id: string, title: string, status: "draft"|"active"|"closed", createdAt: ISO8601 }`
 """.strip()
 
 CODE_WRITER_PROMPT = r"""You are a CODE WRITER agent in the Agent Team system.
@@ -886,6 +997,36 @@ Your job is to implement requirements from the Requirements Document, guided by 
 - Only modify files ASSIGNED in your task — do not touch other files
 - Follow the project's existing code style, conventions, and patterns
 - Implement COMPLETE solutions — no TODOs, no placeholders, no shortcuts
+- **ZERO MOCK DATA POLICY** (ABSOLUTE — NO EXCEPTIONS):
+  You MUST NEVER create service methods that return fake/mock/stub data. This includes:
+  - `of(null).pipe(delay(...), map(() => fakeData))` patterns (RxJS)
+  - Hardcoded arrays or objects returned from service methods
+  - `Promise.resolve(mockData)` or `new Observable(sub => sub.next(fake))`
+  - Any `delay()` used to simulate network latency
+  - Variables named mockTenders, fakeData, dummyResponse, sampleItems, etc.
+  EVERY service method MUST make a REAL HTTP call to a REAL backend API endpoint.
+  - Angular: `this.http.get<T>('/api/endpoint')`
+  - React: `fetch('/api/endpoint')` or `axios.get('/api/endpoint')`
+  - Vue/Nuxt: `$fetch('/api/endpoint')` or `useFetch('/api/endpoint')` or `axios.get()`
+  - Python: `requests.get('/api/endpoint')` or `httpx.get('/api/endpoint')`
+  - `new BehaviorSubject(hardcodedData)` is mock data — use BehaviorSubject(null) + HTTP populate
+  - Use proper DTO mapping between backend response shape and frontend model.
+  If a backend endpoint doesn't exist yet:
+  1. CREATE the backend endpoint first (controller + handler)
+  2. THEN create the frontend service method that calls it
+  3. NEVER scaffold with mock data "to be replaced later" — it NEVER gets replaced
+  If you see existing mock data in the codebase, REPLACE IT with real API calls.
+  VIOLATION = AUTOMATIC REVIEW FAILURE.
+- **FIX CYCLE AWARENESS**: When deployed as part of a fix loop (mock data fix, UI compliance fix,
+  integrity fix), ALWAYS read FIX_CYCLE_LOG.md in the requirements directory FIRST. Study what
+  previous fix cycles attempted. Apply a DIFFERENT strategy from what was already tried.
+  After fixing, APPEND your fix details to FIX_CYCLE_LOG.md.
+- **MILESTONE HANDOFF AWARENESS**: When working inside a milestone that has predecessors:
+  1. Read MILESTONE_HANDOFF.md BEFORE writing any service/client code
+  2. Use the EXACT endpoint paths, methods, and response shapes documented in the handoff
+  3. Do NOT guess API contracts. Do NOT scaffold with mock data when the handoff shows the real endpoint.
+  4. After completing your assigned task, if you created new endpoints or modified existing ones,
+     note them clearly in your code comments — the milestone completion step will add them to the handoff.
 - Handle error cases as specified in requirements
 - If a requirement is unclear, implement your best interpretation and document it
 - If implementing a feature (not a wiring task): ensure your code EXPORTS what the Wiring Map says other files will import
@@ -900,30 +1041,61 @@ Your job is to implement requirements from the Requirements Document, guided by 
 - REQUIREMENTS.md is READ-ONLY for code-writers — only reviewers may edit it
 - After completing your assigned task, update TASKS.md: change your task's Status: PENDING to Status: COMPLETE. Only change YOUR task's status line.
 - Do NOT modify other tasks' statuses in TASKS.md
-- **UI Quality Standards** (ALWAYS for files producing UI output):
-  - Follow the UI Design Standards injected in the orchestrator context.
-    These are your quality baseline — every UI element must meet them.
-  - BEFORE writing UI code, check the architect's design direction. Every component
-    must fit that direction. A brutalist app uses sharp corners and mono fonts;
-    a luxury brand uses refined serif headings and generous whitespace.
-  - Use the spacing system (8px grid): never use arbitrary pixel values.
-  - Use DISTINCTIVE typography — NEVER Inter, Roboto, or Arial (see Standards Section 3).
-  - Use weight EXTREMES (100-200 for light, 800-900 for bold), not timid 400 vs 600.
-  - Structure colors by semantic role (primary, neutral, semantic states).
-    Primary color on max 10-15% of the screen. Neutral palette does 80% of the work.
-  - Check your output against the anti-patterns list (SLOP-001 to SLOP-015).
-    If you catch yourself writing `bg-indigo-500`, centering all text, making a
-    3-card grid, or using Inter — STOP and correct immediately.
-  - ALL interactive components need ALL states: default, hover, focus, active,
-    disabled, loading, error, empty. No static-only HTML.
-  - Write specific, human copy — not "unleash the power" marketing platitudes.
-    Error messages helpful. Empty states have personality. Buttons describe actions.
-  - If REQUIREMENTS.md has a **Design Standards & Reference** section with
-    extracted branding, use those specific values (hex colors, font families).
-  - If NO extracted branding: choose values matching the design direction,
-    structured per the standards' color/typography architecture.
-  - Implement DESIGN-xxx requirements like any other requirement.
-  - Apply framework-adaptive patterns from Section 12 of the standards.
+- **UI COMPLIANCE POLICY (ABSOLUTE — NO EXCEPTIONS)**:
+  When UI_REQUIREMENTS.md exists in .agent-team/, this policy is ACTIVE.
+  Read UI_REQUIREMENTS.md FIRST before writing ANY file that produces UI output.
+
+  REJECTION RULES — any of these = AUTOMATIC REVIEW FAILURE:
+  - UI-FAIL-001: Using a color hex code NOT defined in UI_REQUIREMENTS.md color system → REJECTION
+  - UI-FAIL-002: Using Inter/Roboto/Arial/system-ui when UI_REQUIREMENTS.md specifies custom fonts → REJECTION
+  - UI-FAIL-003: Using arbitrary spacing values (13px, 17px) not on the defined spacing grid → REJECTION
+  - UI-FAIL-004: Interactive component with ONLY default state (missing hover/focus/active/disabled) → REJECTION
+  - UI-FAIL-005: Using SLOP-001 defaults (bg-indigo-500, bg-blue-600) when a custom palette exists → REJECTION
+  - UI-FAIL-006: Center-aligning ALL text (SLOP-004) — body text must be left-aligned → REJECTION
+  - UI-FAIL-007: Using 3 identical cards layout (SLOP-003) when design shows different pattern → REJECTION
+
+  VIOLATION = AUTOMATIC REVIEW FAILURE = SAME SEVERITY AS MOCK DATA.
+  These rules have the SAME enforcement level as the ZERO MOCK DATA POLICY above.
+  A single UI-FAIL violation makes the entire file review FAIL.
+
+  MANDATORY WORKFLOW for UI files:
+  1. Read UI_REQUIREMENTS.md → extract color tokens, font families, spacing grid
+  2. If design tokens file exists (tailwind.config.ts, _variables.scss, css/variables.css),
+     use token references — NEVER hardcode hex values in component files
+  3. Verify every color/font/spacing against the requirements before committing
+  4. If NO UI_REQUIREMENTS.md exists: follow the architect's design direction and
+     choose DISTINCTIVE values (not defaults). Still check SLOP-001..015 anti-patterns.
+- **SEED DATA COMPLETENESS POLICY** (ABSOLUTE — NO EXCEPTIONS):
+  When designing or implementing seed data (database seeding, initial data migration, dev fixtures):
+
+  EVERY seeded record MUST be COMPLETE and QUERYABLE:
+  - SEED-001: Incomplete seed record — every field must be explicitly set, not relying on defaults.
+    If a user record has `isActive`, `emailVerified`, `role`, `createdAt` fields, ALL must be set.
+  - SEED-002: Seed record not queryable by standard API filters — if the user listing endpoint
+    filters on `isActive=true AND emailVerified=true`, then seeded users MUST have BOTH set to true.
+    A seeded record invisible to the app's own queries = BROKEN SEED DATA.
+  - SEED-003: Role without seed account — every role defined in the authorization system MUST have
+    at least one seeded user account. Admin, User, Reviewer, etc. — ALL need seed accounts.
+
+  SEED DATA RULES:
+  1. Define seed data in a dedicated section/file (e.g., SeedData.cs, seed.ts, fixtures.py)
+  2. Every field for every seeded record MUST be explicitly set — do NOT rely on database defaults
+  3. Cross-check seeded values against ALL query filters in the API layer
+  4. Include ALL roles, ALL statuses, ALL enum values that the app expects to find
+  5. Seed data is TEST DATA for development — it must exercise the app's actual query paths
+
+  VIOLATION = AUTOMATIC REVIEW FAILURE.
+- **ENUM/STATUS REGISTRY COMPLIANCE** (ABSOLUTE — NO EXCEPTIONS):
+  When working with entities that have status/type/enum fields:
+  1. Read the STATUS_REGISTRY from the architecture document FIRST
+  2. Use the EXACT string values defined in the registry — do NOT invent new status strings
+  3. Frontend status strings MUST match backend enum values EXACTLY (case-sensitive)
+  4. Backend MUST validate incoming status strings against the enum — reject unknown values
+  5. Raw SQL queries MUST use the same type representation as the ORM (string vs integer)
+  If no STATUS_REGISTRY exists, CREATE one before writing status-dependent code.
+  ENUM-001: Missing registry → REVIEW FAILURE.
+  ENUM-002: Mismatched status string → REVIEW FAILURE.
+  ENUM-003: Undefined state transition → REVIEW FAILURE.
 - **Validation Middleware Best Practices** (ALWAYS for API/backend code):
   - When using validation schemas (Zod, Joi, Pydantic), ALWAYS assign the parsed result back:
     `req.body = schema.parse(req.body)` — never discard the sanitized output.
@@ -1023,6 +1195,59 @@ For each WIRE-xxx item in the Requirements Checklist:
 3. Trace the connection: Can you follow the path from the app's entry point to the feature?
    - If the feature is unreachable from the entry point, it FAILS
 
+## Service-to-API Verification (MANDATORY for SVC-xxx items)
+For each SVC-xxx item in the Requirements Checklist:
+1. Open the frontend service file
+2. Verify EVERY method makes a REAL HTTP call (HttpClient.get/post/put/delete, fetch, axios)
+3. REJECT if ANY method contains: of(), delay(), mockData, fakeData, hardcoded arrays/objects
+4. Verify the URL path matches an actual backend controller endpoint
+5. Verify the response DTO shape matches what the frontend expects
+6. Check enum mapping: if backend returns numeric enums, frontend must have a mapper
+MOCK DATA IS THE #1 ANTI-PATTERN. Finding even ONE mock service method = AUTOMATIC FAILURE of that SVC-xxx item.
+After reviewing all SVC-xxx items, SCAN for any service methods NOT covered by SVC-xxx.
+If found, CREATE new SVC-xxx items for them and verify their wiring.
+
+## UI Compliance Verification (MANDATORY when UI_REQUIREMENTS.md exists)
+UI COMPLIANCE IS THE #2 ENFORCEMENT PRIORITY (after mock data).
+For EVERY file that produces UI output (.tsx, .jsx, .vue, .svelte, .css, .scss):
+1. Read UI_REQUIREMENTS.md to get the authoritative color/font/spacing values
+2. Verify ALL color hex codes in the file match the defined color system
+3. Verify font families match the specified typography (NOT Inter/Roboto/Arial defaults)
+4. Verify spacing values are on the defined grid (not arbitrary px values)
+5. Check for SLOP-001..015 anti-patterns:
+   - SLOP-001: Default Tailwind colors (indigo/blue-500/600) when custom palette exists
+   - SLOP-003: 3 identical cards layout
+   - SLOP-004: All text center-aligned
+   - SLOP-005: Generic gradient (blue-to-purple)
+6. Check interactive components have ALL states: default, hover, focus, active, disabled
+7. FAILURE on ANY UI-FAIL-001..007 violation = same severity as mock data violation
+Apply UI-FAIL-001..007 rules from the code-writer policy. A single violation = file FAILS.
+
+## Seed Data Verification (MANDATORY when seed/fixture files exist)
+For every seed data file or migration that inserts initial records:
+1. Verify EVERY field is explicitly set (SEED-001) — no reliance on implicit defaults
+2. Cross-reference seeded values against API query filters:
+   - Find ALL endpoints that filter on boolean flags (isActive, emailVerified, isApproved)
+   - Verify seeded records have values that PASS those filters (SEED-002)
+3. Verify every role in the authorization system has a seed account (SEED-003):
+   - Find role definitions (enums, constants, config)
+   - Verify seed data includes at least one account per role
+If violations found: Review Log entry with "SEED-NNN", FAIL verdict, list specific fields/roles missing.
+
+## Enum/Status Registry Verification (MANDATORY when status/enum fields exist)
+For every entity with a status, state, type, or enum field:
+1. Verify a STATUS_REGISTRY exists in the architecture document (ENUM-001)
+2. Cross-check every frontend service method that sends a status string:
+   - The string MUST match the backend enum value exactly (ENUM-002)
+3. Cross-check every backend controller that accepts a status parameter:
+   - It MUST validate against the defined enum values (ENUM-002)
+4. Cross-check every raw SQL query that references a status column:
+   - The comparison type (string vs integer) MUST match the ORM definition (DB-001 overlap)
+5. Verify all state transitions in the code match the registry's allowed transitions (ENUM-003):
+   - Find all places where status is updated
+   - Verify the FROM→TO transition is marked YES in the registry
+If violations found: Review Log entry with "ENUM-NNN", FAIL verdict, list specific mismatches.
+
 ## Orphan Detection (MANDATORY)
 After reviewing all items, perform a sweep for orphaned code.
 "NEW" means: files created or modified by the current task batch (check TASKS.md for the list of assigned files).
@@ -1042,6 +1267,30 @@ For NEW application logic files (components, routes, handlers, services, utiliti
 - Any NEW middleware that isn't in a chain → flag as orphan
 If orphans are found: create a Review Log entry with item ID "ORPHAN-CHECK", FAIL verdict, and list the orphaned items.
 Orphan detection catches the "built but forgot to wire" problem.
+
+## Mock Data Detection (MANDATORY — BLOCKING)
+After orphan detection, scan ALL service/client/API files for mock data.
+"Service files" = any file in a services/, clients/, api/, http/, data-access/, providers/,
+or repositories/ directory, OR any file whose name contains "service", "client", "api", "http".
+
+For EVERY such file (EXCLUDING test files):
+1. **Pattern Scan** — search for mock indicators:
+   - `of(` followed by `[` or `{` (RxJS observable returning hardcoded data)
+   - `.pipe(delay(` or `.pipe(timer(` (simulated API latency)
+   - `Promise.resolve([` or `Promise.resolve({` (fake async with hardcoded data)
+   - Variables matching: mock*, fake*, dummy*, sample*, stub* + Data/Response/Result/Items
+   - Methods that `return` a hardcoded array/object without ANY http/fetch/axios call in the method body
+2. **Cross-Reference with API Wiring Map (SVC-xxx)**:
+   If SVC-xxx entries exist in REQUIREMENTS.md, verify each service method:
+   a. Makes an actual HTTP call (HttpClient.get/post, axios.get/post, fetch())
+   b. Calls the CORRECT URL from the SVC-xxx entry
+   c. Uses the CORRECT HTTP method (GET/POST/PUT/DELETE)
+   d. Request/Response types are compatible with the DTOs in the SVC-xxx entry
+3. **Verdict**:
+   - If ANY mock pattern is found in a non-test service file → FAIL with severity CRITICAL
+   - Log: "MOCK-DATA | FAIL | [file]:[line] contains [pattern]. Must call [endpoint] per SVC-xxx."
+   - If a service method has no HTTP call AND no SVC-xxx entry → flag as ORPHAN-SERVICE
+4. **No Exceptions**: There are ZERO acceptable reasons for mock data in production service files.
 
 If verification results are available in .agent-team/VERIFICATION.md, check them. Contract violations and test failures are blockers.
 
@@ -1725,23 +1974,38 @@ def build_decomposition_prompt(
         parts.append("\n[CHUNKED DECOMPOSITION STRATEGY]")
         parts.append("IMPORTANT: Do NOT read the full PRD. Use ONLY the chunk files.")
         parts.append("")
-        parts.append("1. Deploy FOCUSED PRD ANALYZER FLEET — each planner reads ONE chunk:")
+        parts.append("1. First, create the .agent-team/analysis/ directory using the Write tool.")
+        parts.append("")
+        parts.append("2. Deploy FOCUSED PRD ANALYZER FLEET — each planner reads ONE chunk and writes ONE analysis file:")
         for i, chunk in enumerate(prd_chunks):
             chunk_dict = chunk.to_dict() if hasattr(chunk, "to_dict") else chunk
-            parts.append(f"   - Planner {i + 1}: Read '{chunk_dict['file']}' → {chunk_dict['focus']}")
+            section_name = chunk_dict.get("name", f"section_{i + 1}")
+            parts.append(
+                f"   - Planner {i + 1}: Task: \"Read ONLY '{chunk_dict['file']}' "
+                f"and use the Write tool to create '.agent-team/analysis/{section_name}.md'. "
+                f"Focus: {chunk_dict['focus']}. "
+                f"Do NOT read the full PRD. Do NOT write to REQUIREMENTS.md.\""
+            )
 
         parts.append("")
-        parts.append("2. Each planner MUST:")
+        parts.append("3. Each planner MUST use the Write tool to persist their analysis:")
         parts.append("   a. Read ONLY their assigned chunk file (NOT the full PRD)")
-        parts.append("   b. Write detailed analysis to .agent-team/analysis/{section_name}.md")
-        parts.append("   c. Return ONLY: 'Analysis complete. See .agent-team/analysis/{section_name}.md'")
+        parts.append("   b. Use the Write tool to create .agent-team/analysis/{section_name}.md")
+        parts.append("   c. The analysis file MUST contain: extracted requirements, data models, API endpoints, dependencies")
+        parts.append("   d. After writing, return ONLY: 'Analysis written to .agent-team/analysis/{section_name}.md'")
         parts.append("")
-        parts.append("3. After ALL planners complete, deploy SYNTHESIZER agent:")
+        parts.append("CRITICAL: Each planner MUST call the Write tool to create their analysis file.")
+        parts.append("Inline text responses are NOT sufficient — the synthesizer reads from DISK.")
+        parts.append("")
+        parts.append(f"4. VALIDATION: Before deploying synthesizer, verify that .agent-team/analysis/ contains")
+        parts.append(f"   at least {len(prd_chunks)} analysis files. If any are missing, re-deploy the failed planner.")
+        parts.append("")
+        parts.append("5. After ALL planners complete, deploy SYNTHESIZER agent:")
         parts.append("   - Read all files in .agent-team/analysis/")
         parts.append(f"   - Create {master_plan} with ordered milestones")
         parts.append("   - Create CONTRACTS.json with interface definitions")
         parts.append("")
-        parts.append("4. STOP after creating the plan. Do NOT write implementation code.")
+        parts.append("6. STOP after creating the plan. Do NOT write implementation code.")
         parts.append("")
         parts.append("CRITICAL: This chunked approach prevents context overflow.")
         parts.append("Any agent that reads the full PRD will cause failure.")
@@ -1799,6 +2063,16 @@ def build_milestone_execution_prompt(
     if predecessor_context:
         parts.append(f"\n{predecessor_context}")
 
+    # Milestone Handoff injection (tracking documents)
+    if config.tracking_documents.milestone_handoff:
+        try:
+            from .tracking_documents import MILESTONE_HANDOFF_INSTRUCTIONS
+            parts.append(MILESTONE_HANDOFF_INSTRUCTIONS.format(
+                requirements_dir=req_dir,
+            ))
+        except (ImportError, AttributeError):
+            pass  # tracking_documents module not available yet — skip silently
+
     # Design reference injection for milestone execution
     if ui_requirements_content:
         from .design_reference import format_ui_requirements_block
@@ -1829,6 +2103,52 @@ def build_milestone_execution_prompt(
             f"Read requirements from: {milestone_context.requirements_path}"
         )
     parts.append("Run the full convergence loop until all requirements are [x].")
+
+    # UI Compliance Enforcement
+    parts.append("")
+    parts.append("[UI COMPLIANCE ENFORCEMENT]")
+    parts.append("If UI_REQUIREMENTS.md exists in the project:")
+    parts.append("- ALL code-writers MUST read it before writing UI files")
+    parts.append("- ALL reviewers MUST verify UI compliance (UI-FAIL-001..007)")
+    parts.append("- Design tokens file MUST be created BEFORE code-writers start")
+    parts.append("- UI compliance has SAME enforcement level as mock data policy")
+    parts.append("")
+
+    # TASKS.md creation instruction (Fix RC-2)
+    parts.append("")
+    parts.append("[MILESTONE WORKFLOW — MANDATORY STEPS]")
+    parts.append("You MUST execute ALL of these steps IN ORDER for this milestone:")
+    parts.append("1. Read this milestone's REQUIREMENTS.md to understand scope")
+    parts.append("2. Deploy PLANNING/RESEARCH FLEET to explore codebase and understand existing code")
+    parts.append("3. Deploy ARCHITECTURE FLEET to design implementation approach")
+    parts.append("   Include API Wiring Map (SVC-xxx entries) for all frontend-to-backend connections")
+    parts.append("3b. Deploy ARCHITECT for UI DESIGN SYSTEM SETUP (if milestone has UI components)")
+    parts.append("   Read UI_REQUIREMENTS.md → create/update design tokens file → add DESIGN-xxx to REQUIREMENTS.md")
+    parts.append("   BLOCKING: code-writers CANNOT start until design tokens file exists for UI milestones")
+    if milestone_context:
+        ms_tasks_path = milestone_context.requirements_path.replace("REQUIREMENTS.md", "TASKS.md")
+        parts.append(f"4. Deploy TASK ASSIGNER to create TASKS.md in THIS milestone's directory")
+        parts.append(f"   Write to: {ms_tasks_path}")
+    else:
+        parts.append("4. Deploy TASK ASSIGNER to create TASKS.md in THIS milestone's directory")
+    parts.append("   Each task MUST have: ID, description, parent requirement, files, dependencies, status")
+    parts.append("   Frontend service tasks MUST depend on their backend controller tasks (prevents mock data)")
+    parts.append("5. Deploy CODING FLEET — assign tasks FROM TASKS.md (by dependency graph)")
+    parts.append("   Writers READ their task in TASKS.md + REQUIREMENTS.md before coding")
+    parts.append("   After each task, writer marks it COMPLETE in TASKS.md")
+    parts.append("   MOCK DATA GATE: After each coding wave, scan services for mock patterns.")
+    parts.append("   If mocks found, send files back to writers before proceeding to review.")
+    parts.append("6. Deploy REVIEW FLEET (ADVERSARIAL) — verify EVERY requirement + SVC-xxx wiring")
+    parts.append("   Reviewers mark [x] in REQUIREMENTS.md ONLY after thorough verification")
+    parts.append("   MUST check for mock data in ALL service files — any mock = FAIL")
+    parts.append("   MUST increment (review_cycles: N) on every evaluated item")
+    parts.append("7. If any items still [ ] → deploy DEBUGGER FLEET → re-review → repeat")
+    parts.append("8. Deploy TESTING FLEET — write and run tests")
+    parts.append("9. FINAL CHECK: ALL [x] in REQUIREMENTS.md AND all COMPLETE in TASKS.md")
+    parts.append("")
+    parts.append("CRITICAL: Steps 4 (TASKS.md creation), 6 (review fleet), and 9 (final check)")
+    parts.append("are MANDATORY and NON-NEGOTIABLE. Do NOT skip any step.")
+    parts.append("")
     parts.append("Do NOT modify files from completed milestones unless fixing wiring issues.")
     parts.append("Do NOT create requirements for other milestones.")
 
@@ -1851,6 +2171,30 @@ def build_milestone_execution_prompt(
         "to (review_cycles: N+1) on every evaluated item in REQUIREMENTS.md. "
         "This is mandatory — the system uses these markers for convergence health checks."
     )
+
+    # Integration verification for milestones with predecessors
+    if milestone_context and predecessor_context:
+        parts.append("\n[INTEGRATION VERIFICATION — MANDATORY for milestones with predecessors]")
+        parts.append(
+            "After the convergence loop completes, deploy a REVIEW FLEET specifically for "
+            "cross-milestone integration verification:"
+        )
+        parts.append("1. Verify all frontend API calls match actual backend endpoints from predecessor milestones")
+        parts.append("2. Verify DTO/type shapes are compatible across milestone boundaries")
+        parts.append("3. Verify no mock/placeholder data remains — all data flows through real APIs")
+        parts.append("4. Check SVC-xxx requirements in REQUIREMENTS.md")
+        parts.append(
+            "5. If mismatches found, deploy DEBUGGER FLEET to fix them BEFORE marking milestone COMPLETE"
+        )
+        if config.tracking_documents.milestone_handoff:
+            parts.append(
+                "6. Verify MILESTONE_HANDOFF.md consumption checklist is fully marked:\n"
+                "   - Every predecessor endpoint used by this milestone must be [x] in the checklist\n"
+                "   - Unmarked items = unwired services = MUST be fixed before milestone completes\n"
+                "7. Update MILESTONE_HANDOFF.md with this milestone's exposed interfaces section\n"
+                "   - List EVERY new/modified endpoint with exact path, method, auth, request/response shapes\n"
+                "   - Include database state changes, environment variables, known limitations"
+            )
 
     return "\n".join(parts)
 

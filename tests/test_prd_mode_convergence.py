@@ -196,9 +196,9 @@ class TestMilestoneExecutionPrompt:
         assert "[CYCLE TRACKING]" in prompt
         assert "review_cycles" in prompt
 
-    def test_does_not_duplicate_full_orchestrator_sections(self, default_config):
-        """Milestone prompt should NOT contain full orchestrator sections
-        like ARCHITECTURE FLEET or TASKS.md references."""
+    def test_milestone_prompt_includes_mandatory_workflow_steps(self, default_config):
+        """Milestone prompt MUST contain ARCHITECTURE FLEET, TASKS.md,
+        and review fleet references (Fix RC-2: TASKS.md never created)."""
         from agent_team.agents import build_milestone_execution_prompt
 
         prompt = build_milestone_execution_prompt(
@@ -206,9 +206,12 @@ class TestMilestoneExecutionPrompt:
             depth="standard",
             config=default_config,
         )
-        # These are orchestrator-only sections
-        assert "ARCHITECTURE FLEET" not in prompt
-        assert "TASKS.md" not in prompt
+        # These are now REQUIRED in milestone prompts (Fix RC-2)
+        assert "ARCHITECTURE FLEET" in prompt
+        assert "TASKS.md" in prompt
+        assert "TASK ASSIGNER" in prompt
+        assert "REVIEW FLEET" in prompt
+        assert "MANDATORY" in prompt
 
 
 # ===================================================================

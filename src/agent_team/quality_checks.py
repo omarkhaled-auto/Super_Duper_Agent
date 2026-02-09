@@ -20,6 +20,7 @@ Typical usage::
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from dataclasses import dataclass
@@ -116,12 +117,281 @@ _RE_SCHEMA_PARSE_ASSIGNED = re.compile(
     r"(?:const|let|var|return|=)\s*.*(?:parse|safeParse|validate)\s*\(", re.IGNORECASE,
 )
 
+# MOCK-001: RxJS mock patterns in service files
+_RE_RXJS_OF_MOCK = re.compile(r'\bof\s*\(\s*[\[\{]')
+_RE_RXJS_DELAY_PIPE = re.compile(r'\.pipe\s*\([^)]*delay\s*\(')
+_RE_MOCK_RETURN_OF = re.compile(r'return\s+of\s*\(')
+
+# MOCK-002: Promise.resolve with hardcoded data
+_RE_PROMISE_RESOLVE_MOCK = re.compile(r'Promise\.resolve\s*\(\s*[\[\{]')
+
+# MOCK-003: Mock variable names
+_RE_MOCK_VARIABLE = re.compile(
+    r'\b(?:mock|fake|dummy|sample|stub|hardcoded)'
+    r'(?:Data|Response|Result|Items|List|Array|Users|Tenders|Bids|Projects)\b',
+    re.IGNORECASE,
+)
+
+# MOCK-004: setTimeout/setInterval simulating API responses
+_RE_TIMEOUT_MOCK = re.compile(r'setTimeout\s*\(\s*(?:\(\s*\)\s*=>|function)')
+
+# MOCK-005: delay() used to simulate network latency
+_RE_DELAY_SIMULATE = re.compile(r'\bdelay\s*\(\s*\d+\s*\)')
+
+# MOCK-006: BehaviorSubject with hardcoded initial data (non-null/non-empty)
+_RE_BEHAVIOR_SUBJECT_MOCK = re.compile(
+    r'new\s+BehaviorSubject\s*[<(]\s*[\[\{]',
+)
+
+# MOCK-007: new Observable returning hardcoded data
+_RE_OBSERVABLE_MOCK = re.compile(
+    r'new\s+Observable\s*[<(]\s*(?:\(\s*\w+\s*\)\s*=>|function)',
+)
+
+# ---------------------------------------------------------------------------
+# UI Compliance patterns (UI-001..004)
+# ---------------------------------------------------------------------------
+
+# UI-001: Hardcoded hex color in CSS/style attributes (not in config/variable files)
+_RE_HARDCODED_HEX_CSS = re.compile(
+    r'(?:color|background|border|fill|stroke)\s*:\s*#[0-9a-fA-F]{3,8}\b'
+)
+_RE_HARDCODED_HEX_STYLE = re.compile(
+    r"(?:color|backgroundColor|borderColor|fill|stroke)\s*[:=]\s*['\"]#[0-9a-fA-F]{3,8}['\"]"
+)
+
+# UI-001b: Hardcoded hex in Tailwind arbitrary value classes
+_RE_TAILWIND_ARBITRARY_HEX = re.compile(
+    r'(?:bg|text|border|ring|shadow|fill|stroke)-\[#[0-9a-fA-F]{3,8}\]'
+)
+
+# UI-002: Default Tailwind colors (extended — indigo/violet/purple 400..700)
+_RE_DEFAULT_TAILWIND_EXTENDED = re.compile(
+    r'\b(?:bg|text|border|ring)-(?:indigo|violet|purple)-(?:4|5|6|7)00\b'
+)
+
+# UI-003: Generic fonts in config/theme files
+_RE_GENERIC_FONT_CONFIG = re.compile(
+    r"(?:fontFamily|font-family|fonts)\s*[:=].*\b(?:Inter|Roboto|Arial|Helvetica|system-ui)\b",
+    re.IGNORECASE,
+)
+
+# UI-004: Arbitrary spacing not on 4px grid (odd pixel values in padding/margin/gap)
+# Includes directional Tailwind variants: pt/pb/pl/pr, mt/mb/ml/mr
+_RE_ARBITRARY_SPACING = re.compile(
+    r'(?:padding|margin|gap)\s*:\s*(\d+)px|(?:p[tlbrxy]?-|m[tlbrxy]?-|space-[xy]-)(?:\[)?(\d+)(?:px)?(?:\])?'
+)
+
+# Config/theme file detection (exempt from hardcoded color checks)
+# Uses path-segment boundaries to avoid matching component names like "ThemeToggle"
+_RE_CONFIG_FILE = re.compile(
+    r'(?:^|[/\\])(?:tailwind\.config|theme|variables|tokens|design[-_]system|_variables)(?:\.|[/\\]|$)',
+    re.IGNORECASE,
+)
+
+# ---------------------------------------------------------------------------
+# E2E Testing quality patterns (E2E-001..007)
+# ---------------------------------------------------------------------------
+
+# E2E-001: Hardcoded sleep/timeout in E2E tests (use waitFor instead)
+_RE_E2E_SLEEP = re.compile(r'setTimeout\s*\(|time\.sleep\s*\(')
+
+# E2E-002: Hardcoded port in E2E test files (use config/env)
+_RE_E2E_HARDCODED_PORT = re.compile(r'localhost:\d{4}|127\.0\.0\.1:\d{4}')
+# Exempt: references to env/config
+_RE_E2E_PORT_EXEMPT = re.compile(r'(?:process\.env|BASE_URL|baseURL|BASE_URL|config\.|getenv)')
+
+# E2E-003: Mock data in E2E tests (must use real calls)
+_RE_E2E_MOCK_DATA = re.compile(
+    r'\b(?:mockData|fakeResponse|Promise\.resolve\s*\(\s*\[)'
+)
+
+# E2E-004: Empty test body (no assertions)
+_RE_E2E_EMPTY_TEST = re.compile(
+    r'(?:test|it)\s*\([^,]+,\s*async\s*(?:\(\s*\)|\(\s*\{[^}]*\}\s*\))\s*=>\s*\{\s*\}\s*\)'
+)
+
+# E2E-005: Auth test presence check (inverted — warn if NOT found)
+_RE_E2E_AUTH_TEST = re.compile(
+    r'(?:test|it|describe)\s*\(\s*[\'"].*(?:login|auth|sign.?in)',
+    re.IGNORECASE,
+)
+
+# E2E-006: Placeholder text in UI components
+_RE_E2E_PLACEHOLDER = re.compile(
+    r'(?:placeholder|coming.soon|will.be.implemented|future.milestone|under.construction|not.yet.available|lorem.ipsum)',
+    re.IGNORECASE,
+)
+# Comment patterns to exclude from E2E-006
+_RE_COMMENT_LINE = re.compile(r'^\s*(?://|#|/\*|\*|{/\*)')
+
+# E2E-007: Role access failure in E2E results
+_RE_E2E_ROLE_FAILURE = re.compile(r'(?:403|Forbidden|Unauthorized|Access.Denied)', re.IGNORECASE)
+
+# Path patterns for E2E test directories
+_RE_E2E_DIR = re.compile(r'(?:^|[/\\])(?:e2e|playwright)[/\\]', re.IGNORECASE)
+
+# Path patterns for service/client files
+_RE_SERVICE_PATH = re.compile(
+    r'(?:services?|clients?|api|http|data-access|repositor|provider|store|facade|composable)',
+    re.IGNORECASE,
+)
+
 # Function definition patterns for duplicate detection
 _RE_FUNC_DEF_JS = re.compile(
     r"(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(|"
     r"(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s+)?(?:\(|=>)",
 )
 _RE_FUNC_DEF_PY = re.compile(r"^(?:async\s+)?def\s+(\w+)\s*\(", re.MULTILINE)
+
+
+# ---------------------------------------------------------------------------
+# Dual ORM detection patterns (DB-001..003)
+# ---------------------------------------------------------------------------
+
+_RE_DB_SQL_STRING = re.compile(
+    r"""(?:SELECT|INSERT|UPDATE|DELETE|WHERE|SET|JOIN)\s""",
+    re.IGNORECASE,
+)
+_RE_DB_SQL_ENUM_INT_CMP = re.compile(
+    r"""(?:WHERE|AND|OR|SET)\s+\w+\s*=\s*\d+""",
+    re.IGNORECASE,
+)
+_RE_DB_SQL_ENUM_STR_CMP = re.compile(
+    r"""(?:WHERE|AND|OR|SET)\s+\w+\s*=\s*['"]""",
+    re.IGNORECASE,
+)
+_RE_DB_SQL_BOOL_INT = re.compile(
+    r"""(?:WHERE|AND|OR|SET)\s+\w+\s*=\s*[01]\b""",
+    re.IGNORECASE,
+)
+_RE_DB_SQL_DATETIME_FORMAT = re.compile(
+    r"""(?:WHERE|AND|OR|SET)\s+\w+\s*(?:=|<|>|<=|>=|BETWEEN)\s*['"]?\d{4}[-/]\d{2}[-/]\d{2}""",
+    re.IGNORECASE,
+)
+_RE_DB_CSHARP_ENUM_PROP = re.compile(
+    r"""public\s+(\w+)\s+(\w+)\s*\{""",
+)
+_RE_DB_CSHARP_BOOL_PROP = re.compile(
+    r"""public\s+bool\??\s+(\w+)\s*\{""",
+)
+_RE_DB_CSHARP_DATETIME_PROP = re.compile(
+    r"""public\s+(?:DateTime|DateTimeOffset|DateOnly|TimeOnly)\??\s+(\w+)\s*\{""",
+)
+_EXT_ENTITY = frozenset({".cs", ".py", ".ts", ".js"})
+
+# Common C# entity/navigation types to exclude from enum property detection
+_CSHARP_NON_ENUM_TYPES = frozenset({
+    "int", "long", "string", "bool", "decimal", "float",
+    "double", "DateTime", "DateTimeOffset", "DateOnly", "TimeOnly",
+    "Guid", "byte", "short", "byte[]",
+    "ICollection", "IList", "List", "IEnumerable", "HashSet",
+    "class", "interface", "struct", "enum", "record",
+    "static", "abstract", "override", "async", "void", "virtual",
+    "Task", "Action", "Func",
+})
+
+# Suffixes that indicate a type is NOT an enum (service, DTO, entity, etc.)
+_CSHARP_NON_ENUM_SUFFIXES = (
+    "Dto", "DTO", "Service", "Controller", "Repository",
+    "Manager", "Handler", "Factory", "Builder", "Provider",
+    "Validator", "Mapper", "Context", "Configuration",
+    "Options", "Settings", "Response", "Request", "Command",
+    "Query", "Event", "Exception", "Attribute", "Helper",
+    "Model", "ViewModel", "Entity",
+)
+
+# ---------------------------------------------------------------------------
+# Default value detection patterns (DB-004..005)
+# ---------------------------------------------------------------------------
+
+_RE_DB_CSHARP_BOOL_NO_DEFAULT = re.compile(
+    r"""public\s+bool\s+(\w+)\s*\{\s*get;\s*(?:set|init|private\s+set|protected\s+set);\s*\}(?!\s*=)""",
+)
+_RE_DB_CSHARP_ENUM_NO_DEFAULT = re.compile(
+    r"""public\s+(\w+)\s+(\w+)\s*\{\s*get;\s*(?:set|init|private\s+set|protected\s+set);\s*\}(?!\s*=)""",
+)
+_RE_DB_CSHARP_NULLABLE_PROP = re.compile(
+    r"""public\s+(\w+)\?\s+(\w+)\s*\{""",
+)
+_RE_DB_PRISMA_NO_DEFAULT = re.compile(
+    r"""(\w+)\s+(?:Boolean|Int)\s*$""",
+    re.MULTILINE,
+)
+# Prisma String fields with status-like names that should have defaults
+_RE_DB_PRISMA_STRING_STATUS_NO_DEFAULT = re.compile(
+    r"""((?:status|state|type|role|category|priority|phase|level))\s+String\s*$""",
+    re.MULTILINE | re.IGNORECASE,
+)
+# Prisma enum field without default: "status  TenderStatus" (type starts with uppercase, not a built-in)
+_RE_DB_PRISMA_ENUM_NO_DEFAULT = re.compile(
+    r"""(\w+)\s+([A-Z]\w+)\s*$""",
+    re.MULTILINE,
+)
+_PRISMA_BUILTIN_TYPES = frozenset({
+    "String", "Boolean", "Int", "BigInt", "Float", "Decimal",
+    "DateTime", "Json", "Bytes",
+})
+_RE_DB_DJANGO_BOOL_NO_DEFAULT = re.compile(
+    r"""BooleanField\s*\(\s*\)""",
+)
+_RE_DB_SQLALCHEMY_NO_DEFAULT = re.compile(
+    r"""Column\s*\(\s*(?:Boolean|Enum)\b[^)]*\)""",
+    re.IGNORECASE,
+)
+
+# ---------------------------------------------------------------------------
+# Relationship completeness patterns (DB-006..008)
+# ---------------------------------------------------------------------------
+
+_RE_DB_CSHARP_FK_PROP = re.compile(
+    r"""public\s+(?:int|long|Guid|string)\??\s+(\w+Id)\s*\{""",
+)
+_RE_DB_CSHARP_NAV_PROP = re.compile(
+    r"""public\s+(?:virtual\s+)?(?:(?:ICollection|IList|IEnumerable|List|HashSet)<(\w+)>\s+(\w+)|(\w+)\s+(\w+))\s*\{""",
+)
+_RE_DB_CSHARP_HAS_MANY = re.compile(
+    r"""\.Has(?:Many|One)\s*\(\s*\w*\s*=>\s*\w+\.(\w+)\)""",
+)
+_RE_DB_TYPEORM_RELATION = re.compile(
+    r"""@(?:ManyToOne|OneToMany|OneToOne|ManyToMany)\s*\(""",
+)
+_RE_DB_TYPEORM_JOIN_COLUMN = re.compile(
+    r"""@JoinColumn\s*\(\s*\{[^}]*name\s*:\s*['"](\w+)['"]""",
+)
+_RE_DB_TYPEORM_RELATION_DETAIL = re.compile(
+    r"""@(ManyToOne|OneToMany|OneToOne|ManyToMany)\s*\(\s*\(\)\s*=>\s*(\w+)""",
+)
+_RE_DB_DJANGO_FK = re.compile(
+    r"""(?:ForeignKey|OneToOneField|ManyToManyField)\s*\(""",
+)
+_RE_DB_DJANGO_FK_DETAIL = re.compile(
+    r"""(\w+)\s*=\s*models\.(?:ForeignKey|OneToOneField)\s*\(\s*['"]?(\w+)['"]?""",
+)
+_RE_DB_SQLALCHEMY_RELATIONSHIP = re.compile(
+    r"""relationship\s*\(""",
+)
+_RE_DB_SQLALCHEMY_FK_COLUMN = re.compile(
+    r"""(\w+)\s*=\s*Column\s*\([^)]*ForeignKey\s*\(\s*['"](\w+)\.(\w+)['"]""",
+)
+_RE_DB_SQLALCHEMY_RELATIONSHIP_DETAIL = re.compile(
+    r"""(\w+)\s*=\s*relationship\s*\(\s*['"](\w+)['"]""",
+)
+
+# Entity/model file indicators
+_RE_ENTITY_INDICATOR_CS = re.compile(
+    r"""\[Table\]|\bDbContext\b|:\s*DbContext\b""",
+)
+_RE_ENTITY_INDICATOR_TS = re.compile(
+    r"""@Entity\s*\(|Schema\s*\(""",
+)
+_RE_ENTITY_INDICATOR_PY = re.compile(
+    r"""\bmodels\.Model\b|Base\.metadata|Base\s*=\s*declarative_base|class\s+\w+\s*\([^)]*Base[^)]*\)""",
+)
+_RE_ENTITY_DIR = re.compile(
+    r"""(?:^|[/\\])(?:Entities|Models|Domain|entities|models)[/\\]""",
+    re.IGNORECASE,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -133,6 +403,13 @@ _EXT_BACKEND: frozenset[str] = frozenset({".ts", ".js", ".py"})
 _EXT_JS_ALL: frozenset[str] = frozenset({".ts", ".tsx", ".js", ".jsx"})
 _EXT_STYLE: frozenset[str] = frozenset({".css", ".scss", ".ts", ".tsx"})
 _EXT_TEMPLATE: frozenset[str] = frozenset({".ts", ".tsx", ".jsx", ".html"})
+_EXT_UI: frozenset[str] = frozenset({
+    ".tsx", ".jsx", ".vue", ".svelte", ".css", ".scss", ".html",
+})
+_EXT_E2E: frozenset[str] = frozenset({".ts", ".tsx", ".js", ".jsx", ".py"})
+_EXT_TEMPLATE_CONTENT: frozenset[str] = frozenset({
+    ".tsx", ".jsx", ".vue", ".svelte", ".html", ".component.ts",
+})
 
 
 # ---------------------------------------------------------------------------
@@ -401,6 +678,288 @@ def _check_validation_data_flow(
     return violations
 
 
+def _check_mock_data_patterns(
+    content: str,
+    rel_path: str,
+    extension: str,
+) -> list[Violation]:
+    """MOCK-001..007: Detect mock data patterns in service/client files.
+
+    Flags RxJS of() with hardcoded data, Promise.resolve() with hardcoded data,
+    mock variable naming patterns, delay() latency simulation, setTimeout-based
+    API simulation, BehaviorSubject with hardcoded data, and new Observable
+    returning mock data in service, client, API, and data access files.
+
+    Excludes test files and files not in service-related paths.
+    Scans both JS/TS and Python service files.
+    """
+    _mock_extensions = _EXT_JS_ALL | {".py"}
+    if extension not in _mock_extensions:
+        return []
+
+    # Skip test files
+    if _RE_TEST_FILE.search(rel_path):
+        return []
+
+    # Only scan service-related files
+    if not _RE_SERVICE_PATH.search(rel_path):
+        return []
+
+    violations: list[Violation] = []
+    for lineno, line in enumerate(content.splitlines(), start=1):
+        if _RE_RXJS_OF_MOCK.search(line):
+            violations.append(Violation(
+                check="MOCK-001",
+                message="RxJS of() with hardcoded data in service file — must use real HTTP call",
+                file_path=rel_path,
+                line=lineno,
+                severity="error",
+            ))
+        if _RE_MOCK_RETURN_OF.search(line):
+            violations.append(Violation(
+                check="MOCK-001",
+                message="Service method returns of() instead of real HTTP call",
+                file_path=rel_path,
+                line=lineno,
+                severity="error",
+            ))
+        if _RE_RXJS_DELAY_PIPE.search(line):
+            violations.append(Violation(
+                check="MOCK-001",
+                message="RxJS delay() pipe simulating API latency — must use real HTTP call",
+                file_path=rel_path,
+                line=lineno,
+                severity="error",
+            ))
+        if _RE_PROMISE_RESOLVE_MOCK.search(line):
+            violations.append(Violation(
+                check="MOCK-002",
+                message="Promise.resolve() with hardcoded data — must use real HTTP/fetch call",
+                file_path=rel_path,
+                line=lineno,
+                severity="error",
+            ))
+        if _RE_MOCK_VARIABLE.search(line):
+            violations.append(Violation(
+                check="MOCK-003",
+                message="Mock/fake/dummy data variable in service file — replace with real API data",
+                file_path=rel_path,
+                line=lineno,
+                severity="error",
+            ))
+        if _RE_TIMEOUT_MOCK.search(line):
+            violations.append(Violation(
+                check="MOCK-004",
+                message="setTimeout simulating async API in service — must use real HTTP call",
+                file_path=rel_path,
+                line=lineno,
+                severity="warning",
+            ))
+        if _RE_DELAY_SIMULATE.search(line):
+            violations.append(Violation(
+                check="MOCK-005",
+                message="delay() simulating network latency — suggests mock data pattern",
+                file_path=rel_path,
+                line=lineno,
+                severity="warning",
+            ))
+        if _RE_BEHAVIOR_SUBJECT_MOCK.search(line):
+            violations.append(Violation(
+                check="MOCK-006",
+                message="BehaviorSubject initialized with hardcoded data — use null + HTTP populate",
+                file_path=rel_path,
+                line=lineno,
+                severity="error",
+            ))
+        if _RE_OBSERVABLE_MOCK.search(line):
+            violations.append(Violation(
+                check="MOCK-007",
+                message="new Observable returning inline data — must use real HTTP call",
+                file_path=rel_path,
+                line=lineno,
+                severity="error",
+            ))
+    return violations
+
+
+def _check_ui_compliance(
+    content: str,
+    rel_path: str,
+    extension: str,
+) -> list[Violation]:
+    """UI-001..004: Detect UI compliance violations in component/style files.
+
+    Checks for hardcoded colors, default Tailwind palettes, generic fonts,
+    and arbitrary spacing in UI files. Config/theme files are exempt from
+    color checks (they define tokens). Test files are skipped entirely.
+    """
+    if extension not in _EXT_UI:
+        # Also check .component.ts (Angular) and config/theme .ts files
+        if extension == ".ts" and (
+            rel_path.endswith(".component.ts") or _RE_CONFIG_FILE.search(rel_path)
+        ):
+            pass  # Allow these .ts files through
+        else:
+            return []
+
+    # Skip test files
+    if _RE_TEST_FILE.search(rel_path):
+        return []
+
+    is_config_file = _RE_CONFIG_FILE.search(rel_path)
+
+    violations: list[Violation] = []
+    for lineno, line in enumerate(content.splitlines(), start=1):
+        # UI-001: Hardcoded hex colors (skip config files — they define tokens)
+        if not is_config_file:
+            if _RE_HARDCODED_HEX_CSS.search(line):
+                violations.append(Violation(
+                    check="UI-001",
+                    message="Hardcoded hex color in style — use design token variable instead",
+                    file_path=rel_path,
+                    line=lineno,
+                    severity="warning",
+                ))
+            if _RE_HARDCODED_HEX_STYLE.search(line):
+                violations.append(Violation(
+                    check="UI-001",
+                    message="Hardcoded hex color in inline style — use design token variable",
+                    file_path=rel_path,
+                    line=lineno,
+                    severity="warning",
+                ))
+            # UI-001b: Tailwind arbitrary hex
+            if _RE_TAILWIND_ARBITRARY_HEX.search(line):
+                violations.append(Violation(
+                    check="UI-001b",
+                    message="Hardcoded hex in Tailwind arbitrary value — use theme color instead",
+                    file_path=rel_path,
+                    line=lineno,
+                    severity="warning",
+                ))
+
+        # UI-002: Default Tailwind colors (always check, even in config)
+        if _RE_DEFAULT_TAILWIND_EXTENDED.search(line):
+            violations.append(Violation(
+                check="UI-002",
+                message="Default Tailwind color (indigo/violet/purple) — use project-specific palette",
+                file_path=rel_path,
+                line=lineno,
+                severity="warning",
+            ))
+
+        # UI-003: Generic fonts in config files
+        if is_config_file and _RE_GENERIC_FONT_CONFIG.search(line):
+            violations.append(Violation(
+                check="UI-003",
+                message="Generic font (Inter/Roboto/Arial) in config — use distinctive typeface",
+                file_path=rel_path,
+                line=lineno,
+                severity="warning",
+            ))
+
+        # UI-004: Arbitrary spacing (check non-grid values)
+        match = _RE_ARBITRARY_SPACING.search(line)
+        if match:
+            try:
+                # group(1) = CSS property value, group(2) = Tailwind class value
+                raw = match.group(1) or match.group(2)
+                if raw is not None:
+                    value = int(raw)
+                    # Allow 0 and multiples of 4 (4px grid) and common Tailwind values
+                    if value > 0 and value % 4 != 0 and value not in (1, 2, 6, 10, 14):
+                        violations.append(Violation(
+                            check="UI-004",
+                            message=f"Spacing value {value}px not on 4px grid — use grid-aligned value",
+                            file_path=rel_path,
+                            line=lineno,
+                            severity="info",
+                        ))
+            except (ValueError, IndexError):
+                pass
+
+    return violations
+
+
+def _check_e2e_quality(
+    content: str,
+    rel_path: str,
+    extension: str,
+) -> list[Violation]:
+    """E2E-001..006: Detect quality issues in E2E test files and UI templates.
+
+    E2E-001..004: Only targets files in e2e/, tests/e2e/, playwright/ directories.
+    E2E-006: Targets UI template files (tsx, jsx, vue, svelte, html, component.ts)
+    for placeholder text outside of comments.
+    """
+    violations: list[Violation] = []
+
+    # --- E2E-006: Placeholder text in UI components (all template files) ---
+    is_template_file = (
+        extension in _EXT_TEMPLATE_CONTENT
+        or rel_path.endswith(".component.ts")
+    )
+    if is_template_file and not _RE_E2E_DIR.search(rel_path):
+        for lineno, line in enumerate(content.splitlines(), start=1):
+            # Skip comment lines — placeholders in comments are fine
+            if _RE_COMMENT_LINE.search(line):
+                continue
+            if _RE_E2E_PLACEHOLDER.search(line):
+                violations.append(Violation(
+                    check="E2E-006",
+                    message="Placeholder text in UI component — implement the actual feature",
+                    file_path=rel_path,
+                    line=lineno,
+                    severity="error",
+                ))
+
+    # --- E2E-001..004: Only E2E test directories ---
+    if extension not in _EXT_E2E:
+        return violations
+
+    if not _RE_E2E_DIR.search(rel_path):
+        return violations
+
+    for lineno, line in enumerate(content.splitlines(), start=1):
+        # E2E-001: Hardcoded sleep
+        if _RE_E2E_SLEEP.search(line):
+            violations.append(Violation(
+                check="E2E-001",
+                message="Hardcoded sleep/timeout in E2E test — use waitFor, waitForResponse, or waitForSelector",
+                file_path=rel_path,
+                line=lineno,
+                severity="warning",
+            ))
+        # E2E-002: Hardcoded port
+        if _RE_E2E_HARDCODED_PORT.search(line) and not _RE_E2E_PORT_EXEMPT.search(line):
+            violations.append(Violation(
+                check="E2E-002",
+                message="Hardcoded port in E2E test — use configurable BASE_URL or process.env",
+                file_path=rel_path,
+                line=lineno,
+                severity="warning",
+            ))
+        # E2E-003: Mock data in E2E
+        if _RE_E2E_MOCK_DATA.search(line):
+            violations.append(Violation(
+                check="E2E-003",
+                message="Mock data in E2E test — all calls must hit real server",
+                file_path=rel_path,
+                line=lineno,
+                severity="error",
+            ))
+        # E2E-004: Empty test body
+        if _RE_E2E_EMPTY_TEST.search(line):
+            violations.append(Violation(
+                check="E2E-004",
+                message="Empty E2E test body — every test must have meaningful assertions",
+                file_path=rel_path,
+                line=lineno,
+                severity="error",
+            ))
+    return violations
+
+
 def _check_gitignore(
     project_root: Path,
 ) -> list[Violation]:
@@ -511,6 +1070,9 @@ _ALL_CHECKS = [
     _check_transaction_safety,
     _check_param_validation,
     _check_validation_data_flow,
+    _check_mock_data_patterns,
+    _check_ui_compliance,
+    _check_e2e_quality,
 ]
 
 # Union of all file extensions any check cares about (for fast pre-filter)
@@ -520,6 +1082,9 @@ _ALL_EXTENSIONS: frozenset[str] = (
     | _EXT_JS_ALL
     | _EXT_STYLE
     | _EXT_TEMPLATE
+    | _EXT_UI
+    | _EXT_E2E
+    | _EXT_ENTITY
 )
 
 
@@ -628,4 +1193,1308 @@ def run_spot_checks(project_root: Path) -> list[Violation]:
         key=lambda v: (_SEVERITY_ORDER.get(v.severity, 99), v.file_path, v.line)
     )
 
+    return violations
+
+
+def run_mock_data_scan(project_root: Path) -> list[Violation]:
+    """Scan project for mock data patterns in service/client files.
+
+    Unlike :func:`run_spot_checks` which runs ALL checks, this function runs
+    ONLY mock data detection checks (MOCK-001..007).  Designed for targeted
+    post-milestone scanning in ``cli.py``.
+
+    Returns violations sorted by severity, capped at ``_MAX_VIOLATIONS``.
+    """
+    violations: list[Violation] = []
+    source_files = _iter_source_files(project_root)
+
+    for file_path in source_files:
+        if len(violations) >= _MAX_VIOLATIONS:
+            break
+        try:
+            content = file_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+
+        rel_path = file_path.relative_to(project_root).as_posix()
+        extension = file_path.suffix
+
+        file_violations = _check_mock_data_patterns(content, rel_path, extension)
+        violations.extend(file_violations)
+
+    violations = violations[:_MAX_VIOLATIONS]
+    violations.sort(
+        key=lambda v: (_SEVERITY_ORDER.get(v.severity, 99), v.file_path, v.line)
+    )
+    return violations
+
+
+def run_ui_compliance_scan(project_root: Path) -> list[Violation]:
+    """Scan project for UI compliance violations in component/style files.
+
+    Unlike :func:`run_spot_checks` which runs ALL checks, this function runs
+    ONLY UI compliance checks (UI-001..004). Designed for targeted
+    post-milestone scanning in ``cli.py``.
+
+    Returns violations sorted by severity, capped at ``_MAX_VIOLATIONS``.
+    """
+    violations: list[Violation] = []
+    source_files = _iter_source_files(project_root)
+
+    for file_path in source_files:
+        if len(violations) >= _MAX_VIOLATIONS:
+            break
+        try:
+            content = file_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+
+        rel_path = file_path.relative_to(project_root).as_posix()
+        extension = file_path.suffix
+
+        file_violations = _check_ui_compliance(content, rel_path, extension)
+        violations.extend(file_violations)
+
+    violations = violations[:_MAX_VIOLATIONS]
+    violations.sort(
+        key=lambda v: (_SEVERITY_ORDER.get(v.severity, 99), v.file_path, v.line)
+    )
+    return violations
+
+
+def run_e2e_quality_scan(project_root: Path) -> list[Violation]:
+    """Scan project for E2E test quality issues.
+
+    Runs E2E-001..006 checks on files in e2e/ and playwright/ directories
+    and template files. Also runs:
+    - E2E-005 (inverted): warns if app has auth but no auth E2E test found
+    - E2E-007: scans E2E_RESULTS.md for role access failures (403/Forbidden)
+    Returns violations sorted by severity, capped at _MAX_VIOLATIONS.
+    """
+    violations: list[Violation] = []
+    source_files = _iter_source_files(project_root)
+
+    # Track whether any E2E test file contains auth tests (for E2E-005)
+    has_auth_e2e_test = False
+    has_e2e_tests = False
+
+    for file_path in source_files:
+        if len(violations) >= _MAX_VIOLATIONS:
+            break
+        try:
+            content = file_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+
+        rel_path = file_path.relative_to(project_root).as_posix()
+        extension = file_path.suffix
+
+        file_violations = _check_e2e_quality(content, rel_path, extension)
+        violations.extend(file_violations)
+
+        # Track auth test presence for E2E-005 inverted check
+        if extension in _EXT_E2E and _RE_E2E_DIR.search(rel_path):
+            has_e2e_tests = True
+            if _RE_E2E_AUTH_TEST.search(content):
+                has_auth_e2e_test = True
+
+    # --- E2E-005: Inverted auth test check ---
+    # If app has auth dependencies but no auth E2E test, emit warning
+    if has_e2e_tests and not has_auth_e2e_test:
+        # Check if project has auth (look for common auth packages)
+        _auth_indicators = (
+            "passport", "jsonwebtoken", "jwt", "bcrypt", "@nestjs/jwt",
+            "flask-login", "django.contrib.auth", "fastapi-users",
+            "next-auth", "@auth/", "authjs", "firebase-auth",
+        )
+        pkg_json = project_root / "package.json"
+        req_txt = project_root / "requirements.txt"
+        has_auth = False
+        for dep_file in (pkg_json, req_txt):
+            if dep_file.is_file():
+                try:
+                    dep_content = dep_file.read_text(encoding="utf-8", errors="replace").lower()
+                    if any(ind in dep_content for ind in _auth_indicators):
+                        has_auth = True
+                        break
+                except OSError:
+                    pass
+        if has_auth:
+            violations.append(Violation(
+                check="E2E-005",
+                message="No auth E2E test found — app has auth dependencies but no login/auth flow test in e2e/ directory",
+                file_path="(project)",
+                line=0,
+                severity="warning",
+            ))
+
+    # --- E2E-007: Role access failure in E2E results ---
+    results_path = project_root / ".agent-team" / "E2E_RESULTS.md"
+    if results_path.is_file():
+        try:
+            results_content = results_path.read_text(encoding="utf-8", errors="replace")
+            for lineno, line in enumerate(results_content.splitlines(), start=1):
+                if _RE_E2E_ROLE_FAILURE.search(line):
+                    violations.append(Violation(
+                        check="E2E-007",
+                        message="Role access failure detected in E2E results — check backend auth middleware/guards",
+                        file_path=".agent-team/E2E_RESULTS.md",
+                        line=lineno,
+                        severity="error",
+                    ))
+        except OSError:
+            pass
+
+    violations = violations[:_MAX_VIOLATIONS]
+    violations.sort(
+        key=lambda v: (_SEVERITY_ORDER.get(v.severity, 99), v.file_path, v.line)
+    )
+    return violations
+
+
+# ---------------------------------------------------------------------------
+# Post-build integrity scans: Deployment, Asset, PRD reconciliation
+# ---------------------------------------------------------------------------
+
+# --- Deployment integrity patterns ---
+
+_RE_APP_LISTEN_PORT = re.compile(
+    r'\.listen\s*\(\s*(\d{2,5})'
+    r'|uvicorn\.run.*port\s*=\s*(\d+)'
+    r'|\.set\s*\(\s*[\'"]port[\'"]\s*,\s*(\d+)',
+    re.IGNORECASE,
+)
+_RE_ENV_VAR_NODE = re.compile(r'process\.env\.([A-Z_][A-Z0-9_]*)')
+_RE_ENV_VAR_PY = re.compile(
+    r'os\.environ\s*\[\s*[\'"]([A-Z_][A-Z0-9_]*)[\'"]\s*\]'
+    r'|os\.getenv\s*\(\s*[\'"]([A-Z_][A-Z0-9_]*)[\'"]'
+    r'|os\.environ\.get\s*\(\s*[\'"]([A-Z_][A-Z0-9_]*)[\'"]'
+)
+_RE_ENV_WITH_DEFAULT = re.compile(
+    r'process\.env\.\w+\s*(?:\|\||[?]{2})'
+    r'|os\.getenv\s*\([^)]+,[^)]+\)'
+    r'|os\.environ\.get\s*\([^)]+,[^)]+\)',
+)
+_BUILTIN_ENV_VARS: frozenset[str] = frozenset({
+    "NODE_ENV", "PATH", "HOME", "USER", "SHELL", "TERM", "PWD",
+    "HOSTNAME", "LANG", "LC_ALL", "TMPDIR", "TEMP", "TMP",
+    "CI", "DEBUG", "VERBOSE", "LOG_LEVEL",
+})
+_RE_CORS_ORIGIN = re.compile(
+    r'cors\s*\(\s*\{[^}]*origin\s*:\s*[\'"]([^\'"\s]+)[\'"]'
+    r'|CORS_ALLOWED_ORIGINS?\s*=\s*[\'"]([^\'"\s]+)[\'"]'
+    r'|allow_origins\s*=\s*\[\s*[\'"]([^\'"\s]+)[\'"]'
+    r'|enableCors\s*\(\s*\{[^}]*origin\s*:\s*[\'"]([^\'"\s]+)[\'"]',
+    re.IGNORECASE | re.DOTALL,
+)
+_RE_DB_CONN_HOST = re.compile(
+    r'mongodb://(?:\w+:?\w*@)?(\w[\w.-]*):'
+    r'|postgres(?:ql)?://(?:\w+:?\w*@)?(\w[\w.-]*):'
+    r'|mysql://(?:\w+:?\w*@)?(\w[\w.-]*):'
+    r'|redis://(?:\w+:?\w*@)?(\w[\w.-]*):'
+    r'|host\s*[:=]\s*[\'"](\w[\w.-]*)[\'"]',
+    re.IGNORECASE,
+)
+
+# --- Asset integrity patterns ---
+
+_RE_ASSET_SRC = re.compile(r'src\s*=\s*[\'"]([^\'"]+)[\'"]')
+_RE_ASSET_HREF = re.compile(r'href\s*=\s*[\'"]([^\'"]+)[\'"]')
+_RE_ASSET_CSS_URL = re.compile(r'url\(\s*[\'"]?([^)\'"\s]+)[\'"]?\s*\)')
+_RE_ASSET_REQUIRE = re.compile(r'require\(\s*[\'"]([^\'"]+)[\'"]')
+_RE_ASSET_IMPORT = re.compile(r'from\s+[\'"]([^\'"]+)[\'"]')
+
+_ASSET_EXTENSIONS: frozenset[str] = frozenset({
+    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico", ".bmp",
+    ".woff", ".woff2", ".ttf", ".eot", ".otf",
+    ".pdf", ".mp4", ".mp3", ".wav", ".ogg", ".webm",
+})
+_EXT_ASSET_SCAN: frozenset[str] = frozenset({
+    ".tsx", ".jsx", ".vue", ".svelte", ".html", ".css", ".scss",
+    ".ts", ".js", ".ejs", ".hbs", ".pug",
+})
+
+
+def _parse_docker_compose(project_root: Path) -> dict | None:
+    """Parse docker-compose.yml/yaml, returning parsed dict or None."""
+    for name in ("docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"):
+        dc_path = project_root / name
+        if dc_path.is_file():
+            try:
+                import yaml
+                result = yaml.safe_load(dc_path.read_text(encoding="utf-8", errors="replace"))
+                return result if isinstance(result, dict) else None
+            except Exception:
+                return None
+    return None
+
+
+def _parse_env_file(path: Path) -> set[str]:
+    """Parse a .env file and return set of defined variable names."""
+    env_vars: set[str] = set()
+    if not path.is_file():
+        return env_vars
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace").lstrip("\ufeff")
+        for line in content.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            # Strip common 'export' prefix: export VAR=value (space or tab)
+            if line.startswith(("export ", "export\t")):
+                line = line.split(None, 1)[1] if len(line.split(None, 1)) > 1 else ""
+            if "=" in line:
+                key = line.split("=", 1)[0].strip()
+                if key:
+                    env_vars.add(key)
+    except OSError:
+        pass
+    return env_vars
+
+
+def _extract_docker_ports(dc: dict) -> dict[str, list[tuple[int, int]]]:
+    """Extract port mappings from docker-compose services."""
+    result: dict[str, list[tuple[int, int]]] = {}
+    services = dc.get("services") or {}
+    for svc_name, svc_config in services.items():
+        if not isinstance(svc_config, dict):
+            continue
+        ports = svc_config.get("ports") or []
+        mapped: list[tuple[int, int]] = []
+        for p in ports:
+            p_str = str(p).split("/")[0]  # strip protocol
+            parts = p_str.split(":")
+            try:
+                if len(parts) == 2:
+                    mapped.append((int(parts[0]), int(parts[1])))
+                elif len(parts) == 3:
+                    mapped.append((int(parts[1]), int(parts[2])))
+                elif len(parts) == 1:
+                    port = int(parts[0])
+                    mapped.append((port, port))
+            except (ValueError, IndexError):
+                continue
+        if mapped:
+            result[svc_name] = mapped
+    return result
+
+
+def _extract_docker_env_vars(dc: dict) -> set[str]:
+    """Extract all environment variable names from docker-compose services."""
+    env_vars: set[str] = set()
+    services = dc.get("services") or {}
+    for _svc, svc_config in services.items():
+        if not isinstance(svc_config, dict):
+            continue
+        env = svc_config.get("environment")
+        if isinstance(env, dict):
+            env_vars.update(env.keys())
+        elif isinstance(env, list):
+            for item in env:
+                s = str(item)
+                if "=" in s:
+                    env_vars.add(s.split("=", 1)[0].strip())
+                else:
+                    env_vars.add(s.strip())
+    return env_vars
+
+
+def _extract_docker_service_names(dc: dict) -> set[str]:
+    """Extract all service names from docker-compose."""
+    return set((dc.get("services") or {}).keys())
+
+
+def run_deployment_scan(project_root: Path) -> list[Violation]:
+    """Scan for deployment config inconsistencies (DEPLOY-001..004).
+
+    Only runs if docker-compose.yml/yaml exists. Returns warnings.
+    """
+    dc = _parse_docker_compose(project_root)
+    if dc is None:
+        return []
+
+    violations: list[Violation] = []
+    docker_ports = _extract_docker_ports(dc)
+    docker_env = _extract_docker_env_vars(dc)
+    docker_services = _extract_docker_service_names(dc)
+
+    # Collect .env file vars
+    for env_name in (
+        ".env", ".env.example", ".env.local", ".env.development",
+        ".env.production", ".env.staging", ".env.test",
+    ):
+        docker_env.update(_parse_env_file(project_root / env_name))
+
+    container_ports: set[int] = set()
+    for port_list in docker_ports.values():
+        for _hp, cp in port_list:
+            container_ports.add(cp)
+
+    source_files = _iter_source_files(project_root)
+    app_listen_ports: list[tuple[str, int, int]] = []
+    cors_origins: list[tuple[str, int, str]] = []
+    db_hosts: list[tuple[str, int, str]] = []
+    env_usages: list[tuple[str, int, str]] = []
+
+    for file_path in source_files:
+        if len(violations) >= _MAX_VIOLATIONS:
+            break
+        try:
+            content = file_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        rel_path = file_path.relative_to(project_root).as_posix()
+
+        for lineno, line in enumerate(content.splitlines(), start=1):
+            m = _RE_APP_LISTEN_PORT.search(line)
+            if m:
+                port_str = next((g for g in m.groups() if g), None)
+                if port_str:
+                    try:
+                        app_listen_ports.append((rel_path, lineno, int(port_str)))
+                    except ValueError:
+                        pass
+
+            m = _RE_CORS_ORIGIN.search(line)
+            if m:
+                origin = next((g for g in m.groups() if g), None)
+                if origin:
+                    cors_origins.append((rel_path, lineno, origin))
+
+            m = _RE_DB_CONN_HOST.search(line)
+            if m:
+                host = next((g for g in m.groups() if g), None)
+                if host and host not in ("localhost", "127.0.0.1", "0.0.0.0"):
+                    db_hosts.append((rel_path, lineno, host))
+
+            for env_m in _RE_ENV_VAR_NODE.finditer(line):
+                if not _RE_ENV_WITH_DEFAULT.search(line):
+                    env_usages.append((rel_path, lineno, env_m.group(1)))
+            for env_m in _RE_ENV_VAR_PY.finditer(line):
+                var = next((g for g in env_m.groups() if g), None)
+                if var and not _RE_ENV_WITH_DEFAULT.search(line):
+                    env_usages.append((rel_path, lineno, var))
+
+    # DEPLOY-001: Port mismatch
+    for rp, ln, port in app_listen_ports:
+        if container_ports and port not in container_ports:
+            violations.append(Violation(
+                check="DEPLOY-001",
+                message=f"Port mismatch: app listens on {port} but docker-compose container ports are {sorted(container_ports)}",
+                file_path=rp, line=ln, severity="warning",
+            ))
+
+    # DEPLOY-002: Env var not defined
+    all_defined = docker_env | _BUILTIN_ENV_VARS
+    seen: set[str] = set()
+    for rp, ln, var in env_usages:
+        if var not in all_defined and var not in seen:
+            seen.add(var)
+            violations.append(Violation(
+                check="DEPLOY-002",
+                message=f"Environment variable {var} used but not defined in docker-compose or .env",
+                file_path=rp, line=ln, severity="warning",
+            ))
+
+    # DEPLOY-003: CORS origin check
+    for rp, ln, origin in cors_origins:
+        if origin.startswith("http") and "localhost" not in origin and "*" not in origin:
+            violations.append(Violation(
+                check="DEPLOY-003",
+                message=f"CORS origin '{origin}' — verify this matches the actual frontend deployment URL",
+                file_path=rp, line=ln, severity="warning",
+            ))
+
+    # DEPLOY-004: Service name mismatch
+    for rp, ln, host in db_hosts:
+        if docker_services and host not in docker_services:
+            violations.append(Violation(
+                check="DEPLOY-004",
+                message=f"Service name '{host}' in connection string not found in docker-compose services {sorted(docker_services)}",
+                file_path=rp, line=ln, severity="warning",
+            ))
+
+    violations = violations[:_MAX_VIOLATIONS]
+    violations.sort(key=lambda v: (_SEVERITY_ORDER.get(v.severity, 99), v.file_path, v.line))
+    return violations
+
+
+def _is_static_asset_ref(ref: str) -> bool:
+    """Check if a reference points to a static asset file."""
+    if not ref or ref.startswith(("http://", "https://", "//", "data:", "#", "mailto:")):
+        return False
+    if any(c in ref for c in ("${", "{%", "{{", "}}")):
+        return False
+    if ref.startswith(("@/", "~/", "~")):
+        return False
+    # Strip query string and hash fragment before checking extension
+    clean = ref.split("?")[0].split("#")[0]
+    return Path(clean).suffix.lower() in _ASSET_EXTENSIONS
+
+
+def _resolve_asset(ref: str, file_dir: Path, project_root: Path) -> bool:
+    """Try to resolve an asset reference to an existing file."""
+    ref = ref.split("?")[0].split("#")[0]
+    clean = ref.lstrip("/")
+    candidates = [
+        file_dir / ref,
+        project_root / clean,
+        project_root / "public" / clean,
+        project_root / "src" / clean,
+        project_root / "assets" / clean,
+        project_root / "static" / clean,
+        project_root / "src" / "assets" / clean,
+    ]
+    for c in candidates:
+        try:
+            if c.is_file():
+                return True
+        except (OSError, ValueError):
+            continue
+    return False
+
+
+def run_asset_scan(project_root: Path) -> list[Violation]:
+    """Scan for broken static asset references (ASSET-001..003).
+
+    Walks template/component files and checks that src, href, url(),
+    require, and import references to static assets exist on disk.
+    """
+    violations: list[Violation] = []
+
+    for dirpath, dirnames, filenames in os.walk(project_root):
+        dirnames[:] = [d for d in dirnames if not _should_skip_dir(d)]
+        for filename in filenames:
+            if len(violations) >= _MAX_VIOLATIONS:
+                break
+            file_path = Path(dirpath) / filename
+            if file_path.suffix.lower() not in _EXT_ASSET_SCAN:
+                continue
+            try:
+                if file_path.stat().st_size > _MAX_FILE_SIZE:
+                    continue
+                content = file_path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+
+            rel_path = file_path.relative_to(project_root).as_posix()
+            file_dir = file_path.parent
+            ext = file_path.suffix.lower()
+
+            for lineno, line in enumerate(content.splitlines(), start=1):
+                # ASSET-001: src/href
+                for regex in (_RE_ASSET_SRC, _RE_ASSET_HREF):
+                    for m in regex.finditer(line):
+                        ref = m.group(1)
+                        if _is_static_asset_ref(ref) and not _resolve_asset(ref, file_dir, project_root):
+                            violations.append(Violation(
+                                check="ASSET-001",
+                                message=f"Asset reference '{ref}' — file not found on disk",
+                                file_path=rel_path, line=lineno, severity="warning",
+                            ))
+                # ASSET-002: CSS url()
+                if ext in (".css", ".scss"):
+                    for m in _RE_ASSET_CSS_URL.finditer(line):
+                        ref = m.group(1)
+                        if _is_static_asset_ref(ref) and not _resolve_asset(ref, file_dir, project_root):
+                            violations.append(Violation(
+                                check="ASSET-002",
+                                message=f"CSS url() reference '{ref}' — file not found on disk",
+                                file_path=rel_path, line=lineno, severity="warning",
+                            ))
+                # ASSET-003: require/import
+                for regex in (_RE_ASSET_REQUIRE, _RE_ASSET_IMPORT):
+                    for m in regex.finditer(line):
+                        ref = m.group(1)
+                        if _is_static_asset_ref(ref) and not _resolve_asset(ref, file_dir, project_root):
+                            violations.append(Violation(
+                                check="ASSET-003",
+                                message=f"Asset import '{ref}' — file not found on disk",
+                                file_path=rel_path, line=lineno, severity="warning",
+                            ))
+
+    violations = violations[:_MAX_VIOLATIONS]
+    violations.sort(key=lambda v: (_SEVERITY_ORDER.get(v.severity, 99), v.file_path, v.line))
+    return violations
+
+
+def parse_prd_reconciliation(report_path: Path) -> list[Violation]:
+    """Parse PRD_RECONCILIATION.md and return PRD-001 violations for mismatches."""
+    if not report_path.is_file():
+        return []
+    try:
+        content = report_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+
+    violations: list[Violation] = []
+    in_mismatch = False
+
+    _re_section = re.compile(r'^#{2,3}\s')
+    for lineno, line in enumerate(content.splitlines(), start=1):
+        stripped = line.strip()
+        if stripped.startswith("### MISMATCH") or stripped.startswith("## MISMATCH"):
+            in_mismatch = True
+            continue
+        if _re_section.match(stripped) and "MISMATCH" not in stripped:
+            in_mismatch = False
+            continue
+        if in_mismatch and stripped.startswith("- "):
+            violations.append(Violation(
+                check="PRD-001",
+                message=f"PRD reconciliation mismatch: {stripped[2:].strip()}",
+                file_path=str(report_path.name),
+                line=lineno,
+                severity="warning",
+            ))
+
+    return violations[:_MAX_VIOLATIONS]
+
+
+# ---------------------------------------------------------------------------
+# Database integrity scans: Dual ORM, Default Values, Relationships
+# ---------------------------------------------------------------------------
+
+
+def _detect_data_access_methods(
+    project_root: Path,
+    source_files: list[Path],
+) -> tuple[bool, bool]:
+    """Detect whether the project uses ORM(s) and raw SQL queries.
+
+    Returns (has_orm, has_raw_sql).
+    """
+    has_orm = False
+    has_raw = False
+
+    # Check project dependency files for ORM and raw query indicators
+    for dep_name in ("package.json",):
+        dep_path = project_root / dep_name
+        if dep_path.is_file():
+            try:
+                content = dep_path.read_text(encoding="utf-8", errors="replace").lower()
+                # ORM indicators
+                if any(kw in content for kw in ("prisma", "typeorm", "sequelize", "mongoose")):
+                    has_orm = True
+                # Raw query indicators
+                if any(kw in content for kw in ("knex", '"pg"', '"mysql2"')):
+                    has_raw = True
+            except OSError:
+                pass
+
+    for dep_name in ("requirements.txt",):
+        dep_path = project_root / dep_name
+        if dep_path.is_file():
+            try:
+                content = dep_path.read_text(encoding="utf-8", errors="replace").lower()
+                if any(kw in content for kw in ("sqlalchemy", "django")):
+                    has_orm = True
+                if any(kw in content for kw in ("psycopg", "pymysql", "pymongo")):
+                    has_raw = True
+            except OSError:
+                pass
+
+    # Check .csproj files for NuGet packages
+    for f in source_files:
+        if f.suffix == ".csproj":
+            try:
+                content = f.read_text(encoding="utf-8", errors="replace")
+                if "Microsoft.EntityFrameworkCore" in content:
+                    has_orm = True
+                if "Dapper" in content:
+                    has_raw = True
+            except OSError:
+                pass
+
+    # Scan source files for code-level indicators
+    for f in source_files:
+        if f.suffix not in _EXT_ENTITY:
+            continue
+        try:
+            content = f.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+
+        ext = f.suffix
+        if ext == ".cs":
+            if "DbContext" in content or "[Table]" in content or "[Column]" in content:
+                has_orm = True
+            if any(kw in content for kw in ("SqlConnection", "QueryAsync", "ExecuteAsync")):
+                has_raw = True
+        elif ext in (".ts", ".js"):
+            # Only flag as raw SQL if keyword appears outside comments
+            for line in content.splitlines():
+                stripped = line.lstrip()
+                if stripped.startswith("//") or stripped.startswith("*") or stripped.startswith("/*"):
+                    continue
+                if _RE_DB_SQL_STRING.search(line):
+                    has_raw = True
+                    break
+        elif ext == ".py":
+            if "Base.metadata" in content or "models.Model" in content:
+                has_orm = True
+            if "cursor.execute" in content:
+                has_raw = True
+
+    return (has_orm, has_raw)
+
+
+def _find_entity_files(
+    project_root: Path,
+    source_files: list[Path],
+) -> list[Path]:
+    """Return source files that appear to be ORM entity/model definitions."""
+    entity_files: list[Path] = []
+    for f in source_files:
+        if f.suffix not in _EXT_ENTITY:
+            continue
+        try:
+            rel = f.relative_to(project_root).as_posix()
+        except ValueError:
+            rel = f.name
+
+        # Check by directory name
+        if _RE_ENTITY_DIR.search(rel):
+            entity_files.append(f)
+            continue
+
+        # Check by content indicators
+        try:
+            content = f.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+
+        if f.suffix == ".cs":
+            if _RE_ENTITY_INDICATOR_CS.search(content):
+                entity_files.append(f)
+        elif f.suffix in (".ts", ".js"):
+            if _RE_ENTITY_INDICATOR_TS.search(content):
+                entity_files.append(f)
+        elif f.suffix == ".py":
+            if _RE_ENTITY_INDICATOR_PY.search(content):
+                entity_files.append(f)
+
+    return entity_files
+
+
+def run_dual_orm_scan(project_root: Path) -> list[Violation]:
+    """Detect type mismatches between ORM models and raw SQL queries.
+
+    Only runs if 2+ data access methods are detected (ORM + raw queries).
+    Skips gracefully if only one access method found.
+
+    Pattern IDs: DB-001 (enum mismatch), DB-002 (boolean mismatch), DB-003 (datetime mismatch)
+    """
+    violations: list[Violation] = []
+
+    # Also scan .csproj files for detection
+    all_files: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(project_root):
+        dirnames[:] = [d for d in dirnames if not _should_skip_dir(d)]
+        for filename in filenames:
+            fp = Path(dirpath) / filename
+            if fp.suffix in _EXT_ENTITY or fp.suffix == ".csproj":
+                all_files.append(fp)
+
+    source_files = _iter_source_files(project_root)
+    has_orm, has_raw = _detect_data_access_methods(project_root, all_files)
+
+    if not (has_orm and has_raw):
+        return []
+
+    # Collect ORM property types from entity files
+    entity_files = _find_entity_files(project_root, source_files)
+    # Map: property_name_lower -> set of types ("bool", "enum", "string", "datetime")
+    orm_prop_types: dict[str, set[str]] = {}
+
+    for ef in entity_files:
+        try:
+            content = ef.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+
+        rel_path = ef.relative_to(project_root).as_posix()
+
+        if ef.suffix == ".cs":
+            for m in _RE_DB_CSHARP_BOOL_PROP.finditer(content):
+                prop_name = m.group(1).lower()
+                orm_prop_types.setdefault(prop_name, set()).add("bool")
+            for m in _RE_DB_CSHARP_DATETIME_PROP.finditer(content):
+                prop_name = m.group(1).lower()
+                orm_prop_types.setdefault(prop_name, set()).add("datetime")
+            for m in _RE_DB_CSHARP_ENUM_PROP.finditer(content):
+                type_name = m.group(1)
+                prop_name = m.group(2).lower()
+                # Skip common non-enum types using shared frozenset
+                if type_name in _CSHARP_NON_ENUM_TYPES:
+                    continue
+                # Skip types with non-enum suffixes (Dto, Service, Controller, etc.)
+                if type_name.endswith(_CSHARP_NON_ENUM_SUFFIXES):
+                    continue
+                # Skip if type name looks like a known entity (present in entity_info)
+                orm_prop_types.setdefault(prop_name, set()).add("enum")
+
+    # Scan raw SQL in source files for type comparison mismatches
+    for f in source_files:
+        if f.suffix not in _EXT_ENTITY:
+            continue
+        if len(violations) >= _MAX_VIOLATIONS:
+            break
+        try:
+            content = f.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+
+        if not _RE_DB_SQL_STRING.search(content):
+            continue
+
+        rel_path = f.relative_to(project_root).as_posix()
+
+        for lineno, line in enumerate(content.splitlines(), start=1):
+            if not _RE_DB_SQL_STRING.search(line):
+                continue
+
+            line_lower = line.lower()
+
+            # DB-001: Enum column compared as integer or string in raw SQL
+            if _RE_DB_SQL_ENUM_INT_CMP.search(line) or _RE_DB_SQL_ENUM_STR_CMP.search(line):
+                for prop, types in orm_prop_types.items():
+                    if "enum" in types and re.search(rf'\b{re.escape(prop)}\b', line_lower):
+                        violations.append(Violation(
+                            check="DB-001",
+                            message=f"Possible enum type mismatch: ORM defines '{prop}' as enum but raw SQL compares as literal value",
+                            file_path=rel_path,
+                            line=lineno,
+                            severity="error",
+                        ))
+                        break
+
+            # DB-002: Boolean column compared as 0/1 in raw SQL
+            if _RE_DB_SQL_BOOL_INT.search(line):
+                for prop, types in orm_prop_types.items():
+                    if "bool" in types and re.search(rf'\b{re.escape(prop)}\b', line_lower):
+                        violations.append(Violation(
+                            check="DB-002",
+                            message=f"Possible boolean type mismatch: ORM defines '{prop}' as bool but raw SQL compares as 0/1",
+                            file_path=rel_path,
+                            line=lineno,
+                            severity="error",
+                        ))
+                        break
+
+            # DB-003: DateTime column with hardcoded format in raw SQL
+            if _RE_DB_SQL_DATETIME_FORMAT.search(line):
+                for prop, types in orm_prop_types.items():
+                    if "datetime" in types and re.search(rf'\b{re.escape(prop)}\b', line_lower):
+                        violations.append(Violation(
+                            check="DB-003",
+                            message=f"Possible datetime format mismatch: ORM defines '{prop}' as DateTime but raw SQL uses hardcoded date literal",
+                            file_path=rel_path,
+                            line=lineno,
+                            severity="error",
+                        ))
+                        break
+
+    violations = violations[:_MAX_VIOLATIONS]
+    violations.sort(key=lambda v: (_SEVERITY_ORDER.get(v.severity, 99), v.file_path, v.line))
+    return violations
+
+
+def run_default_value_scan(project_root: Path) -> list[Violation]:
+    """Detect missing defaults and unsafe nullable access in entity models.
+
+    Scans ORM entity/model files for boolean/enum properties without defaults
+    and nullable properties used without null guards.
+
+    Pattern IDs: DB-004 (missing default), DB-005 (nullable without null check)
+    """
+    violations: list[Violation] = []
+    source_files = _iter_source_files(project_root)
+    entity_files = _find_entity_files(project_root, source_files)
+
+    for ef in entity_files:
+        if len(violations) >= _MAX_VIOLATIONS:
+            break
+        try:
+            content = ef.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+
+        rel_path = ef.relative_to(project_root).as_posix()
+        ext = ef.suffix
+
+        if ext == ".cs":
+            # DB-004: C# bool without default
+            for m in _RE_DB_CSHARP_BOOL_NO_DEFAULT.finditer(content):
+                prop_name = m.group(1)
+                lineno = content[:m.start()].count("\n") + 1
+                violations.append(Violation(
+                    check="DB-004",
+                    message=f"Boolean property '{prop_name}' has no explicit default — add '= false;' or '= true;'",
+                    file_path=rel_path,
+                    line=lineno,
+                    severity="warning",
+                ))
+
+            # DB-004: C# enum without default (L2 fix)
+            for m in _RE_DB_CSHARP_ENUM_NO_DEFAULT.finditer(content):
+                type_name = m.group(1)
+                prop_name = m.group(2)
+                # Only flag actual enum types — skip primitives and known non-enums
+                if type_name in _CSHARP_NON_ENUM_TYPES:
+                    continue
+                # Skip types with non-enum suffixes (Dto, Service, Controller, etc.)
+                if type_name.endswith(_CSHARP_NON_ENUM_SUFFIXES):
+                    continue
+                # Skip if it looks like a navigation property (type matches a known entity pattern)
+                if type_name.endswith(("Id", "[]")):
+                    continue
+                lineno = content[:m.start()].count("\n") + 1
+                violations.append(Violation(
+                    check="DB-004",
+                    message=f"Enum property '{prop_name}' (type '{type_name}') has no explicit default — add '= {type_name}.DefaultValue;'",
+                    file_path=rel_path,
+                    line=lineno,
+                    severity="warning",
+                ))
+
+            # DB-005: C# nullable property without null check
+            nullable_props: list[tuple[str, str]] = []  # (type, name)
+            for m in _RE_DB_CSHARP_NULLABLE_PROP.finditer(content):
+                nullable_props.append((m.group(1), m.group(2)))
+
+            # Search other source files for unsafe access of nullable props
+            if nullable_props:
+                for sf in source_files:
+                    if sf == ef:
+                        continue
+                    if len(violations) >= _MAX_VIOLATIONS:
+                        break
+                    try:
+                        sf_content = sf.read_text(encoding="utf-8", errors="replace")
+                    except OSError:
+                        continue
+                    sf_rel = sf.relative_to(project_root).as_posix()
+
+                    for _ntype, nname in nullable_props:
+                        # Look for .PropName.Method() without ?.
+                        pattern = re.compile(
+                            rf'\.{re.escape(nname)}\.(?!\s*\?)(\w+)',
+                        )
+                        for sm in pattern.finditer(sf_content):
+                            # Check if there's a null check in the surrounding context
+                            pos = sm.start()
+                            context_start = max(0, sf_content.rfind("\n", 0, max(0, pos - 500)))
+                            context = sf_content[context_start:pos]
+                            if f"{nname} != null" not in context and f"{nname} is not null" not in context and f"?.{nname}" not in sf_content[max(0, pos - 50):pos]:
+                                slineno = sf_content[:pos].count("\n") + 1
+                                violations.append(Violation(
+                                    check="DB-005",
+                                    message=f"Nullable property '{nname}' accessed without null check — use '?.' or null guard",
+                                    file_path=sf_rel,
+                                    line=slineno,
+                                    severity="error",
+                                ))
+
+        elif ext == ".py":
+            # DB-004: Django BooleanField without default
+            for m in _RE_DB_DJANGO_BOOL_NO_DEFAULT.finditer(content):
+                lineno = content[:m.start()].count("\n") + 1
+                violations.append(Violation(
+                    check="DB-004",
+                    message="BooleanField() without default= parameter — add default=True or default=False",
+                    file_path=rel_path,
+                    line=lineno,
+                    severity="warning",
+                ))
+
+            # DB-004: SQLAlchemy Column(Boolean) without default
+            for m in _RE_DB_SQLALCHEMY_NO_DEFAULT.finditer(content):
+                matched_text = m.group(0)
+                if "default" not in matched_text and "server_default" not in matched_text:
+                    lineno = content[:m.start()].count("\n") + 1
+                    violations.append(Violation(
+                        check="DB-004",
+                        message="Column(Boolean/Enum) without default — add default= or server_default=",
+                        file_path=rel_path,
+                        line=lineno,
+                        severity="warning",
+                    ))
+
+            # DB-005: Python Optional[] property accessed without null guard
+            optional_props: list[str] = []
+            for opt_m in re.finditer(r'(\w+)\s*:\s*Optional\[', content):
+                optional_props.append(opt_m.group(1))
+            if optional_props:
+                for sf in source_files:
+                    if sf == ef or sf.suffix != ".py":
+                        continue
+                    if len(violations) >= _MAX_VIOLATIONS:
+                        break
+                    try:
+                        sf_content = sf.read_text(encoding="utf-8", errors="replace")
+                    except OSError:
+                        continue
+                    sf_rel = sf.relative_to(project_root).as_posix()
+                    for oname in optional_props:
+                        pattern = re.compile(rf'\.{re.escape(oname)}\.(\w+)')
+                        for om in pattern.finditer(sf_content):
+                            pos = om.start()
+                            context_start = max(0, sf_content.rfind("\n", 0, max(0, pos - 500)))
+                            context = sf_content[context_start:pos]
+                            if (f"if {oname}" not in context
+                                    and f"if self.{oname}" not in context
+                                    and f"{oname} is not None" not in context
+                                    and f"{oname} is None" not in context):
+                                slineno = sf_content[:pos].count("\n") + 1
+                                violations.append(Violation(
+                                    check="DB-005",
+                                    message=f"Optional property '{oname}' accessed without null guard — check 'if {oname} is not None' first",
+                                    file_path=sf_rel,
+                                    line=slineno,
+                                    severity="error",
+                                ))
+
+        elif ext in (".ts", ".js"):
+            # DB-005: TypeScript nullable property accessed without optional chaining
+            # Find nullable types: prop?: Type  or  prop: Type | null  or  prop: Type | undefined
+            ts_nullable_props: list[str] = []
+            for ts_m in re.finditer(r'(\w+)\s*\?\s*:', content):
+                ts_nullable_props.append(ts_m.group(1))
+            for ts_m in re.finditer(r'(\w+)\s*:\s*\w+\s*\|\s*(?:null|undefined)', content):
+                prop = ts_m.group(1)
+                if prop not in ts_nullable_props:
+                    ts_nullable_props.append(prop)
+            if ts_nullable_props:
+                for sf in source_files:
+                    if sf == ef or sf.suffix not in (".ts", ".js"):
+                        continue
+                    if len(violations) >= _MAX_VIOLATIONS:
+                        break
+                    try:
+                        sf_content = sf.read_text(encoding="utf-8", errors="replace")
+                    except OSError:
+                        continue
+                    sf_rel = sf.relative_to(project_root).as_posix()
+                    for tname in ts_nullable_props:
+                        # Look for .propName.method() without ?.propName
+                        pattern = re.compile(rf'\.{re.escape(tname)}\.(?!\s*\?)(\w+)')
+                        for tm in pattern.finditer(sf_content):
+                            pos = tm.start()
+                            # Check for optional chaining in nearby context
+                            pre = sf_content[max(0, pos - 50):pos]
+                            context_start = max(0, sf_content.rfind("\n", 0, max(0, pos - 500)))
+                            context = sf_content[context_start:pos]
+                            if (f"?.{tname}" not in pre
+                                    and f"{tname} !== null" not in context
+                                    and f"{tname} !== undefined" not in context
+                                    and f"{tname} != null" not in context):
+                                slineno = sf_content[:pos].count("\n") + 1
+                                violations.append(Violation(
+                                    check="DB-005",
+                                    message=f"Nullable property '{tname}' accessed without optional chaining — use '?.{tname}' or add null guard",
+                                    file_path=sf_rel,
+                                    line=slineno,
+                                    severity="error",
+                                ))
+
+    # Also scan .prisma files for DB-004
+    for dirpath, dirnames, filenames in os.walk(project_root):
+        dirnames[:] = [d for d in dirnames if not _should_skip_dir(d)]
+        for filename in filenames:
+            if not filename.endswith(".prisma"):
+                continue
+            fp = Path(dirpath) / filename
+            try:
+                content = fp.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            rel_path = fp.relative_to(project_root).as_posix()
+
+            for m in _RE_DB_PRISMA_NO_DEFAULT.finditer(content):
+                field_name = m.group(1)
+                # Check if the next line has @default
+                end_pos = m.end()
+                next_line_end = content.find("\n", end_pos + 1)
+                if next_line_end == -1:
+                    next_line_end = len(content)
+                next_line = content[end_pos:next_line_end]
+                if "@default" not in next_line:
+                    lineno = content[:m.start()].count("\n") + 1
+                    violations.append(Violation(
+                        check="DB-004",
+                        message=f"Prisma field '{field_name}' without @default — add @default(false) or similar",
+                        file_path=rel_path,
+                        line=lineno,
+                        severity="warning",
+                    ))
+
+            # M1: Prisma enum fields without @default (user-defined types, not builtins)
+            for m in _RE_DB_PRISMA_ENUM_NO_DEFAULT.finditer(content):
+                field_name = m.group(1)
+                type_name = m.group(2)
+                # Skip Prisma built-in types (already handled above)
+                if type_name in _PRISMA_BUILTIN_TYPES:
+                    continue
+                end_pos = m.end()
+                next_line_end = content.find("\n", end_pos + 1)
+                if next_line_end == -1:
+                    next_line_end = len(content)
+                next_line = content[end_pos:next_line_end]
+                if "@default" not in next_line:
+                    lineno = content[:m.start()].count("\n") + 1
+                    violations.append(Violation(
+                        check="DB-004",
+                        message=f"Prisma enum field '{field_name}' (type '{type_name}') without @default — add @default(VALUE)",
+                        file_path=rel_path,
+                        line=lineno,
+                        severity="warning",
+                    ))
+
+            # L2: Prisma String fields with status-like names without @default
+            for m in _RE_DB_PRISMA_STRING_STATUS_NO_DEFAULT.finditer(content):
+                field_name = m.group(1)
+                end_pos = m.end()
+                next_line_end = content.find("\n", end_pos + 1)
+                if next_line_end == -1:
+                    next_line_end = len(content)
+                next_line = content[end_pos:next_line_end]
+                if "@default" not in next_line:
+                    lineno = content[:m.start()].count("\n") + 1
+                    violations.append(Violation(
+                        check="DB-004",
+                        message=f"Prisma status field '{field_name}' (String) without @default — add @default(\"Draft\") or similar",
+                        file_path=rel_path,
+                        line=lineno,
+                        severity="warning",
+                    ))
+
+    violations = violations[:_MAX_VIOLATIONS]
+    violations.sort(key=lambda v: (_SEVERITY_ORDER.get(v.severity, 99), v.file_path, v.line))
+    return violations
+
+
+def run_relationship_scan(project_root: Path) -> list[Violation]:
+    """Detect incomplete ORM relationship configurations.
+
+    Finds FK columns without navigation properties, navigation properties
+    without inverse relationships, and FKs with no relationship config at all.
+
+    Pattern IDs: DB-006 (FK no nav), DB-007 (nav no inverse), DB-008 (FK no config)
+    """
+    violations: list[Violation] = []
+    source_files = _iter_source_files(project_root)
+    entity_files = _find_entity_files(project_root, source_files)
+
+    if not entity_files:
+        return []
+
+    # Collect all entity info: FK props, nav props, config calls
+    # entity_name -> {fk_props: [(name, line, file)], nav_props: [(type, name, line, file)]}
+    entity_info: dict[str, dict] = {}
+
+    # Also scan configuration files for HasMany/HasOne
+    config_references: set[str] = set()  # property names referenced in config
+
+    for ef in entity_files:
+        try:
+            content = ef.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+
+        rel_path = ef.relative_to(project_root).as_posix()
+        ext = ef.suffix
+
+        if ext == ".cs":
+            # Extract class name
+            class_match = re.search(r'class\s+(\w+)', content)
+            if not class_match:
+                continue
+            class_name = class_match.group(1)
+
+            entity_data = entity_info.setdefault(class_name, {
+                "fk_props": [], "nav_props": [],
+            })
+
+            # Find FK properties
+            for m in _RE_DB_CSHARP_FK_PROP.finditer(content):
+                prop_name = m.group(1)
+                # Skip the primary key 'Id'
+                if prop_name == "Id":
+                    continue
+                lineno = content[:m.start()].count("\n") + 1
+                entity_data["fk_props"].append((prop_name, lineno, rel_path))
+
+            # Find navigation properties
+            for m in _RE_DB_CSHARP_NAV_PROP.finditer(content):
+                if m.group(1) is not None:
+                    # Collection type: ICollection<T>, List<T>, etc.
+                    type_name = m.group(1)
+                    prop_name = m.group(2)
+                else:
+                    # Plain type: public virtual Entity Prop {
+                    type_name = m.group(3)
+                    prop_name = m.group(4)
+                # Skip primitive types using shared frozenset + extras
+                if type_name in _CSHARP_NON_ENUM_TYPES or type_name in ("Status", "byte[]"):
+                    continue
+                # Skip types with non-enum suffixes (likely not navigation targets)
+                if type_name.endswith(_CSHARP_NON_ENUM_SUFFIXES):
+                    continue
+                lineno = content[:m.start()].count("\n") + 1
+                entity_data["nav_props"].append((type_name, prop_name, lineno, rel_path))
+
+            # Scan for HasMany/HasOne configuration
+            for m in _RE_DB_CSHARP_HAS_MANY.finditer(content):
+                config_references.add(m.group(1))
+
+        elif ext in (".ts", ".js"):
+            # TypeORM: extract class name and relation details
+            class_match = re.search(r'class\s+(\w+)', content)
+            if not class_match:
+                continue
+            class_name = class_match.group(1)
+
+            entity_data = entity_info.setdefault(class_name, {
+                "fk_props": [], "nav_props": [],
+            })
+
+            # TypeORM @JoinColumn → FK-like reference
+            for m in _RE_DB_TYPEORM_JOIN_COLUMN.finditer(content):
+                col_name = m.group(1)
+                lineno = content[:m.start()].count("\n") + 1
+                entity_data["fk_props"].append((col_name, lineno, rel_path))
+
+            # TypeORM relation decorators → navigation properties
+            for m in _RE_DB_TYPEORM_RELATION_DETAIL.finditer(content):
+                rel_type = m.group(1)  # ManyToOne, OneToMany, etc.
+                target_entity = m.group(2)
+                lineno = content[:m.start()].count("\n") + 1
+                # Find the property name: skip decorator args until closing paren,
+                # then look for the property declaration on the same/next line
+                after = content[m.end():]
+                # Skip past any remaining decorator arguments and closing parens
+                paren_match = re.search(r'\)\s*\n?\s*(\w+)\s*[;:?!]', after)
+                if paren_match:
+                    prop_name = paren_match.group(1)
+                else:
+                    # Fallback: first word before ; or : in next 200 chars
+                    prop_match = re.search(r'(\w+)\s*[;:]', after[:200])
+                    prop_name = prop_match.group(1) if prop_match else target_entity.lower()
+                entity_data["nav_props"].append((target_entity, prop_name, lineno, rel_path))
+                config_references.add(prop_name)
+
+        elif ext == ".py":
+            # Django/SQLAlchemy: extract class and FK/relationship details
+            class_match = re.search(r'class\s+(\w+)', content)
+            if not class_match:
+                continue
+            class_name = class_match.group(1)
+
+            entity_data = entity_info.setdefault(class_name, {
+                "fk_props": [], "nav_props": [],
+            })
+
+            # Django FK fields
+            for m in _RE_DB_DJANGO_FK_DETAIL.finditer(content):
+                field_name = m.group(1)
+                target_model = m.group(2)
+                lineno = content[:m.start()].count("\n") + 1
+                entity_data["fk_props"].append((field_name, lineno, rel_path))
+                # Django FK implicitly creates navigation
+                entity_data["nav_props"].append((target_model, field_name, lineno, rel_path))
+
+            # SQLAlchemy FK columns
+            for m in _RE_DB_SQLALCHEMY_FK_COLUMN.finditer(content):
+                col_name = m.group(1)
+                target_table = m.group(2)
+                lineno = content[:m.start()].count("\n") + 1
+                entity_data["fk_props"].append((col_name, lineno, rel_path))
+
+            # SQLAlchemy relationship() calls → navigation
+            for m in _RE_DB_SQLALCHEMY_RELATIONSHIP_DETAIL.finditer(content):
+                prop_name = m.group(1)
+                target_model = m.group(2)
+                lineno = content[:m.start()].count("\n") + 1
+                entity_data["nav_props"].append((target_model, prop_name, lineno, rel_path))
+                config_references.add(prop_name)
+
+    # Also scan all source files for entity configuration classes
+    for sf in source_files:
+        if sf.suffix != ".cs":
+            continue
+        try:
+            content = sf.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for m in _RE_DB_CSHARP_HAS_MANY.finditer(content):
+            config_references.add(m.group(1))
+
+    # Build a set of all known entity names for inverse lookup
+    all_entity_names = set(entity_info.keys())
+
+    # Check entities for missing navigation, inverse, and config
+    for entity_name, data in entity_info.items():
+        if len(violations) >= _MAX_VIOLATIONS:
+            break
+
+        fk_props = data["fk_props"]
+        nav_props = data["nav_props"]
+        nav_type_names = {t for t, _n, _l, _f in nav_props}
+        nav_prop_names = {n for _t, n, _l, _f in nav_props}
+
+        for fk_name, fk_line, fk_file in fk_props:
+            if len(violations) >= _MAX_VIOLATIONS:
+                break
+
+            # Derive expected nav property name: "TenderId" -> "Tender"
+            expected_nav = fk_name[:-2] if fk_name.endswith("Id") else None
+            if not expected_nav:
+                continue
+
+            has_nav = expected_nav in nav_prop_names or expected_nav in nav_type_names
+            has_config = fk_name in config_references or expected_nav in config_references
+
+            if not has_nav and not has_config:
+                # DB-008: FK with no navigation AND no config
+                violations.append(Violation(
+                    check="DB-008",
+                    message=f"FK '{fk_name}' has no navigation property and no relationship configuration",
+                    file_path=fk_file,
+                    line=fk_line,
+                    severity="error",
+                ))
+            elif not has_nav:
+                # DB-006: FK without navigation property
+                violations.append(Violation(
+                    check="DB-006",
+                    message=f"FK '{fk_name}' has no navigation property '{expected_nav}' — eager loading will return null",
+                    file_path=fk_file,
+                    line=fk_line,
+                    severity="warning",
+                ))
+
+        # DB-007: Navigation property without inverse on related entity (C2 fix)
+        for nav_type, nav_name, nav_line, nav_file in nav_props:
+            if len(violations) >= _MAX_VIOLATIONS:
+                break
+            # Only check if the related type is a known entity
+            if nav_type not in all_entity_names:
+                continue
+            related_data = entity_info.get(nav_type)
+            if not related_data:
+                continue
+            # Check if related entity has an inverse navigation back to this entity
+            related_nav_types = {t for t, _n, _l, _f in related_data["nav_props"]}
+            if entity_name not in related_nav_types:
+                violations.append(Violation(
+                    check="DB-007",
+                    message=f"Navigation property '{nav_name}' (type '{nav_type}') has no inverse on '{nav_type}' — add ICollection<{entity_name}> or reference back",
+                    file_path=nav_file,
+                    line=nav_line,
+                    severity="info",
+                ))
+
+    violations = violations[:_MAX_VIOLATIONS]
+    violations.sort(key=lambda v: (_SEVERITY_ORDER.get(v.severity, 99), v.file_path, v.line))
     return violations

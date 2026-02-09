@@ -81,6 +81,22 @@ class ConvergenceReport:
     zero_cycle_milestones: list[str] = field(default_factory=list)  # milestones with 0 review cycles
 
 
+@dataclass
+class E2ETestReport:
+    """Result of E2E testing phase — tracks backend API and frontend Playwright tests."""
+
+    backend_total: int = 0
+    backend_passed: int = 0
+    frontend_total: int = 0
+    frontend_passed: int = 0
+    fix_retries_used: int = 0
+    total_fix_cycles: int = 0       # Total fix cycles across both parts
+    skipped: bool = False
+    skip_reason: str = ""           # "Build failed", "No backend detected", etc.
+    health: str = "unknown"         # "passed" | "partial" | "failed" | "skipped"
+    failed_tests: list[str] = field(default_factory=list)
+
+
 _STATE_FILE = "STATE.json"
 _CURRENT_SCHEMA_VERSION = 2
 

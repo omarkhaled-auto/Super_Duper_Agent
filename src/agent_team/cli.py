@@ -17,6 +17,7 @@ import string
 import subprocess
 import sys
 import threading
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -39,7 +40,14 @@ from .agents import (
     build_orchestrator_prompt,
 )
 from .config import AgentTeamConfig, apply_depth_quality_gating, detect_depth, extract_constraints, load_config, parse_max_review_cycles, parse_per_item_review_cycles
-from .state import ConvergenceReport
+from .state import ConvergenceReport, E2ETestReport
+from .e2e_testing import (
+    detect_app_type,
+    parse_e2e_results,
+    BACKEND_E2E_PROMPT,
+    FRONTEND_E2E_PROMPT,
+    E2E_FIX_PROMPT,
+)
 from .display import (
     console,
     print_agent_response,
@@ -750,6 +758,11 @@ async def _run_prd_milestones(
                 prd_chunks = None
                 prd_index = None
 
+        # Pre-create analysis directory for chunked decomposition
+        if prd_chunks:
+            analysis_dir = req_dir / "analysis"
+            analysis_dir.mkdir(parents=True, exist_ok=True)
+
         decomp_prompt = build_decomposition_prompt(
             task=task,
             depth=depth,
@@ -773,6 +786,56 @@ async def _run_prd_milestones(
             if intervention:
                 decomp_cost += await _drain_interventions(client, intervention, config, phase_costs)
             total_cost += decomp_cost
+
+        # Validate analysis files for chunked PRDs (Fix RC-1)
+        if prd_chunks:
+            analysis_dir = req_dir / "analysis"
+            min_expected = max(1, (len(prd_chunks) + 1) // 2)  # At least half (ceil division)
+            if analysis_dir.is_dir():
+                analysis_files = list(analysis_dir.glob("*.md"))
+                if len(analysis_files) < min_expected:
+                    print_warning(
+                        f"Chunked PRD analysis incomplete: {len(analysis_files)}/{len(prd_chunks)} "
+                        f"analysis files (need {min_expected}). "
+                        f"Re-running decomposition for missing chunks."
+                    )
+                    # Retry: re-deploy decomposition once for missing analysis files
+                    retry_prompt = build_decomposition_prompt(
+                        task=task, depth=depth, config=config,
+                        prd_path=prd_path, cwd=cwd,
+                        interview_doc=interview_doc,
+                        codebase_map_summary=codebase_map_summary,
+                        design_reference_urls=design_reference_urls,
+                        prd_chunks=prd_chunks, prd_index=prd_index,
+                        ui_requirements_content=ui_requirements_content,
+                    )
+                    retry_options = _build_options(
+                        config, cwd, constraints=constraints,
+                        task_text=task, depth=depth, backend=_backend,
+                    )
+                    retry_phase_costs: dict[str, float] = {}
+                    try:
+                        async with ClaudeSDKClient(options=retry_options) as retry_client:
+                            await retry_client.query(retry_prompt)
+                            retry_cost = await _process_response(
+                                retry_client, config, retry_phase_costs,
+                            )
+                            total_cost += retry_cost
+                    except Exception as exc:
+                        print_warning(f"Analysis retry failed: {exc}")
+                    # Re-check after retry
+                    analysis_files = list(analysis_dir.glob("*.md"))
+                    if len(analysis_files) < min_expected:
+                        print_warning(
+                            f"Chunked PRD analysis still incomplete after retry: "
+                            f"{len(analysis_files)}/{len(prd_chunks)} analysis files. "
+                            f"Synthesizer may produce incomplete MASTER_PLAN.md."
+                        )
+            else:
+                print_warning(
+                    f"Chunked PRD analysis directory not created: {analysis_dir}. "
+                    "Planners may not have written analysis files to disk."
+                )
 
         if not master_plan_path.is_file():
             print_error(
@@ -816,6 +879,25 @@ async def _run_prd_milestones(
     # Phase 2: EXECUTION LOOP
     # ------------------------------------------------------------------
     print_info(f"Phase 2: Executing {len(plan.milestones)} milestones")
+
+    # Check for saved progress from a previous interrupted run
+    progress_path = req_dir / "milestone_progress.json"
+    if progress_path.is_file():
+        import json
+        try:
+            progress = json.loads(progress_path.read_text(encoding="utf-8"))
+            completed_ids = set(progress.get("completed_milestones", []))
+            interrupted_id = progress.get("interrupted_milestone")
+            if completed_ids:
+                print_info(
+                    f"Resuming from interrupt: {len(completed_ids)} milestones completed, "
+                    f"resuming at milestone {interrupted_id}"
+                )
+                # Override resume_from to the interrupted milestone
+                resume_from = interrupted_id
+            progress_path.unlink()  # Clear progress file on resume
+        except (json.JSONDecodeError, OSError):
+            pass  # Ignore corrupt progress file
 
     iteration = 0
     max_iterations = len(plan.milestones) * 2  # safety limit
@@ -871,6 +953,28 @@ async def _run_prd_milestones(
             )
             predecessor_str = render_predecessor_context(predecessor_summaries)
 
+            # Generate consumption checklist if predecessors exist and handoff is enabled
+            if config.tracking_documents.milestone_handoff and predecessor_summaries:
+                try:
+                    from .tracking_documents import generate_consumption_checklist, parse_handoff_interfaces
+                    handoff_path = Path(cwd) / config.convergence.requirements_dir / "MILESTONE_HANDOFF.md"
+                    if handoff_path.is_file():
+                        handoff_content = handoff_path.read_text(encoding="utf-8")
+                        all_interfaces: list[dict] = []
+                        for pred_id in [dep for dep in milestone.dependencies if dep]:
+                            interfaces = parse_handoff_interfaces(handoff_content, pred_id)
+                            all_interfaces.extend(interfaces)
+                        if all_interfaces:
+                            checklist = generate_consumption_checklist(
+                                milestone_id=milestone.id,
+                                milestone_title=milestone.title,
+                                predecessor_interfaces=all_interfaces,
+                            )
+                            handoff_content += "\n\n" + checklist
+                            handoff_path.write_text(handoff_content, encoding="utf-8")
+                except Exception as exc:
+                    print_warning(f"Failed to generate consumption checklist: {exc}")
+
             # Build milestone-specific prompt
             ms_prompt = build_milestone_execution_prompt(
                 task=task,
@@ -901,7 +1005,31 @@ async def _run_prd_milestones(
                             client, intervention, config, ms_phase_costs,
                         )
                     total_cost += ms_cost
+            except KeyboardInterrupt:
+                # Save progress for resume on user interrupt
+                completed_ids = [m.id for m in plan.milestones if m.status == "COMPLETE"]
+                _save_milestone_progress(
+                    cwd=cwd,
+                    config=config,
+                    milestone_id=milestone.id,
+                    completed_milestones=completed_ids,
+                    error_type="KeyboardInterrupt",
+                )
+                print_warning(
+                    f"Milestone {milestone.id} interrupted by user. "
+                    f"Progress saved. Run again to resume from this milestone."
+                )
+                break  # Exit milestone loop
             except Exception as exc:
+                # Save progress for resume on unexpected errors
+                completed_ids = [m.id for m in plan.milestones if m.status == "COMPLETE"]
+                _save_milestone_progress(
+                    cwd=cwd,
+                    config=config,
+                    milestone_id=milestone.id,
+                    completed_milestones=completed_ids,
+                    error_type=type(exc).__name__,
+                )
                 print_warning(f"Milestone {milestone.id} failed: {exc}")
                 milestone.status = "FAILED"
                 plan_content = update_master_plan_status(
@@ -914,13 +1042,208 @@ async def _run_prd_milestones(
                     save_state(_current_state, directory=str(req_dir.parent / ".agent-team"))
                 continue
 
+            # TASKS.md existence check (Fix RC-2 hardening)
+            ms_tasks_path = milestones_dir / milestone.id / "TASKS.md"
+            if not ms_tasks_path.is_file():
+                print_warning(
+                    f"Milestone {milestone.id}: TASKS.md not created at {ms_tasks_path}. "
+                    f"Task decomposition step may have been skipped."
+                )
+
             # Health check (if gate enabled)
             health_report = mm.check_milestone_health(
                 milestone.id,
                 min_convergence_ratio=config.convergence.min_convergence_ratio,
             )
 
-            if config.milestone.health_gate and health_report.health == "failed":
+            # Review recovery loop (mirrors post-orchestration recovery in main flow)
+            if config.milestone.health_gate and health_report and health_report.health in ("failed", "degraded"):
+                needs_recovery = (
+                    (health_report.review_cycles == 0 and health_report.total_requirements > 0)
+                    or (
+                        health_report.total_requirements > 0
+                        and health_report.convergence_ratio < config.convergence.recovery_threshold
+                    )
+                )
+
+                if needs_recovery:
+                    max_recovery = config.milestone.review_recovery_retries
+                    ms_req_path = str(
+                        milestones_dir / milestone.id / config.convergence.requirements_file
+                    )
+                    for recovery_attempt in range(max_recovery):
+                        print_warning(
+                            f"Milestone {milestone.id} review recovery "
+                            f"(attempt {recovery_attempt + 1}/{max_recovery}): "
+                            f"{health_report.checked_requirements}/{health_report.total_requirements} "
+                            f"checked, {health_report.review_cycles} review cycles."
+                        )
+                        try:
+                            recovery_cost = await _run_review_only(
+                                cwd=cwd,
+                                config=config,
+                                constraints=constraints,
+                                intervention=intervention,
+                                task_text=task,
+                                checked=health_report.checked_requirements,
+                                total=health_report.total_requirements,
+                                review_cycles=health_report.review_cycles,
+                                requirements_path=ms_req_path,
+                                depth=depth,
+                            )
+                            total_cost += recovery_cost
+                        except Exception as exc:
+                            print_warning(
+                                f"Milestone {milestone.id} review recovery failed: {exc}"
+                            )
+                            break
+
+                        # Re-check health after recovery
+                        health_report = mm.check_milestone_health(
+                            milestone.id,
+                            min_convergence_ratio=config.convergence.min_convergence_ratio,
+                        )
+                        # Break if healthy, or degraded but above recovery threshold
+                        if health_report.health == "healthy":
+                            break
+                        if (
+                            health_report.health == "degraded"
+                            and health_report.convergence_ratio >= config.convergence.recovery_threshold
+                        ):
+                            break
+                    else:
+                        # All recovery attempts exhausted without sufficient improvement
+                        print_warning(
+                            f"Milestone {milestone.id}: all {max_recovery} review recovery "
+                            f"attempts exhausted. Health: {health_report.health}, "
+                            f"ratio: {health_report.convergence_ratio:.2f}."
+                        )
+
+            # Generate/update MILESTONE_HANDOFF.md (after review recovery, before wiring check)
+            if config.tracking_documents.milestone_handoff:
+                try:
+                    from .tracking_documents import generate_milestone_handoff_entry
+                    handoff_path = Path(cwd) / config.convergence.requirements_dir / "MILESTONE_HANDOFF.md"
+
+                    entry = generate_milestone_handoff_entry(
+                        milestone_id=milestone.id,
+                        milestone_title=milestone.title,
+                        status="COMPLETE",
+                    )
+
+                    if handoff_path.is_file():
+                        existing = handoff_path.read_text(encoding="utf-8")
+                        if f"## {milestone.id}:" not in existing:
+                            handoff_path.write_text(existing + "\n\n---\n\n" + entry, encoding="utf-8")
+                    else:
+                        header = (
+                            "# Milestone Handoff Registry\n\n"
+                            "This document tracks interfaces exposed by each milestone.\n"
+                            "Subsequent milestones MUST read this before coding.\n\n---\n\n"
+                        )
+                        handoff_path.write_text(header + entry, encoding="utf-8")
+
+                    print_info(f"Updated MILESTONE_HANDOFF.md with {milestone.id}")
+
+                    # Run sub-orchestrator to fill handoff details
+                    ms_req_path_for_handoff = str(
+                        milestones_dir / milestone.id / config.convergence.requirements_file
+                    )
+                    handoff_cost = await _generate_handoff_details(
+                        cwd=cwd,
+                        config=config,
+                        milestone_id=milestone.id,
+                        milestone_title=milestone.title,
+                        requirements_path=ms_req_path_for_handoff,
+                        task_text=task,
+                        constraints=constraints,
+                        intervention=intervention,
+                        depth=depth,
+                    )
+                    total_cost += handoff_cost
+                except Exception as exc:
+                    print_warning(f"Failed to update MILESTONE_HANDOFF.md: {exc}")
+
+            # Check wiring completeness from handoff document
+            if config.tracking_documents.milestone_handoff and config.tracking_documents.wiring_completeness_gate > 0:
+                try:
+                    from .tracking_documents import compute_wiring_completeness
+                    handoff_path = Path(cwd) / config.convergence.requirements_dir / "MILESTONE_HANDOFF.md"
+                    if handoff_path.is_file():
+                        wired, total_wiring = compute_wiring_completeness(
+                            handoff_path.read_text(encoding="utf-8"),
+                            milestone.id,
+                        )
+                        if total_wiring > 0:
+                            ratio = wired / total_wiring
+                            print_info(f"Wiring completeness for {milestone.id}: {wired}/{total_wiring} ({ratio:.0%})")
+                            if ratio < config.tracking_documents.wiring_completeness_gate:
+                                print_warning(
+                                    f"Wiring completeness ({ratio:.0%}) below gate "
+                                    f"({config.tracking_documents.wiring_completeness_gate:.0%}). "
+                                    f"Some predecessor interfaces may not be wired."
+                                )
+                except Exception as exc:
+                    print_warning(f"Failed to check wiring completeness: {exc}")
+
+            # Post-milestone mock data scan (if enabled)
+            if config.milestone.mock_data_scan:
+                from .quality_checks import run_mock_data_scan
+                mock_violations = run_mock_data_scan(project_root)
+                if mock_violations:
+                    print_warning(
+                        f"Milestone {milestone.id}: {len(mock_violations)} mock data "
+                        f"violation(s) in service files. Running mock-data fix pass."
+                    )
+                    mock_fix_cost = await _run_mock_data_fix(
+                        cwd=cwd,
+                        config=config,
+                        mock_violations=mock_violations,
+                        task_text=task,
+                        constraints=constraints,
+                        intervention=intervention,
+                        depth=depth,
+                    )
+                    total_cost += mock_fix_cost
+
+                    # Re-scan after fix
+                    remaining_mocks = run_mock_data_scan(project_root)
+                    if remaining_mocks:
+                        print_warning(
+                            f"Milestone {milestone.id}: still {len(remaining_mocks)} "
+                            f"mock data violations after fix pass."
+                        )
+
+            # Post-milestone UI compliance scan (if enabled)
+            if config.milestone.ui_compliance_scan:
+                from .quality_checks import run_ui_compliance_scan
+                ui_violations = run_ui_compliance_scan(project_root)
+                if ui_violations:
+                    print_warning(
+                        f"Milestone {milestone.id}: {len(ui_violations)} UI compliance "
+                        f"violation(s) found. Running UI compliance fix pass."
+                    )
+                    ui_fix_cost = await _run_ui_compliance_fix(
+                        cwd=cwd,
+                        config=config,
+                        ui_violations=ui_violations,
+                        task_text=task,
+                        constraints=constraints,
+                        intervention=intervention,
+                        depth=depth,
+                    )
+                    total_cost += ui_fix_cost
+
+                    # Re-scan after fix
+                    remaining_ui = run_ui_compliance_scan(project_root)
+                    if remaining_ui:
+                        print_warning(
+                            f"Milestone {milestone.id}: still {len(remaining_ui)} "
+                            f"UI compliance violations after fix pass."
+                        )
+
+            # Final health gate decision (after possible recovery)
+            if config.milestone.health_gate and health_report and health_report.health == "failed":
                 print_warning(
                     f"Milestone {milestone.id} health gate FAILED "
                     f"({health_report.checked_requirements}/{health_report.total_requirements}). "
@@ -1059,6 +1382,645 @@ async def _run_milestone_wiring_fix(
         print_warning(f"Wiring fix for {milestone_id} failed: {exc}")
 
     return cost
+
+
+async def _run_mock_data_fix(
+    cwd: str | None,
+    config: AgentTeamConfig,
+    mock_violations: list,
+    task_text: str | None = None,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    depth: str = "standard",
+) -> float:
+    """Run a recovery pass to replace mock data with real API calls.
+
+    Creates a focused prompt listing each mock violation and instructing
+    the orchestrator to deploy code-writers to replace mocks with real
+    HTTP calls, then reviewers to verify.
+    """
+    if not mock_violations:
+        return 0.0
+
+    print_info(f"Running mock data fix pass ({len(mock_violations)} violations)")
+
+    violations_text = "\n".join(
+        f"  - {v.file_path}:{v.line} — {v.message}"
+        for v in mock_violations[:20]
+    )
+
+    fix_prompt = (
+        f"[PHASE: MOCK DATA REPLACEMENT]\n\n"
+        f"CRITICAL: The following service/client files contain mock data instead of real API calls.\n"
+        f"This is a BLOCKING defect — the application is non-functional until these are fixed.\n\n"
+        f"Mock violations found:\n{violations_text}\n\n"
+        f"INSTRUCTIONS:\n"
+        f"1. For EACH file listed above:\n"
+        f"   a. Read the file and identify all mock patterns (of(), delay(), hardcoded data)\n"
+        f"   b. Read REQUIREMENTS.md to find the API Wiring Map (SVC-xxx entries)\n"
+        f"   c. Replace each mock with a real HTTP call to the correct backend endpoint\n"
+        f"   d. Use the project's HTTP client (HttpClient, axios, fetch)\n"
+        f"   e. Ensure request/response types match the API contracts\n"
+        f"2. Deploy code-writer agents to make the replacements\n"
+        f"3. Deploy code-reviewer to verify ALL mocks are gone and HTTP calls are correct\n"
+        f"4. Do NOT add new mock data. Do NOT use of(). Do NOT use delay().\n"
+        f"\n[ORIGINAL USER REQUEST]\n{task_text or ''}"
+    )
+
+    # Inject fix cycle log instructions (if enabled)
+    fix_log_section = ""
+    if config.tracking_documents.fix_cycle_log:
+        try:
+            from .tracking_documents import initialize_fix_cycle_log, build_fix_cycle_entry, FIX_CYCLE_LOG_INSTRUCTIONS
+            req_dir_str = str(Path(cwd or ".") / config.convergence.requirements_dir)
+            initialize_fix_cycle_log(req_dir_str)
+            cycle_entry = build_fix_cycle_entry(
+                phase="Mock Data",
+                cycle_number=1,
+                failures=[f"{v.file_path}:{v.line} — {v.message}" for v in mock_violations[:20]],
+            )
+            fix_log_section = (
+                f"\n\n{FIX_CYCLE_LOG_INSTRUCTIONS.format(requirements_dir=req_dir_str)}\n\n"
+                f"Current fix cycle entry (append your results to this):\n{cycle_entry}\n"
+            )
+        except Exception:
+            pass  # Non-critical — don't block fix if log fails
+
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text, depth=depth, backend=_backend)
+    phase_costs: dict[str, float] = {}
+    cost = 0.0
+
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(fix_prompt + fix_log_section)
+            cost = await _process_response(client, config, phase_costs, current_phase="mock_data_fix")
+            if intervention:
+                cost += await _drain_interventions(client, intervention, config, phase_costs)
+    except Exception as exc:
+        print_warning(f"Mock data fix pass failed: {exc}")
+
+    return cost
+
+
+async def _run_ui_compliance_fix(
+    cwd: str | None,
+    config: AgentTeamConfig,
+    ui_violations: list,
+    task_text: str | None = None,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    depth: str = "standard",
+) -> float:
+    """Run a recovery pass to fix UI compliance violations.
+
+    Creates a focused prompt listing each UI violation and instructing
+    the orchestrator to deploy code-writers to replace hardcoded colors,
+    default palettes, generic fonts, and non-grid spacing with design
+    token references and project-specific values.
+    """
+    if not ui_violations:
+        return 0.0
+
+    print_info(f"Running UI compliance fix pass ({len(ui_violations)} violations)")
+
+    violations_text = "\n".join(
+        f"  - [{v.check}] {v.file_path}:{v.line} — {v.message}"
+        for v in ui_violations[:20]
+    )
+
+    fix_prompt = (
+        f"[PHASE: UI COMPLIANCE FIX]\n\n"
+        f"The following UI files contain design compliance violations.\n"
+        f"These must be fixed to ensure consistent branding and design system adherence.\n\n"
+        f"UI compliance violations found:\n{violations_text}\n\n"
+        f"INSTRUCTIONS:\n"
+        f"1. For EACH violation listed above:\n"
+        f"   a. UI-001/UI-001b: Replace hardcoded hex colors with design token CSS variables\n"
+        f"      or Tailwind theme colors (e.g., `bg-primary`, `text-accent`, `var(--color-primary)`)\n"
+        f"   b. UI-002: Replace default Tailwind colors (indigo/violet/purple) with\n"
+        f"      project-specific palette colors defined in tailwind.config or theme\n"
+        f"   c. UI-003: Replace generic fonts (Inter/Roboto/Arial) with the project's\n"
+        f"      distinctive typeface as defined in the design reference\n"
+        f"   d. UI-004: Adjust spacing values to align with 4px grid\n"
+        f"      (use multiples of 4: 4, 8, 12, 16, 20, 24, 32, 40, 48, 64)\n"
+        f"2. If no design tokens exist yet, create a tokens file first\n"
+        f"   (e.g., `src/styles/tokens.css` or extend `tailwind.config`)\n"
+        f"3. Deploy code-writer agents to make the replacements\n"
+        f"4. Deploy code-reviewer to verify all violations are resolved\n"
+        f"\n[ORIGINAL USER REQUEST]\n{task_text or ''}"
+    )
+
+    # Inject fix cycle log instructions (if enabled)
+    fix_log_section = ""
+    if config.tracking_documents.fix_cycle_log:
+        try:
+            from .tracking_documents import initialize_fix_cycle_log, build_fix_cycle_entry, FIX_CYCLE_LOG_INSTRUCTIONS
+            req_dir_str = str(Path(cwd or ".") / config.convergence.requirements_dir)
+            initialize_fix_cycle_log(req_dir_str)
+            cycle_entry = build_fix_cycle_entry(
+                phase="UI Compliance",
+                cycle_number=1,
+                failures=[f"[{v.check}] {v.file_path}:{v.line} — {v.message}" for v in ui_violations[:20]],
+            )
+            fix_log_section = (
+                f"\n\n{FIX_CYCLE_LOG_INSTRUCTIONS.format(requirements_dir=req_dir_str)}\n\n"
+                f"Current fix cycle entry (append your results to this):\n{cycle_entry}\n"
+            )
+        except Exception:
+            pass  # Non-critical — don't block fix if log fails
+
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text, depth=depth, backend=_backend)
+    phase_costs: dict[str, float] = {}
+    cost = 0.0
+
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(fix_prompt + fix_log_section)
+            cost = await _process_response(client, config, phase_costs, current_phase="ui_compliance_fix")
+            if intervention:
+                cost += await _drain_interventions(client, intervention, config, phase_costs)
+    except Exception as exc:
+        print_warning(f"UI compliance fix pass failed: {exc}")
+
+    return cost
+
+
+async def _run_backend_e2e_tests(
+    cwd: str | None,
+    config: AgentTeamConfig,
+    app_info,  # AppTypeInfo
+    task_text: str | None = None,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    depth: str = "standard",
+) -> tuple[float, E2ETestReport]:
+    """Run backend API E2E tests via sub-orchestrator session."""
+    print_info("Running backend API E2E tests...")
+
+    prompt = BACKEND_E2E_PROMPT.format(
+        requirements_dir=config.convergence.requirements_dir,
+        test_port=config.e2e_testing.test_port,
+        framework=app_info.backend_framework,
+        start_command=app_info.start_command,
+        db_type=app_info.db_type,
+        seed_command=app_info.seed_command or "N/A",
+        api_directory=app_info.api_directory or "src/",
+        task_text=task_text or "",
+    )
+
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text, depth=depth, backend=_backend)
+    phase_costs: dict[str, float] = {}
+    cost = 0.0
+
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(prompt)
+            cost = await _process_response(client, config, phase_costs, current_phase="e2e_backend")
+            if intervention:
+                cost += await _drain_interventions(client, intervention, config, phase_costs)
+    except Exception as exc:
+        print_warning(f"Backend E2E test pass failed: {exc}\n{traceback.format_exc()}")
+
+    # Parse results
+    results_path = Path(cwd) / config.convergence.requirements_dir / "E2E_RESULTS.md"
+    report = parse_e2e_results(results_path)
+    return cost, report
+
+
+async def _run_frontend_e2e_tests(
+    cwd: str | None,
+    config: AgentTeamConfig,
+    app_info,  # AppTypeInfo
+    task_text: str | None = None,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    depth: str = "standard",
+) -> tuple[float, E2ETestReport]:
+    """Run frontend Playwright E2E tests via sub-orchestrator session."""
+    print_info("Running frontend Playwright E2E tests...")
+
+    prompt = FRONTEND_E2E_PROMPT.format(
+        requirements_dir=config.convergence.requirements_dir,
+        test_port=config.e2e_testing.test_port,
+        framework=app_info.frontend_framework,
+        start_command=app_info.start_command,
+        frontend_directory=app_info.frontend_directory or "src/",
+        task_text=task_text or "",
+    )
+
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text, depth=depth, backend=_backend)
+    phase_costs: dict[str, float] = {}
+    cost = 0.0
+
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(prompt)
+            cost = await _process_response(client, config, phase_costs, current_phase="e2e_frontend")
+            if intervention:
+                cost += await _drain_interventions(client, intervention, config, phase_costs)
+    except Exception as exc:
+        print_warning(f"Frontend E2E test pass failed: {exc}\n{traceback.format_exc()}")
+
+    results_path = Path(cwd) / config.convergence.requirements_dir / "E2E_RESULTS.md"
+    report = parse_e2e_results(results_path)
+    return cost, report
+
+
+async def _run_e2e_fix(
+    cwd: str | None,
+    config: AgentTeamConfig,
+    failures: list[str],
+    test_type: str,  # "backend_api" or "frontend_playwright"
+    task_text: str | None = None,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    depth: str = "standard",
+) -> float:
+    """Run a recovery pass to fix E2E test failures."""
+    if not failures:
+        return 0.0
+
+    print_info(f"Running E2E fix pass for {test_type} ({len(failures)} failures)")
+
+    failures_text = "\n".join(f"  - {f}" for f in failures[:20])
+
+    prompt = E2E_FIX_PROMPT.format(
+        requirements_dir=config.convergence.requirements_dir,
+        test_type=test_type,
+        failures=failures_text,
+        task_text=task_text or "",
+    )
+
+    # Inject fix cycle log instructions (if enabled)
+    fix_log_section = ""
+    if config.tracking_documents.fix_cycle_log:
+        try:
+            from .tracking_documents import initialize_fix_cycle_log, build_fix_cycle_entry, FIX_CYCLE_LOG_INSTRUCTIONS
+            req_dir_str = str(Path(cwd or ".") / config.convergence.requirements_dir)
+            initialize_fix_cycle_log(req_dir_str)
+            cycle_entry = build_fix_cycle_entry(
+                phase=f"E2E {test_type}",
+                cycle_number=1,
+                failures=failures[:20],
+            )
+            fix_log_section = (
+                f"\n\n{FIX_CYCLE_LOG_INSTRUCTIONS.format(requirements_dir=req_dir_str)}\n\n"
+                f"Current fix cycle entry (append your results to this):\n{cycle_entry}\n"
+            )
+        except Exception:
+            pass  # Non-critical — don't block fix if log fails
+
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text, depth=depth, backend=_backend)
+    phase_costs: dict[str, float] = {}
+    cost = 0.0
+
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(prompt + fix_log_section)
+            cost = await _process_response(client, config, phase_costs, current_phase="e2e_fix")
+            if intervention:
+                cost += await _drain_interventions(client, intervention, config, phase_costs)
+    except Exception as exc:
+        print_warning(f"E2E fix pass failed: {exc}\n{traceback.format_exc()}")
+
+    return cost
+
+
+# ---------------------------------------------------------------------------
+# PRD Reconciliation Prompt
+# ---------------------------------------------------------------------------
+
+PRD_RECONCILIATION_PROMPT = """\
+[PHASE: PRD RECONCILIATION — QUANTITATIVE CLAIM VERIFICATION]
+
+You are a dedicated verification agent. Your ONLY job is to compare the PRD's
+quantitative claims against the actual codebase implementation and produce a
+report.
+
+STEP 1 — READ THE PRD:
+Read {requirements_dir}/REQUIREMENTS.md (and any milestone REQUIREMENTS.md files).
+Extract EVERY quantitative or countable claim, for example:
+  - "N scenarios", "M user roles", "K dashboard widgets", "L API endpoints"
+  - "supports X file formats", "Y-step wizard", "Z CRUD operations"
+  - Specific feature lists ("bidder management, evaluator scoring, …")
+
+STEP 2 — VERIFY AGAINST CODE:
+For each claim, search the codebase to verify:
+  - Route/page/component counts match stated numbers
+  - Feature lists are fully implemented (not partially)
+  - Data models have all stated fields
+  - API endpoints exist for all stated operations
+  - UI components exist for all stated widgets/sections
+
+STEP 3 — WRITE REPORT:
+Write the report to {requirements_dir}/PRD_RECONCILIATION.md using this format:
+
+# PRD Reconciliation Report
+
+## VERIFIED (claim matches implementation)
+- [Claim]: [Evidence — file paths, counts]
+
+### MISMATCH (claim does NOT match implementation)
+- [Claim]: PRD says [X], found [Y]. Files: [paths]
+- [Claim]: PRD says [X], found [Y]. Files: [paths]
+
+## SUMMARY
+- Total claims checked: N
+- Verified: N
+- Mismatches: N
+
+RULES:
+- Be PRECISE. Count actual files/routes/components, not estimates.
+- Only flag REAL mismatches, not stylistic differences.
+- If a claim is ambiguous, note it as "AMBIGUOUS" (not a mismatch).
+- A missing feature is a mismatch. An extra feature is NOT a mismatch.
+
+{task_text}
+"""
+
+
+async def _run_prd_reconciliation(
+    cwd: str | None,
+    config: AgentTeamConfig,
+    task_text: str | None = None,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    depth: str = "standard",
+) -> float:
+    """Run PRD reconciliation via sub-orchestrator session.
+
+    Deploys an LLM agent to compare quantitative PRD claims against the
+    actual codebase and write PRD_RECONCILIATION.md with findings.
+    """
+    print_info("Running PRD reconciliation check...")
+
+    prompt = PRD_RECONCILIATION_PROMPT.format(
+        requirements_dir=config.convergence.requirements_dir,
+        task_text=f"\n[ORIGINAL USER REQUEST]\n{task_text}" if task_text else "",
+    )
+
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text, depth=depth, backend=_backend)
+    phase_costs: dict[str, float] = {}
+    cost = 0.0
+
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(prompt)
+            cost = await _process_response(client, config, phase_costs, current_phase="prd_reconciliation")
+            if intervention:
+                cost += await _drain_interventions(client, intervention, config, phase_costs)
+    except Exception as exc:
+        print_warning(f"PRD reconciliation pass failed: {exc}\n{traceback.format_exc()}")
+
+    return cost
+
+
+# ---------------------------------------------------------------------------
+# Milestone Handoff Details Generation
+# ---------------------------------------------------------------------------
+
+HANDOFF_GENERATION_PROMPT = """\
+[PHASE: MILESTONE HANDOFF DOCUMENTATION]
+
+Milestone {milestone_id} ({milestone_title}) just completed.
+You must document EVERY interface this milestone exposes for subsequent milestones.
+
+STEP 1: Read {requirements_path} to understand what was built.
+
+STEP 2: Scan the codebase for:
+- API endpoints (route files, controllers): extract path, method, auth, request/response shapes
+- Database schema (migrations, models): extract table names, column names, types
+- Enum/status values: for EVERY entity with a status/type/enum field, extract ALL valid values,
+  the DB storage type (string vs int), and the exact string used in API responses
+- Environment variables (configs, .env): extract variable names and purposes
+
+STEP 3: Update {requirements_dir}/MILESTONE_HANDOFF.md — find the section for {milestone_id}
+and fill in ALL tables:
+- Exposed Interfaces table: EVERY endpoint with exact path, method, auth, request body schema,
+  response schema (include field names AND types)
+- Database State: ALL tables with columns and types
+- Enum/Status Values table: EVERY entity with enum/status fields — list ALL valid values,
+  DB type, and exact API string. This is CRITICAL for preventing cross-milestone mismatches.
+- Environment Variables: ALL env vars with descriptions
+- Known Limitations: Anything not yet implemented
+
+Be EXHAUSTIVE. A vague entry like "returns tender object" is NOT acceptable.
+Write: {{ id: string, title: string, status: "draft"|"active"|"closed", createdAt: string (ISO8601) }}
+
+[ORIGINAL USER REQUEST]
+{task_text}"""
+
+
+async def _generate_handoff_details(
+    cwd: str | None,
+    config: AgentTeamConfig,
+    milestone_id: str,
+    milestone_title: str,
+    requirements_path: str,
+    task_text: str | None = None,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    depth: str = "standard",
+) -> float:
+    """Run a sub-orchestrator session to fill in MILESTONE_HANDOFF.md details.
+
+    Reads the milestone's code and populates the handoff section with actual
+    endpoint details, DB state, env vars. Returns the cost.
+    """
+    print_info(f"Generating handoff details for {milestone_id}...")
+
+    prompt = HANDOFF_GENERATION_PROMPT.format(
+        milestone_id=milestone_id,
+        milestone_title=milestone_title,
+        requirements_path=requirements_path,
+        requirements_dir=config.convergence.requirements_dir,
+        task_text=task_text or "",
+    )
+
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text, depth=depth, backend=_backend)
+    phase_costs: dict[str, float] = {}
+    cost = 0.0
+
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(prompt)
+            cost = await _process_response(client, config, phase_costs, current_phase="handoff_generation")
+            if intervention:
+                cost += await _drain_interventions(client, intervention, config, phase_costs)
+    except Exception as exc:
+        print_warning(f"Handoff details generation for {milestone_id} failed: {exc}\n{traceback.format_exc()}")
+
+    return cost
+
+
+async def _run_integrity_fix(
+    cwd: str | None,
+    config: AgentTeamConfig,
+    violations: list,
+    scan_type: str,  # "deployment", "asset", "database_dual_orm", "database_defaults", or "database_relationships"
+    task_text: str | None = None,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    depth: str = "standard",
+) -> float:
+    """Run a recovery pass to fix integrity violations.
+
+    Creates a focused prompt listing each violation and instructing the
+    orchestrator to deploy code-writers to fix the issues.
+
+    Supported scan_type values:
+      - "deployment": Docker-compose config issues (DEPLOY-001..004)
+      - "asset": Broken static asset references (ASSET-001..003)
+      - "database_dual_orm": ORM/SQL type mismatches (DB-001..003)
+      - "database_defaults": Missing default values (DB-004..005)
+      - "database_relationships": Incomplete relationship config (DB-006..008)
+    """
+    if not violations:
+        return 0.0
+
+    print_info(f"Running {scan_type} integrity fix pass ({len(violations)} violations)")
+
+    violations_text = "\n".join(
+        f"  - [{v.check}] {v.file_path}:{v.line} — {v.message}"
+        for v in violations[:20]
+    )
+
+    if scan_type == "deployment":
+        fix_prompt = (
+            f"[PHASE: DEPLOYMENT INTEGRITY FIX]\n\n"
+            f"The following deployment configuration issues were detected.\n"
+            f"Fix each issue to ensure the app can be deployed correctly.\n\n"
+            f"Violations found:\n{violations_text}\n\n"
+            f"INSTRUCTIONS:\n"
+            f"1. DEPLOY-001 (port mismatch): Update app listen port to match docker-compose,\n"
+            f"   or update docker-compose to expose the correct port.\n"
+            f"2. DEPLOY-002 (undefined env var): Add missing env vars to .env / .env.example,\n"
+            f"   or add defaults in the code (process.env.VAR || 'default').\n"
+            f"3. DEPLOY-003 (CORS): Verify CORS origin matches deployment URL, or use env var.\n"
+            f"4. DEPLOY-004 (service name): Update connection string to use correct docker-compose\n"
+            f"   service name, or add the service to docker-compose.\n"
+            f"\n[ORIGINAL USER REQUEST]\n{task_text or ''}"
+        )
+    elif scan_type == "database_dual_orm":
+        fix_prompt = (
+            f"[PHASE: DATABASE DUAL ORM FIX]\n\n"
+            f"The following ORM/raw-SQL type mismatches were detected.\n"
+            f"Fix each issue so ORM models and raw SQL queries use consistent types.\n\n"
+            f"Violations found:\n{violations_text}\n\n"
+            f"INSTRUCTIONS:\n"
+            f"1. DB-001 (enum mismatch): Use the ORM enum type in raw SQL instead of\n"
+            f"   hardcoded integer or string literals. E.g., use parameterized queries\n"
+            f"   with the enum value, or cast properly.\n"
+            f"2. DB-002 (boolean mismatch): Use proper boolean values (true/false) in\n"
+            f"   raw SQL instead of 0/1 integers, or use parameterized queries.\n"
+            f"3. DB-003 (datetime mismatch): Use parameterized datetime values instead\n"
+            f"   of hardcoded date string literals in raw SQL.\n"
+            f"\n[ORIGINAL USER REQUEST]\n{task_text or ''}"
+        )
+    elif scan_type == "database_defaults":
+        fix_prompt = (
+            f"[PHASE: DATABASE DEFAULT VALUE FIX]\n\n"
+            f"The following missing defaults and unsafe nullable access issues were detected.\n"
+            f"Fix each issue to prevent runtime null errors and undefined state.\n\n"
+            f"Violations found:\n{violations_text}\n\n"
+            f"INSTRUCTIONS:\n"
+            f"1. DB-004 (missing default): Add explicit default values to boolean and\n"
+            f"   enum properties. E.g., `= false;` for bools, `= EnumType.Default;`\n"
+            f"   for enums, `@default(false)` for Prisma, `default=False` for Django.\n"
+            f"2. DB-005 (nullable without null check): Add null guards before accessing\n"
+            f"   nullable properties. Use `?.` (optional chaining), `if (prop != null)`,\n"
+            f"   or `if prop is not None:` as appropriate for the language.\n"
+            f"\n[ORIGINAL USER REQUEST]\n{task_text or ''}"
+        )
+    elif scan_type == "database_relationships":
+        fix_prompt = (
+            f"[PHASE: DATABASE RELATIONSHIP FIX]\n\n"
+            f"The following incomplete ORM relationship configurations were detected.\n"
+            f"Fix each issue to ensure relationships are fully wired.\n\n"
+            f"Violations found:\n{violations_text}\n\n"
+            f"INSTRUCTIONS:\n"
+            f"1. DB-006 (FK without navigation): Add a navigation property for the FK.\n"
+            f"   E.g., add `public virtual Entity Entity {{ get; set; }}` in C#,\n"
+            f"   or `@ManyToOne(() => Entity)` in TypeORM.\n"
+            f"2. DB-007 (navigation without inverse): Add an inverse navigation on the\n"
+            f"   related entity. E.g., `public virtual ICollection<T> Items {{ get; set; }}`\n"
+            f"   or `@OneToMany(() => T, t => t.parent)` in TypeORM.\n"
+            f"3. DB-008 (FK without config): Add relationship configuration in\n"
+            f"   OnModelCreating / entity configuration. E.g., `.HasOne().WithMany()`\n"
+            f"   or add the navigation property and FK attribute.\n"
+            f"\n[ORIGINAL USER REQUEST]\n{task_text or ''}"
+        )
+    else:
+        fix_prompt = (
+            f"[PHASE: ASSET INTEGRITY FIX]\n\n"
+            f"The following broken asset references were detected.\n"
+            f"Fix each reference so the asset loads correctly at runtime.\n\n"
+            f"Violations found:\n{violations_text}\n\n"
+            f"INSTRUCTIONS:\n"
+            f"1. ASSET-001 (broken src/href): Fix the path or add the missing asset file.\n"
+            f"2. ASSET-002 (broken CSS url): Fix the path in the CSS/SCSS file.\n"
+            f"3. ASSET-003 (broken import/require): Fix the import path or add the file.\n"
+            f"4. Prefer fixing paths over adding placeholder files.\n"
+            f"5. If an asset truly does not exist, remove the reference.\n"
+            f"\n[ORIGINAL USER REQUEST]\n{task_text or ''}"
+        )
+
+    # Inject fix cycle log instructions (if enabled)
+    fix_log_section = ""
+    if config.tracking_documents.fix_cycle_log:
+        try:
+            from .tracking_documents import initialize_fix_cycle_log, build_fix_cycle_entry, FIX_CYCLE_LOG_INSTRUCTIONS
+            req_dir_str = str(Path(cwd or ".") / config.convergence.requirements_dir)
+            initialize_fix_cycle_log(req_dir_str)
+            cycle_entry = build_fix_cycle_entry(
+                phase=f"Integrity ({scan_type})",
+                cycle_number=1,
+                failures=[f"[{v.check}] {v.file_path}:{v.line} — {v.message}" for v in violations[:20]],
+            )
+            fix_log_section = (
+                f"\n\n{FIX_CYCLE_LOG_INSTRUCTIONS.format(requirements_dir=req_dir_str)}\n\n"
+                f"Current fix cycle entry (append your results to this):\n{cycle_entry}\n"
+            )
+        except Exception:
+            pass  # Non-critical — don't block fix if log fails
+
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text, depth=depth, backend=_backend)
+    phase_costs: dict[str, float] = {}
+    cost = 0.0
+
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(fix_prompt + fix_log_section)
+            cost = await _process_response(client, config, phase_costs, current_phase=f"{scan_type}_integrity_fix")
+            if intervention:
+                cost += await _drain_interventions(client, intervention, config, phase_costs)
+    except Exception as exc:
+        print_warning(f"{scan_type.capitalize()} integrity fix pass failed: {exc}\n{traceback.format_exc()}")
+
+    return cost
+
+
+def _save_milestone_progress(
+    cwd: str | None,
+    config: AgentTeamConfig,
+    milestone_id: str,
+    completed_milestones: list[str],
+    error_type: str,
+) -> None:
+    """Save milestone progress for resume after interrupt."""
+    import json
+    from datetime import datetime
+    progress_path = (
+        Path(cwd or ".") / config.convergence.requirements_dir / "milestone_progress.json"
+    )
+    progress = {
+        "interrupted_milestone": milestone_id,
+        "completed_milestones": completed_milestones,
+        "error_type": error_type,
+        "timestamp": datetime.now().isoformat(),
+    }
+    progress_path.parent.mkdir(parents=True, exist_ok=True)
+    progress_path.write_text(json.dumps(progress, indent=2))
 
 
 # ---------------------------------------------------------------------------
@@ -1563,7 +2525,7 @@ def _display_per_milestone_health(cwd: str, config: AgentTeamConfig) -> None:
             )
 
 
-def _run_review_only(
+async def _run_review_only(
     cwd: str,
     config: AgentTeamConfig,
     constraints: list | None = None,
@@ -1572,16 +2534,32 @@ def _run_review_only(
     checked: int = 0,
     total: int = 0,
     review_cycles: int = 0,
+    requirements_path: str | None = None,
+    depth: str = "standard",
 ) -> float:
     """Run a review-only recovery pass when convergence health check detects failures.
 
     Creates a focused orchestrator prompt that forces the review fleet deployment.
     Adapts the prompt based on whether this is a zero-cycle failure or a partial-review
     failure (review fleet deployed but did not cover enough items).
+
+    Parameters
+    ----------
+    requirements_path : str | None
+        Optional milestone-scoped requirements path.  When ``None``, defaults
+        to the top-level ``<requirements_dir>/<requirements_file>``.
+    depth : str
+        Depth level for building SDK options.
+
     Returns cost of the recovery pass.
     """
     is_zero_cycle = checked == 0 and total > 0
     unchecked_count = total - checked
+
+    req_reference = (
+        requirements_path
+        or f"{config.convergence.requirements_dir}/{config.convergence.requirements_file}"
+    )
 
     if is_zero_cycle:
         situation = (
@@ -1598,26 +2576,42 @@ def _run_review_only(
     review_prompt = (
         f"{situation}\n\n"
         "You MUST do the following NOW:\n"
-        f"1. Read {config.convergence.requirements_dir}/{config.convergence.requirements_file}\n"
+        f"1. Read {req_reference}\n"
         "2. Deploy the REVIEW FLEET (code-reviewer agents) to verify EACH unchecked item\n"
         "3. For each item, find the implementation and verify correctness\n"
         "4. Mark items [x] ONLY if fully implemented, or document issues in Review Log\n"
         "5. ALWAYS update (review_cycles: N) to (review_cycles: N+1) on EVERY evaluated item\n"
-        "6. Deploy TEST RUNNER agents to run tests\n"
-        f"7. Report final convergence status: target {total}/{total} requirements checked\n\n"
+        "6. If issues found, deploy DEBUGGER FLEET to fix them, then re-review\n"
+        "7. Check for mock data in service files — any of(), delay(), mockData patterns\n"
+        "   must be replaced with REAL API calls\n"
+        "8. Deploy TEST RUNNER agents to run tests\n"
+        f"9. Report final convergence status: target {total}/{total} requirements checked\n\n"
         "This is NOT optional. The system has detected a convergence failure and this "
         "review pass is MANDATORY."
     )
 
-    options = _build_options(config, cwd, constraints=constraints, task_text=task_text, backend=_backend)
-    phase_costs: dict[str, float] = {}
+    # Inject fix cycle log instructions (if enabled)
+    fix_log_section = ""
+    if config.tracking_documents.fix_cycle_log:
+        try:
+            from .tracking_documents import initialize_fix_cycle_log, build_fix_cycle_entry, FIX_CYCLE_LOG_INSTRUCTIONS
+            req_dir_str = str(Path(cwd or ".") / config.convergence.requirements_dir)
+            initialize_fix_cycle_log(req_dir_str)
+            cycle_entry = build_fix_cycle_entry(
+                phase="Review Recovery",
+                cycle_number=1,
+                failures=["review recovery"],
+            )
+            fix_log_section = (
+                f"\n\n{FIX_CYCLE_LOG_INSTRUCTIONS.format(requirements_dir=req_dir_str)}\n\n"
+                f"Current fix cycle entry (append your results to this):\n{cycle_entry}\n"
+            )
+        except Exception:
+            pass  # Non-critical — don't block fix if log fails
+    review_prompt += fix_log_section
 
-    async def _recovery() -> float:
-        async with ClaudeSDKClient(options=options) as client:
-            await client.query(review_prompt)
-            cost = await _process_response(client, config, phase_costs, current_phase="review_recovery")
-            cost += await _drain_interventions(client, intervention, config, phase_costs)
-        return cost
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text, depth=depth, backend=_backend)
+    phase_costs: dict[str, float] = {}
 
     if is_zero_cycle:
         print_warning("Convergence health check FAILED: 0 review cycles detected.")
@@ -1627,7 +2621,12 @@ def _run_review_only(
             f"requirements still unchecked after {review_cycles} review cycles."
         )
     print_info("Launching review-only recovery pass...")
-    return asyncio.run(_recovery())
+
+    async with ClaudeSDKClient(options=options) as client:
+        await client.query(review_prompt)
+        cost = await _process_response(client, config, phase_costs, current_phase="review_recovery")
+        cost += await _drain_interventions(client, intervention, config, phase_costs)
+    return cost
 
 
 def _run_contract_generation(
@@ -2096,9 +3095,11 @@ def main() -> None:
     if design_ref_urls:
         from .design_reference import (
             DesignExtractionError,
+            generate_fallback_ui_requirements,
             load_ui_requirements,
-            run_design_extraction,
+            run_design_extraction_with_retry,
             validate_ui_requirements,
+            validate_ui_requirements_content,
         )
         from .mcp_servers import is_firecrawl_available
 
@@ -2125,8 +3126,28 @@ def main() -> None:
 
         # Only run extraction if we don't have valid content yet
         if ui_requirements_content is None:
+            _fallback = config.design_reference.fallback_generation
+
             if not is_firecrawl_available(config):
-                if _require:
+                if _fallback:
+                    print_warning(
+                        "Phase 0.6: Firecrawl unavailable — generating fallback UI requirements."
+                    )
+                    try:
+                        ui_requirements_content = generate_fallback_ui_requirements(
+                            task=args.task, config=config, cwd=cwd,
+                        )
+                        print_success(
+                            f"Phase 0.6: Fallback {req_dir}/{ui_file} generated "
+                            f"(heuristic defaults — review recommended)"
+                        )
+                    except Exception as exc:
+                        if _require:
+                            print_error(f"Phase 0.6: Fallback generation failed: {exc}")
+                            sys.exit(1)
+                        else:
+                            print_warning(f"Phase 0.6: Fallback generation failed: {exc}")
+                elif _require:
                     print_error(
                         "Phase 0.6: Design reference URLs provided but Firecrawl is unavailable "
                         "(FIRECRAWL_API_KEY not set or firecrawl disabled). "
@@ -2139,20 +3160,26 @@ def main() -> None:
                         "URLs will be passed as soft instructions to orchestrator."
                     )
             else:
+                _retries = config.design_reference.extraction_retries
                 print_info(
-                    f"Phase 0.6: Extracting design references → {req_dir}/{ui_file}"
+                    f"Phase 0.6: Extracting design references → {req_dir}/{ui_file} "
+                    f"(retries={_retries})"
                 )
                 for url in design_ref_urls:
                     print_info(f"  - {url}")
 
                 try:
-                    content, extraction_cost = asyncio.run(run_design_extraction(
-                        urls=design_ref_urls,
-                        config=config,
-                        cwd=cwd,
-                        backend=_backend,
-                    ))
-                    # Validate output
+                    content, extraction_cost = asyncio.run(
+                        run_design_extraction_with_retry(
+                            urls=design_ref_urls,
+                            config=config,
+                            cwd=cwd,
+                            backend=_backend,
+                            max_retries=_retries,
+                        )
+                    )
+
+                    # Validate section headers
                     missing = validate_ui_requirements(content)
                     if missing:
                         msg = (
@@ -2165,13 +3192,55 @@ def main() -> None:
                         else:
                             print_warning(msg + " — continuing with partial content")
 
+                    # Content quality check (if enabled)
+                    if config.design_reference.content_quality_check:
+                        quality_issues = validate_ui_requirements_content(content)
+                        if quality_issues and _fallback:
+                            print_warning(
+                                f"Phase 0.6: Content quality issues detected: "
+                                f"{'; '.join(quality_issues)}. Generating fallback instead."
+                            )
+                            content = generate_fallback_ui_requirements(
+                                task=args.task, config=config, cwd=cwd,
+                            )
+                        elif quality_issues:
+                            for issue in quality_issues:
+                                print_warning(f"Phase 0.6: Quality issue: {issue}")
+
                     ui_requirements_content = content
-                    cost_str = f" (${extraction_cost:.4f})" if _backend == "api" and extraction_cost > 0 else ""
+                    cost_str = (
+                        f" (${extraction_cost:.4f})"
+                        if _backend == "api" and extraction_cost > 0
+                        else ""
+                    )
                     print_success(
                         f"Phase 0.6: {req_dir}/{ui_file} created successfully{cost_str}"
                     )
                 except DesignExtractionError as exc:
-                    if _require:
+                    # All retries exhausted — try fallback
+                    if _fallback:
+                        print_warning(
+                            f"Phase 0.6: Extraction failed after retries: {exc}. "
+                            f"Generating fallback."
+                        )
+                        try:
+                            ui_requirements_content = generate_fallback_ui_requirements(
+                                task=args.task, config=config, cwd=cwd,
+                            )
+                            print_success(
+                                f"Phase 0.6: Fallback {req_dir}/{ui_file} generated"
+                            )
+                        except Exception as fb_exc:
+                            if _require:
+                                print_error(
+                                    f"Phase 0.6: Both extraction and fallback failed: {fb_exc}"
+                                )
+                                sys.exit(1)
+                            else:
+                                print_warning(
+                                    f"Phase 0.6: Both extraction and fallback failed: {fb_exc}"
+                                )
+                    elif _require:
                         print_error(f"Phase 0.6: Design extraction failed: {exc}")
                         sys.exit(1)
                     else:
@@ -2680,7 +3749,7 @@ def main() -> None:
         recovery_types.append("review_recovery")
         pre_recovery_cycles = convergence_report.review_cycles
         try:
-            recovery_cost = _run_review_only(
+            recovery_cost = asyncio.run(_run_review_only(
                 cwd=cwd,
                 config=config,
                 constraints=constraints,
@@ -2689,7 +3758,7 @@ def main() -> None:
                 checked=convergence_report.checked_requirements,
                 total=convergence_report.total_requirements,
                 review_cycles=convergence_report.review_cycles,
-            )
+            ))
             if _current_state:
                 _current_state.total_cost += recovery_cost
             # Re-check health after recovery
@@ -2714,6 +3783,513 @@ def main() -> None:
         except Exception as exc:
             print_warning(f"Review recovery pass failed: {exc}")
 
+    # -------------------------------------------------------------------
+    # Post-orchestration: Mock data scan (standard + milestone modes)
+    # -------------------------------------------------------------------
+    # In milestone mode, each milestone already runs mock scanning.
+    # For standard (non-milestone) mode, scan here as a final safety net.
+    if not _use_milestones and config.milestone.mock_data_scan:
+        try:
+            from .quality_checks import run_mock_data_scan
+            mock_violations = run_mock_data_scan(Path(cwd))
+            if mock_violations:
+                print_warning(
+                    f"Post-orchestration mock data scan: {len(mock_violations)} "
+                    f"mock data violation(s) found in service files."
+                )
+                recovery_types.append("mock_data_fix")
+                try:
+                    mock_fix_cost = asyncio.run(_run_mock_data_fix(
+                        cwd=cwd,
+                        config=config,
+                        mock_violations=mock_violations,
+                        task_text=args.task,
+                        constraints=constraints,
+                        intervention=intervention,
+                        depth=depth if not _use_milestones else "standard",
+                    ))
+                    if _current_state:
+                        _current_state.total_cost += mock_fix_cost
+                except Exception as exc:
+                    print_warning(f"Mock data fix recovery failed: {exc}")
+        except Exception as exc:
+            print_warning(f"Mock data scan failed: {exc}")
+
+    # -------------------------------------------------------------------
+    # Post-orchestration: UI compliance scan (standard mode only)
+    # -------------------------------------------------------------------
+    # In milestone mode, each milestone already runs UI compliance scanning.
+    # For standard (non-milestone) mode, scan here as a final safety net.
+    if not _use_milestones and config.milestone.ui_compliance_scan:
+        try:
+            from .quality_checks import run_ui_compliance_scan
+            ui_violations = run_ui_compliance_scan(Path(cwd))
+            if ui_violations:
+                print_warning(
+                    f"Post-orchestration UI compliance scan: {len(ui_violations)} "
+                    f"UI compliance violation(s) found."
+                )
+                recovery_types.append("ui_compliance_fix")
+                try:
+                    ui_fix_cost = asyncio.run(_run_ui_compliance_fix(
+                        cwd=cwd,
+                        config=config,
+                        ui_violations=ui_violations,
+                        task_text=args.task,
+                        constraints=constraints,
+                        intervention=intervention,
+                        depth=depth if not _use_milestones else "standard",
+                    ))
+                    if _current_state:
+                        _current_state.total_cost += ui_fix_cost
+                except Exception as exc:
+                    print_warning(f"UI compliance fix recovery failed: {exc}")
+        except Exception as exc:
+            print_warning(f"UI compliance scan failed: {exc}")
+
+    # -------------------------------------------------------------------
+    # Post-orchestration: Integrity Scans (deployment, asset, PRD)
+    # -------------------------------------------------------------------
+    # Scan 1: Deployment integrity — docker-compose vs code consistency
+    if config.integrity_scans.deployment_scan:
+        try:
+            from .quality_checks import run_deployment_scan
+            deploy_violations = run_deployment_scan(Path(cwd))
+            if deploy_violations:
+                print_warning(
+                    f"Deployment integrity scan: {len(deploy_violations)} "
+                    f"issue(s) found."
+                )
+                recovery_types.append("deployment_integrity_fix")
+                try:
+                    deploy_fix_cost = asyncio.run(_run_integrity_fix(
+                        cwd=cwd,
+                        config=config,
+                        violations=deploy_violations,
+                        scan_type="deployment",
+                        task_text=args.task,
+                        constraints=constraints,
+                        intervention=intervention,
+                        depth=depth if not _use_milestones else "standard",
+                    ))
+                    if _current_state:
+                        _current_state.total_cost += deploy_fix_cost
+                except Exception as exc:
+                    print_warning(f"Deployment integrity fix failed: {exc}")
+        except Exception as exc:
+            print_warning(f"Deployment integrity scan failed: {exc}")
+
+    # Scan 2: Asset integrity — broken static references
+    if config.integrity_scans.asset_scan:
+        try:
+            from .quality_checks import run_asset_scan
+            asset_violations = run_asset_scan(Path(cwd))
+            if asset_violations:
+                print_warning(
+                    f"Asset integrity scan: {len(asset_violations)} "
+                    f"broken reference(s) found."
+                )
+                recovery_types.append("asset_integrity_fix")
+                try:
+                    asset_fix_cost = asyncio.run(_run_integrity_fix(
+                        cwd=cwd,
+                        config=config,
+                        violations=asset_violations,
+                        scan_type="asset",
+                        task_text=args.task,
+                        constraints=constraints,
+                        intervention=intervention,
+                        depth=depth if not _use_milestones else "standard",
+                    ))
+                    if _current_state:
+                        _current_state.total_cost += asset_fix_cost
+                except Exception as exc:
+                    print_warning(f"Asset integrity fix failed: {exc}")
+        except Exception as exc:
+            print_warning(f"Asset integrity scan failed: {exc}")
+
+    # Scan 3: PRD reconciliation — quantitative claim verification (LLM-based)
+    if config.integrity_scans.prd_reconciliation:
+        try:
+            prd_recon_cost = asyncio.run(_run_prd_reconciliation(
+                cwd=cwd,
+                config=config,
+                task_text=args.task,
+                constraints=constraints,
+                intervention=intervention,
+                depth=depth if not _use_milestones else "standard",
+            ))
+            if _current_state:
+                _current_state.total_cost += prd_recon_cost
+
+            # Parse the generated report for violations
+            from .quality_checks import parse_prd_reconciliation
+            recon_path = Path(cwd) / config.convergence.requirements_dir / "PRD_RECONCILIATION.md"
+            prd_violations = parse_prd_reconciliation(recon_path)
+            if prd_violations:
+                print_warning(
+                    f"PRD reconciliation: {len(prd_violations)} "
+                    f"mismatch(es) found between PRD claims and implementation."
+                )
+                recovery_types.append("prd_reconciliation_mismatch")
+        except Exception as exc:
+            print_warning(f"PRD reconciliation scan failed: {exc}")
+
+    # -------------------------------------------------------------------
+    # Post-orchestration: Database Integrity Scans
+    # -------------------------------------------------------------------
+
+    # Scan 1: Dual ORM type consistency
+    if config.database_scans.dual_orm_scan:
+        try:
+            from .quality_checks import run_dual_orm_scan
+
+            db_dual_violations = run_dual_orm_scan(Path(cwd))
+            if db_dual_violations:
+                print_warning(
+                    f"Dual ORM scan: {len(db_dual_violations)} "
+                    f"type mismatch(es) found."
+                )
+                recovery_types.append("database_dual_orm_fix")
+                try:
+                    fix_cost = asyncio.run(
+                        _run_integrity_fix(
+                            cwd=cwd,
+                            config=config,
+                            violations=db_dual_violations,
+                            scan_type="database_dual_orm",
+                            task_text=args.task,
+                            constraints=constraints,
+                            intervention=intervention,
+                            depth=depth if not _use_milestones else "standard",
+                        )
+                    )
+                    if _current_state:
+                        _current_state.total_cost += fix_cost
+                except Exception as exc:
+                    print_warning(
+                        f"Database dual ORM fix recovery failed: {exc}\n"
+                        f"{traceback.format_exc()}"
+                    )
+        except Exception as exc:
+            print_warning(f"Dual ORM scan failed: {exc}")
+
+    # Scan 2: Default value & nullability
+    if config.database_scans.default_value_scan:
+        try:
+            from .quality_checks import run_default_value_scan
+
+            db_default_violations = run_default_value_scan(Path(cwd))
+            if db_default_violations:
+                print_warning(
+                    f"Default value scan: {len(db_default_violations)} "
+                    f"issue(s) found."
+                )
+                recovery_types.append("database_default_value_fix")
+                try:
+                    fix_cost = asyncio.run(
+                        _run_integrity_fix(
+                            cwd=cwd,
+                            config=config,
+                            violations=db_default_violations,
+                            scan_type="database_defaults",
+                            task_text=args.task,
+                            constraints=constraints,
+                            intervention=intervention,
+                            depth=depth if not _use_milestones else "standard",
+                        )
+                    )
+                    if _current_state:
+                        _current_state.total_cost += fix_cost
+                except Exception as exc:
+                    print_warning(
+                        f"Database default value fix recovery failed: {exc}\n"
+                        f"{traceback.format_exc()}"
+                    )
+        except Exception as exc:
+            print_warning(f"Default value scan failed: {exc}")
+
+    # Scan 3: ORM relationship completeness
+    if config.database_scans.relationship_scan:
+        try:
+            from .quality_checks import run_relationship_scan
+
+            db_rel_violations = run_relationship_scan(Path(cwd))
+            if db_rel_violations:
+                print_warning(
+                    f"Relationship scan: {len(db_rel_violations)} "
+                    f"issue(s) found."
+                )
+                recovery_types.append("database_relationship_fix")
+                try:
+                    fix_cost = asyncio.run(
+                        _run_integrity_fix(
+                            cwd=cwd,
+                            config=config,
+                            violations=db_rel_violations,
+                            scan_type="database_relationships",
+                            task_text=args.task,
+                            constraints=constraints,
+                            intervention=intervention,
+                            depth=depth if not _use_milestones else "standard",
+                        )
+                    )
+                    if _current_state:
+                        _current_state.total_cost += fix_cost
+                except Exception as exc:
+                    print_warning(
+                        f"Database relationship fix recovery failed: {exc}\n"
+                        f"{traceback.format_exc()}"
+                    )
+        except Exception as exc:
+            print_warning(f"Relationship scan failed: {exc}")
+
+    # -------------------------------------------------------------------
+    # Post-orchestration: E2E Testing Phase (after all other scans)
+    # -------------------------------------------------------------------
+    if config.e2e_testing.enabled:
+        if _current_state:
+            _current_state.current_phase = "e2e_testing"
+            try:
+                from .state import save_state as _save_state_e2e
+                _save_state_e2e(_current_state, directory=str(Path(cwd) / ".agent-team"))
+            except Exception:
+                pass
+
+        e2e_report = E2ETestReport()
+        e2e_cost = 0.0
+
+        try:
+            app_info = detect_app_type(Path(cwd))
+
+            # Generate E2E Coverage Matrix (if enabled)
+            if config.tracking_documents.e2e_coverage_matrix:
+                try:
+                    from .tracking_documents import generate_e2e_coverage_matrix
+                    req_dir = Path(cwd) / config.convergence.requirements_dir
+                    req_file = req_dir / "REQUIREMENTS.md"
+                    if req_file.is_file():
+                        req_content = req_file.read_text(encoding="utf-8")
+                        matrix_content = generate_e2e_coverage_matrix(
+                            requirements_content=req_content,
+                            app_info=app_info,
+                        )
+                        matrix_path = req_dir / "E2E_COVERAGE_MATRIX.md"
+                        matrix_path.write_text(matrix_content, encoding="utf-8")
+                        print_info(f"Generated E2E coverage matrix: {matrix_path}")
+                except Exception as exc:
+                    print_warning(f"Failed to generate E2E coverage matrix: {exc}")
+
+            # Check completed phases for resume logic
+            backend_already_done = (
+                _current_state
+                and "e2e_backend" in _current_state.completed_phases
+            )
+            frontend_already_done = (
+                _current_state
+                and "e2e_frontend" in _current_state.completed_phases
+            )
+
+            # Part 1: Backend API E2E
+            if (config.e2e_testing.backend_api_tests
+                    and app_info.has_backend
+                    and not backend_already_done):
+                api_cost, api_report = asyncio.run(_run_backend_e2e_tests(
+                    cwd=cwd, config=config, app_info=app_info,
+                    task_text=args.task, constraints=constraints,
+                    intervention=intervention,
+                    depth=depth if not _use_milestones else "standard",
+                ))
+                e2e_cost += api_cost
+                e2e_report.backend_total = api_report.backend_total
+                e2e_report.backend_passed = api_report.backend_passed
+                e2e_report.failed_tests.extend(api_report.failed_tests)
+
+                # Fix loop — only run if health indicates actual test failures
+                retries = 0
+                while (api_report.health not in ("passed", "skipped", "unknown")
+                       and retries < config.e2e_testing.max_fix_retries):
+                    fix_cost = asyncio.run(_run_e2e_fix(
+                        cwd=cwd, config=config,
+                        failures=api_report.failed_tests,
+                        test_type="backend_api",
+                        task_text=args.task, constraints=constraints,
+                        intervention=intervention,
+                        depth=depth if not _use_milestones else "standard",
+                    ))
+                    e2e_cost += fix_cost
+                    rerun_cost, api_report = asyncio.run(_run_backend_e2e_tests(
+                        cwd=cwd, config=config, app_info=app_info,
+                        task_text=args.task, constraints=constraints,
+                        intervention=intervention,
+                        depth=depth if not _use_milestones else "standard",
+                    ))
+                    e2e_cost += rerun_cost
+                    retries += 1
+                    e2e_report.fix_retries_used += 1
+                    e2e_report.total_fix_cycles += 1
+                    # Update report with latest results
+                    e2e_report.backend_total = api_report.backend_total
+                    e2e_report.backend_passed = api_report.backend_passed
+                    e2e_report.failed_tests = api_report.failed_tests[:]
+
+                if api_report.health not in ("passed", "skipped"):
+                    recovery_types.append("e2e_backend_fix")
+
+                # Only mark backend phase complete when tests actually ran and passed (or partial)
+                if _current_state and api_report.health in ("passed", "partial"):
+                    _current_state.completed_phases.append("e2e_backend")
+                    try:
+                        from .state import save_state as _save_state_e2e2
+                        _save_state_e2e2(_current_state, directory=str(Path(cwd) / ".agent-team"))
+                    except Exception:
+                        pass
+
+            elif backend_already_done:
+                print_info("Resuming: e2e_backend already completed, skipping")
+            elif config.e2e_testing.skip_if_no_api and not app_info.has_backend:
+                e2e_report.skipped = True
+                e2e_report.skip_reason = "No backend API detected"
+
+            # Compute backend pass rate for frontend gate
+            if e2e_report.backend_total > 0:
+                backend_pass_rate = e2e_report.backend_passed / e2e_report.backend_total
+            else:
+                backend_pass_rate = 1.0
+            backend_ok = (
+                not config.e2e_testing.backend_api_tests
+                or not app_info.has_backend
+                or backend_pass_rate >= 0.7
+            )
+
+            if backend_ok and 0.7 <= backend_pass_rate < 1.0:
+                print_warning(
+                    f"Backend API E2E: {backend_pass_rate * 100:.0f}% passed — "
+                    "proceeding with frontend E2E (some failures may be backend-related)"
+                )
+
+            # Part 2: Frontend Playwright
+            if (config.e2e_testing.frontend_playwright_tests
+                    and app_info.has_frontend
+                    and backend_ok
+                    and not frontend_already_done):
+                pw_cost, pw_report = asyncio.run(_run_frontend_e2e_tests(
+                    cwd=cwd, config=config, app_info=app_info,
+                    task_text=args.task, constraints=constraints,
+                    intervention=intervention,
+                    depth=depth if not _use_milestones else "standard",
+                ))
+                e2e_cost += pw_cost
+                e2e_report.frontend_total = pw_report.frontend_total
+                e2e_report.frontend_passed = pw_report.frontend_passed
+                e2e_report.failed_tests.extend(pw_report.failed_tests)
+
+                # Fix loop — only run if health indicates actual test failures
+                retries = 0
+                while (pw_report.health not in ("passed", "skipped", "unknown")
+                       and retries < config.e2e_testing.max_fix_retries):
+                    fix_cost = asyncio.run(_run_e2e_fix(
+                        cwd=cwd, config=config,
+                        failures=pw_report.failed_tests,
+                        test_type="frontend_playwright",
+                        task_text=args.task, constraints=constraints,
+                        intervention=intervention,
+                        depth=depth if not _use_milestones else "standard",
+                    ))
+                    e2e_cost += fix_cost
+                    rerun_cost, pw_report = asyncio.run(_run_frontend_e2e_tests(
+                        cwd=cwd, config=config, app_info=app_info,
+                        task_text=args.task, constraints=constraints,
+                        intervention=intervention,
+                        depth=depth if not _use_milestones else "standard",
+                    ))
+                    e2e_cost += rerun_cost
+                    retries += 1
+                    e2e_report.fix_retries_used += 1
+                    e2e_report.total_fix_cycles += 1
+                    e2e_report.frontend_total = pw_report.frontend_total
+                    e2e_report.frontend_passed = pw_report.frontend_passed
+                    e2e_report.failed_tests = pw_report.failed_tests[:]
+
+                if pw_report.health not in ("passed", "skipped"):
+                    recovery_types.append("e2e_frontend_fix")
+
+                # Only mark frontend phase complete when tests actually ran and passed (or partial)
+                if _current_state and pw_report.health in ("passed", "partial"):
+                    _current_state.completed_phases.append("e2e_frontend")
+                    try:
+                        from .state import save_state as _save_state_e2e3
+                        _save_state_e2e3(_current_state, directory=str(Path(cwd) / ".agent-team"))
+                    except Exception:
+                        pass
+
+            elif frontend_already_done:
+                print_info("Resuming: e2e_frontend already completed, skipping")
+            elif config.e2e_testing.skip_if_no_frontend and not app_info.has_frontend:
+                if not e2e_report.skip_reason:
+                    e2e_report.skip_reason = "No frontend detected"
+                print_info("E2E: No frontend detected — skipping Playwright tests")
+            elif not backend_ok:
+                print_warning(
+                    f"E2E: Backend pass rate {backend_pass_rate * 100:.0f}% below 70% threshold — "
+                    "skipping frontend Playwright tests"
+                )
+
+            # Compute overall health
+            total = e2e_report.backend_total + e2e_report.frontend_total
+            passed = e2e_report.backend_passed + e2e_report.frontend_passed
+            if total == 0:
+                e2e_report.health = "skipped"
+                if not e2e_report.skip_reason:
+                    e2e_report.skip_reason = "No tests executed"
+            elif passed == total:
+                e2e_report.health = "passed"
+            elif total > 0 and passed / total >= 0.7:
+                e2e_report.health = "partial"
+            else:
+                e2e_report.health = "failed"
+
+            if _current_state:
+                _current_state.total_cost += e2e_cost
+                _current_state.completed_phases.append("e2e_testing")
+
+            # Display E2E results
+            print_info(
+                f"E2E Testing Phase complete — "
+                f"Health: {e2e_report.health.upper()} | "
+                f"Backend: {e2e_report.backend_passed}/{e2e_report.backend_total} | "
+                f"Frontend: {e2e_report.frontend_passed}/{e2e_report.frontend_total} | "
+                f"Fix cycles: {e2e_report.total_fix_cycles} | "
+                f"Cost: ${e2e_cost:.2f}"
+            )
+
+            # Parse E2E coverage matrix stats (if enabled)
+            if config.tracking_documents.e2e_coverage_matrix:
+                try:
+                    from .tracking_documents import parse_e2e_coverage_matrix
+                    matrix_path = Path(cwd) / config.convergence.requirements_dir / "E2E_COVERAGE_MATRIX.md"
+                    if matrix_path.is_file():
+                        stats = parse_e2e_coverage_matrix(matrix_path.read_text(encoding="utf-8"))
+                        print_info(
+                            f"E2E Coverage: {stats.tests_written}/{stats.total_items} tests written "
+                            f"({stats.coverage_ratio:.0%}), {stats.tests_passed}/{stats.tests_written} passing "
+                            f"({stats.pass_ratio:.0%})"
+                        )
+                        if stats.coverage_ratio < config.tracking_documents.coverage_completeness_gate:
+                            print_warning(
+                                f"E2E coverage ({stats.coverage_ratio:.0%}) below gate "
+                                f"({config.tracking_documents.coverage_completeness_gate:.0%}). "
+                                f"Some requirements may not have E2E tests."
+                            )
+                            recovery_types.append("e2e_coverage_incomplete")
+                except Exception as exc:
+                    print_warning(f"Failed to parse E2E coverage matrix: {exc}")
+
+        except Exception as exc:
+            print_warning(f"E2E testing phase failed: {exc}\n{traceback.format_exc()}")
+            e2e_report.health = "failed"
+            e2e_report.skip_reason = f"Phase error: {exc}"
+
     # Display recovery report if any recovery passes were triggered
     if recovery_types:
         print_recovery_report(len(recovery_types), recovery_types)
@@ -2721,6 +4297,21 @@ def main() -> None:
     if _current_state:
         _current_state.completed_phases.append("post_orchestration")
         _current_state.current_phase = "verification"
+
+        # Persist tracking document artifact paths in state
+        try:
+            _req_dir = Path(cwd) / config.convergence.requirements_dir
+            fix_log_path = _req_dir / "FIX_CYCLE_LOG.md"
+            if fix_log_path.is_file():
+                _current_state.artifacts["fix_cycle_log"] = str(fix_log_path)
+            matrix_path = _req_dir / "E2E_COVERAGE_MATRIX.md"
+            if matrix_path.is_file():
+                _current_state.artifacts["e2e_coverage_matrix"] = str(matrix_path)
+            handoff_path = _req_dir / "MILESTONE_HANDOFF.md"
+            if handoff_path.is_file():
+                _current_state.artifacts["milestone_handoff"] = str(handoff_path)
+        except Exception:
+            pass  # Best-effort artifact tracking
 
     # -------------------------------------------------------------------
     # Post-orchestration: Verification (if enabled)
