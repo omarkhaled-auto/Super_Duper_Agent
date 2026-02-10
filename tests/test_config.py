@@ -403,78 +403,78 @@ class TestDeepMerge:
 
 class TestDictToConfig:
     def test_empty_dict_returns_defaults(self):
-        cfg = _dict_to_config({})
+        cfg, _ = _dict_to_config({})
         assert cfg.orchestrator.model == "opus"
         assert cfg.depth.default == "standard"
 
     def test_orchestrator_section(self):
-        cfg = _dict_to_config({"orchestrator": {"model": "sonnet", "max_turns": 100}})
+        cfg, _ = _dict_to_config({"orchestrator": {"model": "sonnet", "max_turns": 100}})
         assert cfg.orchestrator.model == "sonnet"
         assert cfg.orchestrator.max_turns == 100
 
     def test_depth_section(self):
-        cfg = _dict_to_config({"depth": {"default": "thorough", "auto_detect": False}})
+        cfg, _ = _dict_to_config({"depth": {"default": "thorough", "auto_detect": False}})
         assert cfg.depth.default == "thorough"
         assert cfg.depth.auto_detect is False
 
     def test_convergence_section(self):
-        cfg = _dict_to_config({"convergence": {"max_cycles": 5}})
+        cfg, _ = _dict_to_config({"convergence": {"max_cycles": 5}})
         assert cfg.convergence.max_cycles == 5
 
     def test_interview_section(self):
-        cfg = _dict_to_config({"interview": {"enabled": False, "model": "haiku"}})
+        cfg, _ = _dict_to_config({"interview": {"enabled": False, "model": "haiku"}})
         assert cfg.interview.enabled is False
         assert cfg.interview.model == "haiku"
 
     def test_design_reference_section(self):
-        cfg = _dict_to_config({"design_reference": {"urls": ["https://example.com"], "depth": "branding"}})
+        cfg, _ = _dict_to_config({"design_reference": {"urls": ["https://example.com"], "depth": "branding"}})
         assert cfg.design_reference.urls == ["https://example.com"]
         assert cfg.design_reference.depth == "branding"
 
     def test_display_section(self):
-        cfg = _dict_to_config({"display": {"verbose": True, "show_cost": False}})
+        cfg, _ = _dict_to_config({"display": {"verbose": True, "show_cost": False}})
         assert cfg.display.verbose is True
         assert cfg.display.show_cost is False
 
     def test_agents_section(self):
-        cfg = _dict_to_config({"agents": {"planner": {"enabled": False}}})
+        cfg, _ = _dict_to_config({"agents": {"planner": {"enabled": False}}})
         assert cfg.agents["planner"].enabled is False
 
     def test_mcp_servers_section(self):
-        cfg = _dict_to_config({"mcp_servers": {"firecrawl": {"enabled": False}}})
+        cfg, _ = _dict_to_config({"mcp_servers": {"firecrawl": {"enabled": False}}})
         assert cfg.mcp_servers["firecrawl"].enabled is False
 
     def test_agents_as_non_dict_skipped(self):
         # If agents contains a non-dict value, it should be skipped
-        cfg = _dict_to_config({"agents": {"planner": "invalid"}})
+        cfg, _ = _dict_to_config({"agents": {"planner": "invalid"}})
         # The default planner should remain since "invalid" is not a dict
         assert cfg.agents["planner"].enabled is True
 
     def test_mcp_servers_as_non_dict_skipped(self):
-        cfg = _dict_to_config({"mcp_servers": {"firecrawl": "invalid"}})
+        cfg, _ = _dict_to_config({"mcp_servers": {"firecrawl": "invalid"}})
         assert cfg.mcp_servers["firecrawl"].enabled is True
 
     def test_codebase_map_section(self):
-        cfg = _dict_to_config({"codebase_map": {"enabled": False, "max_files": 1000}})
+        cfg, _ = _dict_to_config({"codebase_map": {"enabled": False, "max_files": 1000}})
         assert cfg.codebase_map.enabled is False
         assert cfg.codebase_map.max_files == 1000
 
     def test_scheduler_section(self):
-        cfg = _dict_to_config({"scheduler": {"enabled": True, "max_parallel_tasks": 3}})
+        cfg, _ = _dict_to_config({"scheduler": {"enabled": True, "max_parallel_tasks": 3}})
         assert cfg.scheduler.enabled is True
         assert cfg.scheduler.max_parallel_tasks == 3
 
     def test_verification_section(self):
-        cfg = _dict_to_config({"verification": {"enabled": True, "blocking": False}})
+        cfg, _ = _dict_to_config({"verification": {"enabled": True, "blocking": False}})
         assert cfg.verification.enabled is True
         assert cfg.verification.blocking is False
 
     def test_orchestrator_max_budget_usd(self):
-        cfg = _dict_to_config({"orchestrator": {"max_budget_usd": 5.0}})
+        cfg, _ = _dict_to_config({"orchestrator": {"max_budget_usd": 5.0}})
         assert cfg.orchestrator.max_budget_usd == 5.0
 
     def test_orchestrator_max_budget_usd_default(self):
-        cfg = _dict_to_config({})
+        cfg, _ = _dict_to_config({})
         assert cfg.orchestrator.max_budget_usd is None
 
 
@@ -486,16 +486,16 @@ class TestLoadConfig:
     def test_no_file_returns_defaults(self, tmp_path, monkeypatch):
         # Use a temp dir with no config.yaml
         monkeypatch.chdir(tmp_path)
-        cfg = load_config()
+        cfg, _ = load_config()
         assert cfg.orchestrator.model == "opus"
 
     def test_explicit_path(self, config_yaml_file):
-        cfg = load_config(config_path=str(config_yaml_file))
+        cfg, _ = load_config(config_path=str(config_yaml_file))
         assert cfg.orchestrator.model == "sonnet"
         assert cfg.orchestrator.max_turns == 200
 
     def test_cli_overrides_merge(self, config_yaml_file):
-        cfg = load_config(
+        cfg, _ = load_config(
             config_path=str(config_yaml_file),
             cli_overrides={"orchestrator": {"max_turns": 999}},
         )
@@ -530,22 +530,22 @@ class TestDesignReferenceFalsyValues:
 
     def test_empty_urls_preserved(self):
         """urls: [] should stay empty, not fall back to default."""
-        cfg = _dict_to_config({"design_reference": {"urls": []}})
+        cfg, _ = _dict_to_config({"design_reference": {"urls": []}})
         assert cfg.design_reference.urls == []
 
     def test_zero_max_pages_preserved(self):
         """max_pages_per_site: 0 should stay 0, not fall back to default."""
-        cfg = _dict_to_config({"design_reference": {"max_pages_per_site": 0}})
+        cfg, _ = _dict_to_config({"design_reference": {"max_pages_per_site": 0}})
         assert cfg.design_reference.max_pages_per_site == 0
 
     def test_empty_depth_preserved(self):
         """depth: '' should stay empty string, not fall back to default."""
-        cfg = _dict_to_config({"design_reference": {"depth": ""}})
+        cfg, _ = _dict_to_config({"design_reference": {"depth": ""}})
         assert cfg.design_reference.depth == ""
 
     def test_normal_values_still_work(self):
         """Normal values should still work correctly."""
-        cfg = _dict_to_config({"design_reference": {"urls": ["https://example.com"], "depth": "branding", "max_pages_per_site": 10}})
+        cfg, _ = _dict_to_config({"design_reference": {"urls": ["https://example.com"], "depth": "branding", "max_pages_per_site": 10}})
         assert cfg.design_reference.urls == ["https://example.com"]
         assert cfg.design_reference.depth == "branding"
         assert cfg.design_reference.max_pages_per_site == 10
@@ -553,7 +553,7 @@ class TestDesignReferenceFalsyValues:
 
 class TestDesignReferenceCacheTTL:
     def test_design_reference_cache_ttl_from_yaml(self):
-        cfg = _dict_to_config({"design_reference": {"cache_ttl_seconds": 3600}})
+        cfg, _ = _dict_to_config({"design_reference": {"cache_ttl_seconds": 3600}})
         assert cfg.design_reference.cache_ttl_seconds == 3600
 
 
@@ -569,7 +569,7 @@ class TestEnumValidation:
             _dict_to_config({"scheduler": {"conflict_strategy": "invalid-strategy"}})
 
     def test_valid_conflict_strategy_accepted(self):
-        cfg = _dict_to_config({"scheduler": {"conflict_strategy": "integration-agent"}})
+        cfg, _ = _dict_to_config({"scheduler": {"conflict_strategy": "integration-agent"}})
         assert cfg.scheduler.conflict_strategy == "integration-agent"
 
     def test_invalid_design_ref_depth_raises(self):
@@ -577,7 +577,7 @@ class TestEnumValidation:
             _dict_to_config({"design_reference": {"depth": "invalid-depth"}})
 
     def test_valid_design_ref_depth_accepted(self):
-        cfg = _dict_to_config({"design_reference": {"depth": "branding"}})
+        cfg, _ = _dict_to_config({"design_reference": {"depth": "branding"}})
         assert cfg.design_reference.depth == "branding"
 
 
@@ -596,7 +596,7 @@ class TestConfigPropagation:
 
     def test_custom_timeout_persists(self):
         """Custom timeout value set via config is preserved."""
-        cfg = _dict_to_config({"codebase_map": {"timeout_seconds": 60}})
+        cfg, _ = _dict_to_config({"codebase_map": {"timeout_seconds": 60}})
         assert cfg.codebase_map.timeout_seconds == 60
 
     def test_verification_paths_accessible(self):
@@ -790,15 +790,15 @@ class TestDetectDepthExpanded:
 
 class TestInterviewConfigValidation:
     def test_min_exchanges_in_dict_to_config(self):
-        cfg = _dict_to_config({"interview": {"min_exchanges": 5}})
+        cfg, _ = _dict_to_config({"interview": {"min_exchanges": 5}})
         assert cfg.interview.min_exchanges == 5
 
     def test_require_understanding_in_dict_to_config(self):
-        cfg = _dict_to_config({"interview": {"require_understanding_summary": False}})
+        cfg, _ = _dict_to_config({"interview": {"require_understanding_summary": False}})
         assert cfg.interview.require_understanding_summary is False
 
     def test_require_exploration_in_dict_to_config(self):
-        cfg = _dict_to_config({"interview": {"require_codebase_exploration": False}})
+        cfg, _ = _dict_to_config({"interview": {"require_codebase_exploration": False}})
         assert cfg.interview.require_codebase_exploration is False
 
     def test_min_exchanges_zero_raises(self):
@@ -819,7 +819,7 @@ class TestConfigPropagationToRuntime:
     """Verify config fields round-trip through _dict_to_config."""
 
     def test_codebase_map_fields_from_yaml(self):
-        cfg = _dict_to_config({
+        cfg, _ = _dict_to_config({
             "codebase_map": {
                 "max_files": 1000,
                 "max_file_size_kb": 25,
@@ -834,7 +834,7 @@ class TestConfigPropagationToRuntime:
         assert "dist" in cfg.codebase_map.exclude_patterns
 
     def test_scheduler_fields_from_yaml(self):
-        cfg = _dict_to_config({
+        cfg, _ = _dict_to_config({
             "scheduler": {
                 "max_parallel_tasks": 3,
                 "conflict_strategy": "integration-agent",
@@ -848,11 +848,11 @@ class TestConfigPropagationToRuntime:
         assert cfg.scheduler.enable_critical_path is False
 
     def test_verification_blocking_from_yaml(self):
-        cfg = _dict_to_config({"verification": {"blocking": False}})
+        cfg, _ = _dict_to_config({"verification": {"blocking": False}})
         assert cfg.verification.blocking is False
 
     def test_display_gating_from_yaml(self):
-        cfg = _dict_to_config({
+        cfg, _ = _dict_to_config({
             "display": {
                 "show_fleet_composition": False,
                 "show_convergence_status": False,
@@ -862,7 +862,7 @@ class TestConfigPropagationToRuntime:
         assert cfg.display.show_convergence_status is False
 
     def test_orchestrator_awareness_from_yaml(self):
-        cfg = _dict_to_config({
+        cfg, _ = _dict_to_config({
             "orchestrator": {"max_budget_usd": 42.5},
             "convergence": {
                 "max_cycles": 20,
@@ -884,15 +884,15 @@ class TestOrchestratorBackendConfig:
         assert c.backend == "auto"
 
     def test_backend_from_yaml(self):
-        cfg = _dict_to_config({"orchestrator": {"backend": "cli"}})
+        cfg, _ = _dict_to_config({"orchestrator": {"backend": "cli"}})
         assert cfg.orchestrator.backend == "cli"
 
     def test_backend_api_from_yaml(self):
-        cfg = _dict_to_config({"orchestrator": {"backend": "api"}})
+        cfg, _ = _dict_to_config({"orchestrator": {"backend": "api"}})
         assert cfg.orchestrator.backend == "api"
 
     def test_backend_auto_from_yaml(self):
-        cfg = _dict_to_config({"orchestrator": {"backend": "auto"}})
+        cfg, _ = _dict_to_config({"orchestrator": {"backend": "auto"}})
         assert cfg.orchestrator.backend == "auto"
 
     def test_backend_invalid_raises(self):
@@ -906,15 +906,15 @@ class TestOrchestratorBackendConfig:
 
 class TestDesignReferenceStandardsFile:
     def test_standards_file_from_yaml(self):
-        cfg = _dict_to_config({"design_reference": {"standards_file": "/path/to/custom.md"}})
+        cfg, _ = _dict_to_config({"design_reference": {"standards_file": "/path/to/custom.md"}})
         assert cfg.design_reference.standards_file == "/path/to/custom.md"
 
     def test_standards_file_default_when_absent(self):
-        cfg = _dict_to_config({"design_reference": {}})
+        cfg, _ = _dict_to_config({"design_reference": {}})
         assert cfg.design_reference.standards_file == ""
 
     def test_standards_file_empty_string_preserved(self):
-        cfg = _dict_to_config({"design_reference": {"standards_file": ""}})
+        cfg, _ = _dict_to_config({"design_reference": {"standards_file": ""}})
         assert cfg.design_reference.standards_file == ""
 
 
@@ -1049,13 +1049,13 @@ class TestDefaultConfigEnabledByDefault:
     def test_explicit_false_overrides_default(self):
         """YAML with enabled: false must still work (backward compat)."""
         from agent_team.config import _dict_to_config
-        cfg = _dict_to_config({"scheduler": {"enabled": False}})
+        cfg, _ = _dict_to_config({"scheduler": {"enabled": False}})
         assert cfg.scheduler.enabled is False
 
     def test_explicit_false_verification_overrides_default(self):
         """YAML with verification.enabled: false must still work."""
         from agent_team.config import _dict_to_config
-        cfg = _dict_to_config({"verification": {"enabled": False}})
+        cfg, _ = _dict_to_config({"verification": {"enabled": False}})
         assert cfg.verification.enabled is False
 
 
@@ -1104,7 +1104,7 @@ class TestInvestigationConfigInAgentTeamConfig:
         assert c.investigation.enabled is False
 
     def test_investigation_from_yaml(self):
-        cfg = _dict_to_config({
+        cfg, _ = _dict_to_config({
             "investigation": {
                 "enabled": True,
                 "gemini_model": "gemini-2.5-pro",
@@ -1120,7 +1120,7 @@ class TestInvestigationConfigInAgentTeamConfig:
         assert cfg.investigation.agents == ["code-reviewer", "debugger"]
 
     def test_investigation_st_fields_from_yaml(self):
-        cfg = _dict_to_config({
+        cfg, _ = _dict_to_config({
             "investigation": {
                 "sequential_thinking": False,
                 "max_thoughts_per_item": 10,
@@ -1132,21 +1132,21 @@ class TestInvestigationConfigInAgentTeamConfig:
         assert cfg.investigation.enable_hypothesis_loop is False
 
     def test_investigation_partial_yaml(self):
-        cfg = _dict_to_config({"investigation": {"enabled": True}})
+        cfg, _ = _dict_to_config({"investigation": {"enabled": True}})
         assert cfg.investigation.enabled is True
         assert cfg.investigation.max_queries_per_agent == 8  # default preserved
 
     def test_investigation_absent_from_yaml(self):
-        cfg = _dict_to_config({})
+        cfg, _ = _dict_to_config({})
         assert cfg.investigation.enabled is False
 
     def test_investigation_non_dict_ignored(self):
-        cfg = _dict_to_config({"investigation": "invalid"})
+        cfg, _ = _dict_to_config({"investigation": "invalid"})
         assert cfg.investigation.enabled is False  # default unchanged
 
     def test_investigation_old_config_without_st_fields(self):
         """Backward compat: old config with investigation but no ST fields."""
-        cfg = _dict_to_config({
+        cfg, _ = _dict_to_config({
             "investigation": {
                 "enabled": True,
                 "gemini_model": "gemini-2.5-pro",
@@ -1178,19 +1178,19 @@ class TestInvestigationConfigValidation:
             _dict_to_config({"investigation": {"agents": ["nonexistent-agent"]}})
 
     def test_valid_non_default_agents_accepted(self):
-        cfg = _dict_to_config({"investigation": {"agents": ["planner", "architect"]}})
+        cfg, _ = _dict_to_config({"investigation": {"agents": ["planner", "architect"]}})
         assert cfg.investigation.agents == ["planner", "architect"]
 
     def test_empty_agents_list_accepted(self):
-        cfg = _dict_to_config({"investigation": {"agents": []}})
+        cfg, _ = _dict_to_config({"investigation": {"agents": []}})
         assert cfg.investigation.agents == []
 
     def test_valid_queries_accepted(self):
-        cfg = _dict_to_config({"investigation": {"max_queries_per_agent": 1}})
+        cfg, _ = _dict_to_config({"investigation": {"max_queries_per_agent": 1}})
         assert cfg.investigation.max_queries_per_agent == 1
 
     def test_valid_timeout_accepted(self):
-        cfg = _dict_to_config({"investigation": {"timeout_seconds": 1}})
+        cfg, _ = _dict_to_config({"investigation": {"timeout_seconds": 1}})
         assert cfg.investigation.timeout_seconds == 1
 
     def test_max_thoughts_below_minimum_raises(self):
@@ -1198,7 +1198,7 @@ class TestInvestigationConfigValidation:
             _dict_to_config({"investigation": {"max_thoughts_per_item": 2}})
 
     def test_max_thoughts_at_minimum_accepted(self):
-        cfg = _dict_to_config({"investigation": {"max_thoughts_per_item": 3}})
+        cfg, _ = _dict_to_config({"investigation": {"max_thoughts_per_item": 3}})
         assert cfg.investigation.max_thoughts_per_item == 3
 
     def test_max_thoughts_zero_raises(self):
@@ -1218,7 +1218,7 @@ class TestQualityConfig:
         assert qc.quality_triggers_reloop is True
 
     def test_quality_config_from_yaml(self):
-        cfg = _dict_to_config({"quality": {"craft_review": False}})
+        cfg, _ = _dict_to_config({"quality": {"craft_review": False}})
         assert cfg.quality.craft_review is False
         # Other defaults unchanged
         assert cfg.quality.production_defaults is True
@@ -1251,23 +1251,23 @@ class TestMaxThinkingTokensDefaults:
 
 class TestMaxThinkingTokensFromYaml:
     def test_orchestrator_max_thinking_tokens_set(self):
-        cfg = _dict_to_config({"orchestrator": {"max_thinking_tokens": 10000}})
+        cfg, _ = _dict_to_config({"orchestrator": {"max_thinking_tokens": 10000}})
         assert cfg.orchestrator.max_thinking_tokens == 10000
 
     def test_orchestrator_max_thinking_tokens_omitted(self):
-        cfg = _dict_to_config({"orchestrator": {"model": "opus"}})
+        cfg, _ = _dict_to_config({"orchestrator": {"model": "opus"}})
         assert cfg.orchestrator.max_thinking_tokens is None
 
     def test_interview_max_thinking_tokens_set(self):
-        cfg = _dict_to_config({"interview": {"max_thinking_tokens": 8192}})
+        cfg, _ = _dict_to_config({"interview": {"max_thinking_tokens": 8192}})
         assert cfg.interview.max_thinking_tokens == 8192
 
     def test_interview_max_thinking_tokens_omitted(self):
-        cfg = _dict_to_config({"interview": {"enabled": True}})
+        cfg, _ = _dict_to_config({"interview": {"enabled": True}})
         assert cfg.interview.max_thinking_tokens is None
 
     def test_both_set_independently(self):
-        cfg = _dict_to_config({
+        cfg, _ = _dict_to_config({
             "orchestrator": {"max_thinking_tokens": 16000},
             "interview": {"max_thinking_tokens": 4096},
         })
@@ -1293,11 +1293,11 @@ class TestMaxThinkingTokensValidation:
             _dict_to_config({"orchestrator": {"max_thinking_tokens": 1023}})
 
     def test_orchestrator_1024_accepted(self):
-        cfg = _dict_to_config({"orchestrator": {"max_thinking_tokens": 1024}})
+        cfg, _ = _dict_to_config({"orchestrator": {"max_thinking_tokens": 1024}})
         assert cfg.orchestrator.max_thinking_tokens == 1024
 
     def test_orchestrator_null_accepted(self):
-        cfg = _dict_to_config({"orchestrator": {"max_thinking_tokens": None}})
+        cfg, _ = _dict_to_config({"orchestrator": {"max_thinking_tokens": None}})
         assert cfg.orchestrator.max_thinking_tokens is None
 
     def test_interview_below_minimum_raises(self):
@@ -1305,11 +1305,11 @@ class TestMaxThinkingTokensValidation:
             _dict_to_config({"interview": {"max_thinking_tokens": 100}})
 
     def test_interview_1024_accepted(self):
-        cfg = _dict_to_config({"interview": {"max_thinking_tokens": 1024}})
+        cfg, _ = _dict_to_config({"interview": {"max_thinking_tokens": 1024}})
         assert cfg.interview.max_thinking_tokens == 1024
 
     def test_interview_null_accepted(self):
-        cfg = _dict_to_config({"interview": {"max_thinking_tokens": None}})
+        cfg, _ = _dict_to_config({"interview": {"max_thinking_tokens": None}})
         assert cfg.interview.max_thinking_tokens is None
 
 
@@ -1379,7 +1379,7 @@ class TestDictToConfigMilestone:
 
     def test_dict_to_config_milestone_section(self):
         """Parsing milestone from YAML dict sets all fields correctly."""
-        cfg = _dict_to_config({
+        cfg, _ = _dict_to_config({
             "milestone": {
                 "enabled": True,
                 "max_parallel_milestones": 2,
@@ -1394,12 +1394,12 @@ class TestDictToConfigMilestone:
 
     def test_dict_to_config_milestone_disabled_by_default(self):
         """An empty config dict leaves milestone.enabled=False."""
-        cfg = _dict_to_config({})
+        cfg, _ = _dict_to_config({})
         assert cfg.milestone.enabled is False
 
     def test_dict_to_config_milestone_resume_from_milestone(self):
         """resume_from_milestone string is parsed from YAML dict."""
-        cfg = _dict_to_config({
+        cfg, _ = _dict_to_config({
             "milestone": {
                 "resume_from_milestone": "milestone-3",
             }
@@ -1408,12 +1408,12 @@ class TestDictToConfigMilestone:
 
     def test_dict_to_config_milestone_resume_none_when_absent(self):
         """resume_from_milestone is None when not specified."""
-        cfg = _dict_to_config({"milestone": {"enabled": True}})
+        cfg, _ = _dict_to_config({"milestone": {"enabled": True}})
         assert cfg.milestone.resume_from_milestone is None
 
     def test_dict_to_config_milestone_partial_yaml(self):
         """Partial milestone config preserves defaults for unset fields."""
-        cfg = _dict_to_config({"milestone": {"enabled": True}})
+        cfg, _ = _dict_to_config({"milestone": {"enabled": True}})
         assert cfg.milestone.enabled is True
         assert cfg.milestone.max_parallel_milestones == 1  # default preserved
         assert cfg.milestone.health_gate is True  # default preserved
@@ -1421,22 +1421,22 @@ class TestDictToConfigMilestone:
 
     def test_dict_to_config_milestone_non_dict_ignored(self):
         """Non-dict milestone value should not crash or alter defaults."""
-        cfg = _dict_to_config({"milestone": "invalid"})
+        cfg, _ = _dict_to_config({"milestone": "invalid"})
         assert cfg.milestone.enabled is False  # default unchanged
 
     def test_dict_to_config_milestone_resume_non_string_becomes_none(self):
         """Non-string resume_from_milestone is coerced to None."""
-        cfg = _dict_to_config({"milestone": {"resume_from_milestone": 42}})
+        cfg, _ = _dict_to_config({"milestone": {"resume_from_milestone": 42}})
         assert cfg.milestone.resume_from_milestone is None
 
     def test_dict_to_config_wiring_fix_retries(self):
         """wiring_fix_retries is parsed from YAML dict."""
-        cfg = _dict_to_config({"milestone": {"wiring_fix_retries": 3}})
+        cfg, _ = _dict_to_config({"milestone": {"wiring_fix_retries": 3}})
         assert cfg.milestone.wiring_fix_retries == 3
 
     def test_dict_to_config_max_milestones_warning(self):
         """max_milestones_warning is parsed from YAML dict."""
-        cfg = _dict_to_config({"milestone": {"max_milestones_warning": 20}})
+        cfg, _ = _dict_to_config({"milestone": {"max_milestones_warning": 20}})
         assert cfg.milestone.max_milestones_warning == 20
 
 
@@ -1453,10 +1453,10 @@ class TestMilestoneConfigNewDefaults:
 
     def test_wiring_fix_retries_partial_yaml_preserved(self):
         """Partial YAML preserves default wiring_fix_retries."""
-        cfg = _dict_to_config({"milestone": {"enabled": True}})
+        cfg, _ = _dict_to_config({"milestone": {"enabled": True}})
         assert cfg.milestone.wiring_fix_retries == 1
 
     def test_max_milestones_warning_partial_yaml_preserved(self):
         """Partial YAML preserves default max_milestones_warning."""
-        cfg = _dict_to_config({"milestone": {"enabled": True}})
+        cfg, _ = _dict_to_config({"milestone": {"enabled": True}})
         assert cfg.milestone.max_milestones_warning == 30

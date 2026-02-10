@@ -865,7 +865,7 @@ class TestTrackingDocumentsConfig:
                 "wiring_completeness_gate": 0.9,
             }
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.tracking_documents.e2e_coverage_matrix is False
         assert cfg.tracking_documents.fix_cycle_log is False
         assert cfg.tracking_documents.milestone_handoff is False
@@ -900,7 +900,7 @@ class TestTrackingDocumentsConfig:
                 "wiring_completeness_gate": 0.0,
             }
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.tracking_documents.coverage_completeness_gate == 0.0
         assert cfg.tracking_documents.wiring_completeness_gate == 0.0
 
@@ -912,13 +912,13 @@ class TestTrackingDocumentsConfig:
                 "unknown_future_key": 42,
             }
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.tracking_documents.e2e_coverage_matrix is True
 
     def test_partial_yaml_uses_defaults(self):
         """Partial YAML (only some fields) uses defaults for missing."""
         data = {"tracking_documents": {"fix_cycle_log": False}}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.tracking_documents.fix_cycle_log is False
         assert cfg.tracking_documents.e2e_coverage_matrix is True  # default
         assert cfg.tracking_documents.milestone_handoff is True  # default
@@ -926,7 +926,7 @@ class TestTrackingDocumentsConfig:
 
     def test_no_tracking_documents_section(self):
         """Missing section entirely uses all defaults."""
-        cfg = _dict_to_config({})
+        cfg, _ = _dict_to_config({})
         assert cfg.tracking_documents.e2e_coverage_matrix is True
         assert cfg.tracking_documents.fix_cycle_log is True
 
@@ -937,7 +937,7 @@ class TestTrackingDocumentsConfig:
             "integrity_scans": {"deployment_scan": False},
             "tracking_documents": {"fix_cycle_log": False},
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.e2e_testing.enabled is True
         assert cfg.integrity_scans.deployment_scan is False
         assert cfg.tracking_documents.fix_cycle_log is False
@@ -1274,7 +1274,7 @@ class TestCrossFeatureIntegration:
 
     def test_backward_compatibility_no_config(self):
         """Project with no tracking_documents section uses defaults (all enabled)."""
-        cfg = _dict_to_config({})
+        cfg, _ = _dict_to_config({})
         assert cfg.tracking_documents.e2e_coverage_matrix is True
         assert cfg.tracking_documents.fix_cycle_log is True
         assert cfg.tracking_documents.milestone_handoff is True
@@ -1288,7 +1288,7 @@ class TestCrossFeatureIntegration:
                 "milestone_handoff": False,
             }
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.tracking_documents.e2e_coverage_matrix is False
         assert cfg.tracking_documents.fix_cycle_log is False
         assert cfg.tracking_documents.milestone_handoff is False
@@ -1589,7 +1589,7 @@ class TestBackwardCompatibility:
                 "milestone_handoff": False,
             }
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.tracking_documents.e2e_coverage_matrix is False
 
     def test_existing_prompts_still_valid(self):

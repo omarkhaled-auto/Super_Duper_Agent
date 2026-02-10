@@ -455,21 +455,21 @@ class TestMilestoneConfigNewFields:
         assert mc.review_recovery_retries == 0
 
     def test_dict_to_config_review_recovery_retries(self):
-        cfg = _dict_to_config({"milestone": {"review_recovery_retries": 5}})
+        cfg, _ = _dict_to_config({"milestone": {"review_recovery_retries": 5}})
         assert cfg.milestone.review_recovery_retries == 5
 
     def test_dict_to_config_mock_data_scan(self):
-        cfg = _dict_to_config({"milestone": {"mock_data_scan": False}})
+        cfg, _ = _dict_to_config({"milestone": {"mock_data_scan": False}})
         assert cfg.milestone.mock_data_scan is False
 
     def test_dict_to_config_preserves_defaults_on_partial(self):
         """Partial YAML preserves default values for unspecified fields."""
-        cfg = _dict_to_config({"milestone": {"enabled": True}})
+        cfg, _ = _dict_to_config({"milestone": {"enabled": True}})
         assert cfg.milestone.review_recovery_retries == 1
         assert cfg.milestone.mock_data_scan is True
 
     def test_dict_to_config_empty_preserves_defaults(self):
-        cfg = _dict_to_config({})
+        cfg, _ = _dict_to_config({})
         assert cfg.milestone.review_recovery_retries == 1
         assert cfg.milestone.mock_data_scan is True
 

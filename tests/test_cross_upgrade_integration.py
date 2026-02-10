@@ -252,7 +252,7 @@ class TestConfigWiring:
     """Verify all config fields from YAML wire through _dict_to_config."""
 
     def test_empty_dict_returns_defaults(self):
-        cfg = _dict_to_config({})
+        cfg, _ = _dict_to_config({})
         assert isinstance(cfg, AgentTeamConfig)
         assert cfg.milestone.review_recovery_retries == 1
         assert cfg.milestone.mock_data_scan is True
@@ -269,7 +269,7 @@ class TestConfigWiring:
                 "ui_compliance_scan": False,
             }
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.milestone.enabled is True
         assert cfg.milestone.review_recovery_retries == 3
         assert cfg.milestone.mock_data_scan is False
@@ -284,7 +284,7 @@ class TestConfigWiring:
                 "skip_if_no_api": False,
             }
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.e2e_testing.enabled is True
         assert cfg.e2e_testing.max_fix_retries == 3
         assert cfg.e2e_testing.test_port == 8080
@@ -298,7 +298,7 @@ class TestConfigWiring:
                 "prd_reconciliation": False,
             }
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.integrity_scans.deployment_scan is False
         assert cfg.integrity_scans.asset_scan is False
         assert cfg.integrity_scans.prd_reconciliation is False
@@ -311,7 +311,7 @@ class TestConfigWiring:
                 "content_quality_check": False,
             }
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.design_reference.extraction_retries == 5
         assert cfg.design_reference.fallback_generation is False
         assert cfg.design_reference.content_quality_check is False
@@ -319,7 +319,7 @@ class TestConfigWiring:
     def test_unknown_keys_ignored(self):
         data = {"milestone": {"enabled": True, "unknown_field_xyz": "value"}}
         # Should not raise
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.milestone.enabled is True
 
 
@@ -543,12 +543,12 @@ class TestMedium1ReviewRecoveryRetriesValidation:
 
     def test_zero_review_recovery_retries_ok(self):
         data = {"milestone": {"review_recovery_retries": 0}}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.milestone.review_recovery_retries == 0
 
     def test_positive_review_recovery_retries_ok(self):
         data = {"milestone": {"review_recovery_retries": 5}}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.milestone.review_recovery_retries == 5
 
 
@@ -575,12 +575,12 @@ class TestConfigEdgeCases:
     """Edge case tests for config parsing."""
 
     def test_empty_yaml(self):
-        cfg = _dict_to_config({})
+        cfg, _ = _dict_to_config({})
         assert isinstance(cfg, AgentTeamConfig)
 
     def test_partial_yaml(self):
         data = {"milestone": {"enabled": True}}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.milestone.enabled is True
         assert cfg.milestone.max_parallel_milestones == 1  # default
 
@@ -590,7 +590,7 @@ class TestConfigEdgeCases:
             "e2e_testing": 42,
             "integrity_scans": [],
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         # All should fall back to defaults
         assert cfg.milestone.enabled is False
         assert cfg.e2e_testing.enabled is False

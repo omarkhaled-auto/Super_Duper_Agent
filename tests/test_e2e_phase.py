@@ -63,7 +63,7 @@ class TestE2ETestingConfig:
 
     def test_yaml_parsing(self):
         data = {"e2e_testing": {"enabled": True, "max_fix_retries": 3, "test_port": 8888}}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.e2e_testing.enabled is True
         assert cfg.e2e_testing.max_fix_retries == 3
         assert cfg.e2e_testing.test_port == 8888
@@ -86,7 +86,7 @@ class TestE2ETestingConfig:
     def test_legacy_budget_key_ignored(self):
         """Legacy budget_limit_usd key should not cause errors."""
         data = {"e2e_testing": {"enabled": True, "budget_limit_usd": 10.0}}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.e2e_testing.enabled is True
         assert not hasattr(cfg.e2e_testing, "budget_limit_usd")
 
@@ -1921,23 +1921,23 @@ class TestE2EConfigEdgeCases:
 
     def test_port_at_exact_boundaries(self):
         """test_port=1024 and test_port=65535 must both be accepted."""
-        cfg_low = _dict_to_config({"e2e_testing": {"test_port": 1024}})
+        cfg_low, _ = _dict_to_config({"e2e_testing": {"test_port": 1024}})
         assert cfg_low.e2e_testing.test_port == 1024
 
-        cfg_high = _dict_to_config({"e2e_testing": {"test_port": 65535}})
+        cfg_high, _ = _dict_to_config({"e2e_testing": {"test_port": 65535}})
         assert cfg_high.e2e_testing.test_port == 65535
 
     def test_legacy_budget_limit_ignored(self):
         """YAML with budget_limit_usd key must NOT cause error or be present on config."""
         data = {"e2e_testing": {"enabled": True, "budget_limit_usd": 10}}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.e2e_testing.enabled is True
         assert not hasattr(cfg.e2e_testing, "budget_limit_usd")
 
     def test_e2e_config_from_empty_yaml(self):
         """Empty e2e_testing section -> all defaults preserved."""
         data = {"e2e_testing": {}}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         defaults = E2ETestingConfig()
         assert cfg.e2e_testing.enabled == defaults.enabled
         assert cfg.e2e_testing.backend_api_tests == defaults.backend_api_tests
@@ -1950,7 +1950,7 @@ class TestE2EConfigEdgeCases:
     def test_e2e_config_partial_yaml(self):
         """Only enabled=True -> rest are defaults."""
         data = {"e2e_testing": {"enabled": True}}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.e2e_testing.enabled is True
         assert cfg.e2e_testing.max_fix_retries == 5  # default
         assert cfg.e2e_testing.test_port == 9876  # default

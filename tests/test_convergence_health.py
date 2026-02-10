@@ -176,7 +176,7 @@ class TestConfigurableThresholds:
             "recovery_threshold": 0.6,
             "degraded_threshold": 0.3,
         }}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.convergence.min_convergence_ratio == 0.85
         assert cfg.convergence.recovery_threshold == 0.6
         assert cfg.convergence.degraded_threshold == 0.3
@@ -185,7 +185,7 @@ class TestConfigurableThresholds:
         """Old config without new fields should use defaults."""
         from agent_team.config import _dict_to_config
         data = {"convergence": {"max_cycles": 5}}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.convergence.min_convergence_ratio == 0.9
         assert cfg.convergence.recovery_threshold == 0.8
         assert cfg.convergence.degraded_threshold == 0.5

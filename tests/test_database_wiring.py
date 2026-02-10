@@ -140,14 +140,14 @@ class TestScanExecutionPosition:
         Order: mock scan → UI scan → deploy → asset → PRD → DATABASE → E2E → report
         """
         markers = [
-            "run_mock_data_scan(Path(cwd))",
-            "run_ui_compliance_scan(Path(cwd))",
+            "run_mock_data_scan(Path(cwd)",
+            "run_ui_compliance_scan(Path(cwd)",
             "run_deployment_scan(Path(cwd))",
-            "run_asset_scan(Path(cwd))",
+            "run_asset_scan(Path(cwd)",
             "_run_prd_reconciliation(",
-            "run_dual_orm_scan(Path(cwd))",
-            "run_default_value_scan(Path(cwd))",
-            "run_relationship_scan(Path(cwd))",
+            "run_dual_orm_scan(Path(cwd)",
+            "run_default_value_scan(Path(cwd)",
+            "run_relationship_scan(Path(cwd)",
             "detect_app_type(Path(cwd))",  # E2E entry point
             "print_recovery_report(",
         ]

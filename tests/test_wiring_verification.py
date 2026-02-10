@@ -107,10 +107,10 @@ class TestPostOrchestrationOrder:
         7. Recovery report
         """
         markers = [
-            "run_mock_data_scan(Path(cwd))",
-            "run_ui_compliance_scan(Path(cwd))",
+            "run_mock_data_scan(Path(cwd)",
+            "run_ui_compliance_scan(Path(cwd)",
             "run_deployment_scan(Path(cwd))",
-            "run_asset_scan(Path(cwd))",
+            "run_asset_scan(Path(cwd)",
             "_run_prd_reconciliation(",
             "detect_app_type(Path(cwd))",  # E2E entry point
             "print_recovery_report(",
@@ -140,14 +140,16 @@ class TestPostOrchestrationOrder:
 class TestConfigGating:
     """Verify each config flag actually gates its feature."""
 
-    def test_mock_data_scan_gated_by_milestone_config(self, cli_source: str) -> None:
-        """Mock data scan guarded by `config.milestone.mock_data_scan`."""
-        # In standard (non-milestone) mode
-        assert "not _use_milestones and config.milestone.mock_data_scan" in cli_source
+    def test_mock_data_scan_gated_by_config(self, cli_source: str) -> None:
+        """Mock data scan guarded by post_orchestration_scans OR milestone config."""
+        # v6.0: OR gate for backward compat
+        assert "config.post_orchestration_scans.mock_data_scan" in cli_source
+        assert "config.milestone.mock_data_scan" in cli_source
 
-    def test_ui_compliance_scan_gated_by_milestone_config(self, cli_source: str) -> None:
-        """UI compliance scan guarded by `config.milestone.ui_compliance_scan`."""
-        assert "not _use_milestones and config.milestone.ui_compliance_scan" in cli_source
+    def test_ui_compliance_scan_gated_by_config(self, cli_source: str) -> None:
+        """UI compliance scan guarded by post_orchestration_scans OR milestone config."""
+        assert "config.post_orchestration_scans.ui_compliance_scan" in cli_source
+        assert "config.milestone.ui_compliance_scan" in cli_source
 
     def test_deployment_scan_gated_by_integrity_config(self, cli_source: str) -> None:
         """Deployment scan guarded by `config.integrity_scans.deployment_scan`."""
@@ -184,17 +186,17 @@ class TestConfigGating:
     def test_mock_scan_only_in_standard_mode(self, cli_source: str) -> None:
         """Mock data scan runs only in standard mode (not milestones),
         because milestones handle it per-milestone."""
-        # The condition is `if not _use_milestones and config.milestone.mock_data_scan`
-        pattern = r"if not _use_milestones and config\.milestone\.mock_data_scan"
+        # v6.0: OR gate between post_orchestration_scans and milestone config
+        pattern = r"if not _use_milestones and \(config\.post_orchestration_scans\.mock_data_scan or config\.milestone\.mock_data_scan\)"
         assert re.search(pattern, cli_source), (
-            "Mock data scan must be gated by `not _use_milestones`"
+            "Mock data scan must be gated by `not _use_milestones` with OR gate"
         )
 
     def test_ui_scan_only_in_standard_mode(self, cli_source: str) -> None:
         """UI compliance scan runs only in standard mode."""
-        pattern = r"if not _use_milestones and config\.milestone\.ui_compliance_scan"
+        pattern = r"if not _use_milestones and \(config\.post_orchestration_scans\.ui_compliance_scan or config\.milestone\.ui_compliance_scan\)"
         assert re.search(pattern, cli_source), (
-            "UI compliance scan must be gated by `not _use_milestones`"
+            "UI compliance scan must be gated by `not _use_milestones` with OR gate"
         )
 
     def test_integrity_scans_run_in_both_modes(self, cli_source: str) -> None:

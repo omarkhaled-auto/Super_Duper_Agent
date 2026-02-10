@@ -114,7 +114,7 @@ class TestCLIOverridesPipeline:
     def test_cli_overrides_propagate(self, tmp_path, monkeypatch):
         """CLI overrides propagate through to agents."""
         monkeypatch.chdir(tmp_path)
-        cfg = load_config(cli_overrides={"orchestrator": {"model": "sonnet"}})
+        cfg, _ = load_config(cli_overrides={"orchestrator": {"model": "sonnet"}})
         assert cfg.orchestrator.model == "sonnet"
 
     def test_disabled_agents_not_in_definitions(self, config_with_disabled_agents):
@@ -159,7 +159,7 @@ class TestConfigYAMLRoundTrip:
         cfg_path = tmp_path / "config.yaml"
         cfg_path.write_text(yaml.dump(data), encoding="utf-8")
         monkeypatch.chdir(tmp_path)
-        cfg = load_config(config_path=str(cfg_path))
+        cfg, _ = load_config(config_path=str(cfg_path))
         assert cfg.orchestrator.model == "sonnet"
         assert cfg.orchestrator.max_turns == 200
         assert cfg.depth.default == "thorough"
@@ -844,7 +844,7 @@ class TestBackwardCompatNonPRDMode:
                 "health_gate": False,
             },
         }
-        loaded = load_config(cli_overrides=yaml_data)
+        loaded, _ = load_config(cli_overrides=yaml_data)
         assert loaded.milestone.enabled is True
         assert loaded.milestone.max_parallel_milestones == 3
         assert loaded.milestone.health_gate is False

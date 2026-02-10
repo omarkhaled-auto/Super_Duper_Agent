@@ -80,27 +80,27 @@ class TestDatabaseScanConfigYAML:
             "default_value_scan": False,
             "relationship_scan": False,
         }}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.database_scans.dual_orm_scan is False
         assert cfg.database_scans.default_value_scan is False
         assert cfg.database_scans.relationship_scan is False
 
     def test_partial_preserves_defaults(self):
         data = {"database_scans": {"dual_orm_scan": False}}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.database_scans.dual_orm_scan is False
         assert cfg.database_scans.default_value_scan is True  # default preserved
         assert cfg.database_scans.relationship_scan is True  # default preserved
 
     def test_missing_section_uses_defaults(self):
-        cfg = _dict_to_config({})
+        cfg, _ = _dict_to_config({})
         assert cfg.database_scans.dual_orm_scan is True
         assert cfg.database_scans.default_value_scan is True
         assert cfg.database_scans.relationship_scan is True
 
     def test_invalid_type_ignored(self):
         data = {"database_scans": "not_a_dict"}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         # Should fall back to defaults
         assert cfg.database_scans.dual_orm_scan is True
 
@@ -109,7 +109,7 @@ class TestDatabaseScanConfigYAML:
             "dual_orm_scan": False,
             "unknown_future_field": 42,
         }}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.database_scans.dual_orm_scan is False
         assert cfg.database_scans.default_value_scan is True
 
@@ -119,7 +119,7 @@ class TestDatabaseScanConfigYAML:
             "integrity_scans": {"deployment_scan": False},
             "database_scans": {"dual_orm_scan": False},
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.integrity_scans.deployment_scan is False
         assert cfg.database_scans.dual_orm_scan is False
 
@@ -1106,7 +1106,7 @@ class TestCrossFeatureIntegration:
             "database_scans": {"dual_orm_scan": True},
             "e2e_testing": {"enabled": True},
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.convergence.max_cycles == 5
         assert cfg.integrity_scans.deployment_scan is True
         assert cfg.database_scans.dual_orm_scan is True
@@ -1265,7 +1265,7 @@ class TestRegressionSafety:
             "tracking_documents": {"e2e_coverage_matrix": True},
             "database_scans": {"dual_orm_scan": False},
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.convergence.max_cycles == 3
         assert cfg.milestone.enabled is True
         assert cfg.prd_chunking.enabled is True

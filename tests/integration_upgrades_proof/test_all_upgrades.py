@@ -419,7 +419,7 @@ class TestConfigSystem:
                 "fallback_generation": False,
             },
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.orchestrator.model == "sonnet"
         assert cfg.orchestrator.max_turns == 1000
         assert cfg.depth.default == "thorough"
@@ -994,7 +994,7 @@ class TestUIHard2ConfigValidation:
             _dict_to_config({"design_reference": {"extraction_retries": -1}})
 
     def test_zero_accepted(self):
-        cfg = _dict_to_config({"design_reference": {"extraction_retries": 0}})
+        cfg, _ = _dict_to_config({"design_reference": {"extraction_retries": 0}})
         assert cfg.design_reference.extraction_retries == 0
 
 

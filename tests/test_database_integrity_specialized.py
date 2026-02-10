@@ -840,7 +840,7 @@ class TestConfigEdgeCases:
     def test_empty_object_uses_all_defaults(self):
         """Config with database_scans: {} should use all defaults (True)."""
         data = {"database_scans": {}}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.database_scans.dual_orm_scan is True
         assert cfg.database_scans.default_value_scan is True
         assert cfg.database_scans.relationship_scan is True
@@ -848,7 +848,7 @@ class TestConfigEdgeCases:
     def test_single_field_override(self):
         """Only dual_orm_scan disabled, others default to True."""
         data = {"database_scans": {"dual_orm_scan": False}}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.database_scans.dual_orm_scan is False
         assert cfg.database_scans.default_value_scan is True
         assert cfg.database_scans.relationship_scan is True
@@ -860,7 +860,7 @@ class TestConfigEdgeCases:
             "unknown_key": True,
             "another_future_field": "value",
         }}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.database_scans.dual_orm_scan is False
         assert cfg.database_scans.default_value_scan is True
         assert not hasattr(cfg.database_scans, "unknown_key")
@@ -868,20 +868,20 @@ class TestConfigEdgeCases:
     def test_wrong_type_truthy_value(self):
         """String 'yes' as value -- Python treats it as truthy."""
         data = {"database_scans": {"dual_orm_scan": "yes"}}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         # "yes" is truthy in Python, so it should be treated as True-like
         assert cfg.database_scans.dual_orm_scan == "yes"
 
     def test_wrong_type_integer_value(self):
         """Integer 0 as value for a bool field -- Python treats 0 as falsy."""
         data = {"database_scans": {"dual_orm_scan": 0}}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.database_scans.dual_orm_scan == 0
 
     def test_none_value_for_section(self):
         """database_scans: null in YAML -- isinstance check protects."""
         data = {"database_scans": None}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         # isinstance(None, dict) is False, so defaults should apply
         assert cfg.database_scans.dual_orm_scan is True
 
@@ -907,7 +907,7 @@ class TestConfigEdgeCases:
                 "relationship_scan": True,
             },
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.convergence.max_cycles == 10
         assert cfg.milestone.enabled is True
         assert cfg.integrity_scans.deployment_scan is True
@@ -918,13 +918,13 @@ class TestConfigEdgeCases:
     def test_database_scans_not_a_dict_ignored(self):
         """database_scans: 'not_a_dict' -- isinstance check prevents crash."""
         data = {"database_scans": "not_a_dict"}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.database_scans.dual_orm_scan is True
 
     def test_database_scans_list_ignored(self):
         """database_scans: [1, 2, 3] -- isinstance check prevents crash."""
         data = {"database_scans": [1, 2, 3]}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.database_scans.dual_orm_scan is True
 
     def test_all_false_disables_everything(self):
@@ -934,7 +934,7 @@ class TestConfigEdgeCases:
             "default_value_scan": False,
             "relationship_scan": False,
         }}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.database_scans.dual_orm_scan is False
         assert cfg.database_scans.default_value_scan is False
         assert cfg.database_scans.relationship_scan is False

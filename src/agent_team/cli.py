@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 import queue
 import re
@@ -382,10 +383,11 @@ async def _run_interactive(
     resume_context: str | None = None,
     task_text: str | None = None,
     ui_requirements_content: str | None = None,
+    user_overrides: set[str] | None = None,
 ) -> float:
     """Run the interactive multi-turn conversation loop. Returns total cost."""
     # Apply depth-based quality gating for initial depth
-    apply_depth_quality_gating(depth_override or "standard", config)
+    apply_depth_quality_gating(depth_override or "standard", config, user_overrides)
     options = _build_options(
         config, cwd, constraints=constraints, task_text=task_text,
         depth=depth_override or "standard", backend=_backend,
@@ -2864,7 +2866,7 @@ def main() -> None:
 
     # Load config
     try:
-        config = load_config(config_path=args.config, cli_overrides=cli_overrides)
+        config, user_overrides = load_config(config_path=args.config, cli_overrides=cli_overrides)
     except ValueError as exc:
         print_error(f"Configuration error: {exc}")
         sys.exit(1)
@@ -3385,6 +3387,7 @@ def main() -> None:
                     resume_context=_resume_ctx,
                     task_text=args.task,
                     ui_requirements_content=ui_requirements_content,
+                    user_overrides=user_overrides,
                 ))
             else:
                 # Use the interview doc as the task if no explicit task was given
@@ -3404,7 +3407,7 @@ def main() -> None:
                     _current_state.depth = depth
 
                 # Apply depth-based quality gating (QUICK disables quality features)
-                apply_depth_quality_gating(depth, config)
+                apply_depth_quality_gating(depth, config, user_overrides)
 
                 # Route to milestone loop if PRD mode + milestone feature enabled
                 _is_prd_mode = bool(args.prd) or interview_scope == "COMPLEX"
@@ -3784,14 +3787,32 @@ def main() -> None:
             print_warning(f"Review recovery pass failed: {exc}")
 
     # -------------------------------------------------------------------
+    # Compute scan scope based on depth for post-orchestration scans
+    # -------------------------------------------------------------------
+    scan_scope = None
+    if config.depth.scan_scope_mode == "changed" or (
+        config.depth.scan_scope_mode == "auto" and depth in ("quick", "standard")
+    ):
+        try:
+            from .quality_checks import ScanScope, compute_changed_files
+            changed = compute_changed_files(Path(cwd))
+            if changed:
+                scan_scope = ScanScope(
+                    mode="changed_only" if depth == "quick" else "changed_and_imports",
+                    changed_files=changed,
+                )
+        except Exception:
+            pass  # Fall back to full scan on any error
+
+    # -------------------------------------------------------------------
     # Post-orchestration: Mock data scan (standard + milestone modes)
     # -------------------------------------------------------------------
     # In milestone mode, each milestone already runs mock scanning.
     # For standard (non-milestone) mode, scan here as a final safety net.
-    if not _use_milestones and config.milestone.mock_data_scan:
+    if not _use_milestones and (config.post_orchestration_scans.mock_data_scan or config.milestone.mock_data_scan):
         try:
             from .quality_checks import run_mock_data_scan
-            mock_violations = run_mock_data_scan(Path(cwd))
+            mock_violations = run_mock_data_scan(Path(cwd), scope=scan_scope)
             if mock_violations:
                 print_warning(
                     f"Post-orchestration mock data scan: {len(mock_violations)} "
@@ -3820,10 +3841,10 @@ def main() -> None:
     # -------------------------------------------------------------------
     # In milestone mode, each milestone already runs UI compliance scanning.
     # For standard (non-milestone) mode, scan here as a final safety net.
-    if not _use_milestones and config.milestone.ui_compliance_scan:
+    if not _use_milestones and (config.post_orchestration_scans.ui_compliance_scan or config.milestone.ui_compliance_scan):
         try:
             from .quality_checks import run_ui_compliance_scan
-            ui_violations = run_ui_compliance_scan(Path(cwd))
+            ui_violations = run_ui_compliance_scan(Path(cwd), scope=scan_scope)
             if ui_violations:
                 print_warning(
                     f"Post-orchestration UI compliance scan: {len(ui_violations)} "
@@ -3883,7 +3904,7 @@ def main() -> None:
     if config.integrity_scans.asset_scan:
         try:
             from .quality_checks import run_asset_scan
-            asset_violations = run_asset_scan(Path(cwd))
+            asset_violations = run_asset_scan(Path(cwd), scope=scan_scope)
             if asset_violations:
                 print_warning(
                     f"Asset integrity scan: {len(asset_violations)} "
@@ -3909,7 +3930,22 @@ def main() -> None:
             print_warning(f"Asset integrity scan failed: {exc}")
 
     # Scan 3: PRD reconciliation — quantitative claim verification (LLM-based)
-    if config.integrity_scans.prd_reconciliation:
+    _should_run_prd_recon = config.integrity_scans.prd_reconciliation
+    if _should_run_prd_recon and depth == "thorough":
+        # M2 fix: crash-isolate the quality gate file I/O (TOCTOU safe)
+        try:
+            _req_path = Path(cwd) / config.convergence.requirements_dir / config.convergence.requirements_file
+            if _req_path.is_file():
+                _req_size = _req_path.stat().st_size
+                _req_content = _req_path.read_text(encoding="utf-8", errors="replace")
+                _has_req_items = bool(re.search(r"REQ-\d{3}", _req_content))
+                if _req_size < 500 or not _has_req_items:
+                    _should_run_prd_recon = False
+            else:
+                _should_run_prd_recon = False
+        except OSError:
+            pass  # Safe fallback: run reconciliation if gate check fails
+    if _should_run_prd_recon:
         try:
             prd_recon_cost = asyncio.run(_run_prd_reconciliation(
                 cwd=cwd,
@@ -3944,7 +3980,7 @@ def main() -> None:
         try:
             from .quality_checks import run_dual_orm_scan
 
-            db_dual_violations = run_dual_orm_scan(Path(cwd))
+            db_dual_violations = run_dual_orm_scan(Path(cwd), scope=scan_scope)
             if db_dual_violations:
                 print_warning(
                     f"Dual ORM scan: {len(db_dual_violations)} "
@@ -3979,7 +4015,7 @@ def main() -> None:
         try:
             from .quality_checks import run_default_value_scan
 
-            db_default_violations = run_default_value_scan(Path(cwd))
+            db_default_violations = run_default_value_scan(Path(cwd), scope=scan_scope)
             if db_default_violations:
                 print_warning(
                     f"Default value scan: {len(db_default_violations)} "
@@ -4014,7 +4050,7 @@ def main() -> None:
         try:
             from .quality_checks import run_relationship_scan
 
-            db_rel_violations = run_relationship_scan(Path(cwd))
+            db_rel_violations = run_relationship_scan(Path(cwd), scope=scan_scope)
             if db_rel_violations:
                 print_warning(
                     f"Relationship scan: {len(db_rel_violations)} "

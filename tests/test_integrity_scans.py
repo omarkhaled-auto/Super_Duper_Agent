@@ -56,27 +56,27 @@ class TestIntegrityScanConfig:
             "asset_scan": False,
             "prd_reconciliation": False,
         }}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.integrity_scans.deployment_scan is False
         assert cfg.integrity_scans.asset_scan is False
         assert cfg.integrity_scans.prd_reconciliation is False
 
     def test_yaml_parsing_partial(self):
         data = {"integrity_scans": {"deployment_scan": False}}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.integrity_scans.deployment_scan is False
         assert cfg.integrity_scans.asset_scan is True  # default preserved
         assert cfg.integrity_scans.prd_reconciliation is True
 
     def test_yaml_missing_section_uses_defaults(self):
-        cfg = _dict_to_config({})
+        cfg, _ = _dict_to_config({})
         assert cfg.integrity_scans.deployment_scan is True
         assert cfg.integrity_scans.asset_scan is True
         assert cfg.integrity_scans.prd_reconciliation is True
 
     def test_yaml_invalid_type_ignored(self):
         data = {"integrity_scans": "not_a_dict"}
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         # Should fall back to defaults
         assert cfg.integrity_scans.deployment_scan is True
 
@@ -2508,7 +2508,7 @@ class TestConfigOrdering:
             "integrity_scans": {"deployment_scan": False},
             "e2e_testing": {"enabled": True},
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.integrity_scans.deployment_scan is False
         assert cfg.e2e_testing.enabled is True
 
@@ -2520,7 +2520,7 @@ class TestConfigOrdering:
             "integrity_scans": {"asset_scan": False},
             "e2e_testing": {"enabled": False},
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.orchestrator.model == "sonnet"
         assert cfg.milestone.enabled is True
         assert cfg.integrity_scans.asset_scan is False
@@ -3104,7 +3104,7 @@ class TestCLIFunctionEdgeCases:
 
     def test_config_all_integrity_scans_disabled(self):
         """All three scans can be disabled independently."""
-        cfg = _dict_to_config({"integrity_scans": {
+        cfg, _ = _dict_to_config({"integrity_scans": {
             "deployment_scan": False,
             "asset_scan": False,
             "prd_reconciliation": False,

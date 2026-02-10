@@ -23,13 +23,70 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import dataclass
+import subprocess
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
 # ---------------------------------------------------------------------------
 # Dataclasses
 # ---------------------------------------------------------------------------
+
+
+@dataclass
+class ScanScope:
+    """Controls which files a scan examines.
+
+    When passed to a scan function, limits scanning to the specified files
+    instead of walking the entire project tree.  When ``None`` is passed
+    (the default), scans behave identically to the original full-project mode.
+
+    Attributes:
+        mode: "full" (scan everything), "changed_only" (only changed files),
+              or "changed_and_imports" (changed files + their importers).
+        changed_files: Absolute paths of files changed since last commit.
+    """
+
+    mode: str = "full"
+    changed_files: list[Path] = field(default_factory=list)
+
+
+def compute_changed_files(project_root: Path) -> list[Path]:
+    """Compute files changed since last commit + untracked new files.
+
+    Uses ``git diff --name-only HEAD`` for modified files and
+    ``git ls-files --others --exclude-standard`` for new untracked files.
+
+    Returns absolute paths. Returns an empty list if:
+    - Not a git repository
+    - git is not available
+    - Any subprocess error occurs
+
+    An empty list signals the caller to fall back to full-project scanning.
+    """
+    try:
+        diff_output = subprocess.check_output(
+            ["git", "diff", "--name-only", "HEAD"],
+            cwd=project_root,
+            text=True,
+            timeout=10,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        untracked = subprocess.check_output(
+            ["git", "ls-files", "--others", "--exclude-standard"],
+            cwd=project_root,
+            text=True,
+            timeout=10,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        files: list[Path] = []
+        for line in (diff_output + "\n" + untracked).splitlines():
+            line = line.strip()
+            if line:
+                files.append((project_root / line).resolve())
+        return files
+    except (subprocess.SubprocessError, FileNotFoundError, OSError):
+        return []
 
 
 @dataclass
@@ -218,8 +275,11 @@ _RE_E2E_AUTH_TEST = re.compile(
 )
 
 # E2E-006: Placeholder text in UI components
+# NOTE: "placeholder" alone is NOT matched — it is a standard HTML attribute.
+# We match "placeholder text/content" and other indicator phrases.
+# The `.` wildcard intentionally matches any separator (space, underscore, dash).
 _RE_E2E_PLACEHOLDER = re.compile(
-    r'(?:placeholder|coming.soon|will.be.implemented|future.milestone|under.construction|not.yet.available|lorem.ipsum)',
+    r'(?:placeholder.text|placeholder.content|coming.soon|will.be.implemented|future.milestone|under.construction|not.yet.available|lorem.ipsum)',
     re.IGNORECASE,
 )
 # Comment patterns to exclude from E2E-006
@@ -1196,7 +1256,7 @@ def run_spot_checks(project_root: Path) -> list[Violation]:
     return violations
 
 
-def run_mock_data_scan(project_root: Path) -> list[Violation]:
+def run_mock_data_scan(project_root: Path, scope: ScanScope | None = None) -> list[Violation]:
     """Scan project for mock data patterns in service/client files.
 
     Unlike :func:`run_spot_checks` which runs ALL checks, this function runs
@@ -1207,6 +1267,9 @@ def run_mock_data_scan(project_root: Path) -> list[Violation]:
     """
     violations: list[Violation] = []
     source_files = _iter_source_files(project_root)
+    if scope and scope.changed_files:
+        scope_set = set(scope.changed_files)
+        source_files = [f for f in source_files if f.resolve() in scope_set]
 
     for file_path in source_files:
         if len(violations) >= _MAX_VIOLATIONS:
@@ -1229,7 +1292,7 @@ def run_mock_data_scan(project_root: Path) -> list[Violation]:
     return violations
 
 
-def run_ui_compliance_scan(project_root: Path) -> list[Violation]:
+def run_ui_compliance_scan(project_root: Path, scope: ScanScope | None = None) -> list[Violation]:
     """Scan project for UI compliance violations in component/style files.
 
     Unlike :func:`run_spot_checks` which runs ALL checks, this function runs
@@ -1240,6 +1303,9 @@ def run_ui_compliance_scan(project_root: Path) -> list[Violation]:
     """
     violations: list[Violation] = []
     source_files = _iter_source_files(project_root)
+    if scope and scope.changed_files:
+        scope_set = set(scope.changed_files)
+        source_files = [f for f in source_files if f.resolve() in scope_set]
 
     for file_path in source_files:
         if len(violations) >= _MAX_VIOLATIONS:
@@ -1262,7 +1328,7 @@ def run_ui_compliance_scan(project_root: Path) -> list[Violation]:
     return violations
 
 
-def run_e2e_quality_scan(project_root: Path) -> list[Violation]:
+def run_e2e_quality_scan(project_root: Path, scope: ScanScope | None = None) -> list[Violation]:
     """Scan project for E2E test quality issues.
 
     Runs E2E-001..006 checks on files in e2e/ and playwright/ directories
@@ -1272,13 +1338,22 @@ def run_e2e_quality_scan(project_root: Path) -> list[Violation]:
     Returns violations sorted by severity, capped at _MAX_VIOLATIONS.
     """
     violations: list[Violation] = []
-    source_files = _iter_source_files(project_root)
+    all_source_files = _iter_source_files(project_root)
+    # Scope filtering for per-file checks (E2E-001..004)
+    scoped_files = all_source_files
+    _scope_active = False
+    if scope and scope.changed_files:
+        scope_set = set(scope.changed_files)
+        scoped_files = [f for f in all_source_files if f.resolve() in scope_set]
+        _scope_active = True
 
     # Track whether any E2E test file contains auth tests (for E2E-005)
+    # Use FULL file list for aggregate check to avoid false positives (H1 fix)
     has_auth_e2e_test = False
     has_e2e_tests = False
 
-    for file_path in source_files:
+    # Per-file E2E quality checks on scoped files only
+    for file_path in scoped_files:
         if len(violations) >= _MAX_VIOLATIONS:
             break
         try:
@@ -1297,6 +1372,23 @@ def run_e2e_quality_scan(project_root: Path) -> list[Violation]:
             has_e2e_tests = True
             if _RE_E2E_AUTH_TEST.search(content):
                 has_auth_e2e_test = True
+
+    # When scope is active, scan ALL e2e files for auth test presence
+    # to avoid false-positive E2E-005 (H1 fix: unchanged auth test files
+    # must still be visible for the aggregate check)
+    if _scope_active and not has_auth_e2e_test:
+        for file_path in all_source_files:
+            try:
+                rel_path = file_path.relative_to(project_root).as_posix()
+                extension = file_path.suffix
+                if extension in _EXT_E2E and _RE_E2E_DIR.search(rel_path):
+                    has_e2e_tests = True
+                    content = file_path.read_text(encoding="utf-8", errors="replace")
+                    if _RE_E2E_AUTH_TEST.search(content):
+                        has_auth_e2e_test = True
+                        break
+            except OSError:
+                continue
 
     # --- E2E-005: Inverted auth test check ---
     # If app has auth dependencies but no auth E2E test, emit warning
@@ -1654,13 +1746,14 @@ def _resolve_asset(ref: str, file_dir: Path, project_root: Path) -> bool:
     return False
 
 
-def run_asset_scan(project_root: Path) -> list[Violation]:
+def run_asset_scan(project_root: Path, scope: ScanScope | None = None) -> list[Violation]:
     """Scan for broken static asset references (ASSET-001..003).
 
     Walks template/component files and checks that src, href, url(),
     require, and import references to static assets exist on disk.
     """
     violations: list[Violation] = []
+    scope_set = set(f.resolve() for f in scope.changed_files) if scope and scope.changed_files else None
 
     for dirpath, dirnames, filenames in os.walk(project_root):
         dirnames[:] = [d for d in dirnames if not _should_skip_dir(d)]
@@ -1668,6 +1761,8 @@ def run_asset_scan(project_root: Path) -> list[Violation]:
             if len(violations) >= _MAX_VIOLATIONS:
                 break
             file_path = Path(dirpath) / filename
+            if scope_set and file_path.resolve() not in scope_set:
+                continue
             if file_path.suffix.lower() not in _EXT_ASSET_SCAN:
                 continue
             try:
@@ -1877,7 +1972,7 @@ def _find_entity_files(
     return entity_files
 
 
-def run_dual_orm_scan(project_root: Path) -> list[Violation]:
+def run_dual_orm_scan(project_root: Path, scope: ScanScope | None = None) -> list[Violation]:
     """Detect type mismatches between ORM models and raw SQL queries.
 
     Only runs if 2+ data access methods are detected (ORM + raw queries).
@@ -1897,12 +1992,15 @@ def run_dual_orm_scan(project_root: Path) -> list[Violation]:
                 all_files.append(fp)
 
     source_files = _iter_source_files(project_root)
+    # H2 fix: detect data access methods with FULL file list (not scoped)
+    # so that dual-ORM pattern is correctly identified even when only
+    # entity files were changed but raw SQL files were not
     has_orm, has_raw = _detect_data_access_methods(project_root, all_files)
 
     if not (has_orm and has_raw):
         return []
 
-    # Collect ORM property types from entity files
+    # Collect ORM property types from entity files (full list for context)
     entity_files = _find_entity_files(project_root, source_files)
     # Map: property_name_lower -> set of types ("bool", "enum", "string", "datetime")
     orm_prop_types: dict[str, set[str]] = {}
@@ -1934,8 +2032,15 @@ def run_dual_orm_scan(project_root: Path) -> list[Violation]:
                 # Skip if type name looks like a known entity (present in entity_info)
                 orm_prop_types.setdefault(prop_name, set()).add("enum")
 
+    # H2 fix: apply scope filter to violation-reporting phase only
+    # (detection + ORM property collection above used full file lists)
+    scoped_source_files = source_files
+    if scope and scope.changed_files:
+        scope_set = set(f.resolve() for f in scope.changed_files)
+        scoped_source_files = [f for f in source_files if f.resolve() in scope_set]
+
     # Scan raw SQL in source files for type comparison mismatches
-    for f in source_files:
+    for f in scoped_source_files:
         if f.suffix not in _EXT_ENTITY:
             continue
         if len(violations) >= _MAX_VIOLATIONS:
@@ -2000,7 +2105,7 @@ def run_dual_orm_scan(project_root: Path) -> list[Violation]:
     return violations
 
 
-def run_default_value_scan(project_root: Path) -> list[Violation]:
+def run_default_value_scan(project_root: Path, scope: ScanScope | None = None) -> list[Violation]:
     """Detect missing defaults and unsafe nullable access in entity models.
 
     Scans ORM entity/model files for boolean/enum properties without defaults
@@ -2011,6 +2116,9 @@ def run_default_value_scan(project_root: Path) -> list[Violation]:
     violations: list[Violation] = []
     source_files = _iter_source_files(project_root)
     entity_files = _find_entity_files(project_root, source_files)
+    if scope and scope.changed_files:
+        scope_set = set(scope.changed_files)
+        entity_files = [f for f in entity_files if f.resolve() in scope_set]
 
     for ef in entity_files:
         if len(violations) >= _MAX_VIOLATIONS:
@@ -2274,7 +2382,7 @@ def run_default_value_scan(project_root: Path) -> list[Violation]:
     return violations
 
 
-def run_relationship_scan(project_root: Path) -> list[Violation]:
+def run_relationship_scan(project_root: Path, scope: ScanScope | None = None) -> list[Violation]:
     """Detect incomplete ORM relationship configurations.
 
     Finds FK columns without navigation properties, navigation properties
@@ -2288,6 +2396,18 @@ def run_relationship_scan(project_root: Path) -> list[Violation]:
 
     if not entity_files:
         return []
+
+    # M1 fix: determine scoped entity files for violation REPORTING only.
+    # entity_info is collected from ALL entity files for full cross-file
+    # relationship context (unchanged entity B's nav props must be visible
+    # when checking changed entity A's FK references).
+    _scoped_entity_rel_paths: set[str] | None = None
+    if scope and scope.changed_files:
+        scope_set = set(scope.changed_files)
+        _scoped_entity_rel_paths = set()
+        for f in entity_files:
+            if f.resolve() in scope_set:
+                _scoped_entity_rel_paths.add(f.relative_to(project_root).as_posix())
 
     # Collect all entity info: FK props, nav props, config calls
     # entity_name -> {fk_props: [(name, line, file)], nav_props: [(type, name, line, file)]}
@@ -2447,6 +2567,10 @@ def run_relationship_scan(project_root: Path) -> list[Violation]:
             if len(violations) >= _MAX_VIOLATIONS:
                 break
 
+            # M1 fix: only report violations for scoped files
+            if _scoped_entity_rel_paths is not None and fk_file not in _scoped_entity_rel_paths:
+                continue
+
             # Derive expected nav property name: "TenderId" -> "Tender"
             expected_nav = fk_name[:-2] if fk_name.endswith("Id") else None
             if not expected_nav:
@@ -2478,6 +2602,9 @@ def run_relationship_scan(project_root: Path) -> list[Violation]:
         for nav_type, nav_name, nav_line, nav_file in nav_props:
             if len(violations) >= _MAX_VIOLATIONS:
                 break
+            # M1 fix: only report violations for scoped files
+            if _scoped_entity_rel_paths is not None and nav_file not in _scoped_entity_rel_paths:
+                continue
             # Only check if the related type is a known entity
             if nav_type not in all_entity_names:
                 continue

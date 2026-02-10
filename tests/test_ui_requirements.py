@@ -493,7 +493,7 @@ class TestConfigNewFields:
                 "content_quality_check": False,
             }
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.design_reference.extraction_retries == 5
         assert cfg.design_reference.fallback_generation is False
         assert cfg.design_reference.content_quality_check is False
@@ -504,11 +504,11 @@ class TestConfigNewFields:
                 "ui_compliance_scan": False,
             }
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.milestone.ui_compliance_scan is False
 
     def test_dict_to_config_defaults(self):
-        cfg = _dict_to_config({})
+        cfg, _ = _dict_to_config({})
         assert cfg.design_reference.extraction_retries == 2
         assert cfg.design_reference.fallback_generation is True
         assert cfg.design_reference.content_quality_check is True
@@ -520,7 +520,7 @@ class TestConfigNewFields:
                 "extraction_retries": 0,
             }
         }
-        cfg = _dict_to_config(data)
+        cfg, _ = _dict_to_config(data)
         assert cfg.design_reference.extraction_retries == 0
 
 
@@ -821,11 +821,11 @@ class TestConfigInvalidTypes:
             _dict_to_config(data)
 
     def test_extraction_retries_zero_valid(self):
-        cfg = _dict_to_config({"design_reference": {"extraction_retries": 0}})
+        cfg, _ = _dict_to_config({"design_reference": {"extraction_retries": 0}})
         assert cfg.design_reference.extraction_retries == 0
 
     def test_extraction_retries_large_value(self):
-        cfg = _dict_to_config({"design_reference": {"extraction_retries": 100}})
+        cfg, _ = _dict_to_config({"design_reference": {"extraction_retries": 100}})
         assert cfg.design_reference.extraction_retries == 100
 
 

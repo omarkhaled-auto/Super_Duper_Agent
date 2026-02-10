@@ -458,7 +458,7 @@ _DIRECTION_TABLE: dict[str, dict[str, str]] = {
         "secondary": "#F1F5F9",
         "accent": "#F59E0B",
         "heading_font": "Space Grotesk",
-        "body_font": "Inter",
+        "body_font": "IBM Plex Sans",
         "base_unit": "4px",
     },
     "minimal_modern": {
