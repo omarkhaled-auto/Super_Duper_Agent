@@ -335,6 +335,24 @@ class E2ETestingConfig:
 
 
 @dataclass
+class BrowserTestingConfig:
+    """Interactive browser testing via Playwright MCP for production readiness.
+
+    When ``enabled`` is True, the browser testing phase runs after E2E testing
+    to verify the built application works end-to-end through a real browser.
+    Explicit opt-in because it is an expensive phase (sub-orchestrator sessions).
+    """
+
+    enabled: bool = False               # Opt-in (cost: $5-15 per phase)
+    max_fix_retries: int = 5            # Per-workflow fix attempts (min 1)
+    e2e_pass_rate_gate: float = 0.7     # Minimum E2E pass rate to proceed
+    headless: bool = True               # Headless browser mode
+    app_start_command: str = ""         # Override auto-detected start (empty = auto)
+    app_port: int = 0                   # Override auto-detected port (0 = auto)
+    regression_sweep: bool = True       # Quick regression check after fixes
+
+
+@dataclass
 class IntegrityScanConfig:
     """Configuration for post-build integrity scans.
 
@@ -397,6 +415,7 @@ class AgentTeamConfig:
     milestone: MilestoneConfig = field(default_factory=MilestoneConfig)
     prd_chunking: PRDChunkingConfig = field(default_factory=PRDChunkingConfig)
     e2e_testing: E2ETestingConfig = field(default_factory=E2ETestingConfig)
+    browser_testing: BrowserTestingConfig = field(default_factory=BrowserTestingConfig)
     integrity_scans: IntegrityScanConfig = field(default_factory=IntegrityScanConfig)
     tracking_documents: TrackingDocumentsConfig = field(default_factory=TrackingDocumentsConfig)
     database_scans: DatabaseScanConfig = field(default_factory=DatabaseScanConfig)
@@ -466,6 +485,7 @@ def apply_depth_quality_gating(
     depth: str,
     config: AgentTeamConfig,
     user_overrides: set[str] | None = None,
+    prd_mode: bool = False,
 ) -> None:
     """Apply depth-based gating to quality and scan config fields.
 
@@ -509,6 +529,8 @@ def apply_depth_quality_gating(
         # E2E testing
         _gate("e2e_testing.enabled", False, config.e2e_testing, "enabled")
         _gate("e2e_testing.max_fix_retries", 1, config.e2e_testing, "max_fix_retries")
+        # Browser testing
+        _gate("browser_testing.enabled", False, config.browser_testing, "enabled")
 
     elif depth == "standard":
         # Standard disables PRD reconciliation (expensive LLM call)
@@ -519,12 +541,20 @@ def apply_depth_quality_gating(
         _gate("e2e_testing.enabled", True, config.e2e_testing, "enabled")
         _gate("e2e_testing.max_fix_retries", 2, config.e2e_testing, "max_fix_retries")
         _gate("milestone.review_recovery_retries", 2, config.milestone, "review_recovery_retries")
+        # Browser testing — auto-enable only for PRD/PRD+ builds
+        if prd_mode or config.milestone.enabled:
+            _gate("browser_testing.enabled", True, config.browser_testing, "enabled")
+            _gate("browser_testing.max_fix_retries", 3, config.browser_testing, "max_fix_retries")
 
     elif depth == "exhaustive":
         # Exhaustive: full E2E + highest retries
         _gate("e2e_testing.enabled", True, config.e2e_testing, "enabled")
         _gate("e2e_testing.max_fix_retries", 3, config.e2e_testing, "max_fix_retries")
         _gate("milestone.review_recovery_retries", 3, config.milestone, "review_recovery_retries")
+        # Browser testing — auto-enable only for PRD/PRD+ builds
+        if prd_mode or config.milestone.enabled:
+            _gate("browser_testing.enabled", True, config.browser_testing, "enabled")
+            _gate("browser_testing.max_fix_retries", 5, config.browser_testing, "max_fix_retries")
 
 
 def get_agent_counts(depth: str) -> dict[str, tuple[int, int]]:
@@ -1056,6 +1086,39 @@ def _dict_to_config(data: dict[str, Any]) -> tuple[AgentTeamConfig, set[str]]:
             raise ValueError(
                 f"Invalid e2e_testing.test_port: {cfg.e2e_testing.test_port}. "
                 f"Must be between 1024 and 65535"
+            )
+
+    if "browser_testing" in data and isinstance(data["browser_testing"], dict):
+        bt = data["browser_testing"]
+        for key in ("enabled", "max_fix_retries"):
+            if key in bt:
+                user_overrides.add(f"browser_testing.{key}")
+        cfg.browser_testing = BrowserTestingConfig(
+            enabled=bt.get("enabled", cfg.browser_testing.enabled),
+            max_fix_retries=bt.get("max_fix_retries", cfg.browser_testing.max_fix_retries),
+            e2e_pass_rate_gate=bt.get("e2e_pass_rate_gate", cfg.browser_testing.e2e_pass_rate_gate),
+            headless=bt.get("headless", cfg.browser_testing.headless),
+            app_start_command=str(bt.get("app_start_command", cfg.browser_testing.app_start_command)),
+            app_port=bt.get("app_port", cfg.browser_testing.app_port),
+            regression_sweep=bt.get("regression_sweep", cfg.browser_testing.regression_sweep),
+        )
+        # Validate: max_fix_retries >= 1
+        if cfg.browser_testing.max_fix_retries < 1:
+            raise ValueError(
+                f"Invalid browser_testing.max_fix_retries: {cfg.browser_testing.max_fix_retries}. "
+                f"Must be >= 1"
+            )
+        # Validate: app_port 0 (auto) or 1024-65535
+        if cfg.browser_testing.app_port != 0 and not (1024 <= cfg.browser_testing.app_port <= 65535):
+            raise ValueError(
+                f"Invalid browser_testing.app_port: {cfg.browser_testing.app_port}. "
+                f"Must be 0 (auto) or between 1024 and 65535"
+            )
+        # Validate: e2e_pass_rate_gate in [0.0, 1.0]
+        if not (0.0 <= cfg.browser_testing.e2e_pass_rate_gate <= 1.0):
+            raise ValueError(
+                f"Invalid browser_testing.e2e_pass_rate_gate: {cfg.browser_testing.e2e_pass_rate_gate}. "
+                f"Must be between 0.0 and 1.0"
             )
 
     if "tracking_documents" in data and isinstance(data["tracking_documents"], dict):

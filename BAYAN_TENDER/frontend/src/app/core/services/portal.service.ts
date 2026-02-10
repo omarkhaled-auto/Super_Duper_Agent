@@ -367,6 +367,15 @@ export class PortalService {
     );
   }
 
+  getMyQuestions(tenderId: string | number): Observable<PortalClarification[]> {
+    return this.http.get<ApiResponse<any[]>>(
+      `${this.apiUrl}/tenders/${tenderId}/my-questions`
+    ).pipe(
+      map(response => (response.data || []).map(c => this.normalizeClarification(c))),
+      catchError(error => throwError(() => error))
+    );
+  }
+
   getBulletins(tenderId: string | number): Observable<PortalBulletin[]> {
     return this.http.get<ApiResponse<PortalBulletin[]>>(
       `${this.apiUrl}/tenders/${tenderId}/bulletins`
@@ -406,6 +415,20 @@ export class PortalService {
   // ============================================
   // Bid Submission Methods
   // ============================================
+
+  getBidStatus(tenderId: string | number): Observable<{
+    hasSubmitted: boolean;
+    bidId?: string;
+    receiptNumber?: string;
+    submittedAt?: string;
+  }> {
+    return this.http.get<ApiResponse<any>>(
+      `${this.apiUrl}/tenders/${tenderId}/bid/status`
+    ).pipe(
+      map(response => response.data),
+      catchError(() => of({ hasSubmitted: false }))
+    );
+  }
 
   getDraftBid(tenderId: string | number): Observable<PortalBidSubmission | null> {
     return this.http.get<ApiResponse<PortalBidSubmission | null>>(
@@ -512,8 +535,7 @@ export class PortalService {
         // Backend returns SubmitBidResultDto { receipt: BidReceiptDto, isLate: bool }
         const result = response.data;
         const receipt = result.receipt || result;
-        // Normalize bidId to id for frontend model
-        return { ...receipt, id: receipt.bidId || receipt.id } as PortalBidReceipt;
+        return this.normalizeReceipt(receipt);
       }),
       catchError(error => {
         this._isLoading.set(false);
@@ -523,12 +545,42 @@ export class PortalService {
   }
 
   getBidReceipt(bidId: string | number): Observable<PortalBidReceipt> {
-    return this.http.get<ApiResponse<PortalBidReceipt>>(
+    return this.http.get<ApiResponse<any>>(
       `${this.apiUrl}/bids/${bidId}/receipt`
     ).pipe(
-      map(response => response.data),
+      map(response => this.normalizeReceipt(response.data)),
       catchError(error => throwError(() => error))
     );
+  }
+
+  /**
+   * Normalize a BidReceiptDto from the backend into the frontend PortalBidReceipt shape.
+   * Backend uses: bidderCompanyName, isLate, files[].fileSizeBytes, files[].documentType
+   * Frontend uses: bidderName, isLateSubmission, documents[].fileSize, documents[].type
+   */
+  private normalizeReceipt(raw: any): PortalBidReceipt {
+    const files = raw.files || raw.documents || [];
+    const documents = files.map((f: any) => ({
+      type: f.documentType || f.type || '',
+      fileName: f.fileName || '',
+      fileSize: f.fileSizeBytes || f.fileSize || 0,
+    }));
+    const totalFileSize = documents.reduce((sum: number, d: any) => sum + (d.fileSize || 0), 0);
+
+    return {
+      id: raw.bidId || raw.id,
+      receiptNumber: raw.receiptNumber || '',
+      tenderId: raw.tenderId,
+      tenderTitle: raw.tenderTitle || '',
+      tenderReference: raw.tenderReference || '',
+      bidderName: raw.bidderCompanyName || raw.bidderName || '',
+      bidderEmail: raw.bidderEmail || '',
+      submittedAt: raw.submittedAt,
+      isLateSubmission: raw.isLate ?? raw.isLateSubmission ?? false,
+      documents,
+      totalFileSize,
+      pdfUrl: raw.pdfUrl,
+    } as PortalBidReceipt;
   }
 
   downloadReceiptPdf(bidId: string | number): Observable<Blob> {

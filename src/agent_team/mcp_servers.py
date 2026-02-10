@@ -118,3 +118,38 @@ def get_firecrawl_only_servers(config: AgentTeamConfig) -> dict[str, Any]:
         if fc:
             servers["firecrawl"] = fc
     return servers
+
+
+def _playwright_mcp_server(headless: bool = True) -> dict[str, Any]:
+    """Build Playwright MCP server config for browser testing.
+
+    Uses ``@playwright/mcp@latest`` via npx. The headless flag controls
+    whether a visible browser window is shown during execution.
+    """
+    args = ["-y", "@playwright/mcp@latest"]
+    if headless:
+        args.append("--headless")
+    return {
+        "type": "stdio",
+        "command": "npx",
+        "args": args,
+    }
+
+
+def get_browser_testing_servers(config: AgentTeamConfig) -> dict[str, Any]:
+    """Build MCP servers dict for browser testing executor agents.
+
+    Provides the Playwright MCP server for browser interaction, plus
+    Context7 if enabled. Used by the workflow executor and regression
+    sweep agents (NOT the startup or fix agents).
+    """
+    servers: dict[str, Any] = {}
+    servers["playwright"] = _playwright_mcp_server(
+        headless=config.browser_testing.headless,
+    )
+
+    context7_cfg = config.mcp_servers.get("context7")
+    if context7_cfg and context7_cfg.enabled:
+        servers["context7"] = _context7_server()
+
+    return servers

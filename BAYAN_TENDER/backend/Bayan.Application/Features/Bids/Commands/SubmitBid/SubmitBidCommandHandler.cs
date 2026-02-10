@@ -158,6 +158,7 @@ public class SubmitBidCommandHandler : IRequestHandler<SubmitBidCommand, SubmitB
             SubmittedAt = now,
             Timezone = "UTC",
             BidderCompanyName = bidder.CompanyName,
+            BidderEmail = bidder.Email,
             IsLate = isLate,
             Files = bidSubmission.BidDocuments.Select(d => new BidReceiptFileDto
             {

@@ -42,6 +42,7 @@ class RunState:
     failed_milestones: list[str] = field(default_factory=list)
     milestone_order: list[str] = field(default_factory=list)
     completion_ratio: float = 0.0  # completed_milestones / total_milestones
+    completed_browser_workflows: list[int] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.run_id:
@@ -95,6 +96,38 @@ class E2ETestReport:
     skip_reason: str = ""           # "Build failed", "No backend detected", etc.
     health: str = "unknown"         # "passed" | "partial" | "failed" | "skipped"
     failed_tests: list[str] = field(default_factory=list)
+
+
+@dataclass
+class WorkflowResult:
+    """Per-workflow outcome from browser testing."""
+
+    workflow_id: int = 0
+    workflow_name: str = ""
+    total_steps: int = 0
+    completed_steps: int = 0
+    health: str = "pending"          # pending | passed | failed | skipped
+    failed_step: str = ""
+    failure_reason: str = ""
+    fix_retries_used: int = 0
+    screenshots: list[str] = field(default_factory=list)
+    console_errors: list[str] = field(default_factory=list)
+
+
+@dataclass
+class BrowserTestReport:
+    """Aggregate browser testing phase outcome."""
+
+    total_workflows: int = 0
+    passed_workflows: int = 0
+    failed_workflows: int = 0
+    skipped_workflows: int = 0
+    total_fix_cycles: int = 0
+    workflow_results: list[WorkflowResult] = field(default_factory=list)
+    health: str = "unknown"          # passed | partial | failed | skipped
+    skip_reason: str = ""
+    regression_sweep_passed: bool = False
+    total_screenshots: int = 0
 
 
 _STATE_FILE = "STATE.json"
@@ -231,6 +264,7 @@ def load_state(directory: str = ".agent-team") -> RunState | None:
             failed_milestones=_expect(data.get("failed_milestones", []), list, []),
             milestone_order=_expect(data.get("milestone_order", []), list, []),
             completion_ratio=_expect(data.get("completion_ratio", 0.0), (int, float), 0.0),
+            completed_browser_workflows=_expect(data.get("completed_browser_workflows", []), list, []),
         )
     except (json.JSONDecodeError, KeyError, TypeError, ValueError, OSError, UnicodeDecodeError):
         return None

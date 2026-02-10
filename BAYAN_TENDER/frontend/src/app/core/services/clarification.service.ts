@@ -25,6 +25,102 @@ const PRIORITY_TO_API: Record<string, number> = {
   'urgent': 3
 };
 
+// Backend enum integer → frontend string mappings
+const STATUS_INT_MAP: Record<number, ClarificationStatus> = {
+  0: 'submitted',
+  1: 'under_review',   // Pending
+  2: 'answered',       // DraftAnswer — answer exists, ready for review/bulletin
+  3: 'answered',
+  4: 'published',
+  5: 'rejected',       // Duplicate
+  6: 'rejected'
+};
+
+const STATUS_NAME_MAP: Record<string, ClarificationStatus> = {
+  'submitted': 'submitted',
+  'pending': 'under_review',
+  'draftanswer': 'answered',
+  'answered': 'answered',
+  'published': 'published',
+  'duplicate': 'rejected',
+  'rejected': 'rejected'
+};
+
+const PRIORITY_INT_MAP: Record<number, ClarificationPriority> = {
+  0: 'low',
+  1: 'medium',   // Normal
+  2: 'high',
+  3: 'urgent'
+};
+
+const PRIORITY_NAME_MAP: Record<string, ClarificationPriority> = {
+  'low': 'low',
+  'normal': 'medium',
+  'high': 'high',
+  'urgent': 'urgent'
+};
+
+const SOURCE_INT_MAP: Record<number, ClarificationSource> = {
+  0: 'bidder',     // BidderQuestion
+  1: 'internal',   // InternalRfi
+  2: 'internal'    // ClientRfi
+};
+
+const SOURCE_NAME_MAP: Record<string, ClarificationSource> = {
+  'bidderquestion': 'bidder',
+  'internalrfi': 'internal',
+  'clientrfi': 'internal'
+};
+
+/** Normalize a raw clarification from the API to match frontend model */
+function normalizeClarification(raw: any): Clarification {
+  // Normalize status
+  let status: ClarificationStatus = 'submitted';
+  if (typeof raw.status === 'number') {
+    status = STATUS_INT_MAP[raw.status] ?? 'submitted';
+  } else if (typeof raw.status === 'string') {
+    status = STATUS_NAME_MAP[raw.status.toLowerCase()] ?? (raw.status as ClarificationStatus);
+  }
+  if (raw.statusName) {
+    const mapped = STATUS_NAME_MAP[raw.statusName.toLowerCase()];
+    if (mapped) status = mapped;
+  }
+
+  // Normalize priority
+  let priority: ClarificationPriority = 'medium';
+  if (typeof raw.priority === 'number') {
+    priority = PRIORITY_INT_MAP[raw.priority] ?? 'medium';
+  } else if (typeof raw.priority === 'string') {
+    priority = PRIORITY_NAME_MAP[raw.priority.toLowerCase()] ?? (raw.priority as ClarificationPriority);
+  }
+  if (raw.priorityName) {
+    const mapped = PRIORITY_NAME_MAP[raw.priorityName.toLowerCase()];
+    if (mapped) priority = mapped;
+  }
+
+  // Normalize source from clarificationType
+  let source: ClarificationSource = 'bidder';
+  if (typeof raw.clarificationType === 'number') {
+    source = SOURCE_INT_MAP[raw.clarificationType] ?? 'bidder';
+  } else if (raw.typeName) {
+    source = SOURCE_NAME_MAP[raw.typeName.toLowerCase()] ?? 'bidder';
+  }
+  if (raw.source && typeof raw.source === 'string') {
+    source = raw.source as ClarificationSource;
+  }
+
+  return {
+    ...raw,
+    status,
+    priority,
+    source,
+    bidderName: raw.bidderName ?? null,
+    submittedByName: raw.submittedByName ?? raw.submittedByUserName ?? null,
+    answeredByName: raw.answeredByName ?? null,
+    relatedBoqSectionTitle: raw.relatedBoqSectionTitle ?? raw.relatedBoqSection ?? null
+  };
+}
+
 export interface ClarificationQueryParams extends PaginationParams, ClarificationFilterParams {}
 
 @Injectable({
@@ -79,6 +175,10 @@ export class ClarificationService {
     }
 
     return this.api.getList<Clarification>(this.basePath(tenderId), queryParams as any).pipe(
+      map(result => ({
+        ...result,
+        items: result.items.map(c => normalizeClarification(c))
+      })),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -96,6 +196,7 @@ export class ClarificationService {
     this._error.set(null);
 
     return this.api.get<Clarification>(`${this.basePath(tenderId)}/${id}`).pipe(
+      map(c => normalizeClarification(c)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -112,7 +213,7 @@ export class ClarificationService {
   getSummary(tenderId: number): Observable<ClarificationSummary> {
     return this.api.getList<Clarification>(this.basePath(tenderId), { page: 1, pageSize: 1000 } as any).pipe(
       map(result => {
-        const clarifications = result.items;
+        const clarifications = result.items.map(c => normalizeClarification(c));
 
         const byStatus: Record<ClarificationStatus, number> = {
           draft: 0,
@@ -173,6 +274,7 @@ export class ClarificationService {
       priority: PRIORITY_TO_API[data.priority || 'medium'] ?? 1,
       attachmentIds: data.attachmentIds || []
     }).pipe(
+      map(c => normalizeClarification(c)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -190,6 +292,7 @@ export class ClarificationService {
     this._error.set(null);
 
     return this.api.put<Clarification>(`${this.basePath(tenderId)}/${id}`, data).pipe(
+      map(c => normalizeClarification(c)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -210,6 +313,7 @@ export class ClarificationService {
     return this.api.post<Clarification>(`${this.basePath(tenderId)}/${id}/answer`, {
       answer: data.answer
     }).pipe(
+      map(c => normalizeClarification(c)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -230,6 +334,7 @@ export class ClarificationService {
     return this.api.put<Clarification>(`${this.basePath(tenderId)}/${id}`, {
       status: 'submitted'
     }).pipe(
+      map(c => normalizeClarification(c)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -250,6 +355,7 @@ export class ClarificationService {
     return this.api.put<Clarification>(`${this.basePath(tenderId)}/${id}`, {
       status: 'under_review'
     }).pipe(
+      map(c => normalizeClarification(c)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -268,6 +374,7 @@ export class ClarificationService {
     this._error.set(null);
 
     return this.api.post<Clarification>(`${this.basePath(tenderId)}/${id}/approve`, {}).pipe(
+      map(c => normalizeClarification(c)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -288,6 +395,7 @@ export class ClarificationService {
     return this.api.post<Clarification>(`${this.basePath(tenderId)}/${id}/assign`, {
       assignToUserId
     }).pipe(
+      map(c => normalizeClarification(c)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -308,6 +416,7 @@ export class ClarificationService {
     return this.api.post<Clarification>(`${this.basePath(tenderId)}/${id}/duplicate`, {
       originalClarificationId
     }).pipe(
+      map(c => normalizeClarification(c)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -328,6 +437,7 @@ export class ClarificationService {
     return this.api.post<Clarification>(`${this.basePath(tenderId)}/${id}/reject`, {
       reason: reason || ''
     }).pipe(
+      map(c => normalizeClarification(c)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -404,12 +514,15 @@ export class ClarificationService {
    * Fetches clarifications with status filter = 'answered'.
    */
   getAnsweredClarifications(tenderId: number): Observable<Clarification[]> {
+    // Fetch all and filter client-side: both DraftAnswer(2) and Answered(3) normalize to 'answered'
     return this.api.getList<Clarification>(this.basePath(tenderId), {
       page: 1,
-      pageSize: 1000,
-      status: 'answered'
+      pageSize: 1000
     } as any).pipe(
-      map(result => result.items)
+      map(result => result.items
+        .map(c => normalizeClarification(c))
+        .filter(c => c.status === 'answered')
+      )
     );
   }
 

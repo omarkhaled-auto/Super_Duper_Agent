@@ -102,6 +102,22 @@ public class BidderLoginCommandHandler : IRequestHandler<BidderLoginCommand, Bid
         await _context.SaveChangesAsync(cancellationToken);
 
         // Build tender access list
+        var qualifiedTenderIds = bidder.TenderBidders
+            .Where(tb => tb.QualificationStatus == QualificationStatus.Qualified)
+            .Select(tb => tb.TenderId)
+            .ToList();
+
+        // Check which tenders have submitted bids
+        var submittedTenderIds = await _context.BidSubmissions
+            .Where(b => b.BidderId == bidder.Id
+                     && qualifiedTenderIds.Contains(b.TenderId)
+                     && b.ReceiptNumber != null
+                     && b.ReceiptNumber != string.Empty)
+            .Select(b => b.TenderId)
+            .ToListAsync(cancellationToken);
+
+        var submittedSet = new HashSet<Guid>(submittedTenderIds);
+
         var tenderAccess = bidder.TenderBidders
             .Where(tb => tb.QualificationStatus == QualificationStatus.Qualified)
             .Select(tb => new BidderTenderAccessDto
@@ -109,7 +125,8 @@ public class BidderLoginCommandHandler : IRequestHandler<BidderLoginCommand, Bid
                 TenderId = tb.TenderId,
                 TenderTitle = tb.Tender.Title,
                 TenderReference = tb.Tender.Reference,
-                QualificationStatus = tb.QualificationStatus.ToString()
+                QualificationStatus = tb.QualificationStatus.ToString(),
+                HasSubmittedBid = submittedSet.Contains(tb.TenderId)
             })
             .ToList();
 

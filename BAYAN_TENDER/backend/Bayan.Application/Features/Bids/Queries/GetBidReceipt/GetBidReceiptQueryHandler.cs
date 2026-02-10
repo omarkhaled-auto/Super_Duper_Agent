@@ -46,6 +46,7 @@ public class GetBidReceiptQueryHandler : IRequestHandler<GetBidReceiptQuery, Bid
             SubmittedAt = bidSubmission.SubmissionTime,
             Timezone = "UTC",
             BidderCompanyName = bidSubmission.Bidder.CompanyName,
+            BidderEmail = bidSubmission.Bidder.Email,
             IsLate = bidSubmission.IsLate,
             Files = bidSubmission.BidDocuments.Select(d => new BidReceiptFileDto
             {

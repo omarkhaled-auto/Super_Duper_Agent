@@ -16,7 +16,7 @@ import { DialogService, DynamicDialog } from 'primeng/dynamicdialog';
 import { MessageService } from 'primeng/api';
 import { forkJoin } from 'rxjs';
 import { PortalService } from '../../../core/services/portal.service';
-import { PortalClarification, PortalBulletin } from '../../../core/models/portal.model';
+import { PortalClarification, PortalBulletin, PortalBulletinClarification } from '../../../core/models/portal.model';
 import { SubmitQuestionDialogComponent } from './submit-question-dialog.component';
 
 @Component({
@@ -112,7 +112,7 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
                             [value]="bulletin.clarifications.length + ' Q&A'"
                             severity="secondary"
                           ></p-tag>
-                          @if (bulletin.pdfUrl) {
+                          @if (bulletin.hasPdf) {
                             <button
                               pButton
                               icon="pi pi-download"
@@ -126,14 +126,9 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
                       </div>
                     </ng-template>
 
-                    @if (bulletin.title || bulletin.introduction) {
+                    @if (bulletin.introduction) {
                       <div class="bulletin-intro">
-                        @if (bulletin.title) {
-                          <h4>{{ bulletin.title }}</h4>
-                        }
-                        @if (bulletin.introduction) {
-                          <p>{{ bulletin.introduction }}</p>
-                        }
+                        <p>{{ bulletin.introduction }}</p>
                       </div>
                       <p-divider></p-divider>
                     }
@@ -146,10 +141,10 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
                             <div class="qa-question">
                               <strong>{{ qa.subject }}</strong>
                               <p>{{ qa.question }}</p>
-                              @if (qa.relatedBoqSectionTitle) {
+                              @if (qa.relatedBoqSection) {
                                 <span class="boq-ref">
                                   <i class="pi pi-link"></i>
-                                  {{ qa.relatedBoqSectionTitle }}
+                                  {{ qa.relatedBoqSection }}
                                 </span>
                               }
                             </div>
@@ -700,11 +695,11 @@ export class PortalClarificationsComponent implements OnInit {
 
     forkJoin({
       bulletins: this.portalService.getBulletins(this.tenderId),
-      clarifications: this.portalService.getClarifications(this.tenderId)
+      myQuestions: this.portalService.getMyQuestions(this.tenderId)
     }).subscribe({
       next: (result) => {
         this.bulletins.set(result.bulletins);
-        this.myClarifications.set(result.clarifications);
+        this.myClarifications.set(result.myQuestions);
         this.isLoading.set(false);
       },
       error: (err) => {

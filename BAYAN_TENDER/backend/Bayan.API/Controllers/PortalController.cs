@@ -1,6 +1,7 @@
 using Bayan.Application.Common.Interfaces;
 using Bayan.Application.Common.Models;
 using Bayan.Application.Features.Auth.DTOs;
+using Bayan.Application.Features.Bids.Commands.GenerateBidReceiptPdf;
 using Bayan.Application.Features.Bids.Commands.SubmitBid;
 using Bayan.Application.Features.Bids.Commands.UploadBidFile;
 using Bayan.Application.Features.Bids.DTOs;
@@ -458,6 +459,38 @@ public class PortalController : ControllerBase
     }
 
     /// <summary>
+    /// Gets the bidder's own submitted questions for a tender (any status).
+    /// </summary>
+    /// <param name="tenderId">The tender ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of the bidder's questions.</returns>
+    [HttpGet("tenders/{tenderId:guid}/my-questions")]
+    [Authorize(Roles = "Bidder")]
+    [ProducesResponseType(typeof(List<PortalClarificationDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<List<PortalClarificationDto>>> GetMyQuestions(
+        Guid tenderId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var bidderId = GetBidderId();
+            var query = new GetMyQuestionsQuery
+            {
+                TenderId = tenderId,
+                BidderId = bidderId
+            };
+
+            var result = await _mediator.Send(query, cancellationToken);
+            return Ok(ApiResponse<List<PortalClarificationDto>>.SuccessResponse(result));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(ApiResponse<object>.FailureResponse(ex.Message));
+        }
+    }
+
+    /// <summary>
     /// Submits a question/clarification request.
     /// </summary>
     /// <param name="tenderId">The tender ID.</param>
@@ -594,6 +627,45 @@ public class PortalController : ControllerBase
     #region Bid Submissions
 
     /// <summary>
+    /// Checks the bid submission status for the current bidder on a tender.
+    /// Returns whether a bid has already been submitted, with receipt details if so.
+    /// </summary>
+    /// <param name="tenderId">The tender ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Bid status with optional receipt info.</returns>
+    [HttpGet("tenders/{tenderId:guid}/bid/status")]
+    [Authorize(Roles = "Bidder")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetBidStatus(
+        Guid tenderId,
+        CancellationToken cancellationToken = default)
+    {
+        var bidderId = GetBidderId();
+
+        var submission = await _context.BidSubmissions
+            .Where(b => b.TenderId == tenderId
+                     && b.BidderId == bidderId
+                     && b.ReceiptNumber != null
+                     && b.ReceiptNumber != string.Empty)
+            .Select(b => new { b.Id, b.ReceiptNumber, b.SubmissionTime })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (submission != null)
+        {
+            return Ok(ApiResponse<object>.SuccessResponse(new
+            {
+                hasSubmitted = true,
+                bidId = submission.Id,
+                receiptNumber = submission.ReceiptNumber,
+                submittedAt = submission.SubmissionTime
+            }));
+        }
+
+        return Ok(ApiResponse<object>.SuccessResponse(new { hasSubmitted = false }));
+    }
+
+    /// <summary>
     /// Uploads a file for a bid submission.
     /// </summary>
     /// <param name="tenderId">The tender ID.</param>
@@ -716,19 +788,62 @@ public class PortalController : ControllerBase
         // Get the bid submission to verify ownership and get PDF path
         var bidSubmission = await _context.BidSubmissions
             .Where(b => b.Id == bidId && b.BidderId == bidderId)
-            .Select(b => new { b.ReceiptPdfPath, b.ReceiptNumber })
+            .Select(b => new { b.Id, b.ReceiptPdfPath, b.ReceiptNumber })
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (bidSubmission == null || string.IsNullOrEmpty(bidSubmission.ReceiptPdfPath))
+        if (bidSubmission == null || string.IsNullOrEmpty(bidSubmission.ReceiptNumber))
         {
             return NotFound(ApiResponse<object>.FailureResponse("Resource not found"));
         }
 
-        var stream = await _fileStorage.DownloadFileAsync(
-            bidSubmission.ReceiptPdfPath,
-            cancellationToken);
+        // Try to download existing PDF from storage
+        Stream? stream = null;
+        bool needsRegeneration = string.IsNullOrEmpty(bidSubmission.ReceiptPdfPath);
 
-        return File(stream, "application/pdf", $"BidReceipt-{bidSubmission.ReceiptNumber}.pdf");
+        if (!needsRegeneration)
+        {
+            try
+            {
+                stream = await _fileStorage.DownloadFileAsync(
+                    bidSubmission.ReceiptPdfPath,
+                    cancellationToken);
+
+                // Check if stored PDF is corrupted (under 2KB usually means blank)
+                if (stream is MemoryStream ms && ms.Length < 2048)
+                {
+                    stream.Dispose();
+                    stream = null;
+                    needsRegeneration = true;
+                }
+            }
+            catch
+            {
+                needsRegeneration = true;
+            }
+        }
+
+        // Regenerate PDF if missing or corrupted
+        if (needsRegeneration)
+        {
+            var pdfResult = await _mediator.Send(
+                new GenerateBidReceiptPdfCommand
+                {
+                    BidSubmissionId = bidSubmission.Id
+                },
+                cancellationToken);
+
+            // Update stored path
+            var entity = await _context.BidSubmissions.FindAsync(new object[] { bidSubmission.Id }, cancellationToken);
+            if (entity != null)
+            {
+                entity.ReceiptPdfPath = pdfResult.FilePath;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+
+            stream = new MemoryStream(pdfResult.PdfContent);
+        }
+
+        return File(stream!, "application/pdf", $"BidReceipt-{bidSubmission.ReceiptNumber}.pdf");
     }
 
     #endregion

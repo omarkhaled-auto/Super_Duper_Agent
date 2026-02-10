@@ -24,6 +24,9 @@ import { PortalService } from '../../../core/services/portal.service';
       <header class="portal-header">
         <div class="header-content">
           <div class="header-left">
+            <a routerLink="/portal/tenders" class="back-link" pTooltip="Back to Your Tenders" tooltipPosition="bottom">
+              <i class="pi pi-arrow-left"></i>
+            </a>
             <img src="assets/images/logo-white.svg" alt="Bayan" class="portal-logo" />
             <div class="tender-info" *ngIf="tender()">
               <h1 class="tender-title">{{ tender()?.title }}</h1>
@@ -145,6 +148,25 @@ import { PortalService } from '../../../core/services/portal.service';
       align-items: center;
       gap: 1.5rem;
     }
+
+    .back-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 0.375rem;
+      color: rgba(255, 255, 255, 0.7);
+      text-decoration: none;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .back-link:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+    }
+
+    .back-link i { font-size: 1.125rem; }
 
     .portal-logo { height: 40px; }
 

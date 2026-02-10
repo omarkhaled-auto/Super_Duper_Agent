@@ -44,4 +44,23 @@ public class PortalBulletinDto
     /// Number of clarifications included in this bulletin.
     /// </summary>
     public int ClarificationCount { get; set; }
+
+    /// <summary>
+    /// The published Q&A items in this bulletin.
+    /// </summary>
+    public List<PortalBulletinClarificationDto> Clarifications { get; set; } = new();
+}
+
+/// <summary>
+/// A single Q&A item within a published bulletin (portal-facing).
+/// </summary>
+public class PortalBulletinClarificationDto
+{
+    public Guid Id { get; set; }
+    public string ReferenceNumber { get; set; } = string.Empty;
+    public string Subject { get; set; } = string.Empty;
+    public string Question { get; set; } = string.Empty;
+    public string Answer { get; set; } = string.Empty;
+    public string? RelatedBoqSection { get; set; }
+    public DateTime? AnsweredAt { get; set; }
 }

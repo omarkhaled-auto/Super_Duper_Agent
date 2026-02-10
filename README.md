@@ -120,6 +120,7 @@ Interview → Codebase Map → Plan → Research → Architect → Contract → 
 | 16 | **Database Integrity Scans** | 3 static scans (DB-001..008): dual ORM type consistency, default values, relationship completeness |
 | 17 | **E2E Testing Phase** | Real backend API tests + Playwright browser tests — verifies the app actually works end-to-end |
 | 18 | **Tracking Documents** | E2E coverage matrix, fix cycle log, milestone handoff docs — structured agent memory between phases |
+| 19 | **Browser MCP Testing** | Playwright-based visual browser testing — starts app, executes user workflows, takes screenshots, fixes regressions |
 
 Steps 5-7 repeat in a **convergence loop** until every `- [ ]` in REQUIREMENTS.md becomes `- [x]`.
 
@@ -683,6 +684,15 @@ e2e_testing:
   skip_if_no_api: true        # Auto-skip backend if no API detected
   skip_if_no_frontend: true   # Auto-skip frontend if no frontend detected
 
+browser_testing:
+  enabled: false              # Enable browser MCP testing (auto-enabled at thorough/exhaustive + PRD)
+  max_fix_retries: 3          # Fix-rerun cycles per failing workflow
+  e2e_pass_rate_gate: 0.7     # Minimum E2E pass rate before browser testing runs
+  headless: true              # Run browser in headless mode
+  app_start_command: ""       # Custom app start command (empty = auto-detect)
+  app_port: 0                 # Custom port (0 = auto-detect)
+  regression_sweep: true      # Re-run passed workflows after fixes
+
 tracking_documents:
   e2e_coverage_matrix: true      # Generate coverage matrix before E2E tests
   fix_cycle_log: true            # Track fix attempts across all fix loops
@@ -1162,7 +1172,7 @@ tests/
                           #   SDK client lifecycle, Firecrawl config (5 tests)
 ```
 
-**Total: 4019+ tests** — 4014+ unit/integration (always run) + 5 E2E (require `--run-e2e`).
+**Total: 4308+ tests** — 4303+ unit/integration (always run) + 5 E2E (require `--run-e2e`).
 
 ### Upgrade Test Files (v2.0-v7.0)
 
@@ -1188,7 +1198,9 @@ tests/
 ├── test_config_completeness.py        # v7.0: All 11 dataclass defaults, YAML loading (47 tests)
 ├── test_scan_pattern_correctness.py   # v7.0: Positive/negative regex match tests (50 tests)
 ├── test_prompt_integrity.py           # v7.0: All 17 prompt policies verified (33 tests)
-└── test_fix_completeness.py           # v7.0: All fix function branches, signatures (30 tests)
+├── test_fix_completeness.py           # v7.0: All fix function branches, signatures (30 tests)
+├── test_browser_testing.py            # v8.0: Browser MCP workflow parsing, startup, screenshots, edge cases (~190 tests)
+└── test_browser_wiring.py             # v8.0: Browser CLI wiring, depth gating, signatures, crash isolation (~93 tests)
 ```
 
 ### Live E2E Verification
@@ -1261,7 +1273,7 @@ src/agent_team/
 ├── interviewer.py           # Phase 0: 3-phase interactive interview with min-exchange enforcement, non-interactive mode, scope estimation
 ├── display.py               # Rich terminal output (banners, tables, progress, verification, convergence health panels, milestone progress)
 ├── state.py                 # Run state persistence: save/load STATE.json, atomic writes, staleness detection, convergence reports, milestone tracking (schema v2)
-├── mcp_servers.py           # Firecrawl + Context7 MCP server configuration
+├── mcp_servers.py           # Firecrawl + Context7 + Playwright MCP server configuration
 ├── _lang.py                 # Shared language detection (Python, TS, JS, Go, Rust, etc.)
 ├── enums.py                 # Type-safe enums (DepthLevel, TaskStatus, HealthStatus, etc.)
 ├── codebase_map.py          # Phase 0.5: project structure analysis, dependency mapping
@@ -1271,6 +1283,7 @@ src/agent_team/
 ├── wiring.py                # Wiring dependency detection — defers WIRE-xxx tasks until prerequisites complete
 ├── verification.py          # Progressive verification: requirements → contracts → lint → types → tests → build → security → quality checks
 ├── e2e_testing.py           # E2E testing: AppTypeInfo, detect_app_type(), parse_e2e_results(), backend/frontend/fix prompt constants
+├── browser_testing.py       # Browser MCP testing: WorkflowDefinition, AppStartupInfo, workflow generation/parsing, 4 prompt constants
 ├── tracking_documents.py    # Per-phase tracking: E2E coverage matrix, fix cycle log, milestone handoff generation + parsing
 ├── design_reference.py      # Design reference extraction: retry, fallback, validation, UI requirements generation
 └── prd_chunking.py          # Large PRD detection (>50KB), section chunking, index building
@@ -1305,6 +1318,7 @@ src/agent_team/
 - **Anti-pattern spot checks**: `quality_checks.py` scans project files with compiled regex patterns for common anti-patterns (FRONT-xxx, BACK-xxx, SLOP-xxx). Runs as a non-blocking advisory phase in the verification pipeline. Capped at 100 violations per scan.
 - **Zero mock data policy**: Code writers are explicitly prohibited from using mock data (RxJS of(), Promise.resolve(), BehaviorSubject, hardcoded variables). Seven regex patterns (MOCK-001..007) scan service/store/facade files. Covers Angular, React, Vue/Nuxt, and Python.
 - **E2E testing phase**: After convergence-driven reviews pass, real HTTP calls to real APIs (backend) and real Playwright browser interactions (frontend) verify the app actually works. Fix loops diagnose failure types and apply targeted strategies (implement feature, fix auth, fix wiring, fix logic).
+- **Browser MCP visual testing**: After E2E tests pass, a Playwright MCP agent launches the app in a real browser, executes user-facing workflows (login, CRUD, navigation), takes screenshots, and verifies visual correctness. Regression sweeps re-run all passed workflows after each fix. Triple-gated (config + depth + E2E pass rate). Crash-isolated with finally-block app cleanup.
 - **Tracking documents**: Three per-phase documents (coverage matrix, fix cycle log, milestone handoff) give agents structured memory between phases, preventing superficial testing, repeated fix strategies, and zero cross-milestone wiring.
 - **Database integrity scans**: Three static scans catch dual ORM type mismatches, missing default values, and incomplete relationship configuration across C#, TypeScript, and Python frameworks. Prompt policies (seed data completeness, enum/status registry) prevent these bugs at code-writing time.
 - **Depth-gated post-orchestration**: The entire post-orchestration pipeline is depth-aware. Quick fixes skip all scans. Standard scopes to changed files. Thorough/exhaustive auto-enable E2E testing. User overrides are sacred — explicit config values survive depth gating.
@@ -1337,6 +1351,7 @@ cli.py ──────┬──→ config.py ──→ enums.py
              ├──→ milestone_manager.py ──→ state.py
              ├──→ quality_checks.py (8 scan functions, ScanScope, 40+ regex patterns)
              ├──→ e2e_testing.py (AppTypeInfo, detect_app_type, parse_e2e_results)
+             ├──→ browser_testing.py (WorkflowDefinition, AppStartupInfo, 4 prompts, 15+ functions)
              ├──→ tracking_documents.py (coverage matrix, fix cycle log, milestone handoff)
              ├──→ design_reference.py (extraction retry, fallback, validation)
              ├──→ prd_chunking.py (large PRD detection, section chunking)
@@ -1363,14 +1378,15 @@ The following security properties are maintained:
 
 ---
 
-## Post-Orchestration Pipeline (v2.0-v7.0)
+## Post-Orchestration Pipeline (v2.0-v8.0)
 
-After the convergence loop completes, a 12-step post-orchestration pipeline runs quality scans, integrity checks, and E2E verification. All steps are depth-gated, crash-isolated, and independently configurable.
+After the convergence loop completes, a 13-step post-orchestration pipeline runs quality scans, integrity checks, E2E verification, and browser testing. All steps are depth-gated, crash-isolated, and independently configurable.
 
 ```
 Scope Computation → Mock Data Scan → UI Compliance Scan → Deployment Scan
 → Asset Scan → PRD Reconciliation → DB Dual ORM Scan → DB Default Value Scan
-→ DB Relationship Scan → E2E Backend Tests → E2E Frontend Tests → Recovery Report
+→ DB Relationship Scan → E2E Backend Tests → E2E Frontend Tests
+→ Browser MCP Testing → Recovery Report
 ```
 
 ### Depth Gating
@@ -1384,10 +1400,12 @@ Scope Computation → Mock Data Scan → UI Compliance Scan → Deployment Scan
 | PRD reconciliation | SKIP | SKIP | CONDITIONAL | FULL |
 | DB scans (3) | SKIP | SCOPED | FULL | FULL |
 | E2E testing | SKIP | OPT-IN | AUTO-ENABLED | AUTO-ENABLED |
+| Browser MCP testing | SKIP | SKIP | AUTO-ENABLED (PRD) | AUTO-ENABLED (PRD) |
 
 **SCOPED** = only files changed since last commit are scanned (via `git diff`).
 **CONDITIONAL** = PRD recon only runs if REQUIREMENTS.md >500 bytes + contains REQ-xxx.
 **AUTO-ENABLED** = E2E testing turns on automatically (unless user set `enabled: false`).
+**AUTO-ENABLED (PRD)** = Browser testing turns on at thorough/exhaustive depth when PRD mode is active.
 
 ### Quality Scan Patterns
 
@@ -1409,6 +1427,19 @@ When enabled (opt-in at standard, auto-enabled at thorough/exhaustive), the E2E 
 3. **70% Backend Gate** — Frontend tests only run if backend achieves >=70% pass rate
 4. **Fix Loop** — Up to `max_fix_retries` fix-rerun cycles per part (fixes the app, not the test)
 5. **Tracking** — E2E coverage matrix maps every requirement to a test; fix cycle log prevents repeated strategies
+
+### Browser MCP Testing Phase
+
+When enabled (auto-enabled at thorough/exhaustive + PRD mode), the Browser MCP phase:
+
+1. **App Startup** — Starts the built application, verifies health endpoint responds
+2. **Workflow Generation** — Creates user-facing workflows from REQUIREMENTS.md (login, CRUD, navigation)
+3. **Workflow Execution** — Playwright MCP clicks through each workflow, takes screenshots at each step
+4. **Fix Loop** — Up to `max_fix_retries` fix-rerun cycles per failing workflow (fixes the app, not the test)
+5. **Regression Sweep** — After each fix, ALL previously passed workflows are re-tested
+6. **Readiness Report** — Final summary with pass/fail counts, screenshot inventory, unresolved issues
+
+**Triple gate:** `browser_testing.enabled` + depth gating (thorough/exhaustive + PRD) + `e2e_pass_rate_gate` (70% E2E pass rate).
 
 ### Tracking Documents
 
@@ -1437,20 +1468,21 @@ For detailed upgrade documentation with all fixes, hardening passes, review roun
 | **v5.0** | Database Integrity | DB-001..008 scans (dual ORM, defaults, relationships), seed data + enum/status policies, C#/TS/Py support. 2 review rounds, 24 fixes. 409 tests. |
 | **v6.0** | Mode Upgrade Propagation | Depth-intelligent post-orchestration, scoped scanning (git diff), user override protection, PostOrchestrationScanConfig. 259 tests. |
 | **v7.0** | Production Audit #2 | 6-agent audit, 3 bugs fixed, 239 new tests, **100% PRODUCTION READY** certification. 4019 total tests passing. |
+| **v8.0** | Browser MCP Testing | Playwright-based visual browser testing — workflow execution, screenshot verification, regression sweeps, fix loops. 3-agent review cycle, 5 bugs fixed, 283 new tests. 4308 total tests passing. |
 
 ### Production Readiness
 
 ```
 =============================================================
-   100% PRODUCTION READY (v7.0 audit — 2026-02-10)
+   100% PRODUCTION READY (v8.0 — 2026-02-10)
 =============================================================
 ```
 
 - **0 CRITICAL bugs** across all versions
-- **4019 tests passing** (2 pre-existing failures in test_mcp_servers.py)
-- **12/12 post-orchestration blocks** independently crash-isolated
+- **4308 tests passing** (2 pre-existing failures in test_mcp_servers.py)
+- **13/13 post-orchestration blocks** independently crash-isolated (12 original + browser testing)
 - **17/17 prompt policies** correctly mapped across 6 agent roles
-- **All 55+ config fields** consumed at correct gate locations
+- **All 60+ config fields** consumed at correct gate locations
 - **Full backward compatibility** — old configs, no configs, partial configs all work
 
 ---

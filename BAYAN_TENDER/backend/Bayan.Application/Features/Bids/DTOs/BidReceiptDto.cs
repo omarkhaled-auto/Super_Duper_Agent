@@ -46,6 +46,11 @@ public class BidReceiptDto
     public string BidderCompanyName { get; set; } = string.Empty;
 
     /// <summary>
+    /// Email of the bidder.
+    /// </summary>
+    public string BidderEmail { get; set; } = string.Empty;
+
+    /// <summary>
     /// Whether the submission was late.
     /// </summary>
     public bool IsLate { get; set; }

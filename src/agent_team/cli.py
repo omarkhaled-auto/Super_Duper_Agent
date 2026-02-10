@@ -41,7 +41,7 @@ from .agents import (
     build_orchestrator_prompt,
 )
 from .config import AgentTeamConfig, apply_depth_quality_gating, detect_depth, extract_constraints, load_config, parse_max_review_cycles, parse_per_item_review_cycles
-from .state import ConvergenceReport, E2ETestReport
+from .state import BrowserTestReport, ConvergenceReport, E2ETestReport, WorkflowResult
 from .e2e_testing import (
     detect_app_type,
     parse_e2e_results,
@@ -1686,6 +1686,253 @@ async def _run_e2e_fix(
         print_warning(f"E2E fix pass failed: {exc}\n{traceback.format_exc()}")
 
     return cost
+
+
+# ---------------------------------------------------------------------------
+# Browser MCP Interactive Testing — Sub-Orchestrator Functions
+# ---------------------------------------------------------------------------
+
+async def _run_browser_startup_agent(
+    cwd: str | None,
+    config: AgentTeamConfig,
+    workflows_dir: Path,
+    task_text: str | None = None,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    depth: str = "standard",
+) -> tuple[float, "AppStartupInfo"]:
+    """Start the app via a sub-orchestrator agent (fallback when app isn't running)."""
+    from .browser_testing import BROWSER_APP_STARTUP_PROMPT, AppStartupInfo, parse_app_startup_info
+
+    print_info("Starting application via startup agent...")
+
+    prompt = BROWSER_APP_STARTUP_PROMPT.format(
+        project_root=cwd or ".",
+        app_start_command=config.browser_testing.app_start_command or "auto-detect",
+        app_port=config.browser_testing.app_port or "auto-detect",
+    )
+
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text, depth=depth, backend=_backend)
+    phase_costs: dict[str, float] = {}
+    cost = 0.0
+
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(prompt)
+            cost = await _process_response(client, config, phase_costs, current_phase="browser_startup")
+            if intervention:
+                cost += await _drain_interventions(client, intervention, config, phase_costs)
+    except Exception as exc:
+        print_warning(f"Browser startup agent failed: {exc}\n{traceback.format_exc()}")
+        return cost, AppStartupInfo()
+
+    try:
+        startup_path = workflows_dir / "APP_STARTUP.md"
+        info = parse_app_startup_info(startup_path)
+    except Exception as exc:
+        print_warning(f"Failed to parse app startup info: {exc}")
+        return cost, AppStartupInfo()
+    return cost, info
+
+
+async def _run_browser_workflow_executor(
+    cwd: str | None,
+    config: AgentTeamConfig,
+    workflow_def: "WorkflowDefinition",
+    workflows_dir: Path,
+    app_url: str,
+    task_text: str | None = None,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    depth: str = "standard",
+) -> tuple[float, WorkflowResult]:
+    """Execute a single workflow via Playwright MCP browser agent."""
+    from .browser_testing import BROWSER_WORKFLOW_EXECUTOR_PROMPT, parse_workflow_results
+    from .mcp_servers import get_browser_testing_servers
+
+    print_info(f"Executing workflow {workflow_def.id}: {workflow_def.name}")
+
+    # Read workflow file content
+    workflow_content = ""
+    try:
+        workflow_content = Path(workflow_def.path).read_text(encoding="utf-8")
+    except OSError:
+        workflow_content = f"Workflow {workflow_def.id}: {workflow_def.name}"
+
+    screenshots_dir = workflows_dir.parent / "screenshots"
+    screenshots_dir.mkdir(parents=True, exist_ok=True)
+
+    prompt = BROWSER_WORKFLOW_EXECUTOR_PROMPT.format(
+        app_url=app_url,
+        workflow_id=f"{workflow_def.id:02d}",
+        screenshots_dir=str(screenshots_dir),
+        workflow_content=workflow_content,
+    )
+
+    # Build options with Playwright MCP servers
+    browser_servers = get_browser_testing_servers(config)
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text, depth=depth, backend=_backend)
+    # Override MCP servers with browser testing servers
+    options.mcp_servers = browser_servers
+
+    phase_costs: dict[str, float] = {}
+    cost = 0.0
+
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(prompt)
+            cost = await _process_response(client, config, phase_costs, current_phase=f"browser_wf_{workflow_def.id}")
+            if intervention:
+                cost += await _drain_interventions(client, intervention, config, phase_costs)
+    except Exception as exc:
+        print_warning(f"Browser workflow {workflow_def.id} failed: {exc}\n{traceback.format_exc()}")
+        return cost, WorkflowResult(
+            workflow_id=workflow_def.id,
+            workflow_name=workflow_def.name,
+            health="failed",
+            failure_reason=str(exc),
+        )
+
+    results_dir = workflows_dir.parent / "results"
+    results_path = results_dir / f"workflow_{workflow_def.id:02d}_results.md"
+    result = parse_workflow_results(results_path)
+    result.workflow_id = workflow_def.id
+    result.workflow_name = workflow_def.name
+    return cost, result
+
+
+async def _run_browser_workflow_fix(
+    cwd: str | None,
+    config: AgentTeamConfig,
+    workflow_def: "WorkflowDefinition",
+    result: WorkflowResult,
+    workflows_dir: Path,
+    task_text: str | None = None,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    depth: str = "standard",
+) -> float:
+    """Fix app code after a browser workflow failure."""
+    from .browser_testing import BROWSER_WORKFLOW_FIX_PROMPT
+
+    print_info(f"Running browser fix for workflow {workflow_def.id}: {workflow_def.name}")
+
+    # Read workflow content
+    workflow_content = ""
+    try:
+        workflow_content = Path(workflow_def.path).read_text(encoding="utf-8")
+    except OSError:
+        pass
+
+    # Build failure report
+    failure_report = (
+        f"Workflow: {workflow_def.name}\n"
+        f"Failed at: {result.failed_step}\n"
+        f"Reason: {result.failure_reason}\n"
+    )
+
+    console_errors = "\n".join(result.console_errors[:20]) if result.console_errors else "No console errors captured"
+
+    # Read fix cycle log
+    fix_log_path = workflows_dir.parent / "FIX_CYCLE_LOG.md"
+    fix_cycle_log = ""
+    try:
+        if fix_log_path.is_file():
+            fix_cycle_log = fix_log_path.read_text(encoding="utf-8")
+    except OSError:
+        pass
+
+    prompt = BROWSER_WORKFLOW_FIX_PROMPT.format(
+        failure_report=failure_report,
+        workflow_content=workflow_content,
+        console_errors=console_errors,
+        fix_cycle_log=fix_cycle_log or "No previous fix attempts",
+    )
+
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text, depth=depth, backend=_backend)
+    phase_costs: dict[str, float] = {}
+    cost = 0.0
+
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(prompt)
+            cost = await _process_response(client, config, phase_costs, current_phase=f"browser_fix_{workflow_def.id}")
+            if intervention:
+                cost += await _drain_interventions(client, intervention, config, phase_costs)
+    except Exception as exc:
+        print_warning(f"Browser fix for workflow {workflow_def.id} failed: {exc}\n{traceback.format_exc()}")
+
+    return cost
+
+
+async def _run_browser_regression_sweep(
+    cwd: str | None,
+    config: AgentTeamConfig,
+    passed_workflows: list["WorkflowDefinition"],
+    workflows_dir: Path,
+    app_url: str,
+    task_text: str | None = None,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    depth: str = "standard",
+) -> tuple[float, list[int]]:
+    """Quick regression sweep — ONE session checks ALL passed workflows."""
+    from .browser_testing import BROWSER_REGRESSION_SWEEP_PROMPT
+    from .mcp_servers import get_browser_testing_servers
+
+    url_lines = []
+    for wf in passed_workflows:
+        url_lines.append(f"- Workflow {wf.id} ({wf.name}): {app_url}{wf.first_page_route}")
+
+    screenshots_dir = workflows_dir.parent / "screenshots"
+    screenshots_dir.mkdir(parents=True, exist_ok=True)
+
+    prompt = BROWSER_REGRESSION_SWEEP_PROMPT.format(
+        app_url=app_url,
+        screenshots_dir=str(screenshots_dir),
+        passed_workflow_urls="\n".join(url_lines),
+    )
+
+    browser_servers = get_browser_testing_servers(config)
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text, depth=depth, backend=_backend)
+    options.mcp_servers = browser_servers
+
+    phase_costs: dict[str, float] = {}
+    cost = 0.0
+    regressed_ids: list[int] = []
+
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(prompt)
+            cost = await _process_response(client, config, phase_costs, current_phase="browser_regression")
+            if intervention:
+                cost += await _drain_interventions(client, intervention, config, phase_costs)
+    except Exception as exc:
+        print_warning(f"Browser regression sweep failed: {exc}\n{traceback.format_exc()}")
+        return cost, []
+
+    # Parse regression results
+    sweep_path = workflows_dir.parent / "REGRESSION_SWEEP_RESULTS.md"
+    if sweep_path.is_file():
+        try:
+            sweep_content = sweep_path.read_text(encoding="utf-8")
+            # Look for "Regressed workflow IDs: [1, 3]" or individual regressed rows
+            import re as _re
+            ids_match = _re.search(r"Regressed workflow IDs?:\s*\[([^\]]+)\]", sweep_content)
+            if ids_match:
+                for num in _re.findall(r"\d+", ids_match.group(1)):
+                    regressed_ids.append(int(num))
+            else:
+                # Parse table rows for REGRESSED status
+                for line in sweep_content.splitlines():
+                    if "REGRESSED" in line.upper():
+                        nums = _re.findall(r"Workflow\s+(\d+)", line)
+                        for n in nums:
+                            regressed_ids.append(int(n))
+        except (OSError, ValueError):
+            pass
+
+    return cost, regressed_ids
 
 
 # ---------------------------------------------------------------------------
@@ -3406,11 +3653,11 @@ def main() -> None:
                 if _current_state:
                     _current_state.depth = depth
 
-                # Apply depth-based quality gating (QUICK disables quality features)
-                apply_depth_quality_gating(depth, config, user_overrides)
-
                 # Route to milestone loop if PRD mode + milestone feature enabled
                 _is_prd_mode = bool(args.prd) or interview_scope == "COMPLEX"
+
+                # Apply depth-based quality gating (QUICK disables quality features)
+                apply_depth_quality_gating(depth, config, user_overrides, prd_mode=_is_prd_mode)
                 _master_plan_exists = (
                     Path(cwd) / config.convergence.requirements_dir
                     / config.convergence.master_plan_file
@@ -4083,6 +4330,8 @@ def main() -> None:
     # -------------------------------------------------------------------
     # Post-orchestration: E2E Testing Phase (after all other scans)
     # -------------------------------------------------------------------
+    e2e_report = E2ETestReport()
+    e2e_cost = 0.0
     if config.e2e_testing.enabled:
         if _current_state:
             _current_state.current_phase = "e2e_testing"
@@ -4091,9 +4340,6 @@ def main() -> None:
                 _save_state_e2e(_current_state, directory=str(Path(cwd) / ".agent-team"))
             except Exception:
                 pass
-
-        e2e_report = E2ETestReport()
-        e2e_cost = 0.0
 
         try:
             app_info = detect_app_type(Path(cwd))
@@ -4325,6 +4571,339 @@ def main() -> None:
             print_warning(f"E2E testing phase failed: {exc}\n{traceback.format_exc()}")
             e2e_report.health = "failed"
             e2e_report.skip_reason = f"Phase error: {exc}"
+
+    # ------------------------------------------------------------------
+    # Post-orchestration: Browser MCP Interactive Testing Phase
+    # ------------------------------------------------------------------
+    browser_report = BrowserTestReport()
+    browser_cost = 0.0
+    _browser_app_started = False  # Track if we started the app (for cleanup)
+    _browser_app_port = 0
+    if config.browser_testing.enabled:
+        try:
+            print_info("Browser MCP Interactive Testing Phase")
+
+            # Gate: E2E pass rate
+            e2e_total = e2e_report.backend_total + e2e_report.frontend_total
+            e2e_passed = e2e_report.backend_passed + e2e_report.frontend_passed
+
+            if e2e_total == 0:
+                print_info("Browser testing skipped: E2E phase did not run")
+                browser_report.health = "skipped"
+                browser_report.skip_reason = "E2E phase did not run"
+            elif (e2e_passed / e2e_total) < config.browser_testing.e2e_pass_rate_gate:
+                e2e_rate = e2e_passed / e2e_total
+                print_warning(
+                    f"Browser testing skipped: E2E pass rate {e2e_rate:.0%} "
+                    f"< {config.browser_testing.e2e_pass_rate_gate:.0%}"
+                )
+                browser_report.health = "skipped"
+                browser_report.skip_reason = "E2E pass rate below gate"
+            elif _current_state and "browser_testing" in _current_state.completed_phases:
+                print_info("Resuming: browser_testing already completed")
+            else:
+                from .browser_testing import (
+                    check_app_running,
+                    generate_browser_workflows,
+                    verify_workflow_execution,
+                    check_screenshot_diversity,
+                    write_workflow_state,
+                    update_workflow_state,
+                    count_screenshots,
+                    generate_readiness_report,
+                    generate_unresolved_issues,
+                )
+
+                if _current_state:
+                    _current_state.current_phase = "browser_testing"
+
+                # Create directories
+                browser_base = Path(cwd) / config.convergence.requirements_dir / "browser-workflows"
+                bw_workflows_dir = browser_base / "workflows"
+                bw_results_dir = browser_base / "results"
+                bw_screenshots_dir = browser_base / "screenshots"
+                bw_workflows_dir.mkdir(parents=True, exist_ok=True)
+                bw_results_dir.mkdir(parents=True, exist_ok=True)
+                bw_screenshots_dir.mkdir(parents=True, exist_ok=True)
+
+                # Step 1: App startup — health check first, agent as fallback
+                port = config.browser_testing.app_port
+                if port == 0:
+                    port = config.e2e_testing.test_port
+                if port == 0:
+                    try:
+                        from .e2e_testing import detect_app_type as _detect_app_type_browser
+                        _app_type_browser = _detect_app_type_browser(Path(cwd))
+                        if _app_type_browser and _app_type_browser.test_port:
+                            port = _app_type_browser.test_port
+                    except Exception:
+                        pass
+                if port == 0:
+                    port = 3000
+
+                app_url = f"http://localhost:{port}"
+
+                if check_app_running(port):
+                    print_info(f"App running on port {port} — reusing from E2E phase")
+                else:
+                    print_info(f"App not running on port {port} — starting via startup agent")
+                    startup_cost, startup_info = asyncio.run(_run_browser_startup_agent(
+                        cwd, config, browser_base,
+                        task_text=task_text, constraints=constraints,
+                        intervention=intervention, depth=depth,
+                    ))
+                    browser_cost += startup_cost
+                    _browser_app_started = True
+                    if startup_info.port:
+                        port = startup_info.port
+                        app_url = f"http://localhost:{port}"
+                    _browser_app_port = port
+
+                    if not check_app_running(port):
+                        print_warning("App startup failed — skipping browser testing")
+                        browser_report.health = "failed"
+                        browser_report.skip_reason = "App startup failed"
+                        raise RuntimeError("App startup failed")
+
+                # Step 2: Workflow generation (deterministic Python)
+                coverage_matrix_path = Path(cwd) / config.convergence.requirements_dir / "E2E_COVERAGE_MATRIX.md"
+                if not coverage_matrix_path.is_file():
+                    coverage_matrix_path = None
+
+                app_info_browser = None
+                try:
+                    from .e2e_testing import detect_app_type as _detect_app_type_wf
+                    app_info_browser = _detect_app_type_wf(Path(cwd))
+                except Exception:
+                    pass
+
+                requirements_dir = Path(cwd) / config.convergence.requirements_dir
+                workflow_defs = generate_browser_workflows(
+                    requirements_dir, coverage_matrix_path, app_info_browser, Path(cwd),
+                )
+
+                if not workflow_defs:
+                    print_warning("No browser workflows generated — skipping")
+                    browser_report.health = "failed"
+                    browser_report.skip_reason = "No workflows generated"
+                    raise RuntimeError("No workflows generated")
+
+                browser_report.total_workflows = len(workflow_defs)
+                write_workflow_state(bw_workflows_dir, workflow_defs)
+
+                print_info(f"Generated {len(workflow_defs)} browser workflows")
+
+                # Step 3: Sequential workflow execution
+                any_fixes_applied = False
+                workflow_results: dict[int, WorkflowResult] = {}
+
+                for wf in workflow_defs:
+                    # Resume check
+                    if _current_state and wf.id in _current_state.completed_browser_workflows:
+                        print_info(f"Workflow {wf.id} already completed — skipping")
+                        continue
+
+                    # Prerequisite check
+                    failed_deps = [
+                        dep for dep in wf.depends_on
+                        if dep in workflow_results and workflow_results[dep].health in ("failed", "skipped")
+                    ]
+                    if failed_deps:
+                        dep_str = ", ".join(str(d) for d in failed_deps)
+                        print_warning(f"Workflow {wf.id} skipped: prerequisite(s) {dep_str} failed/skipped")
+                        wr = WorkflowResult(
+                            workflow_id=wf.id,
+                            workflow_name=wf.name,
+                            health="skipped",
+                            failure_reason=f"Prerequisites failed/skipped: {dep_str}",
+                        )
+                        workflow_results[wf.id] = wr
+                        browser_report.workflow_results.append(wr)
+                        browser_report.skipped_workflows += 1
+                        update_workflow_state(bw_workflows_dir, wf.id, "SKIPPED")
+                        continue
+
+                    update_workflow_state(bw_workflows_dir, wf.id, "IN_PROGRESS")
+
+                    # Execute with fix loop
+                    retries = 0
+                    workflow_passed = False
+
+                    while not workflow_passed and retries <= config.browser_testing.max_fix_retries:
+                        exec_cost, wr = asyncio.run(_run_browser_workflow_executor(
+                            cwd, config, wf, bw_workflows_dir, app_url,
+                            task_text=task_text, constraints=constraints,
+                            intervention=intervention, depth=depth,
+                        ))
+                        browser_cost += exec_cost
+
+                        # Structural verification
+                        verified, issues = verify_workflow_execution(bw_workflows_dir, wf.id, wf.total_steps)
+                        diverse = check_screenshot_diversity(bw_screenshots_dir, wf.id, wf.total_steps)
+
+                        if verified and diverse and wr.health == "passed":
+                            workflow_passed = True
+                            break
+
+                        if not verified:
+                            print_warning(f"Workflow {wf.id} verification failed: {'; '.join(issues[:3])}")
+                            wr.health = "failed"
+                            if not wr.failure_reason:
+                                wr.failure_reason = "; ".join(issues[:3])
+                        if not diverse:
+                            print_warning(f"Workflow {wf.id} screenshots not diverse enough")
+
+                        if retries >= config.browser_testing.max_fix_retries:
+                            break
+
+                        # Fix pass
+                        fix_cost = asyncio.run(_run_browser_workflow_fix(
+                            cwd, config, wf, wr, bw_workflows_dir,
+                            task_text=task_text, constraints=constraints,
+                            intervention=intervention, depth=depth,
+                        ))
+                        browser_cost += fix_cost
+                        retries += 1
+                        any_fixes_applied = True
+                        browser_report.total_fix_cycles += 1
+
+                    # Record result
+                    wr.fix_retries_used = retries
+                    workflow_results[wf.id] = wr
+                    browser_report.workflow_results.append(wr)
+
+                    if workflow_passed:
+                        browser_report.passed_workflows += 1
+                        update_workflow_state(bw_workflows_dir, wf.id, "PASSED", retries, count_screenshots(bw_screenshots_dir))
+                        if _current_state:
+                            _current_state.completed_browser_workflows.append(wf.id)
+                    else:
+                        browser_report.failed_workflows += 1
+                        update_workflow_state(bw_workflows_dir, wf.id, "FAILED", retries, count_screenshots(bw_screenshots_dir))
+                        recovery_types.append("browser_testing_failed")
+
+                    if _current_state:
+                        _current_state.total_cost += browser_cost
+                        from .state import save_state as _save_state_browser
+                        _save_state_browser(_current_state, directory=str(Path(cwd) / ".agent-team"))
+
+                # Step 4: Regression sweep
+                if (
+                    config.browser_testing.regression_sweep
+                    and any_fixes_applied
+                    and browser_report.passed_workflows > 0
+                ):
+                    print_info("Running regression sweep...")
+                    passed_wfs = [wf for wf in workflow_defs if workflow_results.get(wf.id) and workflow_results[wf.id].health == "passed"]
+                    sweep_cost, regressed_ids = asyncio.run(_run_browser_regression_sweep(
+                        cwd, config, passed_wfs, bw_workflows_dir, app_url,
+                        task_text=task_text, constraints=constraints,
+                        intervention=intervention, depth=depth,
+                    ))
+                    browser_cost += sweep_cost
+
+                    if regressed_ids:
+                        print_warning(f"Regression detected in workflows: {regressed_ids}")
+                        all_regressions_fixed = True
+                        for reg_id in regressed_ids:
+                            reg_wf = next((w for w in workflow_defs if w.id == reg_id), None)
+                            if reg_wf:
+                                reg_result = workflow_results.get(reg_id)
+                                if reg_result:
+                                    fix_cost = asyncio.run(_run_browser_workflow_fix(
+                                        cwd, config, reg_wf, reg_result, bw_workflows_dir,
+                                        task_text=task_text, constraints=constraints,
+                                        intervention=intervention, depth=depth,
+                                    ))
+                                    browser_cost += fix_cost
+                                    # Re-execute to verify fix worked
+                                    reexec_cost, reexec_result = asyncio.run(_run_browser_workflow_executor(
+                                        cwd, config, reg_wf, bw_workflows_dir, app_url,
+                                        task_text=task_text, constraints=constraints,
+                                        intervention=intervention, depth=depth,
+                                    ))
+                                    browser_cost += reexec_cost
+                                    workflow_results[reg_id] = reexec_result
+                                    # Update report entry
+                                    for i, wr in enumerate(browser_report.workflow_results):
+                                        if wr.workflow_id == reg_id:
+                                            browser_report.workflow_results[i] = reexec_result
+                                            break
+                                    if reexec_result.health != "passed":
+                                        all_regressions_fixed = False
+                                        print_warning(f"Regression fix for workflow {reg_id} did not resolve the issue")
+                        browser_report.regression_sweep_passed = all_regressions_fixed
+                    else:
+                        browser_report.regression_sweep_passed = True
+                        print_info("Regression sweep passed — no regressions detected")
+
+                # Step 5: Aggregate health
+                if browser_report.passed_workflows == browser_report.total_workflows:
+                    browser_report.health = "passed"
+                elif browser_report.passed_workflows > 0:
+                    browser_report.health = "partial"
+                    if browser_report.failed_workflows > 0:
+                        recovery_types.append("browser_testing_partial")
+                elif browser_report.skipped_workflows == browser_report.total_workflows:
+                    browser_report.health = "failed"
+                else:
+                    browser_report.health = "failed"
+
+                browser_report.total_screenshots = count_screenshots(bw_screenshots_dir)
+
+                # Step 6: Generate reports
+                readiness_content = generate_readiness_report(bw_workflows_dir, browser_report, workflow_defs)
+                print_info(f"Browser readiness report generated ({len(readiness_content)} chars)")
+
+                failed_results = [wr for wr in browser_report.workflow_results if wr.health == "failed"]
+                if failed_results:
+                    generate_unresolved_issues(bw_workflows_dir, failed_results)
+
+                if _current_state and browser_report.health in ("passed", "partial"):
+                    _current_state.completed_phases.append("browser_testing")
+                    _current_state.artifacts["browser_readiness_report"] = str(
+                        browser_base / "BROWSER_READINESS_REPORT.md"
+                    )
+
+                print_info(
+                    f"Browser Testing Phase complete — "
+                    f"Health: {browser_report.health.upper()} | "
+                    f"Passed: {browser_report.passed_workflows}/{browser_report.total_workflows} | "
+                    f"Fix cycles: {browser_report.total_fix_cycles} | "
+                    f"Screenshots: {browser_report.total_screenshots} | "
+                    f"Cost: ${browser_cost:.2f}"
+                )
+
+        except RuntimeError:
+            pass  # Already handled (skip scenarios raise RuntimeError)
+        except Exception as exc:
+            print_warning(f"Browser testing phase failed: {exc}\n{traceback.format_exc()}")
+            browser_report.health = "failed"
+            browser_report.skip_reason = f"Phase error: {exc}"
+        finally:
+            # Stop app process if startup agent started one
+            if _browser_app_started and _browser_app_port:
+                try:
+                    import subprocess as _cleanup_subprocess
+                    import sys as _cleanup_sys
+                    if _cleanup_sys.platform == "win32":
+                        _cleanup_subprocess.run(
+                            ["taskkill", "/F", "/FI", f"IMAGENAME eq node.exe", "/FI", f"WINDOWTITLE eq *:{_browser_app_port}*"],
+                            capture_output=True, timeout=10,
+                        )
+                        # Also try netstat-based kill via port
+                        _cleanup_subprocess.run(
+                            f'for /f "tokens=5" %p in (\'netstat -ano ^| findstr :{_browser_app_port} ^| findstr LISTENING\') do taskkill /F /PID %p',
+                            shell=True, capture_output=True, timeout=10,
+                        )
+                    else:
+                        _cleanup_subprocess.run(
+                            ["fuser", "-k", f"{_browser_app_port}/tcp"],
+                            capture_output=True, timeout=10,
+                        )
+                    print_info(f"Stopped app process on port {_browser_app_port}")
+                except Exception:
+                    pass  # Best-effort cleanup
 
     # Display recovery report if any recovery passes were triggered
     if recovery_types:

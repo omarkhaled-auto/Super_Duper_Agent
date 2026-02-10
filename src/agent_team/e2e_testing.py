@@ -386,6 +386,48 @@ You are running end-to-end tests against the REAL backend API. These are NOT uni
 they make REAL HTTP calls to a RUNNING server.
 
 INSTRUCTIONS:
+
+STEP 0 — SCHEMA DRIFT CHECK (MANDATORY — RUN BEFORE ANY TESTS):
+
+Before writing a single test, validate that the database schema matches the ORM models.
+Schema drift causes silent data corruption that no E2E test can diagnose properly —
+fixing it FIRST prevents hours of debugging wrong root causes.
+
+Detect which ORM the project uses (from detect_app_type or package inspection), then
+run the corresponding command:
+
+| ORM / Framework | Validation Command | What It Checks |
+|----------------|-------------------|----------------|
+| Prisma | `npx prisma validate && npx prisma migrate diff --from-migrations ./prisma/migrations --to-schema-datamodel ./prisma/schema.prisma --exit-code` | Schema file valid + no pending migrations |
+| Django | `python manage.py makemigrations --check --dry-run` | No model changes missing from migrations |
+| EF Core (.NET) | `dotnet ef migrations has-pending-model-changes` (EF Core 8+) OR `dotnet ef dbcontext script` and compare output | Pending model changes detected |
+| Alembic (SQLAlchemy) | `alembic check` (Alembic 1.9+) | Head revision matches model metadata |
+| TypeORM | `npx typeorm migration:generate src/migrations/DriftCheck --check` | Generates migration — non-empty output means drift |
+| Sequelize | No built-in check — skip this step | N/A |
+| Mongoose/MongoDB | No schema migrations — skip this step | N/A |
+| Knex | `npx knex migrate:status` | Lists pending migrations |
+| Drizzle | `npx drizzle-kit check` | Schema matches migrations |
+
+Rules:
+   a. Run the command for the detected ORM. If the project uses multiple ORMs, run ALL.
+   b. If the command does not exist (old ORM version, tool not installed), log a warning
+      and SKIP — do not fail. This step is best-effort.
+   c. If the command reports drift or pending changes:
+      - Generate/fix the migration FIRST (e.g., `npx prisma migrate dev --name fix_drift`,
+        `python manage.py makemigrations`)
+      - Apply it to the dev database
+      - Re-run the validation command to confirm clean
+      - Only THEN proceed to writing E2E tests
+   d. If the command passes clean, proceed to test writing immediately.
+   e. If you cannot determine the ORM or the project has no database, skip this entire step.
+   f. NEVER skip this step when a known ORM is detected — schema drift corrupts all
+      downstream E2E results.
+
+Why this matters: If the schema is drifted, E2E tests will fail for the WRONG reason.
+The fix loop will try to fix controller logic or service code when the real problem is a
+missing column. Running validation first ensures every E2E failure is a real application
+bug, not a schema sync issue.
+
 1. Read {requirements_dir}/REQUIREMENTS.md to understand ALL API endpoints and workflows
 2. Scan {api_directory} to discover route/controller files and actual endpoints
 3. Create E2E test plan in {requirements_dir}/E2E_TEST_PLAN.md listing:
@@ -491,6 +533,12 @@ FRONTEND_E2E_PROMPT = """\
 
 You are running end-to-end Playwright tests against the REAL frontend application.
 These tests open a REAL browser, navigate pages, click buttons, fill forms, and verify results.
+
+SCHEMA DRIFT AWARENESS: If the backend E2E phase ran a schema drift check and found
+issues, those have already been fixed. If you encounter database-related errors during
+Playwright tests (missing columns, type errors on API responses, null values where
+non-null expected), the root cause may be schema drift that was partially fixed. Report
+it clearly in the E2E results so the fix loop targets the migration, not the frontend code.
 
 INSTRUCTIONS:
 1. Install Playwright if not already installed:

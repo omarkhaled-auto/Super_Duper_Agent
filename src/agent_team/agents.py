@@ -933,6 +933,23 @@ After identifying all frontend services and backend controllers, you MUST:
 
 The SVC-xxx section is as important as FUNC-xxx and WIRE-xxx.
 
+### EXACT FIELD SCHEMAS IN SVC-xxx TABLE (MANDATORY)
+The Request DTO and Response DTO columns MUST contain **exact field names and types**, NOT just class names.
+
+WRONG (class name only):
+| SVC-001 | TenderService.getAll() | GET /api/tenders | GET | - | TenderListDto |
+
+RIGHT (exact field schema):
+| SVC-001 | TenderService.getAll() | GET /api/tenders | GET | - | { id: number, title: string, status: "draft"\|"active"\|"closed", createdAt: string } |
+
+Rules for field schemas:
+1. Use the EXACT field names that the backend serializer will produce (e.g., camelCase for JSON)
+2. For C# backends: properties are PascalCase in code but serialize to camelCase — write the camelCase version
+3. Include ALL fields the frontend will read — missing fields cause runtime `undefined`
+4. For nested objects, use inline notation: `{ user: { id: number, name: string } }`
+5. For arrays, use: `{ items: Array<{ id: number, title: string }> }`
+6. The frontend code-writer MUST use these exact field names — no renaming allowed
+
 Define module contracts: for each new module, specify its exported symbols (name, kind, signature). For module wiring, specify which modules import what from where. Output these as a contracts section in REQUIREMENTS.md.
 
 ## Status/Enum Registry (MANDATORY for projects with status or enum fields)
@@ -1011,6 +1028,20 @@ Your job is to implement requirements from the Requirements Document, guided by 
   - Python: `requests.get('/api/endpoint')` or `httpx.get('/api/endpoint')`
   - `new BehaviorSubject(hardcodedData)` is mock data — use BehaviorSubject(null) + HTTP populate
   - Use proper DTO mapping between backend response shape and frontend model.
+
+  ## API CONTRACT COMPLIANCE (MANDATORY for SVC-xxx items)
+  When implementing ANY service method that corresponds to an SVC-xxx requirement:
+  1. OPEN REQUIREMENTS.md and find the SVC-xxx table row for this endpoint
+  2. READ the exact field names from the Response DTO column
+  3. Use EXACTLY those field names in your frontend model/interface — do NOT rename, re-case, or alias them
+  4. For C# backends: the JSON serializer produces camelCase (e.g., `TenderTitle` property → `tenderTitle` in JSON)
+     - Your TypeScript/Angular interface MUST use the camelCase version: `tenderTitle: string`
+     - NEVER use a different name like `title` or `tender_title`
+  5. For the Request DTO: use the exact field names from the Request DTO column in your HTTP request body
+  6. If REQUIREMENTS.md has no field schema (just a class name like "TenderDto"), flag it for the architect
+
+  VIOLATION: Using field names that don't match the SVC-xxx schema = API-001/API-002 contract violation.
+
   If a backend endpoint doesn't exist yet:
   1. CREATE the backend endpoint first (controller + handler)
   2. THEN create the frontend service method that calls it
@@ -1206,6 +1237,26 @@ For each SVC-xxx item in the Requirements Checklist:
 MOCK DATA IS THE #1 ANTI-PATTERN. Finding even ONE mock service method = AUTOMATIC FAILURE of that SVC-xxx item.
 After reviewing all SVC-xxx items, SCAN for any service methods NOT covered by SVC-xxx.
 If found, CREATE new SVC-xxx items for them and verify their wiring.
+
+## API Contract Field Verification (MANDATORY for SVC-xxx items with field schemas)
+After verifying mock data and URL wiring, perform FIELD-LEVEL verification:
+For each SVC-xxx row that has an explicit field schema (not just a class name) in the Response DTO column:
+
+1. **API-001: Backend field mismatch** — Open the backend DTO/model class. Verify that EVERY field name listed in the SVC-xxx Response DTO exists as a property. For C# classes, verify PascalCase property exists (it serializes to camelCase). Flag any missing or differently-named properties.
+
+2. **API-002: Frontend field mismatch** — Open the frontend model/interface. Verify that EVERY field name listed in the SVC-xxx Response DTO is used with the EXACT same name. For TypeScript interfaces reading from C# backends, fields must be camelCase. Flag any field that is renamed, aliased, or uses a different casing convention.
+
+3. **API-003: Type mismatch** — Verify that field types are compatible:
+   - Backend `int`/`long` → Frontend `number`
+   - Backend `string` → Frontend `string`
+   - Backend `DateTime` → Frontend `string` (ISO 8601)
+   - Backend `decimal`/`double` → Frontend `number`
+   - Backend `bool` → Frontend `boolean`
+   - Backend `enum` (numeric) → Frontend must have a mapping function, NOT raw numbers
+   - Backend `List<T>` → Frontend `Array<T>` or `T[]`
+
+If an SVC-xxx row has only a class name (no field schema), SKIP field verification for that row — it's a legacy entry.
+Each violation is a HARD FAILURE for that SVC-xxx item. The code-writer must fix field names to match the contract.
 
 ## UI Compliance Verification (MANDATORY when UI_REQUIREMENTS.md exists)
 UI COMPLIANCE IS THE #2 ENFORCEMENT PRIORITY (after mock data).

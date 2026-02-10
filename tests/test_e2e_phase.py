@@ -345,6 +345,74 @@ class TestE2EFixPrompt:
 
 
 # =========================================================================
+# Schema Drift Detection
+# =========================================================================
+
+class TestSchemaDriftDetection:
+    """Tests for schema drift detection prompt injection."""
+
+    def test_backend_prompt_contains_schema_drift_check(self):
+        """BACKEND_E2E_PROMPT must contain the schema drift check section."""
+        assert "SCHEMA DRIFT CHECK" in BACKEND_E2E_PROMPT
+
+    def test_backend_prompt_contains_all_orm_commands(self):
+        """BACKEND_E2E_PROMPT must reference all 9 ORM validation commands."""
+        # Prisma
+        assert "npx prisma validate" in BACKEND_E2E_PROMPT
+        assert "npx prisma migrate diff" in BACKEND_E2E_PROMPT
+        # Django
+        assert "python manage.py makemigrations --check" in BACKEND_E2E_PROMPT
+        # EF Core
+        assert "dotnet ef migrations has-pending-model-changes" in BACKEND_E2E_PROMPT
+        # Alembic
+        assert "alembic check" in BACKEND_E2E_PROMPT
+        # TypeORM
+        assert "npx typeorm migration:generate" in BACKEND_E2E_PROMPT
+        # Sequelize (skip entry)
+        assert "Sequelize" in BACKEND_E2E_PROMPT
+        # Mongoose (skip entry)
+        assert "Mongoose" in BACKEND_E2E_PROMPT
+        # Knex
+        assert "npx knex migrate:status" in BACKEND_E2E_PROMPT
+        # Drizzle
+        assert "npx drizzle-kit check" in BACKEND_E2E_PROMPT
+
+    def test_backend_prompt_schema_drift_before_test_writing(self):
+        """Schema drift section must appear BEFORE test-writing instructions."""
+        drift_idx = BACKEND_E2E_PROMPT.index("SCHEMA DRIFT CHECK")
+        write_idx = BACKEND_E2E_PROMPT.index("Write API E2E test scripts")
+        assert drift_idx < write_idx, (
+            "Schema drift check must appear before test-writing instructions"
+        )
+
+    def test_backend_prompt_contains_priority_language(self):
+        """Schema drift section must contain priority language."""
+        assert "BEFORE ANY TESTS" in BACKEND_E2E_PROMPT or "RUN BEFORE" in BACKEND_E2E_PROMPT
+
+    def test_frontend_prompt_contains_schema_drift_awareness(self):
+        """FRONTEND_E2E_PROMPT must contain the schema drift awareness paragraph."""
+        assert "SCHEMA DRIFT AWARENESS" in FRONTEND_E2E_PROMPT
+        assert "schema drift" in FRONTEND_E2E_PROMPT.lower()
+        assert "migration" in FRONTEND_E2E_PROMPT.lower()
+
+    def test_prompts_preserve_existing_content(self):
+        """Both prompts must still contain all critical existing content."""
+        # Backend prompt existing content
+        assert "REAL HTTP" in BACKEND_E2E_PROMPT
+        assert "REQUIREMENTS.md" in BACKEND_E2E_PROMPT
+        assert "E2E_COVERAGE_MATRIX.md" in BACKEND_E2E_PROMPT
+        assert "ROLE-BASED API TESTING" in BACKEND_E2E_PROMPT
+        assert "STATE PASSING" in BACKEND_E2E_PROMPT
+        assert "{task_text}" in BACKEND_E2E_PROMPT
+        # Frontend prompt existing content
+        assert "Playwright" in FRONTEND_E2E_PROMPT
+        assert "REQUIREMENTS.md" in FRONTEND_E2E_PROMPT
+        assert "ROUTE COMPLETENESS" in FRONTEND_E2E_PROMPT
+        assert "PLACEHOLDER DETECTION" in FRONTEND_E2E_PROMPT
+        assert "{task_text}" in FRONTEND_E2E_PROMPT
+
+
+# =========================================================================
 # Fix 3: Quality Patterns
 # =========================================================================
 

@@ -134,21 +134,33 @@ export interface PortalClarification {
   isAnonymous?: boolean;
 }
 
+export interface PortalBulletinClarification {
+  id: string;
+  referenceNumber: string;
+  subject: string;
+  question: string;
+  answer: string;
+  relatedBoqSection?: string;
+  answeredAt?: Date | string;
+}
+
 export interface PortalBulletin {
-  id: number;
-  bulletinNumber: string;
-  title?: string;
+  id: number | string;
+  bulletinNumber: number;
   introduction?: string;
+  closingNotes?: string;
   issueDate: Date | string;
-  clarifications: PortalClarification[];
-  pdfUrl?: string;
+  publishedAt?: Date | string;
+  hasPdf: boolean;
+  clarificationCount: number;
+  clarifications: PortalBulletinClarification[];
 }
 
 export interface SubmitQuestionDto {
   tenderId: string | number;
   subject: string;
   question: string;
-  relatedBoqSectionId?: number;
+  relatedBoqSection?: string;
   isAnonymous: boolean;
   attachmentIds?: number[];
 }

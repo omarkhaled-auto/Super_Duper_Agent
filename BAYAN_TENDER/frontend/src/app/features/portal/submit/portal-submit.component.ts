@@ -53,6 +53,46 @@ interface UploadSection {
   providers: [ConfirmationService, MessageService],
   template: `
     <div class="portal-submit">
+      <!-- Already Submitted State -->
+      @if (existingBid()) {
+        <div class="already-submitted" data-testid="already-submitted">
+          <div class="submitted-icon">
+            <i class="pi pi-check-circle"></i>
+          </div>
+          <h2>Bid Already Submitted</h2>
+          <p class="submitted-message">
+            You have already submitted a bid for this tender.
+          </p>
+          <div class="submitted-details">
+            <div class="detail-row">
+              <span class="detail-label">Receipt Number</span>
+              <span class="detail-value">{{ existingBid()!.receiptNumber }}</span>
+            </div>
+            @if (existingBid()!.submittedAt) {
+              <div class="detail-row">
+                <span class="detail-label">Submitted On</span>
+                <span class="detail-value">{{ existingBid()!.submittedAt | date:'EEEE, MMMM d, y - h:mm a' }}</span>
+              </div>
+            }
+          </div>
+          <div class="submitted-actions">
+            <button
+              pButton
+              label="View Receipt"
+              icon="pi pi-file"
+              class="view-receipt-btn"
+              (click)="goToReceipt()"
+            ></button>
+            <button
+              pButton
+              label="Back to Tender"
+              icon="pi pi-arrow-left"
+              class="p-button-outlined back-btn"
+              (click)="goToTender()"
+            ></button>
+          </div>
+        </div>
+      } @else {
       <!-- Deadline Warning Banner -->
       @if (!countdown().isExpired) {
         <div
@@ -361,6 +401,7 @@ interface UploadSection {
           </form>
         </p-card>
       </div>
+      }
     </div>
 
     <p-confirmDialog></p-confirmDialog>
@@ -744,6 +785,96 @@ interface UploadSection {
       }
     }
 
+    /* Already Submitted State */
+    .already-submitted {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 3rem 2rem;
+      background: var(--bayan-background, #ffffff);
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      border-radius: var(--bayan-radius, 0.5rem);
+      animation: fadeIn 0.3s ease;
+    }
+
+    .submitted-icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: #f0fdf4;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .submitted-icon i {
+      font-size: 3rem;
+      color: #16a34a;
+    }
+
+    .already-submitted h2 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--bayan-foreground, #09090b);
+    }
+
+    .submitted-message {
+      color: var(--bayan-muted-foreground, #71717a);
+      margin: 0 0 2rem 0;
+      font-size: 1rem;
+    }
+
+    .submitted-details {
+      width: 100%;
+      max-width: 400px;
+      background: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
+      padding: 1.25rem;
+      margin-bottom: 2rem;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+    }
+
+    .detail-row + .detail-row {
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
+    }
+
+    .detail-label {
+      color: var(--bayan-muted-foreground, #71717a);
+      font-size: 0.875rem;
+    }
+
+    .detail-value {
+      font-weight: 600;
+      color: var(--bayan-foreground, #09090b);
+      font-size: 0.875rem;
+    }
+
+    .submitted-actions {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .view-receipt-btn {
+      height: 48px;
+      padding: 0 2rem;
+      font-size: 1rem;
+    }
+
+    .back-btn {
+      height: 48px;
+      padding: 0 2rem;
+      font-size: 1rem;
+    }
+
     @media (max-width: 768px) {
       .deadline-banner {
         flex-direction: column;
@@ -755,6 +886,16 @@ interface UploadSection {
       }
 
       .submit-btn {
+        width: 100%;
+      }
+
+      .submitted-actions {
+        flex-direction: column;
+        width: 100%;
+      }
+
+      .view-receipt-btn,
+      .back-btn {
         width: 100%;
       }
     }
@@ -773,6 +914,7 @@ export class PortalSubmitComponent implements OnInit, OnDestroy {
 
   tender = this.portalService.currentTender;
   isSubmitting = signal(false);
+  existingBid = signal<{ bidId: string; receiptNumber: string; submittedAt?: string } | null>(null);
 
   countdown = signal({
     days: 0,
@@ -799,9 +941,32 @@ export class PortalSubmitComponent implements OnInit, OnDestroy {
     this.tenderId = this.route.parent?.snapshot.params['tenderId'] || this.route.snapshot.params['tenderId'];
     this.initForm();
     this.initSections();
-    this.startCountdown();
-    this.subscribeToProgress();
-    this.loadDraftBid();
+    this.checkBidStatus();
+  }
+
+  private checkBidStatus(): void {
+    this.portalService.getBidStatus(this.tenderId).subscribe({
+      next: (status) => {
+        if (status.hasSubmitted && status.bidId) {
+          this.existingBid.set({
+            bidId: status.bidId,
+            receiptNumber: status.receiptNumber || '',
+            submittedAt: status.submittedAt
+          });
+        } else {
+          // No existing bid — proceed with normal flow
+          this.startCountdown();
+          this.subscribeToProgress();
+          this.loadDraftBid();
+        }
+      },
+      error: () => {
+        // If status check fails, proceed with normal flow
+        this.startCountdown();
+        this.subscribeToProgress();
+        this.loadDraftBid();
+      }
+    });
   }
 
   ngOnDestroy(): void {
@@ -1024,6 +1189,17 @@ export class PortalSubmitComponent implements OnInit, OnDestroy {
     }
 
     return '';
+  }
+
+  goToReceipt(): void {
+    const bid = this.existingBid();
+    if (bid) {
+      this.router.navigate(['/portal/bids', bid.bidId, 'receipt']);
+    }
+  }
+
+  goToTender(): void {
+    this.router.navigate(['/portal/tenders', this.tenderId, 'documents']);
   }
 
   onSubmit(): void {

@@ -115,10 +115,10 @@ interface DialogData {
           <label for="boqSection">Related BOQ Section (Optional)</label>
           <p-dropdown
             id="boqSection"
-            formControlName="relatedBoqSectionId"
+            formControlName="relatedBoqSection"
             [options]="boqSections()"
             optionLabel="title"
-            optionValue="id"
+            optionValue="title"
             placeholder="Select related BOQ section"
             [showClear]="true"
             styleClass="w-full"
@@ -296,7 +296,7 @@ export class SubmitQuestionDialogComponent implements OnInit {
     this.questionForm = this.fb.group({
       subject: ['', [Validators.required, Validators.maxLength(200)]],
       question: ['', [Validators.required, Validators.minLength(20), Validators.maxLength(2000)]],
-      relatedBoqSectionId: [null],
+      relatedBoqSection: [null],
       isAnonymous: [false]
     });
   }
@@ -341,7 +341,7 @@ export class SubmitQuestionDialogComponent implements OnInit {
       tenderId: this.data.tenderId,
       subject: this.questionForm.value.subject,
       question: this.questionForm.value.question,
-      relatedBoqSectionId: this.questionForm.value.relatedBoqSectionId || undefined,
+      relatedBoqSection: this.questionForm.value.relatedBoqSection || undefined,
       isAnonymous: this.questionForm.value.isAnonymous
     };
 

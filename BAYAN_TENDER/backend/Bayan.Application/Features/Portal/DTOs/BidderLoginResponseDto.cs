@@ -101,4 +101,9 @@ public class BidderTenderAccessDto
     /// Qualification status for this tender.
     /// </summary>
     public string QualificationStatus { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Whether the bidder has submitted a bid for this tender.
+    /// </summary>
+    public bool HasSubmittedBid { get; set; }
 }

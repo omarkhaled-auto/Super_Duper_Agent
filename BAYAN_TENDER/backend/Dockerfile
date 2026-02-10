@@ -8,6 +8,9 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
+# Install fonts for QuestPDF/SkiaSharp (needed in dev mode with dotnet watch)
+RUN apt-get update && apt-get install -y --no-install-recommends libfontconfig1 fonts-liberation fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
+
 # Copy solution and project files for layer caching
 COPY *.sln .
 COPY Bayan.Domain/*.csproj ./Bayan.Domain/
@@ -33,8 +36,8 @@ RUN dotnet publish Bayan.API/Bayan.API.csproj -c Release -o /app/publish --no-bu
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 
-# Install curl for health checks and libfontconfig1 for SkiaSharp/QuestPDF
-RUN apt-get update && apt-get install -y --no-install-recommends curl libfontconfig1 && rm -rf /var/lib/apt/lists/*
+# Install curl for health checks, libfontconfig1 + fonts for SkiaSharp/QuestPDF
+RUN apt-get update && apt-get install -y --no-install-recommends curl libfontconfig1 fonts-liberation fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
 
 # Set environment variables
 ENV ASPNETCORE_URLS=http://+:80

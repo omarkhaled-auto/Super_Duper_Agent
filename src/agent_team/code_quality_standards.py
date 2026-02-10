@@ -589,9 +589,31 @@ DATABASE_INTEGRITY_STANDARDS = r"""## DATABASE INTEGRITY QUALITY STANDARDS
 - State transitions MUST be explicitly defined (which transitions are valid, which are not).
 """.strip()
 
+API_CONTRACT_STANDARDS = r"""
+## API Contract Verification Standards
+
+### API-001: Backend DTO Field Missing
+**Severity:** error
+The backend DTO/model class is missing a field that is specified in the SVC-xxx wiring table.
+Every field listed in the Response DTO schema must exist as a property in the backend class.
+For C# backends, verify PascalCase property names (they serialize to camelCase JSON).
+
+### API-002: Frontend Model Field Mismatch
+**Severity:** error
+The frontend model/interface uses a different field name than specified in the SVC-xxx wiring table.
+Field names must EXACTLY match the contract — no renaming, aliasing, or re-casing.
+For TypeScript consuming C# APIs: use the camelCase serialized form, not PascalCase.
+
+### API-003: Type Mismatch
+**Severity:** warning
+A field's type in the backend or frontend doesn't match the SVC-xxx contract.
+Common issues: using `string` for numeric IDs, missing enum mappers, raw Date vs ISO string.
+""".strip()
+
+
 _AGENT_STANDARDS_MAP: dict[str, list[str]] = {
-    "code-writer": [FRONTEND_STANDARDS, BACKEND_STANDARDS, DATABASE_INTEGRITY_STANDARDS],
-    "code-reviewer": [CODE_REVIEW_STANDARDS, DATABASE_INTEGRITY_STANDARDS],
+    "code-writer": [FRONTEND_STANDARDS, BACKEND_STANDARDS, DATABASE_INTEGRITY_STANDARDS, API_CONTRACT_STANDARDS],
+    "code-reviewer": [CODE_REVIEW_STANDARDS, DATABASE_INTEGRITY_STANDARDS, API_CONTRACT_STANDARDS],
     "test-runner": [TESTING_STANDARDS, E2E_TESTING_STANDARDS],
     "debugger": [DEBUGGING_STANDARDS],
     "architect": [ARCHITECTURE_QUALITY_STANDARDS, DATABASE_INTEGRITY_STANDARDS],

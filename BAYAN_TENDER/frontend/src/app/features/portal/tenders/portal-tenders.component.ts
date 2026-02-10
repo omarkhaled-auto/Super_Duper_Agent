@@ -31,7 +31,11 @@ import { PortalService } from '../../../core/services/portal.service';
               <div class="tender-info">
                 <h3>{{ tender.tenderTitle }}</h3>
                 <p class="tender-ref">{{ tender.tenderReference }}</p>
-                <p-tag [value]="tender.qualificationStatus" severity="success"></p-tag>
+                @if (tender.hasSubmittedBid) {
+                  <p-tag value="Bid Submitted" severity="info" icon="pi pi-check"></p-tag>
+                } @else {
+                  <p-tag [value]="tender.qualificationStatus" severity="success"></p-tag>
+                }
               </div>
               <div class="tender-actions">
                 <a pButton label="Open" icon="pi pi-folder-open"
@@ -166,7 +170,7 @@ export class PortalTendersComponent implements OnInit {
   private readonly portalService = inject(PortalService);
 
   companyName = signal('');
-  tenders = signal<Array<{ tenderId: string; tenderTitle: string; tenderReference: string; qualificationStatus: string }>>([]);
+  tenders = signal<Array<{ tenderId: string; tenderTitle: string; tenderReference: string; qualificationStatus: string; hasSubmittedBid?: boolean }>>([]);
 
   ngOnInit(): void {
     const user = this.portalService.currentUser();

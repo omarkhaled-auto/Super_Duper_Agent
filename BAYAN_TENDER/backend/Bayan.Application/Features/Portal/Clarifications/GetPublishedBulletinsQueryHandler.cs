@@ -34,7 +34,7 @@ public class GetPublishedBulletinsQueryHandler : IRequestHandler<GetPublishedBul
             throw new UnauthorizedAccessException($"You are not qualified for this tender. Current status: {tenderBidder.QualificationStatus}");
         }
 
-        // Get bulletins with clarification counts
+        // Get bulletins with their published Q&A items
         var bulletins = await _context.ClarificationBulletins
             .Where(b => b.TenderId == request.TenderId)
             .Select(b => new PortalBulletinDto
@@ -46,7 +46,20 @@ public class GetPublishedBulletinsQueryHandler : IRequestHandler<GetPublishedBul
                 ClosingNotes = b.ClosingNotes,
                 HasPdf = !string.IsNullOrEmpty(b.PdfPath),
                 PublishedAt = b.PublishedAt,
-                ClarificationCount = b.Clarifications.Count
+                ClarificationCount = b.Clarifications.Count,
+                Clarifications = b.Clarifications
+                    .OrderBy(c => c.ReferenceNumber)
+                    .Select(c => new PortalBulletinClarificationDto
+                    {
+                        Id = c.Id,
+                        ReferenceNumber = c.ReferenceNumber,
+                        Subject = c.Subject,
+                        Question = c.Question,
+                        Answer = c.Answer ?? string.Empty,
+                        RelatedBoqSection = c.RelatedBoqSection,
+                        AnsweredAt = c.AnsweredAt
+                    })
+                    .ToList()
             })
             .OrderByDescending(b => b.BulletinNumber)
             .ToListAsync(cancellationToken);

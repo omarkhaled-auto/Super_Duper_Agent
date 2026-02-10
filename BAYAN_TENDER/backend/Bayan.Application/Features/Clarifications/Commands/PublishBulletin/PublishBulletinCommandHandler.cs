@@ -65,6 +65,13 @@ public class PublishBulletinCommandHandler : IRequestHandler<PublishBulletinComm
                 $"The following clarification IDs were not found: {string.Join(", ", missingIds)}");
         }
 
+        // Auto-approve any DraftAnswer clarifications (admin answered but didn't explicitly approve)
+        foreach (var c in clarifications.Where(c => c.Status == ClarificationStatus.DraftAnswer))
+        {
+            c.Status = ClarificationStatus.Answered;
+            c.UpdatedAt = DateTime.UtcNow;
+        }
+
         // Validate all clarifications are in Answered status
         var nonAnsweredClarifications = clarifications
             .Where(c => c.Status != ClarificationStatus.Answered)
