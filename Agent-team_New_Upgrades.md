@@ -1841,6 +1841,7 @@ Full report: `Reports/BROWSER_TESTING_REVIEW_REPORT.md` (37KB, 828 lines)
 | v6.0 | 3 | YES | YES | YES | YES | **READY** |
 | v7.0 | audit | N/A | YES | YES | YES | **READY** |
 | v8.0 | 1 | YES | YES | YES | YES | **READY** |
+| v9.0 | 3 | YES | YES | YES | YES | **READY** |
 
 ### Known Non-Blocking Items
 
@@ -1857,3 +1858,119 @@ Full report: `Reports/BROWSER_TESTING_REVIEW_REPORT.md` (37KB, 828 lines)
 - **Resume Support:** `RunState.completed_browser_workflows` tracks passed workflows. Skips already-verified workflows on resume.
 - **Regression Safety:** After every fix, ALL previously passed workflows are re-tested. New regressions trigger additional fix cycles.
 - **Best-Effort:** Parse failures return safe defaults (empty `AppStartupInfo()`, empty workflow lists). Pipeline never crashes on bad agent output.
+
+---
+
+## API Contract Verification (v9.0) — Prevention + Detection + Guarantee
+
+### The Problem
+
+In full-stack apps, the architect specifies SVC-xxx wiring entries (frontend service method -> backend endpoint), but the code-writer agents independently choose DTO field names. The backend might use `BidderCompanyName` (PascalCase) while the frontend uses `bidderName` (camelCase alias). Both compile, both pass code review, but at runtime the frontend reads `undefined` because the JSON field name doesn't match.
+
+### The 3-Layer Solution
+
+```
+Layer 1: PREVENTION (prompts)     — Architect forced to write exact field schemas in SVC-xxx table
+Layer 2: DETECTION (static scan)  — Post-orchestration regex scan cross-references code against SVC-xxx schemas
+Layer 3: GUARANTEE (fix loop)     — Scan -> sub-orchestrator fix -> re-scan cycle
+```
+
+### Layer 1: Prevention (Prompt Injections)
+
+Three prompt injections force field-level precision throughout the pipeline:
+
+| Prompt | Injection | What It Does |
+|--------|-----------|-------------|
+| `ARCHITECT_PROMPT` | "EXACT FIELD SCHEMAS IN SVC-xxx TABLE" | Forces architects to write `{ id: number, title: string }` in DTO columns instead of just `TenderDto` |
+| `CODE_WRITER_PROMPT` | "API CONTRACT COMPLIANCE" | Mandates code-writers use exact field names from REQUIREMENTS.md SVC-xxx table — no renaming |
+| `CODE_REVIEWER_PROMPT` | "API Contract Field Verification" | Reviewers perform field-by-field API-001/002/003 checks on every SVC-xxx item |
+
+Plus `API_CONTRACT_STANDARDS` quality constant mapped to `code-writer` and `code-reviewer` agents via `get_standards_for_agent()`.
+
+### Layer 2: Detection (Static Scan)
+
+`run_api_contract_scan()` in `quality_checks.py` (~290 lines):
+
+1. **Parse SVC-xxx table** from REQUIREMENTS.md (+ `.agent-team/REQUIREMENTS.md` + milestone REQUIREMENTS.md files)
+2. **Extract field schemas** from `{ id: number, title: string }` notation in Request/Response DTO columns
+3. **Cross-reference against code:**
+   - **API-001** (error): Backend DTO/model class missing a field from the schema (checks both camelCase and PascalCase)
+   - **API-002** (error): Frontend model/interface uses a different field name than specified
+   - **API-003** (warning): Unusual type that may indicate a backend/frontend type mismatch
+
+**Backward compatible:** SVC-xxx rows with just a class name (no `{...}` schema) produce zero violations.
+
+### Layer 3: Guarantee (Fix Loop)
+
+`_run_api_contract_fix()` async sub-orchestrator in `cli.py`:
+
+1. Formats first 20 violations as text
+2. Builds fix-specific prompt (different guidance for API-001 vs API-002 vs API-003)
+3. Injects fix cycle log (if tracking enabled)
+4. Runs ClaudeSDKClient sub-orchestrator to fix the violations
+5. Cost tracked in `_current_state.total_cost`
+
+### CLI Pipeline Position
+
+```
+... DB Relationship Scan -> API Contract Verification -> E2E Testing Phase ...
+```
+
+**Triple gate:**
+- `config.post_orchestration_scans.api_contract_scan` (default: `true`)
+- `detect_app_type()` must report both `has_backend` and `has_frontend`
+- Quick depth disables the scan
+
+### Violation Codes
+
+| Code | Severity | Description | Example |
+|------|----------|-------------|---------|
+| API-001 | error | Backend DTO missing contract field | Schema says `description: string`, C# class has no `Description` property |
+| API-002 | error | Frontend model uses wrong field name | Schema says `tenderTitle`, TypeScript interface uses `title` |
+| API-003 | warning | Unusual type in contract | Field type `weirdtype` not recognized as standard |
+
+### Config
+
+```yaml
+post_orchestration_scans:
+  api_contract_scan: true   # default: true, disabled at quick depth
+```
+
+### Key Technical Details
+
+- **PascalCase conversion:** `_to_pascal_case("tenderTitle")` -> `"TenderTitle"` for C# backend matching
+- **SvcContract dataclass:** Holds parsed row data with `request_fields` and `response_fields` dicts
+- **Field schema parser:** Handles nested objects `{ user: { id: number } }`, arrays `Array<{ id: number }>`, union types `"draft"|"active"`
+- **Scope-aware:** Accepts `ScanScope` for git-diff-based file filtering
+- **Cap:** `_MAX_VIOLATIONS = 100` (shared with all other scans)
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `agents.py` | 3 prompt injections (ARCHITECT, CODE_WRITER, CODE_REVIEWER) |
+| `code_quality_standards.py` | `API_CONTRACT_STANDARDS` constant + mapping to code-writer/code-reviewer |
+| `quality_checks.py` | `run_api_contract_scan()` + 8 helper functions + `SvcContract` dataclass |
+| `config.py` | `api_contract_scan` field on `PostOrchestrationScanConfig` + loader + depth gating |
+| `cli.py` | `_run_api_contract_fix()` + scan invocation block + recovery wiring |
+
+### Tests
+
+81 tests in `tests/test_api_contract.py` across 12 test classes:
+
+| Class | Tests | What It Covers |
+|-------|-------|---------------|
+| `TestParseFieldSchema` | 8 | Simple/nested/array/enum/empty/dash/class-name parsing |
+| `TestParseSvcTable` | 5 | Standard table, legacy rows, mixed, empty, no-SVC |
+| `TestToPascalCase` | 5 | camelCase, single char, already Pascal, empty, "id" |
+| `TestRunApiContractScan` | 12 | No-req, legacy, matching, API-001, API-002, scope, milestones, cap, sorting |
+| `TestApiContractConfig` | 5 | Default, explicit false, dict_to_config, quick depth |
+| `TestPromptContent` | 8 | All 3 prompt injections + backward compat preservation |
+| `TestQualityStandards` | 6 | Constant exists, mapped, get_standards_for_agent() |
+| `TestCLIWiring` | 10 | Function exists, async, gating, fullstack, ordering, crash isolation |
+| `TestBackwardCompat` | 6 | Existing prompts, scans, config, standards preserved |
+| `TestSvcContract` | 3 | Dataclass fields, empty, request+response |
+| `TestTypeCompatibility` | 4 | Complex types skipped, known types pass, enum, bool |
+| `TestCaseMatching` | 2 | PascalCase backend matches camelCase schema |
+
+**Total: 4361 tests passing, 0 regressions.**

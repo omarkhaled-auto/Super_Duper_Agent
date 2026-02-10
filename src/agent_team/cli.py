@@ -1464,6 +1464,86 @@ async def _run_mock_data_fix(
     return cost
 
 
+async def _run_api_contract_fix(
+    cwd: str | None,
+    config: AgentTeamConfig,
+    api_violations: list,
+    task_text: str | None = None,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    depth: str = "standard",
+) -> float:
+    """Run a recovery pass to fix API contract violations (API-001, API-002, API-003).
+
+    Creates a focused prompt listing each field mismatch and instructing
+    the orchestrator to deploy code-writers to align backend DTOs and
+    frontend models with the REQUIREMENTS.md contract.
+    """
+    if not api_violations:
+        return 0.0
+
+    print_info(f"Running API contract fix pass ({len(api_violations)} violations)")
+
+    violation_text = "\n".join(
+        f"  - [{v.check}] {v.file_path}:{v.line} — {v.message}"
+        for v in api_violations[:20]
+    )
+
+    fix_prompt = (
+        f"[PHASE: API CONTRACT FIX]\n\n"
+        f"The following API contract violations were detected — field names or types\n"
+        f"in backend DTOs / frontend models do not match the REQUIREMENTS.md contract.\n\n"
+        f"API contract violations found:\n{violation_text}\n\n"
+        f"INSTRUCTIONS:\n"
+        f"1. For API-001 (backend field missing):\n"
+        f"   - Add the missing property to the backend DTO/model class\n"
+        f"   - Use PascalCase for C# properties (they serialize to camelCase)\n"
+        f"2. For API-002 (frontend field mismatch):\n"
+        f"   - Update the frontend model/interface to use the EXACT field name from REQUIREMENTS.md\n"
+        f"   - Do NOT rename fields — match the backend JSON response shape\n"
+        f"3. For API-003 (type mismatch):\n"
+        f"   - Fix the type to match the contract specification\n"
+        f"   - Add enum mappers where needed\n"
+        f"4. Read REQUIREMENTS.md to find the SVC-xxx table with field schemas.\n"
+        f"5. Fix ONLY the listed violations. Do not refactor or change anything else.\n"
+        f"\n[ORIGINAL USER REQUEST]\n{task_text or ''}"
+    )
+
+    # Inject fix cycle log instructions (if enabled)
+    fix_log_section = ""
+    if config.tracking_documents.fix_cycle_log:
+        try:
+            from .tracking_documents import initialize_fix_cycle_log, build_fix_cycle_entry, FIX_CYCLE_LOG_INSTRUCTIONS
+            req_dir_str = str(Path(cwd or ".") / config.convergence.requirements_dir)
+            initialize_fix_cycle_log(req_dir_str)
+            cycle_entry = build_fix_cycle_entry(
+                phase="API Contract",
+                cycle_number=1,
+                failures=[f"[{v.check}] {v.file_path}:{v.line} — {v.message}" for v in api_violations[:20]],
+            )
+            fix_log_section = (
+                f"\n\n{FIX_CYCLE_LOG_INSTRUCTIONS.format(requirements_dir=req_dir_str)}\n\n"
+                f"Current fix cycle entry (append your results to this):\n{cycle_entry}\n"
+            )
+        except Exception:
+            pass  # Non-critical — don't block fix if log fails
+
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text, depth=depth, backend=_backend)
+    phase_costs: dict[str, float] = {}
+    cost = 0.0
+
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(fix_prompt + fix_log_section)
+            cost = await _process_response(client, config, phase_costs, current_phase="api_contract_fix")
+            if intervention:
+                cost += await _drain_interventions(client, intervention, config, phase_costs)
+    except Exception as exc:
+        print_warning(f"API contract fix pass failed: {exc}")
+
+    return cost
+
+
 async def _run_ui_compliance_fix(
     cwd: str | None,
     config: AgentTeamConfig,
@@ -4326,6 +4406,43 @@ def main() -> None:
                     )
         except Exception as exc:
             print_warning(f"Relationship scan failed: {exc}")
+
+    # -------------------------------------------------------------------
+    # Post-orchestration: API Contract Verification scan
+    # -------------------------------------------------------------------
+    if config.post_orchestration_scans.api_contract_scan:
+        try:
+            from .quality_checks import run_api_contract_scan
+            from .e2e_testing import detect_app_type as _detect_app
+            _app_info = _detect_app(Path(cwd))
+            if _app_info.has_backend and _app_info.has_frontend:
+                api_contract_violations = run_api_contract_scan(Path(cwd), scope=scan_scope)
+                if api_contract_violations:
+                    print_warning(
+                        f"API contract scan: {len(api_contract_violations)} "
+                        f"field mismatch violation(s) found."
+                    )
+                    recovery_types.append("api_contract_fix")
+                    try:
+                        api_fix_cost = asyncio.run(_run_api_contract_fix(
+                            cwd=cwd,
+                            config=config,
+                            api_violations=api_contract_violations,
+                            task_text=args.task,
+                            constraints=constraints,
+                            intervention=intervention,
+                            depth=depth if not _use_milestones else "standard",
+                        ))
+                        if _current_state:
+                            _current_state.total_cost += api_fix_cost
+                    except Exception as exc:
+                        print_warning(f"API contract fix recovery failed: {exc}")
+                else:
+                    print_success("API contract scan: no field mismatches detected.")
+            else:
+                print_info("API contract scan: skipped (not a full-stack app).")
+        except Exception as exc:
+            print_warning(f"API contract scan failed: {exc}")
 
     # -------------------------------------------------------------------
     # Post-orchestration: E2E Testing Phase (after all other scans)

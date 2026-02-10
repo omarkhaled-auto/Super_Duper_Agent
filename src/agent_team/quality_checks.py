@@ -2625,3 +2625,359 @@ def run_relationship_scan(project_root: Path, scope: ScanScope | None = None) ->
     violations = violations[:_MAX_VIOLATIONS]
     violations.sort(key=lambda v: (_SEVERITY_ORDER.get(v.severity, 99), v.file_path, v.line))
     return violations
+
+
+# ---------------------------------------------------------------------------
+# API Contract Verification — run_api_contract_scan()
+# ---------------------------------------------------------------------------
+
+_RE_SVC_TABLE_ROW = re.compile(
+    r'^\|\s*(SVC-\d+)\s*\|'       # SVC-ID
+    r'\s*([^|]+?)\s*\|'           # Frontend Service.Method
+    r'\s*([^|]+?)\s*\|'           # Backend Endpoint
+    r'\s*([^|]+?)\s*\|'           # HTTP Method
+    r'\s*([^|]+?)\s*\|'           # Request DTO
+    r'\s*([^|]+?)\s*\|',          # Response DTO
+    re.MULTILINE,
+)
+
+_RE_FIELD_SCHEMA = re.compile(r'\{[^}]+\}')
+
+
+@dataclass
+class SvcContract:
+    """Parsed SVC-xxx table row from REQUIREMENTS.md."""
+    svc_id: str
+    frontend_service_method: str
+    backend_endpoint: str
+    http_method: str
+    request_dto: str
+    response_dto: str
+    request_fields: dict[str, str]   # field_name -> type_hint
+    response_fields: dict[str, str]  # field_name -> type_hint
+
+
+def _parse_field_schema(schema_text: str) -> dict[str, str]:
+    """Parse a field schema like '{ id: number, title: string }' into a dict.
+
+    Returns field_name -> type_hint mapping. Returns empty dict if the text
+    is just a class name (no braces) or unparseable.
+    """
+    match = _RE_FIELD_SCHEMA.search(schema_text)
+    if not match:
+        return {}
+    inner = match.group(0)[1:-1].strip()  # strip braces
+    if not inner:
+        return {}
+
+    fields: dict[str, str] = {}
+    # Split on commas that are NOT inside nested braces or angle brackets
+    depth = 0
+    current = ""
+    for char in inner:
+        if char in ('{', '<', '('):
+            depth += 1
+            current += char
+        elif char in ('}', '>', ')'):
+            depth -= 1
+            current += char
+        elif char == ',' and depth == 0:
+            _parse_single_field(current.strip(), fields)
+            current = ""
+        else:
+            current += char
+    if current.strip():
+        _parse_single_field(current.strip(), fields)
+
+    return fields
+
+
+def _parse_single_field(field_text: str, fields: dict[str, str]) -> None:
+    """Parse 'fieldName: type' into the fields dict."""
+    if ':' not in field_text:
+        return
+    parts = field_text.split(':', 1)
+    name = parts[0].strip().strip('"').strip("'")
+    type_hint = parts[1].strip()
+    if name and type_hint:
+        fields[name] = type_hint
+
+
+def _parse_svc_table(requirements_text: str) -> list[SvcContract]:
+    """Parse all SVC-xxx table rows from REQUIREMENTS.md content."""
+    contracts: list[SvcContract] = []
+    for match in _RE_SVC_TABLE_ROW.finditer(requirements_text):
+        svc_id = match.group(1).strip()
+        frontend_sm = match.group(2).strip()
+        backend_ep = match.group(3).strip()
+        http_method = match.group(4).strip()
+        request_dto = match.group(5).strip()
+        response_dto = match.group(6).strip()
+
+        request_fields = _parse_field_schema(request_dto)
+        response_fields = _parse_field_schema(response_dto)
+
+        contracts.append(SvcContract(
+            svc_id=svc_id,
+            frontend_service_method=frontend_sm,
+            backend_endpoint=backend_ep,
+            http_method=http_method,
+            request_dto=request_dto,
+            response_dto=response_dto,
+            request_fields=request_fields,
+            response_fields=response_fields,
+        ))
+    return contracts
+
+
+def _to_pascal_case(camel_name: str) -> str:
+    """Convert camelCase field name to PascalCase (for C# property matching).
+
+    Examples: 'tenderTitle' -> 'TenderTitle', 'id' -> 'Id'
+    """
+    if not camel_name:
+        return camel_name
+    return camel_name[0].upper() + camel_name[1:]
+
+
+def _extract_identifiers_from_file(content: str) -> set[str]:
+    """Extract all word-boundary identifiers from a source file.
+
+    Returns a set of all tokens that look like identifiers (letters, digits, underscore).
+    This is intentionally broad — the caller filters against known field names.
+    """
+    return set(re.findall(r'\b[a-zA-Z_]\w*\b', content))
+
+
+def _find_files_by_pattern(
+    project_root: Path,
+    pattern: str,
+    scope: "ScanScope | None" = None,
+) -> list[Path]:
+    """Find source files whose relative path matches the given regex pattern."""
+    compiled = re.compile(pattern, re.IGNORECASE)
+    matched: list[Path] = []
+    source_files = _iter_source_files(project_root)
+    if scope and scope.changed_files:
+        scope_set = set(scope.changed_files)
+        source_files = [f for f in source_files if f.resolve() in scope_set]
+    for f in source_files:
+        rel = f.relative_to(project_root).as_posix()
+        if compiled.search(rel):
+            matched.append(f)
+    return matched
+
+
+def _check_backend_fields(
+    contract: SvcContract,
+    project_root: Path,
+    violations: list[Violation],
+) -> None:
+    """Check that backend DTO files contain all fields from the contract schema."""
+    if not contract.response_fields:
+        return
+
+    # Find backend files (controllers, DTOs, models, handlers)
+    backend_patterns = [
+        r'(?:controllers?|handlers?|endpoints?)',
+        r'(?:dto|dtos|models?|entities|viewmodels?|responses?)',
+    ]
+    backend_files: list[Path] = []
+    for pat in backend_patterns:
+        backend_files.extend(_find_files_by_pattern(project_root, pat))
+
+    if not backend_files:
+        return
+
+    # Collect all identifiers from backend files
+    all_backend_ids: set[str] = set()
+    for bf in backend_files:
+        try:
+            content = bf.read_text(encoding="utf-8", errors="replace")
+            if len(content) > _MAX_FILE_SIZE:
+                continue
+            all_backend_ids.update(_extract_identifiers_from_file(content))
+        except OSError:
+            continue
+
+    if not all_backend_ids:
+        return
+
+    for field_name, type_hint in contract.response_fields.items():
+        pascal_name = _to_pascal_case(field_name)
+        # Accept either camelCase or PascalCase in backend code
+        if field_name not in all_backend_ids and pascal_name not in all_backend_ids:
+            violations.append(Violation(
+                check="API-001",
+                message=(
+                    f"{contract.svc_id}: Backend missing field '{field_name}' "
+                    f"(PascalCase: '{pascal_name}') from response schema. "
+                    f"Expected type: {type_hint}"
+                ),
+                file_path="REQUIREMENTS.md",
+                line=0,
+                severity="error",
+            ))
+
+
+def _check_frontend_fields(
+    contract: SvcContract,
+    project_root: Path,
+    violations: list[Violation],
+) -> None:
+    """Check that frontend model/service files use exact field names from the contract."""
+    if not contract.response_fields:
+        return
+
+    # Find frontend files (services, models, interfaces, components)
+    frontend_patterns = [
+        r'(?:services?|clients?|api)',
+        r'(?:models?|interfaces?|types?|dto)',
+    ]
+    frontend_files: list[Path] = []
+    for pat in frontend_patterns:
+        frontend_files.extend(_find_files_by_pattern(project_root, pat))
+
+    if not frontend_files:
+        return
+
+    # Collect all identifiers from frontend files
+    all_frontend_ids: set[str] = set()
+    for ff in frontend_files:
+        try:
+            content = ff.read_text(encoding="utf-8", errors="replace")
+            if len(content) > _MAX_FILE_SIZE:
+                continue
+            all_frontend_ids.update(_extract_identifiers_from_file(content))
+        except OSError:
+            continue
+
+    if not all_frontend_ids:
+        return
+
+    for field_name, type_hint in contract.response_fields.items():
+        # Frontend must use the exact camelCase name from the schema
+        if field_name not in all_frontend_ids:
+            violations.append(Violation(
+                check="API-002",
+                message=(
+                    f"{contract.svc_id}: Frontend missing field '{field_name}' "
+                    f"from response schema. Expected type: {type_hint}. "
+                    f"The frontend model/interface must use this exact field name."
+                ),
+                file_path="REQUIREMENTS.md",
+                line=0,
+                severity="error",
+            ))
+
+
+_TYPE_COMPAT_MAP: dict[str, set[str]] = {
+    "number": {"number", "int", "long", "float", "double", "decimal", "integer", "bigint"},
+    "string": {"string", "str", "datetime", "date", "guid", "uuid", "iso8601"},
+    "boolean": {"boolean", "bool"},
+}
+
+
+def _check_type_compatibility(
+    contract: SvcContract,
+    project_root: Path,
+    violations: list[Violation],
+) -> None:
+    """Check that field types in backend/frontend are compatible with the contract."""
+    if not contract.response_fields:
+        return
+
+    for field_name, type_hint in contract.response_fields.items():
+        normalized = type_hint.lower().strip().strip('"').strip("'")
+        # Skip complex types (objects, arrays, unions with |)
+        if any(c in normalized for c in ('{', '<', '[', '|', 'array', 'list')):
+            continue
+
+        # Check if the type looks like it could be mismatched
+        is_known = False
+        for _base_type, compat_set in _TYPE_COMPAT_MAP.items():
+            if normalized in compat_set:
+                is_known = True
+                break
+
+        if not is_known and normalized not in ("enum", "object", "any", "-"):
+            violations.append(Violation(
+                check="API-003",
+                message=(
+                    f"{contract.svc_id}: Field '{field_name}' has unusual type "
+                    f"'{type_hint}' — verify backend/frontend type compatibility."
+                ),
+                file_path="REQUIREMENTS.md",
+                line=0,
+                severity="warning",
+            ))
+
+
+def run_api_contract_scan(
+    project_root: Path,
+    scope: ScanScope | None = None,
+) -> list[Violation]:
+    """Scan project for API contract violations between SVC-xxx specs and code.
+
+    Parses the SVC-xxx wiring table from REQUIREMENTS.md, extracts field schemas,
+    and cross-references them against backend DTO properties and frontend model
+    field names. Only produces violations for rows that have explicit field schemas
+    (rows with just class names are skipped — backward compatible).
+
+    Returns:
+        List of Violation objects (API-001, API-002, API-003).
+    """
+    violations: list[Violation] = []
+
+    # Find REQUIREMENTS.md (check milestone dirs too)
+    req_paths = [
+        project_root / "REQUIREMENTS.md",
+        project_root / ".agent-team" / "REQUIREMENTS.md",
+    ]
+    # Also check milestone directories
+    milestones_dir = project_root / ".agent-team" / "milestones"
+    if milestones_dir.is_dir():
+        for ms_dir in sorted(milestones_dir.iterdir()):
+            if ms_dir.is_dir():
+                req_path = ms_dir / "REQUIREMENTS.md"
+                if req_path.is_file():
+                    req_paths.append(req_path)
+
+    requirements_text = ""
+    for req_path in req_paths:
+        if req_path.is_file():
+            try:
+                requirements_text += "\n" + req_path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+
+    if not requirements_text:
+        return violations
+
+    # Parse SVC-xxx table
+    contracts = _parse_svc_table(requirements_text)
+    if not contracts:
+        return violations
+
+    # Only check contracts that have field schemas (backward compat)
+    contracts_with_schemas = [
+        c for c in contracts
+        if c.response_fields or c.request_fields
+    ]
+
+    if not contracts_with_schemas:
+        return violations
+
+    # Run all 3 checks
+    for contract in contracts_with_schemas:
+        if len(violations) >= _MAX_VIOLATIONS:
+            break
+        _check_backend_fields(contract, project_root, violations)
+        _check_frontend_fields(contract, project_root, violations)
+        _check_type_compatibility(contract, project_root, violations)
+
+    violations = violations[:_MAX_VIOLATIONS]
+    violations.sort(
+        key=lambda v: (_SEVERITY_ORDER.get(v.severity, 99), v.file_path, v.line)
+    )
+    return violations

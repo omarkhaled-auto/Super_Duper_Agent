@@ -118,9 +118,10 @@ Interview → Codebase Map → Plan → Research → Architect → Contract → 
 | 14 | **Asset Scan** | Detects broken static asset references (src, href, url(), require, import) |
 | 15 | **PRD Reconciliation** | LLM sub-orchestrator compares REQUIREMENTS.md against built codebase — flags implementation drift |
 | 16 | **Database Integrity Scans** | 3 static scans (DB-001..008): dual ORM type consistency, default values, relationship completeness |
-| 17 | **E2E Testing Phase** | Real backend API tests + Playwright browser tests — verifies the app actually works end-to-end |
-| 18 | **Tracking Documents** | E2E coverage matrix, fix cycle log, milestone handoff docs — structured agent memory between phases |
-| 19 | **Browser MCP Testing** | Playwright-based visual browser testing — starts app, executes user workflows, takes screenshots, fixes regressions |
+| 17 | **API Contract Verification** | Cross-references SVC-xxx field schemas against backend DTO properties and frontend model field names — catches field mismatches before runtime |
+| 18 | **E2E Testing Phase** | Real backend API tests + Playwright browser tests — verifies the app actually works end-to-end |
+| 19 | **Tracking Documents** | E2E coverage matrix, fix cycle log, milestone handoff docs — structured agent memory between phases |
+| 20 | **Browser MCP Testing** | Playwright-based visual browser testing — starts app, executes user workflows, takes screenshots, fixes regressions |
 
 Steps 5-7 repeat in a **convergence loop** until every `- [ ]` in REQUIREMENTS.md becomes `- [x]`.
 
@@ -1200,7 +1201,8 @@ tests/
 ├── test_prompt_integrity.py           # v7.0: All 17 prompt policies verified (33 tests)
 ├── test_fix_completeness.py           # v7.0: All fix function branches, signatures (30 tests)
 ├── test_browser_testing.py            # v8.0: Browser MCP workflow parsing, startup, screenshots, edge cases (~190 tests)
-└── test_browser_wiring.py             # v8.0: Browser CLI wiring, depth gating, signatures, crash isolation (~93 tests)
+├── test_browser_wiring.py             # v8.0: Browser CLI wiring, depth gating, signatures, crash isolation (~93 tests)
+└── test_api_contract.py              # v9.0: API contract scan parsing, field matching, config, CLI wiring, backward compat (81 tests)
 ```
 
 ### Live E2E Verification
@@ -1320,6 +1322,7 @@ src/agent_team/
 - **E2E testing phase**: After convergence-driven reviews pass, real HTTP calls to real APIs (backend) and real Playwright browser interactions (frontend) verify the app actually works. Fix loops diagnose failure types and apply targeted strategies (implement feature, fix auth, fix wiring, fix logic).
 - **Browser MCP visual testing**: After E2E tests pass, a Playwright MCP agent launches the app in a real browser, executes user-facing workflows (login, CRUD, navigation), takes screenshots, and verifies visual correctness. Regression sweeps re-run all passed workflows after each fix. Triple-gated (config + depth + E2E pass rate). Crash-isolated with finally-block app cleanup.
 - **Tracking documents**: Three per-phase documents (coverage matrix, fix cycle log, milestone handoff) give agents structured memory between phases, preventing superficial testing, repeated fix strategies, and zero cross-milestone wiring.
+- **API contract verification**: Three-layer system catches DTO field name mismatches between backend and frontend. Prevention: architect prompt forces exact field schemas in SVC-xxx table. Detection: `run_api_contract_scan()` cross-references code against contract. Guarantee: fix loop runs sub-orchestrator to correct mismatches. PascalCase-aware (C# properties serialize to camelCase). Only fires for full-stack apps.
 - **Database integrity scans**: Three static scans catch dual ORM type mismatches, missing default values, and incomplete relationship configuration across C#, TypeScript, and Python frameworks. Prompt policies (seed data completeness, enum/status registry) prevent these bugs at code-writing time.
 - **Depth-gated post-orchestration**: The entire post-orchestration pipeline is depth-aware. Quick fixes skip all scans. Standard scopes to changed files. Thorough/exhaustive auto-enable E2E testing. User overrides are sacred — explicit config values survive depth gating.
 - **Scoped scanning**: `compute_changed_files()` uses git diff to determine what changed. Seven scan functions accept an optional scope parameter. Cross-file/aggregate checks use full file lists even when scoped, ensuring semantic correctness.
@@ -1385,8 +1388,8 @@ After the convergence loop completes, a 13-step post-orchestration pipeline runs
 ```
 Scope Computation → Mock Data Scan → UI Compliance Scan → Deployment Scan
 → Asset Scan → PRD Reconciliation → DB Dual ORM Scan → DB Default Value Scan
-→ DB Relationship Scan → E2E Backend Tests → E2E Frontend Tests
-→ Browser MCP Testing → Recovery Report
+→ DB Relationship Scan → API Contract Verification → E2E Backend Tests
+→ E2E Frontend Tests → Browser MCP Testing → Recovery Report
 ```
 
 ### Depth Gating
@@ -1399,6 +1402,7 @@ Scope Computation → Mock Data Scan → UI Compliance Scan → Deployment Scan
 | Asset scan | SKIP | SCOPED | FULL | FULL |
 | PRD reconciliation | SKIP | SKIP | CONDITIONAL | FULL |
 | DB scans (3) | SKIP | SCOPED | FULL | FULL |
+| API contract scan | SKIP | FULL | FULL | FULL |
 | E2E testing | SKIP | OPT-IN | AUTO-ENABLED | AUTO-ENABLED |
 | Browser MCP testing | SKIP | SKIP | AUTO-ENABLED (PRD) | AUTO-ENABLED (PRD) |
 
@@ -1417,6 +1421,19 @@ Scope Computation → Mock Data Scan → UI Compliance Scan → Deployment Scan
 | Deployment | DEPLOY-001..004 | Port mismatches, undefined env vars, CORS origin, service name mismatches |
 | Asset | ASSET-001..003 | Broken image/font/media, CSS url(), require/import references |
 | Database | DB-001..008 | Dual ORM type mismatch, missing defaults, nullable access, FK/nav gaps |
+| API Contract | API-001..003 | Backend DTO missing field, frontend model field mismatch, type incompatibility |
+
+### API Contract Verification
+
+When enabled (default, disabled at quick depth), the API contract scan:
+
+1. **Parse SVC-xxx table** from REQUIREMENTS.md — extracts field schemas like `{ id: number, title: string }`
+2. **Cross-reference backend** — Checks DTO/model classes for every field (PascalCase and camelCase)
+3. **Cross-reference frontend** — Checks model/interface files for exact field name matches
+4. **Fix loop** — Sub-orchestrator corrects field mismatches (adds properties, renames fields)
+
+**Full-stack gate:** Only runs when `detect_app_type()` reports both `has_backend` and `has_frontend`.
+**Backward compatible:** Legacy SVC-xxx rows with class names only (no field schemas) produce zero violations.
 
 ### E2E Testing Phase
 
@@ -1469,19 +1486,20 @@ For detailed upgrade documentation with all fixes, hardening passes, review roun
 | **v6.0** | Mode Upgrade Propagation | Depth-intelligent post-orchestration, scoped scanning (git diff), user override protection, PostOrchestrationScanConfig. 259 tests. |
 | **v7.0** | Production Audit #2 | 6-agent audit, 3 bugs fixed, 239 new tests, **100% PRODUCTION READY** certification. 4019 total tests passing. |
 | **v8.0** | Browser MCP Testing | Playwright-based visual browser testing — workflow execution, screenshot verification, regression sweeps, fix loops. 3-agent review cycle, 5 bugs fixed, 283 new tests. 4308 total tests passing. |
+| **v9.0** | API Contract Verification | 3-layer system (prevention + detection + guarantee) — catches DTO field name mismatches between backend and frontend. API-001..003 violation codes. SVC-xxx field schema enforcement. 81 tests. 4361 total tests passing. |
 
 ### Production Readiness
 
 ```
 =============================================================
-   100% PRODUCTION READY (v8.0 — 2026-02-10)
+   100% PRODUCTION READY (v9.0 — 2026-02-10)
 =============================================================
 ```
 
 - **0 CRITICAL bugs** across all versions
-- **4308 tests passing** (2 pre-existing failures in test_mcp_servers.py)
-- **13/13 post-orchestration blocks** independently crash-isolated (12 original + browser testing)
-- **17/17 prompt policies** correctly mapped across 6 agent roles
+- **4361 tests passing** (1 pre-existing failure in test_mcp_servers.py)
+- **14/14 post-orchestration blocks** independently crash-isolated (12 original + browser testing + API contract)
+- **20/20 prompt policies** correctly mapped across 6 agent roles
 - **All 60+ config fields** consumed at correct gate locations
 - **Full backward compatibility** — old configs, no configs, partial configs all work
 

@@ -300,6 +300,7 @@ class PostOrchestrationScanConfig:
 
     mock_data_scan: bool = True       # Scan for mock data in service files
     ui_compliance_scan: bool = True   # Scan for UI compliance violations
+    api_contract_scan: bool = True    # Scan for API contract field mismatches
 
 
 @dataclass
@@ -514,6 +515,7 @@ def apply_depth_quality_gating(
         # Post-orchestration scans
         _gate("post_orchestration_scans.mock_data_scan", False, config.post_orchestration_scans, "mock_data_scan")
         _gate("post_orchestration_scans.ui_compliance_scan", False, config.post_orchestration_scans, "ui_compliance_scan")
+        _gate("post_orchestration_scans.api_contract_scan", False, config.post_orchestration_scans, "api_contract_scan")
         # Milestone scans (legacy fields)
         _gate("milestone.mock_data_scan", False, config.milestone, "mock_data_scan")
         _gate("milestone.ui_compliance_scan", False, config.milestone, "ui_compliance_scan")
@@ -1156,12 +1158,13 @@ def _dict_to_config(data: dict[str, Any]) -> tuple[AgentTeamConfig, set[str]]:
 
     if "post_orchestration_scans" in data and isinstance(data["post_orchestration_scans"], dict):
         pos = data["post_orchestration_scans"]
-        for key in ("mock_data_scan", "ui_compliance_scan"):
+        for key in ("mock_data_scan", "ui_compliance_scan", "api_contract_scan"):
             if key in pos:
                 user_overrides.add(f"post_orchestration_scans.{key}")
         cfg.post_orchestration_scans = PostOrchestrationScanConfig(
             mock_data_scan=pos.get("mock_data_scan", cfg.post_orchestration_scans.mock_data_scan),
             ui_compliance_scan=pos.get("ui_compliance_scan", cfg.post_orchestration_scans.ui_compliance_scan),
+            api_contract_scan=pos.get("api_contract_scan", cfg.post_orchestration_scans.api_contract_scan),
         )
     elif "milestone" in data and isinstance(data["milestone"], dict):
         # Backward compat: migrate milestone.mock_data_scan / ui_compliance_scan
