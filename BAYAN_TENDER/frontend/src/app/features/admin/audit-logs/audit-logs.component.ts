@@ -16,7 +16,6 @@ import { MessageService } from 'primeng/api';
 import { TableLazyLoadEvent } from 'primeng/table';
 import { ApiService } from '../../../core/services/api.service';
 import { UserService } from '../../../core/services/user.service';
-import { PaginatedResult } from '../../../core/models/pagination.model';
 
 interface AuditLog {
   id: string;
@@ -482,10 +481,10 @@ export class AuditLogsComponent implements OnInit {
 
     const params = this.buildQueryParams();
 
-    this.api.get<PaginatedResult<AuditLog>>('/admin/audit-logs', params as any).subscribe({
+    this.api.get<any>('/admin/audit-logs', params as any).subscribe({
       next: (response) => {
-        this.auditLogs.set(response.items);
-        this.totalRecords.set(response.total);
+        this.auditLogs.set(response.items || []);
+        this.totalRecords.set(response.totalCount ?? response.total ?? 0);
         this.isLoading.set(false);
       },
       error: (error) => {
@@ -589,9 +588,9 @@ export class AuditLogsComponent implements OnInit {
     const params = this.buildQueryParams();
     params['pageSize'] = '10000'; // Export all matching records
 
-    this.api.get<PaginatedResult<AuditLog>>('/admin/audit-logs', params as any).subscribe({
+    this.api.get<any>('/admin/audit-logs', params as any).subscribe({
       next: (response) => {
-        this.generateExcel(response.items);
+        this.generateExcel(response.items || []);
         this.isExporting.set(false);
         this.messageService.add({
           severity: 'success',

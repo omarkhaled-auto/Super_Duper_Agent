@@ -415,3 +415,347 @@ All changes sit on top of commit `fbc6021`. **Build succeeds** (Angular `ng buil
 10. **Start Approval — no approver selection UI:** The Combined Scorecard's "Start Approval" button auto-assigns the first 3 approver-role users. Production should have a dialog for selecting and ordering approvers.
 
 11. **Single-bidder testing caveat:** All evaluation/scoring/ranking tested with 1 bidder. Multi-bidder scenarios (deviation calculations, outlier detection, comparative ranking) need re-testing before production.
+
+---
+
+## 7. Exact E2E Path Tested (Step-by-Step)
+
+This is the precise sequence of actions performed and verified during E2E testing.
+
+### Phase 0: Pre-Session Setup (Previously Completed)
+1. Docker Compose `up` — all 7 services running (db, api, ui, minio, redis, mailhog, adminer)
+2. DB seeded with: 1 admin, 1 tender manager, 1 approver, 1 auditor, 1 analyst, 1 panelist, 2 bidders
+3. Tender created: `7d9ba792-fa69-4b53-be01-52148f9ec6c1` (Reference: TNR-2025-0001)
+4. BOQ imported via Excel (48 items, AED 11,474,690.00)
+5. Documents uploaded to tender folders (tender_documents, drawings, etc.)
+6. Tender published (Draft → Published)
+7. 2 bidders invited to tender
+
+### Phase 1: Bidder Portal — Document Access & Clarifications
+| Step | Action | Result | Fixes Required |
+|------|--------|--------|----------------|
+| 1.1 | Login as `bidder@vendor.ae` / `Bayan@2024` at `/portal/login` | Success — lands on portal tenders list | None |
+| 1.2 | Click on published tender card | Navigated to tender detail with tabs | None |
+| 1.3 | Navigate to **Documents** tab | Documents grouped by folder category | Fix 1 (qualification status), Fix 2 (property names), Fix 5 (url field) |
+| 1.4 | Click download on a document | File streams and downloads correctly | Fix 3 (download URL), Fix 4 (presigned URL → stream) |
+| 1.5 | Navigate to **Clarifications** tab | Published Q&A bulletins visible | Fix 6 (TabMenu rewrite) |
+| 1.6 | Click **Submit Question** | Dialog opens with BOQ sections dropdown | Fix 7 (BOQ sections endpoint) |
+| 1.7 | Fill question form, select BOQ section, submit | Question saved, appears in "My Questions" list | Fix 8 (status normalization), Fix 10 (relatedBoqSection) |
+| 1.8 | Refresh page | My Questions persist (not lost) | Fix 9 (GetMyQuestions endpoint) |
+| 1.9 | View Q&A Bulletin with clarification items | Bulletin renders with question/answer pairs | Fix 14 (PortalBulletinDto) |
+| 1.10 | Download bulletin PDF | PDF downloads correctly | Fix 3 (download URL) |
+
+### Phase 2: Admin — Answer Clarification & Publish Bulletin
+| Step | Action | Result | Fixes Required |
+|------|--------|--------|----------------|
+| 2.1 | Login as `admin@bayan.ae` / `Bayan@2024` at `/login` | Success — lands on dashboard | None |
+| 2.2 | Navigate to tender → Clarifications tab | List shows submitted question with status | Fix 11 (admin enum normalization) |
+| 2.3 | Click on question → **Answer** | Draft answer saved, status → DraftAnswer | Fix 12 (DraftAnswer mapping) |
+| 2.4 | Click **Publish Q&A Bulletin** | Dialog shows answered clarifications | Fix 13 (DraftAnswer → auto-approve) |
+| 2.5 | Select clarification, publish | Bulletin created with PDF, email sent to bidders | None (verified via MailHog) |
+
+### Phase 3: Bidder Portal — Bid Submission
+| Step | Action | Result | Fixes Required |
+|------|--------|--------|----------------|
+| 3.1 | Login as bidder, navigate to **Submit Bid** tab | Upload UI with 5 file categories | None |
+| 3.2 | Upload files to each category (technical, commercial, etc.) | All 5 categories upload successfully | None |
+| 3.3 | Click **Submit Bid** | Bid submitted, receipt generated | Fix 15 (company name, file sizes, PDF) |
+| 3.4 | View bid receipt | Receipt number, company name, documents listed correctly | Fix 15 |
+| 3.5 | Download receipt PDF | PDF downloads with correct content | Fix 15 |
+| 3.6 | Navigate away and return to Submit Bid tab | Shows "Already Submitted" card (not upload UI) | Fix 16 (bid status check) |
+| 3.7 | Click **View Receipt** from Already Submitted card | Navigates to receipt page | Fix 16 |
+| 3.8 | Use **Back to Your Tenders** link | Navigates to portal tenders list | Fix 17 |
+| 3.9 | Check tender card status | Shows "Bid Submitted" tag (blue) | Fix 18 |
+
+### Phase 4: Admin — BOQ Import (Bid Analysis)
+| Step | Action | Result | Fixes Required |
+|------|--------|--------|----------------|
+| 4.1 | Navigate to tender → Bids tab | Bid listed with status | None |
+| 4.2 | Click **Import BOQ** on bid | Opens 5-step import wizard | Fix 19 (wizard wiring) |
+| 4.3 | **Step 1: Parse** — click Parse File | 48 items detected, preview rows shown | Fix 20 (null guard), Fix 21 (column keys) |
+| 4.4 | **Step 2: Map Columns** — verify auto-mapped columns | All columns mapped correctly, proceed | None |
+| 4.5 | **Step 3: Match** — review matches | 48/48 exact matches (all bid items → BOQ items) | Fix 22 (CRITICAL: BidPricing creation), Fix 23 (full items) |
+| 4.6 | **Step 4: Normalize** — apply conversions | Items normalized successfully | None |
+| 4.7 | **Step 5: Validate & Import** — execute import | 48 items imported, AED 11,474,690.00 total | None |
+
+### Phase 5: Admin — Evaluation Pipeline
+| Step | Action | Result | Fixes Required |
+|------|--------|--------|----------------|
+| 5.1 | Navigate to tender → **Comparable Sheet** sub-tab | Bidder data populated, section subtotals correct | None |
+| 5.2 | Navigate to **Evaluation Setup** sub-tab | Numeric scoring, blind mode, panel members shown | Fix 25 (DB seeding) |
+| 5.3 | Navigate to **Technical Scoring** sub-tab | 6 criteria shown, score input fields | Fix 24 (role auth) |
+| 5.4 | Enter scores (1-10) for each criterion, add comments | Scores saved, comments persisted | None |
+| 5.5 | Submit final scores | Final submission confirmed | None |
+| 5.6 | Navigate to **Technical Summary** sub-tab | Score matrix, averages displayed | Fix 26 (sub-tab wiring) |
+| 5.7 | Click **View Comments** on a criterion | Comments dialog shows submitted comments | Fix 27 (loadComments call) |
+| 5.8 | Click **Lock Scores** | Scores locked (irreversible) | None |
+| 5.9 | Navigate to **Combined Scorecard** sub-tab | Empty initially | Fix 28 |
+| 5.10 | Set weights 70/30, click Apply | Tech: 5.33, Commercial: 100.00, Combined: 33.73, Rank #1 | Fix 28 (commercial auto-calc) |
+| 5.11 | Test **Sensitivity Analysis** | Weight sensitivity calculated across splits | None |
+| 5.12 | Click **Generate Award Pack** | "Award pack generated successfully" toast | None |
+
+### Phase 6: Admin — Approval Workflow
+| Step | Action | Result | Fixes Required |
+|------|--------|--------|----------------|
+| 6.1 | Click **Start Approval** on Combined Scorecard | Confirmation dialog, then workflow created | Fix 29 (enum mapping), Fix 30 (approver auto-fetch) |
+| 6.2 | DB: Reassigned Level 1 approver to `approver@bayan.ae` | Level 1 set to testable approver account | Manual DB update |
+| 6.3 | Login as `approver@bayan.ae` / `Bayan@2024` | Success — Approval workflow UI shown | None |
+| 6.4 | Select **Approve**, add comment, submit | "Your decision 'Approve' has been recorded" | None |
+| 6.5 | DB: Reassigned Level 2 to `approver@bayan.ae` | Level 2 set to testable account | Manual DB update |
+| 6.6 | Refresh, approve Level 2 | Level 2 approved, Level 3 activated | None |
+| 6.7 | DB: Reassigned Level 3 to `approver@bayan.ae` | Level 3 set to testable account | Manual DB update |
+| 6.8 | Refresh, approve Level 3 | Workflow APPROVED, tender status → **Awarded** | None |
+| 6.9 | Verified in DB: `approval_workflows.status = 2` (Approved), `tenders.status = 'Awarded'` | Full lifecycle complete | None |
+
+### Lifecycle Summary
+```
+Tender: Draft → Published → (Bidder submits bid) → Evaluation → Awarded
+                                                        ↓
+                                              Technical Scoring → Lock
+                                              Commercial Scoring (auto)
+                                              Combined Scorecard
+                                              Award Pack Generation
+                                              3-Level Approval → Approved
+```
+
+---
+
+## 8. Untested Paths & Features (Gap Analysis)
+
+### System Inventory
+- **17 backend controllers** with **100+ endpoints**
+- **7 frontend feature modules** with **50+ components**
+- **21+ core services**
+- **7 user roles**: Admin, TenderManager, CommercialAnalyst, Approver, Auditor, TechnicalPanelist, Bidder
+
+### API Verification Results
+| Feature | API Tested | Frontend Tested | Notes |
+|---------|-----------|----------------|-------|
+| User creation (POST /api/admin/users) | YES (201) | NO | Returns userId + temp password. Deactivated test user after. |
+| Bidder creation (POST /api/bidders) | YES (201) | NO | Returns bidder with id, CR#, license. |
+| User listing (GET /api/admin/users) | YES (200) | NO | 9 users returned with roles. |
+
+### Untested Admin Features
+
+#### A. User Management (AdminController)
+| Feature | Endpoint | Risk Level |
+|---------|----------|------------|
+| User creation **via UI** (user-form-dialog) | POST /api/admin/users | **HIGH** — first step of real E2E |
+| User editing via UI | PUT /api/admin/users/{id} | MEDIUM |
+| Toggle user active/inactive via UI | POST /api/admin/users/{id}/toggle-active | LOW |
+| User list pagination, search, role filter | GET /api/admin/users?search=... | LOW |
+| Password reset flow (forgot → email → reset) | POST /api/auth/forgot-password + reset-password | **HIGH** — critical auth flow |
+
+#### B. Bidder Management (BiddersController)
+| Feature | Endpoint | Risk Level |
+|---------|----------|------------|
+| Bidder creation **via UI** (bidder-form-dialog) | POST /api/bidders | **HIGH** — required before invitations |
+| Bidder editing (prequalification, deactivation) | PUT /api/bidders/{id} | MEDIUM |
+| Bidder search & filtering | GET /api/bidders?search=... | LOW |
+
+#### C. Client Management (ClientsController)
+| Feature | Endpoint | Risk Level |
+|---------|----------|------------|
+| Client creation via UI (client-form-dialog) | POST /api/clients | MEDIUM |
+| Client listing, search | GET /api/clients | LOW |
+| Client editing | PUT /api/clients/{id} | LOW |
+
+#### D. System Settings
+| Feature | Endpoint | Risk Level |
+|---------|----------|------------|
+| View system settings | GET /api/admin/settings | LOW |
+| Update settings | PUT /api/admin/settings/{key} | MEDIUM |
+
+#### E. Audit Logs
+| Feature | Endpoint | Risk Level |
+|---------|----------|------------|
+| View audit log list with filters | GET /api/admin/audit-logs | LOW |
+
+### Untested Tender Lifecycle Features
+
+#### F. Tender Creation Wizard (4-step)
+| Feature | Component | Risk Level |
+|---------|-----------|------------|
+| Step 1: Basic Info (title, reference, type, client) | basic-info-step.component | **HIGH** — start of lifecycle |
+| Step 2: Dates (submission deadline, opening date) | dates-step.component | **HIGH** |
+| Step 3: Criteria (tech weight, commercial weight) | criteria-step.component | MEDIUM |
+| Step 4: Review & Create | review-step.component | MEDIUM |
+| Auto-generate reference (TNR-YYYY-####) | GET /api/tenders/next-reference | LOW |
+
+#### G. Tender Operations
+| Feature | Endpoint | Risk Level |
+|---------|----------|------------|
+| Cancel tender | POST /api/tenders/{id}/cancel | MEDIUM |
+| Update tender details | PUT /api/tenders/{id} | MEDIUM |
+| Activity feed | GET /api/tenders/{id}/activity | LOW |
+
+#### H. Bidder Invitation & Qualification
+| Feature | Endpoint | Risk Level |
+|---------|----------|------------|
+| Invite bidders via UI (invite-bidders.component) | POST /api/tenders/{id}/invite | **TESTED via DB** — UI not tested |
+| Remove bidder from tender | DELETE /api/tenders/{id}/bidders/{bidderId} | MEDIUM |
+| Update bidder qualification status via UI | PUT /api/tenders/{id}/bidders/{bidderId}/qualification | **HIGH** — currently done via raw SQL |
+
+#### I. BOQ Management (Manual)
+| Feature | Component | Risk Level |
+|---------|-----------|------------|
+| Create BOQ section manually | boq-section-dialog.component | MEDIUM |
+| Create BOQ item manually | boq-item-dialog.component | MEDIUM |
+| Edit/delete BOQ sections and items | PUT/DELETE endpoints | MEDIUM |
+| Duplicate BOQ item | POST .../duplicate | LOW |
+| BOQ import from Excel (admin BOQ, not bid) | boq-import-dialog.component | MEDIUM |
+| Export BOQ template to Excel | boq-export-dialog.component | LOW |
+
+### Untested Bid Management Features
+
+#### J. Bid Opening & Late Bids
+| Feature | Endpoint | Risk Level |
+|---------|----------|------------|
+| Open bids ceremony (IRREVERSIBLE) | POST /api/tenders/{id}/bids/open | **HIGH** |
+| Accept late bid | POST .../bids/{id}/accept-late | MEDIUM |
+| Reject late bid with reason | POST .../bids/{id}/reject-late | MEDIUM |
+| Disqualify bid with reason | POST .../bids/{id}/disqualify | MEDIUM |
+| Download all bids as ZIP | GET .../bids/download-all | LOW |
+| Bid detail dialog | bid-details-dialog.component | LOW |
+
+#### K. Bid Exceptions
+| Feature | Endpoint | Risk Level |
+|---------|----------|------------|
+| View bid exceptions | GET /api/tenders/{id}/exceptions | MEDIUM |
+| Add bid exception (cost/time/risk) | POST /api/tenders/{id}/exceptions | MEDIUM |
+| Exceptions panel in evaluation | exceptions-panel.component | MEDIUM |
+
+### Untested Evaluation Features
+
+#### L. Multi-Bidder Evaluation
+| Feature | Risk Level | Notes |
+|---------|------------|-------|
+| Comparable sheet with 3+ bidders | **HIGH** | Deviation, outlier detection, cross-bidder comparison |
+| Commercial scoring with 3+ bidders | **HIGH** | Lowest bid ratio formula: (Lowest/This)×100 |
+| Combined scorecard ranking with ties | MEDIUM | Tie-breaking behavior unknown |
+| Sensitivity analysis with varied weights | LOW | Only tested at one weight set |
+
+#### M. Advanced Evaluation
+| Feature | Endpoint | Risk Level |
+|---------|----------|------------|
+| Recalculate outliers | POST .../recalculate-outliers | LOW |
+| Export comparable sheet to Excel | GET .../comparable-sheet/export-excel | MEDIUM |
+| Download award pack PDF | GET .../award-pack/download | MEDIUM |
+| Evaluation setup via UI (not DB seed) | POST .../evaluation/setup | **HIGH** |
+
+#### N. Approval Variations
+| Feature | Risk Level | Notes |
+|---------|------------|-------|
+| Reject at any level → workflow rejected | **HIGH** | Only tested approve path |
+| Return for Revision at any level | **HIGH** | Not tested at all |
+| Pending approvals widget on dashboard | MEDIUM | approver-dashboard.component exists |
+| Approval history view | LOW | GET .../approval/history |
+
+### Untested Portal Features
+
+#### O. Bidder Account Activation
+| Feature | Endpoint | Risk Level |
+|---------|----------|------------|
+| Account activation (set password from email) | POST /api/portal/auth/activate | **HIGH** — first-time bidder flow |
+| Portal token refresh | POST /api/portal/auth/refresh-token | LOW |
+
+#### P. Addenda
+| Feature | Endpoint | Risk Level |
+|---------|----------|------------|
+| Admin: create addendum | POST .../addenda | MEDIUM |
+| Admin: issue addendum to bidders | POST .../addenda/{id}/issue | MEDIUM |
+| Portal: view addenda | GET /api/portal/tenders/{id}/addenda | MEDIUM |
+| Portal: acknowledge addendum | POST /api/portal/tenders/{id}/addenda/{id}/acknowledge | MEDIUM |
+
+#### Q. Multi-Bidder Portal
+| Feature | Risk Level | Notes |
+|---------|------------|-------|
+| Second bidder (`bidder2@vendor.ae`) portal login | MEDIUM | Account exists but never tested |
+| Second bidder submits bid to same tender | **HIGH** | Required for multi-bidder evaluation |
+| Second bidder views documents, clarifications | LOW | Should work same as bidder 1 |
+
+### Untested Cross-Cutting Features
+
+#### R. Vendor Pricing Intelligence
+| Feature | Endpoint | Risk Level |
+|---------|----------|------------|
+| Vendor pricing dashboard | GET /api/vendor-pricing/dashboard | MEDIUM |
+| Vendor trends over time | GET .../trends/{bidderId} | MEDIUM |
+| Compare vendors (2-5) | POST .../compare | MEDIUM |
+| Export vendor pricing to Excel | GET .../export | LOW |
+| Create vendor pricing snapshot | POST .../snapshots | MEDIUM |
+
+#### S. Dashboard
+| Feature | Component | Risk Level |
+|---------|-----------|------------|
+| Tender Manager dashboard (KPIs, activity) | dashboard.component | LOW |
+| Overview dashboard | GET /api/dashboard/overview | LOW |
+| Approver dashboard | approver-dashboard.component | MEDIUM |
+
+#### T. Notifications
+| Feature | Endpoint | Risk Level |
+|---------|----------|------------|
+| Get notification preferences | GET /api/notifications/preferences | LOW |
+| Update notification preferences | PUT /api/notifications/preferences | LOW |
+
+#### U. Document Management (Advanced)
+| Feature | Endpoint | Risk Level |
+|---------|----------|------------|
+| Create document folder | POST .../documents/folders | LOW |
+| View document versions | GET .../documents/{id}/versions | LOW |
+| Delete document | DELETE .../documents/{id} | MEDIUM |
+
+#### V. Clarification Management (Advanced Admin)
+| Feature | Endpoint | Risk Level |
+|---------|----------|------------|
+| Submit internal RFI | POST .../clarifications/internal-rfi | MEDIUM |
+| Approve answer (not auto-approve) | POST .../clarifications/{id}/approve | LOW |
+| Mark as duplicate | POST .../clarifications/{id}/duplicate | LOW |
+| Reject clarification | POST .../clarifications/{id}/reject | LOW |
+| Assign clarification to team member | POST .../clarifications/{id}/assign | LOW |
+
+### Priority Matrix: What to Test Next
+
+| Priority | Feature | Why |
+|----------|---------|-----|
+| **P0** | User creation via UI | First step of any real E2E — currently bypassed via DB seeding |
+| **P0** | Bidder creation via UI | Required before inviting bidders to tenders |
+| **P0** | Tender creation wizard | Start of lifecycle — currently bypassed via pre-seeded tender |
+| **P0** | Multi-bidder evaluation (3 bidders) | Scoring/ranking formulas untested with competition |
+| **P1** | Bidder qualification via UI | Currently done via raw SQL — blocks portal access |
+| **P1** | Bid opening ceremony | Irreversible action, untested |
+| **P1** | Approval rejection + return for revision | Only approve path tested |
+| **P1** | Evaluation setup via UI | Currently DB-seeded, UI flow untested |
+| **P1** | Bidder account activation (portal) | First-time bidder flow from invitation email |
+| **P2** | Password reset flow | Auth critical path |
+| **P2** | Addenda creation & acknowledgment | Untested feature set |
+| **P2** | Vendor pricing intelligence | Entire module untested |
+| **P2** | BOQ manual management | Create/edit/delete sections & items |
+| **P3** | Advanced clarification ops | Duplicate, reject, assign, internal RFI |
+| **P3** | Dashboard accuracy | KPIs, activity feed, approver widget |
+| **P3** | Document versioning & deletion | Low-risk CRUD |
+| **P3** | Notification preferences | Low-risk settings |
+
+### Coverage Summary
+| Category | Endpoints | Tested | Untested | Coverage |
+|----------|-----------|--------|----------|----------|
+| Auth | 5 | 2 | 3 | 40% |
+| Tenders | 17 | 5 | 12 | 29% |
+| Bids | 7 | 0 | 7 | 0% |
+| Bid Analysis (Import) | 6 | 6 | 0 | 100% |
+| Clarifications | 13 | 5 | 8 | 38% |
+| BOQ | 14 | 1 | 13 | 7% |
+| Documents | 7 | 2 | 5 | 29% |
+| Evaluation | 11 | 8 | 3 | 73% |
+| Tech Evaluation | 9 | 7 | 2 | 78% |
+| Approval | 6 | 4 | 2 | 67% |
+| Admin | 8 | 1 | 7 | 13% |
+| Bidders | 4 | 0 | 4 | 0% |
+| Clients | 4 | 0 | 4 | 0% |
+| Dashboard | 3 | 0 | 3 | 0% |
+| Vendor Pricing | 9 | 0 | 9 | 0% |
+| Notifications | 2 | 0 | 2 | 0% |
+| Portal | 19 | 14 | 5 | 74% |
+| **TOTAL** | **144** | **55** | **89** | **38%** |
+
+> **Note:** "Tested" means the endpoint was exercised during E2E testing (either via browser UI or direct API call for verification). The 38% coverage focused on the **critical happy path** — the full tender lifecycle from publish to award. The untested 62% consists of management UIs (CRUD), alternative flows (reject, cancel), advanced features (vendor pricing), and multi-user scenarios.

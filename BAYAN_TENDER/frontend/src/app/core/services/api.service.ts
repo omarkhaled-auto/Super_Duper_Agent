@@ -65,10 +65,28 @@ export class ApiService {
   }
 
   getList<T>(endpoint: string, params?: QueryParams): Observable<PaginatedResponse<T>> {
-    return this.http.get<ApiResponse<PaginatedResponse<T>>>(`${this.baseUrl}${endpoint}`, {
+    return this.http.get<ApiResponse<any>>(`${this.baseUrl}${endpoint}`, {
       params: this.buildHttpParams(params)
     }).pipe(
-      map(response => response.data),
+      map(response => {
+        const raw = response.data;
+        // Backend PaginatedList returns a flat structure with items, pageNumber, totalCount, etc.
+        // Map it to the frontend PaginatedResponse<T> shape.
+        if (raw && raw.items && !raw.pagination) {
+          return {
+            items: raw.items,
+            pagination: {
+              currentPage: raw.pageNumber ?? raw.page ?? 1,
+              pageSize: raw.pageSize ?? 10,
+              totalItems: raw.totalCount ?? raw.total ?? 0,
+              totalPages: raw.totalPages ?? 1,
+              hasNextPage: raw.hasNextPage ?? false,
+              hasPreviousPage: raw.hasPreviousPage ?? false
+            }
+          } as PaginatedResponse<T>;
+        }
+        return raw as PaginatedResponse<T>;
+      }),
       catchError(this.handleError)
     );
   }

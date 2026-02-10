@@ -412,20 +412,14 @@ export class BidderFormDialogComponent implements OnInit {
         contactPersonPhone: formValue.contactPersonPhone || undefined
       };
 
-      // For demo, simulate API response
-      const newBidder: Bidder = {
-        id: Date.now(), // Mock ID
-        ...createDto,
-        tradeSpecializations: createDto.tradeSpecializations,
-        prequalificationStatus: createDto.prequalificationStatus || PrequalificationStatus.PENDING,
-        ndaStatus: createDto.ndaStatus || NdaStatus.NOT_SENT,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-
-      // In production: this.bidderService.createBidder(createDto).subscribe(...)
-      this.dialogRef.close(newBidder);
+      this.bidderService.createBidder(createDto).subscribe({
+        next: (result) => {
+          this.dialogRef.close(result);
+        },
+        error: (err) => {
+          this.errorMessage.set(err.message || 'Failed to create bidder');
+        }
+      });
     } else {
       const updateDto: UpdateBidderDto = {
         companyNameEn: formValue.companyNameEn,
@@ -442,18 +436,14 @@ export class BidderFormDialogComponent implements OnInit {
         contactPersonPhone: formValue.contactPersonPhone || undefined
       };
 
-      // For demo, simulate API response
-      const updatedBidder: Bidder = {
-        ...data!.bidder!,
-        ...updateDto,
-        tradeSpecializations: updateDto.tradeSpecializations || data!.bidder!.tradeSpecializations,
-        prequalificationStatus: updateDto.prequalificationStatus || data!.bidder!.prequalificationStatus,
-        ndaStatus: updateDto.ndaStatus || data!.bidder!.ndaStatus,
-        updatedAt: new Date()
-      };
-
-      // In production: this.bidderService.updateBidder(data!.bidder!.id, updateDto).subscribe(...)
-      this.dialogRef.close(updatedBidder);
+      this.bidderService.updateBidder(data!.bidder!.id, updateDto).subscribe({
+        next: (result) => {
+          this.dialogRef.close(result);
+        },
+        error: (err) => {
+          this.errorMessage.set(err.message || 'Failed to update bidder');
+        }
+      });
     }
   }
 

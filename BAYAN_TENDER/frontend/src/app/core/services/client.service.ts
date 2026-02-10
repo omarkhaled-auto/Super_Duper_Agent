@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, tap, catchError, throwError } from 'rxjs';
+import { Observable, tap, catchError, throwError, map } from 'rxjs';
 import { ApiService } from './api.service';
 import { Client, CreateClientDto, UpdateClientDto } from '../models/client.model';
 import { PaginatedResponse, QueryParams } from '../models';
@@ -9,6 +9,30 @@ export interface ClientQueryParams extends QueryParams {
   search?: string;
   city?: string;
   country?: string;
+}
+
+/** Maps a raw backend client object to the frontend Client model */
+function mapApiClient(raw: any): Client {
+  return {
+    id: raw.id ?? raw.Id,
+    name: raw.name ?? raw.Name ?? '',
+    nameAr: raw.nameAr ?? raw.NameAr ?? undefined,
+    email: raw.email ?? raw.Email ?? '',
+    phone: raw.phone ?? raw.Phone ?? undefined,
+    address: raw.address ?? raw.Address ?? undefined,
+    city: raw.city ?? raw.City ?? undefined,
+    country: raw.country ?? raw.Country ?? undefined,
+    crNumber: raw.crNumber ?? raw.CRNumber ?? raw.cRNumber ?? undefined,
+    vatNumber: raw.vatNumber ?? raw.VatNumber ?? undefined,
+    contactPerson: raw.contactPerson ?? raw.ContactPerson ?? undefined,
+    contactEmail: raw.contactEmail ?? raw.ContactEmail ?? undefined,
+    contactPhone: raw.contactPhone ?? raw.ContactPhone ?? raw.phone ?? raw.Phone ?? undefined,
+    isActive: raw.isActive ?? raw.IsActive ?? true,
+    createdAt: raw.createdAt ?? raw.CreatedAt,
+    updatedAt: raw.updatedAt ?? raw.UpdatedAt,
+    tendersCount: raw.tendersCount ?? raw.tenderCount ?? raw.TenderCount ?? 0,
+    totalContractValue: raw.totalContractValue ?? raw.TotalContractValue ?? 0
+  };
 }
 
 @Injectable({
@@ -28,7 +52,11 @@ export class ClientService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return this.api.getList<Client>(this.endpoint, params).pipe(
+    return this.api.getList<any>(this.endpoint, params).pipe(
+      map(response => ({
+        ...response,
+        items: (response.items || []).map(mapApiClient)
+      })),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -38,11 +66,12 @@ export class ClientService {
     );
   }
 
-  getClientById(id: number): Observable<Client> {
+  getClientById(id: number | string): Observable<Client> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return this.api.get<Client>(`${this.endpoint}/${id}`).pipe(
+    return this.api.get<any>(`${this.endpoint}/${id}`).pipe(
+      map(raw => mapApiClient(raw)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -56,7 +85,8 @@ export class ClientService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return this.api.post<Client>(this.endpoint, data).pipe(
+    return this.api.post<any>(this.endpoint, data).pipe(
+      map(raw => mapApiClient({ ...data, ...raw })),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -66,11 +96,12 @@ export class ClientService {
     );
   }
 
-  updateClient(id: number, data: UpdateClientDto): Observable<Client> {
+  updateClient(id: number | string, data: UpdateClientDto): Observable<Client> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return this.api.put<Client>(`${this.endpoint}/${id}`, data).pipe(
+    return this.api.put<any>(`${this.endpoint}/${id}`, data).pipe(
+      map(raw => mapApiClient({ id, ...data, ...raw })),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -80,7 +111,7 @@ export class ClientService {
     );
   }
 
-  deleteClient(id: number): Observable<void> {
+  deleteClient(id: number | string): Observable<void> {
     this._isLoading.set(true);
     this._error.set(null);
 
@@ -94,7 +125,7 @@ export class ClientService {
     );
   }
 
-  toggleClientStatus(id: number, isActive: boolean): Observable<Client> {
+  toggleClientStatus(id: number | string, isActive: boolean): Observable<Client> {
     return this.updateClient(id, { isActive });
   }
 

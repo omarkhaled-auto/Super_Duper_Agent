@@ -300,57 +300,26 @@ export class UserListComponent implements OnInit {
   }
 
   private loadUsers(): void {
-    // For demo purposes, using mock data
-    // In production, this would call: this.userService.getUsers()
-    const mockUsers: User[] = [
-      {
-        id: 1,
-        email: 'admin@bayan.sa',
-        firstName: 'Ahmed',
-        lastName: 'Al-Rashid',
-        role: UserRole.ADMIN,
-        isActive: true,
-        createdAt: new Date('2025-01-01'),
-        updatedAt: new Date('2026-01-15'),
-        lastLogin: new Date('2026-02-05')
+    this.userService.getUsers({
+      page: 1,
+      pageSize: 1000,
+      search: undefined,
+      role: undefined,
+      isActive: undefined
+    }).subscribe({
+      next: (response) => {
+        const items = response?.items || [];
+        this.users.set(items);
+        this.filteredUsers.set(items);
       },
-      {
-        id: 2,
-        email: 'manager@bayan.sa',
-        firstName: 'Fatima',
-        lastName: 'Al-Saud',
-        role: UserRole.TENDER_MANAGER,
-        isActive: true,
-        createdAt: new Date('2025-03-15'),
-        updatedAt: new Date('2026-01-20'),
-        lastLogin: new Date('2026-02-04')
-      },
-      {
-        id: 3,
-        email: 'bidder@company.sa',
-        firstName: 'Mohammed',
-        lastName: 'Al-Harbi',
-        role: UserRole.BIDDER,
-        isActive: true,
-        createdAt: new Date('2025-06-01'),
-        updatedAt: new Date('2026-01-10'),
-        lastLogin: new Date('2026-02-03')
-      },
-      {
-        id: 4,
-        email: 'viewer@org.sa',
-        firstName: 'Sara',
-        lastName: 'Al-Otaibi',
-        role: UserRole.VIEWER,
-        isActive: false,
-        createdAt: new Date('2025-09-15'),
-        updatedAt: new Date('2026-01-05'),
-        lastLogin: new Date('2025-12-20')
+      error: () => {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Failed to load users from the server'
+        });
       }
-    ];
-
-    this.users.set(mockUsers);
-    this.filteredUsers.set(mockUsers);
+    });
   }
 
   onSearch(): void {
@@ -428,23 +397,32 @@ export class UserListComponent implements OnInit {
   }
 
   toggleUserStatus(user: User): void {
-    const newStatus = !user.isActive;
-    const action = newStatus ? 'activate' : 'deactivate';
+    const action = user.isActive ? 'deactivate' : 'activate';
 
     this.confirmationService.confirm({
       message: `Are you sure you want to ${action} ${user.firstName} ${user.lastName}?`,
       header: `Confirm ${action.charAt(0).toUpperCase() + action.slice(1)}`,
       icon: 'pi pi-exclamation-triangle',
       accept: () => {
-        // In production: this.userService.toggleUserStatus(user.id, newStatus)
-        this.users.update(users =>
-          users.map(u => u.id === user.id ? { ...u, isActive: newStatus } : u)
-        );
-        this.applyFilters();
-        this.messageService.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: `User ${newStatus ? 'activated' : 'deactivated'} successfully`
+        this.userService.toggleUserStatus(user.id).subscribe({
+          next: () => {
+            this.users.update(users =>
+              users.map(u => u.id === user.id ? { ...u, isActive: !user.isActive } : u)
+            );
+            this.applyFilters();
+            this.messageService.add({
+              severity: 'success',
+              summary: 'Success',
+              detail: `User ${!user.isActive ? 'activated' : 'deactivated'} successfully`
+            });
+          },
+          error: (err) => {
+            this.messageService.add({
+              severity: 'error',
+              summary: 'Error',
+              detail: err.message || `Failed to ${action} user`
+            });
+          }
         });
       }
     });
@@ -457,13 +435,23 @@ export class UserListComponent implements OnInit {
       icon: 'pi pi-exclamation-triangle',
       acceptButtonStyleClass: 'p-button-danger',
       accept: () => {
-        // In production: this.userService.deleteUser(user.id)
-        this.users.update(users => users.filter(u => u.id !== user.id));
-        this.applyFilters();
-        this.messageService.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'User deleted successfully'
+        this.userService.deleteUser(user.id).subscribe({
+          next: () => {
+            this.users.update(users => users.filter(u => u.id !== user.id));
+            this.applyFilters();
+            this.messageService.add({
+              severity: 'success',
+              summary: 'Success',
+              detail: 'User deleted successfully'
+            });
+          },
+          error: (err) => {
+            this.messageService.add({
+              severity: 'error',
+              summary: 'Error',
+              detail: err.message || 'Failed to delete user'
+            });
+          }
         });
       }
     });

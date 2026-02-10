@@ -417,102 +417,23 @@ export class BidderListComponent implements OnInit {
   }
 
   private loadBidders(): void {
-    // Mock data for demonstration - in production, fetch from API
-    const mockBidders: Bidder[] = [
-      {
-        id: 1,
-        companyNameEn: 'Tech Solutions Ltd',
-        companyNameAr: 'حلول تقنية المحدودة',
-        email: 'info@techsolutions.sa',
-        phone: '+966 11 234 5678',
-        crNumber: '1010123456',
-        address: 'Riyadh, King Fahd Road',
-        tradeSpecializations: [TradeSpecialization.IT_SERVICES, TradeSpecialization.TELECOMMUNICATIONS],
-        prequalificationStatus: PrequalificationStatus.APPROVED,
-        ndaStatus: NdaStatus.SIGNED,
-        contactPersonName: 'Ahmed Al-Rashid',
-        contactPersonEmail: 'ahmed@techsolutions.sa',
-        contactPersonPhone: '+966 50 123 4567',
-        isActive: true,
-        createdAt: new Date('2025-01-15'),
-        updatedAt: new Date('2026-01-20'),
-        tendersCount: 15,
-        activeTendersCount: 3
+    this.bidderService.getBidders({
+      page: 1,
+      pageSize: 1000
+    }).subscribe({
+      next: (response) => {
+        const items = response?.items || [];
+        this.bidders.set(items);
+        this.filteredBidders.set(items);
       },
-      {
-        id: 2,
-        companyNameEn: 'Al-Bina Construction',
-        companyNameAr: 'البناء للمقاولات',
-        email: 'contact@albina.sa',
-        phone: '+966 12 345 6789',
-        crNumber: '1010234567',
-        address: 'Jeddah, Al-Madinah Road',
-        tradeSpecializations: [TradeSpecialization.CONSTRUCTION, TradeSpecialization.ENGINEERING, TradeSpecialization.MAINTENANCE],
-        prequalificationStatus: PrequalificationStatus.APPROVED,
-        ndaStatus: NdaStatus.SIGNED,
-        contactPersonName: 'Mohammed Al-Harbi',
-        contactPersonEmail: 'mohammed@albina.sa',
-        contactPersonPhone: '+966 55 234 5678',
-        isActive: true,
-        createdAt: new Date('2025-03-20'),
-        updatedAt: new Date('2026-01-25'),
-        tendersCount: 8,
-        activeTendersCount: 2
-      },
-      {
-        id: 3,
-        companyNameEn: 'Global Supplies Co',
-        email: 'sales@globalsupplies.sa',
-        phone: '+966 13 456 7890',
-        crNumber: '1010345678',
-        tradeSpecializations: [TradeSpecialization.SUPPLIES, TradeSpecialization.LOGISTICS],
-        prequalificationStatus: PrequalificationStatus.PENDING,
-        ndaStatus: NdaStatus.SENT,
-        contactPersonName: 'Sara Al-Otaibi',
-        contactPersonEmail: 'sara@globalsupplies.sa',
-        isActive: true,
-        createdAt: new Date('2025-06-10'),
-        updatedAt: new Date('2026-02-01'),
-        tendersCount: 0,
-        activeTendersCount: 0
-      },
-      {
-        id: 4,
-        companyNameEn: 'Security First Services',
-        companyNameAr: 'الأمان أولا للخدمات',
-        email: 'info@securityfirst.sa',
-        phone: '+966 11 567 8901',
-        crNumber: '1010456789',
-        tradeSpecializations: [TradeSpecialization.SECURITY],
-        prequalificationStatus: PrequalificationStatus.REJECTED,
-        ndaStatus: NdaStatus.NOT_SENT,
-        isActive: false,
-        createdAt: new Date('2025-08-15'),
-        updatedAt: new Date('2026-01-10'),
-        tendersCount: 2,
-        activeTendersCount: 0
-      },
-      {
-        id: 5,
-        companyNameEn: 'Strategic Consulting Group',
-        email: 'hello@strategicconsulting.sa',
-        crNumber: '1010567890',
-        tradeSpecializations: [TradeSpecialization.CONSULTING, TradeSpecialization.FINANCIAL],
-        prequalificationStatus: PrequalificationStatus.APPROVED,
-        ndaStatus: NdaStatus.SIGNED,
-        contactPersonName: 'Khalid Al-Faisal',
-        contactPersonEmail: 'khalid@strategicconsulting.sa',
-        contactPersonPhone: '+966 54 567 8901',
-        isActive: true,
-        createdAt: new Date('2025-10-01'),
-        updatedAt: new Date('2026-02-03'),
-        tendersCount: 5,
-        activeTendersCount: 1
+      error: () => {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Failed to load bidders from the server'
+        });
       }
-    ];
-
-    this.bidders.set(mockBidders);
-    this.filteredBidders.set(mockBidders);
+    });
   }
 
   onSearch(): void {
@@ -609,15 +530,25 @@ export class BidderListComponent implements OnInit {
       header: `Confirm ${action.charAt(0).toUpperCase() + action.slice(1)}`,
       icon: 'pi pi-exclamation-triangle',
       accept: () => {
-        // In production: this.bidderService.toggleBidderStatus(bidder.id, newStatus)
-        this.bidders.update(bidders =>
-          bidders.map(b => b.id === bidder.id ? { ...b, isActive: newStatus } : b)
-        );
-        this.applyFilters();
-        this.messageService.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: `Bidder ${newStatus ? 'activated' : 'deactivated'} successfully`
+        this.bidderService.toggleBidderStatus(bidder.id, newStatus).subscribe({
+          next: () => {
+            this.bidders.update(bidders =>
+              bidders.map(b => b.id === bidder.id ? { ...b, isActive: newStatus } : b)
+            );
+            this.applyFilters();
+            this.messageService.add({
+              severity: 'success',
+              summary: 'Success',
+              detail: `Bidder ${newStatus ? 'activated' : 'deactivated'} successfully`
+            });
+          },
+          error: (err) => {
+            this.messageService.add({
+              severity: 'error',
+              summary: 'Error',
+              detail: err.message || `Failed to ${action} bidder`
+            });
+          }
         });
       }
     });
@@ -630,13 +561,23 @@ export class BidderListComponent implements OnInit {
       icon: 'pi pi-exclamation-triangle',
       acceptButtonStyleClass: 'p-button-danger',
       accept: () => {
-        // In production: this.bidderService.deleteBidder(bidder.id)
-        this.bidders.update(bidders => bidders.filter(b => b.id !== bidder.id));
-        this.applyFilters();
-        this.messageService.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'Bidder deleted successfully'
+        this.bidderService.deleteBidder(bidder.id).subscribe({
+          next: () => {
+            this.bidders.update(bidders => bidders.filter(b => b.id !== bidder.id));
+            this.applyFilters();
+            this.messageService.add({
+              severity: 'success',
+              summary: 'Success',
+              detail: 'Bidder deleted successfully'
+            });
+          },
+          error: (err) => {
+            this.messageService.add({
+              severity: 'error',
+              summary: 'Error',
+              detail: err.message || 'Failed to delete bidder'
+            });
+          }
         });
       }
     });

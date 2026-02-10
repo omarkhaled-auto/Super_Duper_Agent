@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Observable, tap, catchError, throwError, map } from 'rxjs';
 import { ApiService } from './api.service';
-import { User, UserRole } from '../models/user.model';
+import { User, UserRole, mapApiRole } from '../models/user.model';
 import { PaginatedResponse, QueryParams } from '../models';
 
 export interface CreateUserDto {
@@ -43,6 +43,24 @@ export interface UserQueryParams extends QueryParams {
   search?: string;
 }
 
+/** Maps a raw backend user object to the frontend User model */
+function mapApiUser(raw: any): User {
+  return {
+    id: raw.id ?? raw.Id,
+    email: raw.email ?? raw.Email ?? '',
+    firstName: raw.firstName ?? raw.FirstName ?? '',
+    lastName: raw.lastName ?? raw.LastName ?? '',
+    role: mapApiRole(raw.role ?? raw.Role ?? 6),
+    isActive: raw.isActive ?? raw.IsActive ?? true,
+    createdAt: raw.createdAt ?? raw.CreatedAt,
+    updatedAt: raw.updatedAt ?? raw.UpdatedAt,
+    lastLogin: raw.lastLoginAt ?? raw.LastLoginAt ?? raw.lastLogin ?? undefined,
+    phone: raw.phoneNumber ?? raw.PhoneNumber ?? raw.phone ?? undefined,
+    company: raw.companyName ?? raw.CompanyName ?? raw.company ?? undefined,
+    avatar: raw.profilePictureUrl ?? raw.ProfilePictureUrl ?? undefined
+  };
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -60,7 +78,11 @@ export class UserService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return this.api.getList<User>(this.endpoint, params).pipe(
+    return this.api.getList<any>(this.endpoint, params).pipe(
+      map(response => ({
+        ...response,
+        items: (response.items || []).map(mapApiUser)
+      })),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -70,11 +92,12 @@ export class UserService {
     );
   }
 
-  getUserById(id: number): Observable<User> {
+  getUserById(id: number | string): Observable<User> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return this.api.get<User>(`${this.endpoint}/${id}`).pipe(
+    return this.api.get<any>(`${this.endpoint}/${id}`).pipe(
+      map(raw => mapApiUser(raw)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -100,17 +123,16 @@ export class UserService {
     };
 
     return this.api.post<any>(this.endpoint, backendPayload).pipe(
-      map(result => ({
-        id: 0,
+      map(result => mapApiUser({
         email: data.email,
         firstName: data.firstName,
         lastName: data.lastName,
         role: data.role,
         isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        phone: data.phone,
+        companyName: data.company,
         ...result
-      } as User)),
+      })),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -120,11 +142,26 @@ export class UserService {
     );
   }
 
-  updateUser(id: number, data: UpdateUserDto): Observable<User> {
+  updateUser(id: number | string, data: UpdateUserDto): Observable<User> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return this.api.put<User>(`${this.endpoint}/${id}`, data).pipe(
+    // Transform frontend DTO to match backend UpdateUserRequest
+    const backendPayload = {
+      firstName: data.firstName,
+      lastName: data.lastName,
+      email: data.email,
+      role: data.role ? (ROLE_TO_BACKEND[data.role] ?? undefined) : undefined,
+      phone: data.phone || null,
+      companyName: data.company || null
+    };
+
+    return this.api.put<any>(`${this.endpoint}/${id}`, backendPayload).pipe(
+      map(() => ({
+        id: typeof id === 'string' ? id : id,
+        ...data,
+        updatedAt: new Date()
+      } as unknown as User)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -134,7 +171,7 @@ export class UserService {
     );
   }
 
-  deleteUser(id: number): Observable<void> {
+  deleteUser(id: number | string): Observable<void> {
     this._isLoading.set(true);
     this._error.set(null);
 
@@ -148,8 +185,18 @@ export class UserService {
     );
   }
 
-  toggleUserStatus(id: number, isActive: boolean): Observable<User> {
-    return this.updateUser(id, { isActive });
+  toggleUserStatus(id: number | string): Observable<any> {
+    this._isLoading.set(true);
+    this._error.set(null);
+
+    return this.api.post<any>(`${this.endpoint}/${id}/toggle-active`, {}).pipe(
+      tap(() => this._isLoading.set(false)),
+      catchError(error => {
+        this._isLoading.set(false);
+        this._error.set(error.message || 'Failed to toggle user status');
+        return throwError(() => error);
+      })
+    );
   }
 
   clearError(): void {

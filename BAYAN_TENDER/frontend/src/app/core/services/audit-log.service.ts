@@ -55,7 +55,7 @@ export class AuditLogService {
     if (params.endDate) queryParams['endDate'] = params.endDate;
     if (params.search) queryParams['search'] = params.search;
 
-    return this.api.get<PaginatedResult<AuditLog>>('/admin/audit-logs', { params: queryParams });
+    return this.api.get<PaginatedResult<AuditLog>>('/admin/audit-logs', queryParams);
   }
 
   /**

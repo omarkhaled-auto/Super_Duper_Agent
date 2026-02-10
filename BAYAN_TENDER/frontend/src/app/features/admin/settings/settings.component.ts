@@ -581,64 +581,109 @@ export class SettingsComponent implements OnInit {
   }
 
   private loadSettings(): void {
-    // In production, load from API
-    // this.settingsService.getSettings().subscribe(settings => {
-    //   this.generalSettings = settings.general;
-    //   this.tenderSettings = settings.tender;
-    //   this.notificationSettings = settings.notification;
-    //   this.securitySettings = settings.security;
-    // });
+    this.settingsService.getSettings().subscribe({
+      next: (settings) => {
+        this.generalSettings = { ...this.generalSettings, ...settings.general };
+        this.tenderSettings = { ...this.tenderSettings, ...settings.tender };
+        this.notificationSettings = { ...this.notificationSettings, ...settings.notification };
+        this.securitySettings = { ...this.securitySettings, ...settings.security };
+      },
+      error: () => {
+        // Keep defaults on error - already initialized from getDefaultSettings()
+        this.messageService.add({
+          severity: 'warn',
+          summary: 'Warning',
+          detail: 'Could not load settings from server. Using defaults.'
+        });
+      }
+    });
   }
 
   saveGeneralSettings(): void {
     this.isSaving.set(true);
-    // In production: this.settingsService.updateGeneralSettings(this.generalSettings)
-    setTimeout(() => {
-      this.isSaving.set(false);
-      this.messageService.add({
-        severity: 'success',
-        summary: 'Success',
-        detail: 'General settings saved successfully'
-      });
-    }, 500);
+    this.settingsService.updateGeneralSettings(this.generalSettings).subscribe({
+      next: () => {
+        this.isSaving.set(false);
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Success',
+          detail: 'General settings saved successfully'
+        });
+      },
+      error: (err) => {
+        this.isSaving.set(false);
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: err.message || 'Failed to save general settings'
+        });
+      }
+    });
   }
 
   saveTenderSettings(): void {
     this.isSaving.set(true);
-    // In production: this.settingsService.updateTenderSettings(this.tenderSettings)
-    setTimeout(() => {
-      this.isSaving.set(false);
-      this.messageService.add({
-        severity: 'success',
-        summary: 'Success',
-        detail: 'Tender settings saved successfully'
-      });
-    }, 500);
+    this.settingsService.updateTenderSettings(this.tenderSettings).subscribe({
+      next: () => {
+        this.isSaving.set(false);
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Success',
+          detail: 'Tender settings saved successfully'
+        });
+      },
+      error: (err) => {
+        this.isSaving.set(false);
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: err.message || 'Failed to save tender settings'
+        });
+      }
+    });
   }
 
   saveNotificationSettings(): void {
     this.isSaving.set(true);
-    // In production: this.settingsService.updateNotificationSettings(this.notificationSettings)
-    setTimeout(() => {
-      this.isSaving.set(false);
-      this.messageService.add({
-        severity: 'success',
-        summary: 'Success',
-        detail: 'Notification settings saved successfully'
-      });
-    }, 500);
+    this.settingsService.updateNotificationSettings(this.notificationSettings).subscribe({
+      next: () => {
+        this.isSaving.set(false);
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Success',
+          detail: 'Notification settings saved successfully'
+        });
+      },
+      error: (err) => {
+        this.isSaving.set(false);
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: err.message || 'Failed to save notification settings'
+        });
+      }
+    });
   }
 
   saveSecuritySettings(): void {
     this.isSaving.set(true);
-    // In production: this.settingsService.updateSecuritySettings(this.securitySettings)
-    setTimeout(() => {
-      this.isSaving.set(false);
-      this.messageService.add({
-        severity: 'success',
-        summary: 'Success',
-        detail: 'Security settings saved successfully'
-      });
-    }, 500);
+    this.settingsService.updateSecuritySettings(this.securitySettings).subscribe({
+      next: () => {
+        this.isSaving.set(false);
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Success',
+          detail: 'Security settings saved successfully'
+        });
+      },
+      error: (err) => {
+        this.isSaving.set(false);
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: err.message || 'Failed to save security settings'
+        });
+      }
+    });
   }
 }

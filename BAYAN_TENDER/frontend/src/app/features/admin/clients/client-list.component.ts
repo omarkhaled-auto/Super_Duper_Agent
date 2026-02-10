@@ -351,85 +351,24 @@ export class ClientListComponent implements OnInit {
   }
 
   private loadClients(): void {
-    // For demo purposes, using mock data
-    // In production: this.clientService.getClients()
-    const mockClients: Client[] = [
-      {
-        id: 1,
-        name: 'Saudi Aramco',
-        nameAr: 'ارامكو السعودية',
-        email: 'procurement@aramco.com',
-        phone: '+966 13 000 0000',
-        address: 'Dhahran, Eastern Province',
-        city: 'Dhahran',
-        country: 'Saudi Arabia',
-        crNumber: '1010000000',
-        vatNumber: '300000000000003',
-        contactPerson: 'Mohammed Al-Faisal',
-        contactEmail: 'm.alfaisal@aramco.com',
-        contactPhone: '+966 50 000 0001',
-        isActive: true,
-        createdAt: new Date('2024-01-15'),
-        updatedAt: new Date('2026-01-20'),
-        tendersCount: 45,
-        totalContractValue: 150000000
+    this.clientService.getClients({
+      page: 1,
+      pageSize: 1000
+    }).subscribe({
+      next: (response) => {
+        const items = response?.items || [];
+        this.clients.set(items);
+        this.filteredClients.set(items);
+        this.updateCityOptions();
       },
-      {
-        id: 2,
-        name: 'SABIC',
-        nameAr: 'سابك',
-        email: 'contracts@sabic.com',
-        phone: '+966 11 225 8000',
-        address: 'King Fahd Road',
-        city: 'Riyadh',
-        country: 'Saudi Arabia',
-        crNumber: '1010010000',
-        vatNumber: '300000000000004',
-        contactPerson: 'Fatima Al-Rashid',
-        contactEmail: 'f.alrashid@sabic.com',
-        contactPhone: '+966 50 000 0002',
-        isActive: true,
-        createdAt: new Date('2024-03-10'),
-        updatedAt: new Date('2026-01-15'),
-        tendersCount: 28,
-        totalContractValue: 85000000
-      },
-      {
-        id: 3,
-        name: 'Riyadh Metro',
-        nameAr: 'مترو الرياض',
-        email: 'tenders@riyadhmetro.sa',
-        phone: '+966 11 000 1234',
-        city: 'Riyadh',
-        country: 'Saudi Arabia',
-        crNumber: '1010020000',
-        contactPerson: 'Ahmed Al-Otaibi',
-        contactPhone: '+966 55 000 0003',
-        isActive: true,
-        createdAt: new Date('2024-06-01'),
-        updatedAt: new Date('2026-01-10'),
-        tendersCount: 12,
-        totalContractValue: 25000000
-      },
-      {
-        id: 4,
-        name: 'Jeddah Development',
-        nameAr: 'تطوير جدة',
-        email: 'contracts@jeddahdev.sa',
-        phone: '+966 12 000 5678',
-        city: 'Jeddah',
-        country: 'Saudi Arabia',
-        isActive: false,
-        createdAt: new Date('2024-09-15'),
-        updatedAt: new Date('2025-12-20'),
-        tendersCount: 5,
-        totalContractValue: 8000000
+      error: () => {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Failed to load clients from the server'
+        });
       }
-    ];
-
-    this.clients.set(mockClients);
-    this.filteredClients.set(mockClients);
-    this.updateCityOptions();
+    });
   }
 
   private updateCityOptions(): void {
@@ -529,15 +468,25 @@ export class ClientListComponent implements OnInit {
       header: `Confirm ${action.charAt(0).toUpperCase() + action.slice(1)}`,
       icon: 'pi pi-exclamation-triangle',
       accept: () => {
-        // In production: this.clientService.toggleClientStatus(client.id, newStatus)
-        this.clients.update(clients =>
-          clients.map(c => c.id === client.id ? { ...c, isActive: newStatus } : c)
-        );
-        this.applyFilters();
-        this.messageService.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: `Client ${newStatus ? 'activated' : 'deactivated'} successfully`
+        this.clientService.toggleClientStatus(client.id, newStatus).subscribe({
+          next: () => {
+            this.clients.update(clients =>
+              clients.map(c => c.id === client.id ? { ...c, isActive: newStatus } : c)
+            );
+            this.applyFilters();
+            this.messageService.add({
+              severity: 'success',
+              summary: 'Success',
+              detail: `Client ${newStatus ? 'activated' : 'deactivated'} successfully`
+            });
+          },
+          error: (err) => {
+            this.messageService.add({
+              severity: 'error',
+              summary: 'Error',
+              detail: err.message || `Failed to ${action} client`
+            });
+          }
         });
       }
     });
@@ -550,14 +499,24 @@ export class ClientListComponent implements OnInit {
       icon: 'pi pi-exclamation-triangle',
       acceptButtonStyleClass: 'p-button-danger',
       accept: () => {
-        // In production: this.clientService.deleteClient(client.id)
-        this.clients.update(clients => clients.filter(c => c.id !== client.id));
-        this.updateCityOptions();
-        this.applyFilters();
-        this.messageService.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'Client deleted successfully'
+        this.clientService.deleteClient(client.id).subscribe({
+          next: () => {
+            this.clients.update(clients => clients.filter(c => c.id !== client.id));
+            this.updateCityOptions();
+            this.applyFilters();
+            this.messageService.add({
+              severity: 'success',
+              summary: 'Success',
+              detail: 'Client deleted successfully'
+            });
+          },
+          error: (err) => {
+            this.messageService.add({
+              severity: 'error',
+              summary: 'Error',
+              detail: err.message || 'Failed to delete client'
+            });
+          }
         });
       }
     });

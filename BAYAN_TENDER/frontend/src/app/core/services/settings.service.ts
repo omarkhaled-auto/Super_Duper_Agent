@@ -14,7 +14,7 @@ import {
 })
 export class SettingsService {
   private readonly api = inject(ApiService);
-  private readonly endpoint = '/settings';
+  private readonly endpoint = '/admin/settings';
 
   private readonly _isLoading = signal<boolean>(false);
   private readonly _error = signal<string | null>(null);
