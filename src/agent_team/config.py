@@ -301,6 +301,7 @@ class PostOrchestrationScanConfig:
     mock_data_scan: bool = True       # Scan for mock data in service files
     ui_compliance_scan: bool = True   # Scan for UI compliance violations
     api_contract_scan: bool = True    # Scan for API contract field mismatches
+    max_scan_fix_passes: int = 1  # Max fix iterations per scan (1=single pass, 2+=multi-pass)
 
 
 @dataclass
@@ -533,6 +534,8 @@ def apply_depth_quality_gating(
         _gate("e2e_testing.max_fix_retries", 1, config.e2e_testing, "max_fix_retries")
         # Browser testing
         _gate("browser_testing.enabled", False, config.browser_testing, "enabled")
+        # Multi-pass fix cycles
+        _gate("post_orchestration_scans.max_scan_fix_passes", 0, config.post_orchestration_scans, "max_scan_fix_passes")
 
     elif depth == "standard":
         # Standard disables PRD reconciliation (expensive LLM call)
@@ -557,6 +560,8 @@ def apply_depth_quality_gating(
         if prd_mode or config.milestone.enabled:
             _gate("browser_testing.enabled", True, config.browser_testing, "enabled")
             _gate("browser_testing.max_fix_retries", 5, config.browser_testing, "max_fix_retries")
+        # v10: Exhaustive depth defaults to 2 fix passes
+        _gate("post_orchestration_scans.max_scan_fix_passes", 2, config.post_orchestration_scans, "max_scan_fix_passes")
 
 
 def get_agent_counts(depth: str) -> dict[str, tuple[int, int]]:
@@ -1158,13 +1163,21 @@ def _dict_to_config(data: dict[str, Any]) -> tuple[AgentTeamConfig, set[str]]:
 
     if "post_orchestration_scans" in data and isinstance(data["post_orchestration_scans"], dict):
         pos = data["post_orchestration_scans"]
-        for key in ("mock_data_scan", "ui_compliance_scan", "api_contract_scan"):
+        for key in ("mock_data_scan", "ui_compliance_scan", "api_contract_scan", "max_scan_fix_passes"):
             if key in pos:
                 user_overrides.add(f"post_orchestration_scans.{key}")
+        _msfp = pos.get("max_scan_fix_passes", 1)
+        if isinstance(_msfp, int) and _msfp >= 0:
+            _msfp_val = _msfp
+        elif isinstance(_msfp, int):
+            _msfp_val = 0
+        else:
+            _msfp_val = 1
         cfg.post_orchestration_scans = PostOrchestrationScanConfig(
             mock_data_scan=pos.get("mock_data_scan", cfg.post_orchestration_scans.mock_data_scan),
             ui_compliance_scan=pos.get("ui_compliance_scan", cfg.post_orchestration_scans.ui_compliance_scan),
             api_contract_scan=pos.get("api_contract_scan", cfg.post_orchestration_scans.api_contract_scan),
+            max_scan_fix_passes=_msfp_val,
         )
     elif "milestone" in data and isinstance(data["milestone"], dict):
         # Backward compat: migrate milestone.mock_data_scan / ui_compliance_scan

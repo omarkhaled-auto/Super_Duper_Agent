@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, takeUntil, switchMap } from 'rxjs';
 
 // PrimeNG
 import { CardModule } from 'primeng/card';
@@ -30,6 +30,7 @@ import { MessageService, ConfirmationService } from 'primeng/api';
 
 // Services and Models
 import { EvaluationService } from '../../../../core/services/evaluation.service';
+import { ApprovalService } from '../../../../core/services/approval.service';
 import {
   CombinedScorecard,
   ScorecardBidder,
@@ -576,6 +577,7 @@ export class CombinedScorecardComponent implements OnInit, OnDestroy {
   @Output() awardPackGenerated = new EventEmitter<AwardPack>();
 
   private readonly evaluationService = inject(EvaluationService);
+  private readonly approvalService = inject(ApprovalService);
   private readonly messageService = inject(MessageService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly decimalPipe = inject(DecimalPipe);
@@ -741,8 +743,18 @@ export class CombinedScorecardComponent implements OnInit, OnDestroy {
       accept: () => {
         this.isStartingApproval.set(true);
 
-        this.evaluationService.startApproval(this.tenderId)
-          .pipe(takeUntil(this.destroy$))
+        // Fetch approvers first, then initiate with their IDs
+        this.approvalService.getApprovers()
+          .pipe(
+            switchMap((approvers) => {
+              if (approvers.length < 3) {
+                throw new Error(`Need at least 3 approvers, found ${approvers.length}. Please add more approver users.`);
+              }
+              const approverIds = approvers.slice(0, 3).map(a => String(a.id));
+              return this.evaluationService.startApproval(this.tenderId, approverIds);
+            }),
+            takeUntil(this.destroy$)
+          )
           .subscribe({
             next: () => {
               this.isStartingApproval.set(false);

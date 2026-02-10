@@ -623,6 +623,21 @@ def print_recovery_report(
     type_hints = {
         "contract_generation": "CONTRACTS.json was not generated during orchestration",
         "review_recovery": "Review fleet did not achieve sufficient requirement coverage",
+        "mock_data_fix": "Mock data patterns detected in service files",
+        "ui_compliance_fix": "Hardcoded UI values violating design token policy",
+        "deployment_integrity_fix": "Docker/deployment configuration inconsistencies",
+        "asset_integrity_fix": "Broken static asset references in source files",
+        "prd_reconciliation_mismatch": "PRD claims not verified in implementation",
+        "database_dual_orm_fix": "Dual ORM usage causing type inconsistencies",
+        "database_default_value_fix": "Missing default values or unsafe nullable access",
+        "database_relationship_fix": "Incomplete ORM relationship definitions",
+        "api_contract_fix": "API field name mismatches between backend and frontend",
+        "e2e_backend_fix": "Backend E2E test failures requiring code fixes",
+        "e2e_frontend_fix": "Frontend Playwright test failures requiring code fixes",
+        "e2e_coverage_incomplete": "E2E test coverage below completeness threshold",
+        "browser_testing_failed": "Browser workflow verification failures",
+        "browser_testing_partial": "Some browser workflows failed verification",
+        "artifact_recovery": "Missing REQUIREMENTS.md recovered from source code analysis",
     }
 
     content = Text()

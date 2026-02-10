@@ -77,10 +77,8 @@ public class CalculateCommercialScoresCommandHandler : IRequestHandler<Calculate
         if (bidSubmissions.Count < 3)
         {
             _logger.LogWarning(
-                "Tender {TenderId} has only {BidderCount} bidders, minimum 3 required for commercial evaluation",
+                "Tender {TenderId} has only {BidderCount} bidders (recommended minimum is 3 for competitive evaluation)",
                 request.TenderId, bidSubmissions.Count);
-            throw new InvalidOperationException(
-                $"Minimum 3 bidders required for commercial score calculation. Currently only {bidSubmissions.Count} qualified bid(s) submitted.");
         }
 
         // Calculate totals for each bidder

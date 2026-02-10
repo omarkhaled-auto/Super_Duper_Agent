@@ -1,4 +1,5 @@
 using Bayan.Application.Common.Interfaces;
+using Bayan.Application.Features.Evaluation.Commands.CalculateCommercialScores;
 using Bayan.Application.Features.Evaluation.DTOs;
 using Bayan.Domain.Entities;
 using MediatR;
@@ -14,13 +15,16 @@ namespace Bayan.Application.Features.Evaluation.Commands.CalculateCombinedScores
 public class CalculateCombinedScoresCommandHandler : IRequestHandler<CalculateCombinedScoresCommand, CombinedScorecardDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly IMediator _mediator;
     private readonly ILogger<CalculateCombinedScoresCommandHandler> _logger;
 
     public CalculateCombinedScoresCommandHandler(
         IApplicationDbContext context,
+        IMediator mediator,
         ILogger<CalculateCombinedScoresCommandHandler> logger)
     {
         _context = context;
+        _mediator = mediator;
         _logger = logger;
     }
 
@@ -81,17 +85,43 @@ public class CalculateCombinedScoresCommandHandler : IRequestHandler<CalculateCo
 
         if (!latestCommercialScores.Any())
         {
-            _logger.LogWarning("No commercial scores found for tender {TenderId}", request.TenderId);
-            return new CombinedScorecardDto
+            _logger.LogInformation(
+                "No commercial scores found for tender {TenderId}, auto-triggering commercial score calculation",
+                request.TenderId);
+
+            await _mediator.Send(new CalculateCommercialScoresCommand
             {
                 TenderId = request.TenderId,
-                TenderReference = tender.Reference,
-                TenderTitle = tender.Title,
-                TechnicalWeight = techWeight,
-                CommercialWeight = commWeight,
-                Entries = new List<CombinedScoreEntryDto>(),
-                CalculatedAt = DateTime.UtcNow
-            };
+                IncludeProvisionalSums = true,
+                IncludeAlternates = true
+            }, cancellationToken);
+
+            // Re-query commercial scores after calculation
+            var freshCommercialScores = await _context.CommercialScores
+                .Include(cs => cs.Bidder)
+                .Where(cs => cs.TenderId == request.TenderId)
+                .OrderByDescending(cs => cs.CalculatedAt)
+                .ToListAsync(cancellationToken);
+
+            latestCommercialScores = freshCommercialScores
+                .GroupBy(cs => cs.BidderId)
+                .Select(g => g.First())
+                .ToDictionary(cs => cs.BidderId, cs => cs);
+
+            if (!latestCommercialScores.Any())
+            {
+                _logger.LogWarning("Still no commercial scores after auto-calculation for tender {TenderId}", request.TenderId);
+                return new CombinedScorecardDto
+                {
+                    TenderId = request.TenderId,
+                    TenderReference = tender.Reference,
+                    TenderTitle = tender.Title,
+                    TechnicalWeight = techWeight,
+                    CommercialWeight = commWeight,
+                    Entries = new List<CombinedScoreEntryDto>(),
+                    CalculatedAt = DateTime.UtcNow
+                };
+            }
         }
 
         // Calculate combined scores

@@ -263,6 +263,165 @@ def detect_app_type(project_root: Path) -> AppTypeInfo:  # noqa: C901 — detect
                 info.frontend_directory = candidate
                 break
 
+    # ------------------------------------------------------------------
+    # 7. Subdirectory scanning for monorepo/multi-directory layouts
+    # ------------------------------------------------------------------
+    # If root-level detection didn't find both backend and frontend,
+    # scan common subdirectory names for package.json files.
+    _SUBDIR_CANDIDATES = ("backend", "frontend", "server", "client", "api", "web")
+
+    if not (info.has_backend and info.has_frontend):
+        for _subdir_name in _SUBDIR_CANDIDATES:
+            _subdir = root / _subdir_name
+            if not _subdir.is_dir():
+                continue
+
+            _sub_pkg = _read_json(_subdir / "package.json")
+            _sub_deps: dict = _sub_pkg.get("dependencies", {})
+            _sub_dev: dict = _sub_pkg.get("devDependencies", {})
+            _sub_all = {**_sub_deps, **_sub_dev}
+
+            if _sub_pkg:
+                # Backend framework detection in subdirectory
+                if not info.has_backend:
+                    if "express" in _sub_deps:
+                        info.has_backend = True
+                        info.backend_framework = info.backend_framework or "express"
+                        info.api_directory = info.api_directory or _subdir_name
+                    elif "@nestjs/core" in _sub_deps:
+                        info.has_backend = True
+                        info.backend_framework = info.backend_framework or "nestjs"
+                        info.api_directory = info.api_directory or _subdir_name
+                    elif "@hapi/hapi" in _sub_deps:
+                        info.has_backend = True
+                        info.backend_framework = info.backend_framework or "hapi"
+                        info.api_directory = info.api_directory or _subdir_name
+                    elif "koa" in _sub_deps:
+                        info.has_backend = True
+                        info.backend_framework = info.backend_framework or "koa"
+                        info.api_directory = info.api_directory or _subdir_name
+
+                # Frontend framework detection in subdirectory
+                if not info.has_frontend:
+                    if "@angular/core" in _sub_deps:
+                        info.has_frontend = True
+                        info.frontend_framework = info.frontend_framework or "angular"
+                        info.frontend_directory = _subdir_name
+                    elif "next" in _sub_deps:
+                        info.has_frontend = True
+                        info.frontend_framework = info.frontend_framework or "nextjs"
+                        info.frontend_directory = _subdir_name
+                        if not info.has_backend:
+                            info.has_backend = True
+                            info.backend_framework = info.backend_framework or "nextjs"
+                    elif "react" in _sub_deps:
+                        info.has_frontend = True
+                        info.frontend_framework = info.frontend_framework or "react"
+                        info.frontend_directory = _subdir_name
+                    elif "vue" in _sub_deps:
+                        info.has_frontend = True
+                        info.frontend_framework = info.frontend_framework or "vue"
+                        info.frontend_directory = _subdir_name
+
+                # Database detection in subdirectory
+                if not info.db_type:
+                    if "prisma" in _sub_all or "@prisma/client" in _sub_deps:
+                        info.db_type = "prisma"
+                    elif "mongoose" in _sub_deps:
+                        info.db_type = "mongoose"
+                    elif "sequelize" in _sub_deps:
+                        info.db_type = "sequelize"
+
+                # Playwright in subdirectory
+                if not info.playwright_installed:
+                    if "@playwright/test" in _sub_dev or "@playwright/test" in _sub_deps:
+                        info.playwright_installed = True
+
+                # Language from subdirectory
+                if not info.language:
+                    if "typescript" in _sub_all or (_subdir / "tsconfig.json").is_file():
+                        info.language = "typescript"
+                    elif _sub_pkg:
+                        info.language = "javascript"
+
+                # Package manager from subdirectory lock files
+                if not info.package_manager:
+                    if (_subdir / "yarn.lock").is_file():
+                        info.package_manager = "yarn"
+                    elif (_subdir / "pnpm-lock.yaml").is_file():
+                        info.package_manager = "pnpm"
+                    elif (_subdir / "package-lock.json").is_file():
+                        info.package_manager = "npm"
+
+            # Framework config files in subdirectory (even without package.json)
+            if not info.has_frontend and (_subdir / "angular.json").is_file():
+                info.has_frontend = True
+                info.frontend_framework = info.frontend_framework or "angular"
+                info.frontend_directory = _subdir_name
+
+            for _cfg in ("next.config.js", "next.config.mjs", "next.config.ts"):
+                if not info.has_frontend and (_subdir / _cfg).is_file():
+                    info.has_frontend = True
+                    info.frontend_framework = info.frontend_framework or "nextjs"
+                    info.frontend_directory = _subdir_name
+                    if not info.has_backend:
+                        info.has_backend = True
+                        info.backend_framework = info.backend_framework or "nextjs"
+                    break
+
+            # Prisma schema in subdirectory
+            if not info.db_type and (_subdir / "prisma" / "schema.prisma").is_file():
+                info.db_type = "prisma"
+
+            # Python ecosystem in subdirectory
+            if not info.has_backend:
+                _sub_req = (_subdir / "requirements.txt").is_file()
+                _sub_pyproj = (_subdir / "pyproject.toml").is_file()
+                if _sub_req or _sub_pyproj:
+                    _sub_py_text = ""
+                    if _sub_req:
+                        try:
+                            _sub_py_text += (_subdir / "requirements.txt").read_text(
+                                encoding="utf-8", errors="replace"
+                            )
+                        except OSError:
+                            pass
+                    if _sub_pyproj:
+                        try:
+                            _sub_py_text += (_subdir / "pyproject.toml").read_text(
+                                encoding="utf-8", errors="replace"
+                            )
+                        except OSError:
+                            pass
+                    _low = _sub_py_text.lower()
+                    if "django" in _low:
+                        info.has_backend = True
+                        info.backend_framework = info.backend_framework or "django"
+                        info.api_directory = info.api_directory or _subdir_name
+                        info.language = info.language or "python"
+                    elif "fastapi" in _low:
+                        info.has_backend = True
+                        info.backend_framework = info.backend_framework or "fastapi"
+                        info.api_directory = info.api_directory or _subdir_name
+                        info.language = info.language or "python"
+                    elif "flask" in _low:
+                        info.has_backend = True
+                        info.backend_framework = info.backend_framework or "flask"
+                        info.api_directory = info.api_directory or _subdir_name
+                        info.language = info.language or "python"
+
+            # API directory from subdirectory structure
+            if not info.api_directory and info.has_backend:
+                for _api_candidate in (
+                    f"{_subdir_name}/src/routes",
+                    f"{_subdir_name}/src/controllers",
+                    f"{_subdir_name}/src/api",
+                    _subdir_name,
+                ):
+                    if (root / _api_candidate).is_dir():
+                        info.api_directory = _api_candidate
+                        break
+
     return info
 
 

@@ -2105,6 +2105,121 @@ async def _run_prd_reconciliation(
 
 
 # ---------------------------------------------------------------------------
+# Artifact Recovery Prompt (v10.1)
+# ---------------------------------------------------------------------------
+
+ARTIFACT_RECOVERY_PROMPT = """\
+[ARTIFACT RECOVERY — POST-ORCHESTRATION]
+
+The orchestrator has finished building the project but did NOT generate the required
+tracking documents. You MUST create these files by analyzing the generated source code
+and the original PRD/task description.
+
+STEP 1: Scan the project structure. PRIORITIZE reading these files first:
+  - Route/controller files (routes/, controllers/, api/) — needed for SVC-xxx table
+  - Model/entity files (models/, entities/, prisma/schema.prisma) — needed for STATUS_REGISTRY
+  - Main entry points (app.ts, main.ts, index.ts, server.ts) — needed for feature inventory
+  - Component index files (components/, pages/, features/) — needed for frontend REQ-xxx items
+  For large projects (100+ files), focus on these categories. Do NOT attempt to read every file.
+STEP 2: Read the PRD document if it exists.
+STEP 3: Generate {requirements_dir}/REQUIREMENTS.md with this EXACT format:
+
+## Requirements
+
+For each feature you can identify in the source code, write:
+- [ ] REQ-NNN: <description of the feature>
+
+Number them sequentially starting from REQ-001.
+Include ALL features: API endpoints, UI components, authentication, database operations, etc.
+Mark ALL as [ ] (unchecked) — the REVIEW FLEET will mark them [x] after verification.
+
+## SVC-xxx Service-to-API Wiring Map
+
+| ID | Endpoint | Method | Request Schema | Response Schema |
+|----|----------|--------|---------------|-----------------|
+| SVC-001 | /api/... | GET/POST/... | {{ field: type }} | {{ field: type }} |
+
+Populate this table by reading the actual route/controller files.
+One row per API endpoint. Use the actual field names from the code.
+
+## STATUS_REGISTRY
+
+List every enum, status type, and state machine found in the codebase:
+- Enum Name: [list of valid values]
+- Status transitions: [from → to rules if discoverable]
+
+STEP 4: If {requirements_dir}/TASKS.md does NOT exist, generate it:
+
+## Tasks
+
+For each REQ-xxx requirement, create a corresponding task:
+- TASK-NNN: <implementation task> (status: COMPLETE)
+
+Mark all tasks COMPLETE since the code is already built.
+{task_text}
+"""
+
+
+async def _run_artifact_recovery(
+    cwd: str | None,
+    config: AgentTeamConfig,
+    task_text: str | None = None,
+    prd_path: str | None = None,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    depth: str = "standard",
+) -> float:
+    """Deploy artifact recovery agent to generate missing REQUIREMENTS.md and TASKS.md.
+
+    This is a safety net for PRD mode when the orchestrator fails to generate
+    root-level tracking artifacts. Reads all generated source code + PRD and
+    produces structured REQUIREMENTS.md with REQ-xxx checkboxes, SVC-xxx table,
+    and STATUS_REGISTRY section.
+
+    NOTE: _backend is a module-level global (line ~3063: ``_backend: str = "api"``),
+    referenced the same way by _run_prd_reconciliation() and all 20+ async functions.
+    """
+    print_info("Artifact recovery: generating missing REQUIREMENTS.md from source code analysis...")
+
+    prompt = ARTIFACT_RECOVERY_PROMPT.format(
+        requirements_dir=config.convergence.requirements_dir,
+        task_text=f"\n[ORIGINAL USER REQUEST]\n{task_text}" if task_text else "",
+    )
+
+    # If PRD document exists, prepend it as context
+    if prd_path:
+        prd_file = Path(prd_path)
+        if prd_file.is_file():
+            try:
+                prd_content = prd_file.read_text(encoding="utf-8", errors="replace")
+                prompt = f"[PRD DOCUMENT]\n{prd_content}\n\n{prompt}"
+            except OSError:
+                pass
+
+    # Follow the EXACT pattern from _run_prd_reconciliation():
+    # _backend is a module-level global, NOT a parameter.
+    options = _build_options(
+        config, cwd, constraints=constraints, task_text=task_text,
+        depth=depth, backend=_backend,
+    )
+    phase_costs: dict[str, float] = {}
+    cost = 0.0
+
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(prompt)
+            cost = await _process_response(
+                client, config, phase_costs, current_phase="artifact_recovery",
+            )
+            if intervention:
+                cost += await _drain_interventions(client, intervention, config, phase_costs)
+    except Exception as exc:
+        print_warning(f"Artifact recovery agent failed: {exc}\n{traceback.format_exc()}")
+
+    return cost
+
+
+# ---------------------------------------------------------------------------
 # Milestone Handoff Details Generation
 # ---------------------------------------------------------------------------
 
@@ -3589,6 +3704,55 @@ def main() -> None:
 
         _current_state.completed_phases.append("design_extraction")
 
+    else:
+        # v10: Fallback UI requirements when no --design-ref provided
+        if config.design_reference.fallback_generation:
+            from .design_reference import (
+                generate_fallback_ui_requirements,
+                load_ui_requirements,
+                validate_ui_requirements,
+            )
+
+            _current_state.current_phase = "design_extraction"
+            req_dir = config.convergence.requirements_dir
+            ui_file = config.design_reference.ui_requirements_file
+
+            # Check for existing valid UI_REQUIREMENTS.md (resume scenario)
+            existing = load_ui_requirements(cwd, config)
+            if existing:
+                missing = validate_ui_requirements(existing)
+                if not missing:
+                    print_info(
+                        f"Phase 0.6: Reusing existing {req_dir}/{ui_file} "
+                        f"(all required sections present)"
+                    )
+                    ui_requirements_content = existing
+                else:
+                    print_info(
+                        f"Existing {req_dir}/{ui_file} is missing sections: "
+                        f"{', '.join(missing)}. Regenerating fallback."
+                    )
+
+            if ui_requirements_content is None:
+                print_info(
+                    "Phase 0.6: No --design-ref provided — generating fallback UI requirements."
+                )
+                try:
+                    ui_requirements_content = generate_fallback_ui_requirements(
+                        task=args.task, config=config, cwd=cwd,
+                    )
+                    print_success(
+                        f"Phase 0.6: Fallback {req_dir}/{ui_file} generated "
+                        f"(heuristic defaults from task/PRD analysis)"
+                    )
+                except Exception as exc:
+                    print_warning(
+                        f"Phase 0.6: Fallback UI generation failed: {exc}. "
+                        f"Continuing without UI requirements."
+                    )
+
+            _current_state.completed_phases.append("design_extraction")
+
     _current_state.current_phase = "pre_orchestration"
 
     # -------------------------------------------------------------------
@@ -3865,6 +4029,51 @@ def main() -> None:
             print_warning(f"Task status diagnostic failed: {exc}")
 
     # -------------------------------------------------------------------
+    # v10.1: Post-orchestration Artifact Verification Gate
+    # -------------------------------------------------------------------
+    if _is_prd_mode and not _use_milestones:
+        _req_path_check = (
+            Path(cwd) / config.convergence.requirements_dir
+            / config.convergence.requirements_file
+        )
+        if not _req_path_check.is_file():
+            print_warning(
+                "ARTIFACT RECOVERY: REQUIREMENTS.md not found after orchestration. "
+                "Deploying recovery agent to generate from source code analysis."
+            )
+            recovery_types.append("artifact_recovery")
+            try:
+                _artifact_cost = asyncio.run(_run_artifact_recovery(
+                    cwd=cwd,
+                    config=config,
+                    task_text=args.task,
+                    prd_path=getattr(args, "prd", None),
+                    constraints=constraints,
+                    intervention=intervention,
+                    depth=depth,
+                ))
+                if _current_state:
+                    _current_state.total_cost += _artifact_cost
+
+                # Verify recovery produced the file
+                if _req_path_check.is_file():
+                    print_success("Artifact recovery: REQUIREMENTS.md generated successfully.")
+                else:
+                    print_warning("Artifact recovery completed but REQUIREMENTS.md still not found.")
+
+                # Also check TASKS.md
+                _tasks_path_check = (
+                    Path(cwd) / config.convergence.requirements_dir / "TASKS.md"
+                )
+                if _tasks_path_check.is_file():
+                    print_info("Artifact recovery: TASKS.md also generated.")
+            except Exception as exc:
+                print_warning(f"Artifact recovery failed: {exc}")
+                print_warning(traceback.format_exc())
+        else:
+            print_info("Artifact verification: REQUIREMENTS.md exists (no recovery needed).")
+
+    # -------------------------------------------------------------------
     # Post-orchestration: Contract health check
     # -------------------------------------------------------------------
     if config.verification.enabled:
@@ -4055,7 +4264,18 @@ def main() -> None:
             )
             needs_recovery = True
         else:
-            print_warning("Convergence health: unknown (no requirements found).")
+            if _is_prd_mode:
+                # v10.1: Force recovery in PRD mode even when no requirements found.
+                # Artifact recovery (Deliverable 10) should have created REQUIREMENTS.md,
+                # but if it failed or produced no parseable checkboxes, we still want
+                # the review fleet to deploy and establish baseline convergence.
+                print_warning(
+                    "UNKNOWN HEALTH in PRD mode — deploying mandatory review fleet "
+                    "to establish baseline convergence."
+                )
+                needs_recovery = True
+            else:
+                print_warning("Convergence health: unknown (no requirements found).")
     elif convergence_report.health == "degraded":
         if (
             convergence_report.total_requirements > 0
@@ -4139,27 +4359,43 @@ def main() -> None:
     if not _use_milestones and (config.post_orchestration_scans.mock_data_scan or config.milestone.mock_data_scan):
         try:
             from .quality_checks import run_mock_data_scan
-            mock_violations = run_mock_data_scan(Path(cwd), scope=scan_scope)
-            if mock_violations:
-                print_warning(
-                    f"Post-orchestration mock data scan: {len(mock_violations)} "
-                    f"mock data violation(s) found in service files."
-                )
-                recovery_types.append("mock_data_fix")
-                try:
-                    mock_fix_cost = asyncio.run(_run_mock_data_fix(
-                        cwd=cwd,
-                        config=config,
-                        mock_violations=mock_violations,
-                        task_text=args.task,
-                        constraints=constraints,
-                        intervention=intervention,
-                        depth=depth if not _use_milestones else "standard",
-                    ))
-                    if _current_state:
-                        _current_state.total_cost += mock_fix_cost
-                except Exception as exc:
-                    print_warning(f"Mock data fix recovery failed: {exc}")
+            _max_passes = config.post_orchestration_scans.max_scan_fix_passes
+            for _fix_pass in range(max(1, _max_passes) if _max_passes > 0 else 1):
+                mock_violations = run_mock_data_scan(Path(cwd), scope=scan_scope)
+                if mock_violations:
+                    if _fix_pass > 0:
+                        print_info(f"Mock data scan pass {_fix_pass + 1}: {len(mock_violations)} residual violation(s)")
+                    else:
+                        print_warning(
+                            f"Post-orchestration mock data scan: {len(mock_violations)} "
+                            f"mock data violation(s) found in service files."
+                        )
+                    if _fix_pass == 0:
+                        recovery_types.append("mock_data_fix")
+                    if _max_passes > 0:
+                        try:
+                            mock_fix_cost = asyncio.run(_run_mock_data_fix(
+                                cwd=cwd,
+                                config=config,
+                                mock_violations=mock_violations,
+                                task_text=args.task,
+                                constraints=constraints,
+                                intervention=intervention,
+                                depth=depth if not _use_milestones else "standard",
+                            ))
+                            if _current_state:
+                                _current_state.total_cost += mock_fix_cost
+                        except Exception as exc:
+                            print_warning(f"Mock data fix recovery failed: {exc}")
+                            break
+                    else:
+                        break  # scan-only mode
+                else:
+                    if _fix_pass == 0:
+                        print_info("Mock data scan: 0 violations (clean)")
+                    else:
+                        print_info(f"Mock data scan pass {_fix_pass + 1}: all violations resolved")
+                    break
         except Exception as exc:
             print_warning(f"Mock data scan failed: {exc}")
 
@@ -4171,27 +4407,43 @@ def main() -> None:
     if not _use_milestones and (config.post_orchestration_scans.ui_compliance_scan or config.milestone.ui_compliance_scan):
         try:
             from .quality_checks import run_ui_compliance_scan
-            ui_violations = run_ui_compliance_scan(Path(cwd), scope=scan_scope)
-            if ui_violations:
-                print_warning(
-                    f"Post-orchestration UI compliance scan: {len(ui_violations)} "
-                    f"UI compliance violation(s) found."
-                )
-                recovery_types.append("ui_compliance_fix")
-                try:
-                    ui_fix_cost = asyncio.run(_run_ui_compliance_fix(
-                        cwd=cwd,
-                        config=config,
-                        ui_violations=ui_violations,
-                        task_text=args.task,
-                        constraints=constraints,
-                        intervention=intervention,
-                        depth=depth if not _use_milestones else "standard",
-                    ))
-                    if _current_state:
-                        _current_state.total_cost += ui_fix_cost
-                except Exception as exc:
-                    print_warning(f"UI compliance fix recovery failed: {exc}")
+            _max_passes = config.post_orchestration_scans.max_scan_fix_passes
+            for _fix_pass in range(max(1, _max_passes) if _max_passes > 0 else 1):
+                ui_violations = run_ui_compliance_scan(Path(cwd), scope=scan_scope)
+                if ui_violations:
+                    if _fix_pass > 0:
+                        print_info(f"UI compliance scan pass {_fix_pass + 1}: {len(ui_violations)} residual violation(s)")
+                    else:
+                        print_warning(
+                            f"Post-orchestration UI compliance scan: {len(ui_violations)} "
+                            f"UI compliance violation(s) found."
+                        )
+                    if _fix_pass == 0:
+                        recovery_types.append("ui_compliance_fix")
+                    if _max_passes > 0:
+                        try:
+                            ui_fix_cost = asyncio.run(_run_ui_compliance_fix(
+                                cwd=cwd,
+                                config=config,
+                                ui_violations=ui_violations,
+                                task_text=args.task,
+                                constraints=constraints,
+                                intervention=intervention,
+                                depth=depth if not _use_milestones else "standard",
+                            ))
+                            if _current_state:
+                                _current_state.total_cost += ui_fix_cost
+                        except Exception as exc:
+                            print_warning(f"UI compliance fix recovery failed: {exc}")
+                            break
+                    else:
+                        break  # scan-only mode
+                else:
+                    if _fix_pass == 0:
+                        print_info("UI compliance scan: 0 violations (clean)")
+                    else:
+                        print_info(f"UI compliance scan pass {_fix_pass + 1}: all violations resolved")
+                    break
         except Exception as exc:
             print_warning(f"UI compliance scan failed: {exc}")
 
@@ -4202,28 +4454,44 @@ def main() -> None:
     if config.integrity_scans.deployment_scan:
         try:
             from .quality_checks import run_deployment_scan
-            deploy_violations = run_deployment_scan(Path(cwd))
-            if deploy_violations:
-                print_warning(
-                    f"Deployment integrity scan: {len(deploy_violations)} "
-                    f"issue(s) found."
-                )
-                recovery_types.append("deployment_integrity_fix")
-                try:
-                    deploy_fix_cost = asyncio.run(_run_integrity_fix(
-                        cwd=cwd,
-                        config=config,
-                        violations=deploy_violations,
-                        scan_type="deployment",
-                        task_text=args.task,
-                        constraints=constraints,
-                        intervention=intervention,
-                        depth=depth if not _use_milestones else "standard",
-                    ))
-                    if _current_state:
-                        _current_state.total_cost += deploy_fix_cost
-                except Exception as exc:
-                    print_warning(f"Deployment integrity fix failed: {exc}")
+            _max_passes = config.post_orchestration_scans.max_scan_fix_passes
+            for _fix_pass in range(max(1, _max_passes) if _max_passes > 0 else 1):
+                deploy_violations = run_deployment_scan(Path(cwd))
+                if deploy_violations:
+                    if _fix_pass > 0:
+                        print_info(f"Deployment integrity scan pass {_fix_pass + 1}: {len(deploy_violations)} residual violation(s)")
+                    else:
+                        print_warning(
+                            f"Deployment integrity scan: {len(deploy_violations)} "
+                            f"issue(s) found."
+                        )
+                    if _fix_pass == 0:
+                        recovery_types.append("deployment_integrity_fix")
+                    if _max_passes > 0:
+                        try:
+                            deploy_fix_cost = asyncio.run(_run_integrity_fix(
+                                cwd=cwd,
+                                config=config,
+                                violations=deploy_violations,
+                                scan_type="deployment",
+                                task_text=args.task,
+                                constraints=constraints,
+                                intervention=intervention,
+                                depth=depth if not _use_milestones else "standard",
+                            ))
+                            if _current_state:
+                                _current_state.total_cost += deploy_fix_cost
+                        except Exception as exc:
+                            print_warning(f"Deployment integrity fix failed: {exc}")
+                            break
+                    else:
+                        break  # scan-only mode
+                else:
+                    if _fix_pass == 0:
+                        print_info("Deployment integrity scan: 0 violations (clean)")
+                    else:
+                        print_info(f"Deployment integrity scan pass {_fix_pass + 1}: all violations resolved")
+                    break
         except Exception as exc:
             print_warning(f"Deployment integrity scan failed: {exc}")
 
@@ -4231,28 +4499,44 @@ def main() -> None:
     if config.integrity_scans.asset_scan:
         try:
             from .quality_checks import run_asset_scan
-            asset_violations = run_asset_scan(Path(cwd), scope=scan_scope)
-            if asset_violations:
-                print_warning(
-                    f"Asset integrity scan: {len(asset_violations)} "
-                    f"broken reference(s) found."
-                )
-                recovery_types.append("asset_integrity_fix")
-                try:
-                    asset_fix_cost = asyncio.run(_run_integrity_fix(
-                        cwd=cwd,
-                        config=config,
-                        violations=asset_violations,
-                        scan_type="asset",
-                        task_text=args.task,
-                        constraints=constraints,
-                        intervention=intervention,
-                        depth=depth if not _use_milestones else "standard",
-                    ))
-                    if _current_state:
-                        _current_state.total_cost += asset_fix_cost
-                except Exception as exc:
-                    print_warning(f"Asset integrity fix failed: {exc}")
+            _max_passes = config.post_orchestration_scans.max_scan_fix_passes
+            for _fix_pass in range(max(1, _max_passes) if _max_passes > 0 else 1):
+                asset_violations = run_asset_scan(Path(cwd), scope=scan_scope)
+                if asset_violations:
+                    if _fix_pass > 0:
+                        print_info(f"Asset integrity scan pass {_fix_pass + 1}: {len(asset_violations)} residual violation(s)")
+                    else:
+                        print_warning(
+                            f"Asset integrity scan: {len(asset_violations)} "
+                            f"broken reference(s) found."
+                        )
+                    if _fix_pass == 0:
+                        recovery_types.append("asset_integrity_fix")
+                    if _max_passes > 0:
+                        try:
+                            asset_fix_cost = asyncio.run(_run_integrity_fix(
+                                cwd=cwd,
+                                config=config,
+                                violations=asset_violations,
+                                scan_type="asset",
+                                task_text=args.task,
+                                constraints=constraints,
+                                intervention=intervention,
+                                depth=depth if not _use_milestones else "standard",
+                            ))
+                            if _current_state:
+                                _current_state.total_cost += asset_fix_cost
+                        except Exception as exc:
+                            print_warning(f"Asset integrity fix failed: {exc}")
+                            break
+                    else:
+                        break  # scan-only mode
+                else:
+                    if _fix_pass == 0:
+                        print_info("Asset integrity scan: 0 violations (clean)")
+                    else:
+                        print_info(f"Asset integrity scan pass {_fix_pass + 1}: all violations resolved")
+                    break
         except Exception as exc:
             print_warning(f"Asset integrity scan failed: {exc}")
 
@@ -4306,34 +4590,49 @@ def main() -> None:
     if config.database_scans.dual_orm_scan:
         try:
             from .quality_checks import run_dual_orm_scan
-
-            db_dual_violations = run_dual_orm_scan(Path(cwd), scope=scan_scope)
-            if db_dual_violations:
-                print_warning(
-                    f"Dual ORM scan: {len(db_dual_violations)} "
-                    f"type mismatch(es) found."
-                )
-                recovery_types.append("database_dual_orm_fix")
-                try:
-                    fix_cost = asyncio.run(
-                        _run_integrity_fix(
-                            cwd=cwd,
-                            config=config,
-                            violations=db_dual_violations,
-                            scan_type="database_dual_orm",
-                            task_text=args.task,
-                            constraints=constraints,
-                            intervention=intervention,
-                            depth=depth if not _use_milestones else "standard",
+            _max_passes = config.post_orchestration_scans.max_scan_fix_passes
+            for _fix_pass in range(max(1, _max_passes) if _max_passes > 0 else 1):
+                db_dual_violations = run_dual_orm_scan(Path(cwd), scope=scan_scope)
+                if db_dual_violations:
+                    if _fix_pass > 0:
+                        print_info(f"Dual ORM scan pass {_fix_pass + 1}: {len(db_dual_violations)} residual violation(s)")
+                    else:
+                        print_warning(
+                            f"Dual ORM scan: {len(db_dual_violations)} "
+                            f"type mismatch(es) found."
                         )
-                    )
-                    if _current_state:
-                        _current_state.total_cost += fix_cost
-                except Exception as exc:
-                    print_warning(
-                        f"Database dual ORM fix recovery failed: {exc}\n"
-                        f"{traceback.format_exc()}"
-                    )
+                    if _fix_pass == 0:
+                        recovery_types.append("database_dual_orm_fix")
+                    if _max_passes > 0:
+                        try:
+                            fix_cost = asyncio.run(
+                                _run_integrity_fix(
+                                    cwd=cwd,
+                                    config=config,
+                                    violations=db_dual_violations,
+                                    scan_type="database_dual_orm",
+                                    task_text=args.task,
+                                    constraints=constraints,
+                                    intervention=intervention,
+                                    depth=depth if not _use_milestones else "standard",
+                                )
+                            )
+                            if _current_state:
+                                _current_state.total_cost += fix_cost
+                        except Exception as exc:
+                            print_warning(
+                                f"Database dual ORM fix recovery failed: {exc}\n"
+                                f"{traceback.format_exc()}"
+                            )
+                            break
+                    else:
+                        break  # scan-only mode
+                else:
+                    if _fix_pass == 0:
+                        print_info("Dual ORM scan: 0 violations (clean)")
+                    else:
+                        print_info(f"Dual ORM scan pass {_fix_pass + 1}: all violations resolved")
+                    break
         except Exception as exc:
             print_warning(f"Dual ORM scan failed: {exc}")
 
@@ -4341,34 +4640,49 @@ def main() -> None:
     if config.database_scans.default_value_scan:
         try:
             from .quality_checks import run_default_value_scan
-
-            db_default_violations = run_default_value_scan(Path(cwd), scope=scan_scope)
-            if db_default_violations:
-                print_warning(
-                    f"Default value scan: {len(db_default_violations)} "
-                    f"issue(s) found."
-                )
-                recovery_types.append("database_default_value_fix")
-                try:
-                    fix_cost = asyncio.run(
-                        _run_integrity_fix(
-                            cwd=cwd,
-                            config=config,
-                            violations=db_default_violations,
-                            scan_type="database_defaults",
-                            task_text=args.task,
-                            constraints=constraints,
-                            intervention=intervention,
-                            depth=depth if not _use_milestones else "standard",
+            _max_passes = config.post_orchestration_scans.max_scan_fix_passes
+            for _fix_pass in range(max(1, _max_passes) if _max_passes > 0 else 1):
+                db_default_violations = run_default_value_scan(Path(cwd), scope=scan_scope)
+                if db_default_violations:
+                    if _fix_pass > 0:
+                        print_info(f"Default value scan pass {_fix_pass + 1}: {len(db_default_violations)} residual violation(s)")
+                    else:
+                        print_warning(
+                            f"Default value scan: {len(db_default_violations)} "
+                            f"issue(s) found."
                         )
-                    )
-                    if _current_state:
-                        _current_state.total_cost += fix_cost
-                except Exception as exc:
-                    print_warning(
-                        f"Database default value fix recovery failed: {exc}\n"
-                        f"{traceback.format_exc()}"
-                    )
+                    if _fix_pass == 0:
+                        recovery_types.append("database_default_value_fix")
+                    if _max_passes > 0:
+                        try:
+                            fix_cost = asyncio.run(
+                                _run_integrity_fix(
+                                    cwd=cwd,
+                                    config=config,
+                                    violations=db_default_violations,
+                                    scan_type="database_defaults",
+                                    task_text=args.task,
+                                    constraints=constraints,
+                                    intervention=intervention,
+                                    depth=depth if not _use_milestones else "standard",
+                                )
+                            )
+                            if _current_state:
+                                _current_state.total_cost += fix_cost
+                        except Exception as exc:
+                            print_warning(
+                                f"Database default value fix recovery failed: {exc}\n"
+                                f"{traceback.format_exc()}"
+                            )
+                            break
+                    else:
+                        break  # scan-only mode
+                else:
+                    if _fix_pass == 0:
+                        print_info("Default value scan: 0 violations (clean)")
+                    else:
+                        print_info(f"Default value scan pass {_fix_pass + 1}: all violations resolved")
+                    break
         except Exception as exc:
             print_warning(f"Default value scan failed: {exc}")
 
@@ -4376,34 +4690,49 @@ def main() -> None:
     if config.database_scans.relationship_scan:
         try:
             from .quality_checks import run_relationship_scan
-
-            db_rel_violations = run_relationship_scan(Path(cwd), scope=scan_scope)
-            if db_rel_violations:
-                print_warning(
-                    f"Relationship scan: {len(db_rel_violations)} "
-                    f"issue(s) found."
-                )
-                recovery_types.append("database_relationship_fix")
-                try:
-                    fix_cost = asyncio.run(
-                        _run_integrity_fix(
-                            cwd=cwd,
-                            config=config,
-                            violations=db_rel_violations,
-                            scan_type="database_relationships",
-                            task_text=args.task,
-                            constraints=constraints,
-                            intervention=intervention,
-                            depth=depth if not _use_milestones else "standard",
+            _max_passes = config.post_orchestration_scans.max_scan_fix_passes
+            for _fix_pass in range(max(1, _max_passes) if _max_passes > 0 else 1):
+                db_rel_violations = run_relationship_scan(Path(cwd), scope=scan_scope)
+                if db_rel_violations:
+                    if _fix_pass > 0:
+                        print_info(f"Relationship scan pass {_fix_pass + 1}: {len(db_rel_violations)} residual violation(s)")
+                    else:
+                        print_warning(
+                            f"Relationship scan: {len(db_rel_violations)} "
+                            f"issue(s) found."
                         )
-                    )
-                    if _current_state:
-                        _current_state.total_cost += fix_cost
-                except Exception as exc:
-                    print_warning(
-                        f"Database relationship fix recovery failed: {exc}\n"
-                        f"{traceback.format_exc()}"
-                    )
+                    if _fix_pass == 0:
+                        recovery_types.append("database_relationship_fix")
+                    if _max_passes > 0:
+                        try:
+                            fix_cost = asyncio.run(
+                                _run_integrity_fix(
+                                    cwd=cwd,
+                                    config=config,
+                                    violations=db_rel_violations,
+                                    scan_type="database_relationships",
+                                    task_text=args.task,
+                                    constraints=constraints,
+                                    intervention=intervention,
+                                    depth=depth if not _use_milestones else "standard",
+                                )
+                            )
+                            if _current_state:
+                                _current_state.total_cost += fix_cost
+                        except Exception as exc:
+                            print_warning(
+                                f"Database relationship fix recovery failed: {exc}\n"
+                                f"{traceback.format_exc()}"
+                            )
+                            break
+                    else:
+                        break  # scan-only mode
+                else:
+                    if _fix_pass == 0:
+                        print_info("Relationship scan: 0 violations (clean)")
+                    else:
+                        print_info(f"Relationship scan pass {_fix_pass + 1}: all violations resolved")
+                    break
         except Exception as exc:
             print_warning(f"Relationship scan failed: {exc}")
 
@@ -4416,29 +4745,43 @@ def main() -> None:
             from .e2e_testing import detect_app_type as _detect_app
             _app_info = _detect_app(Path(cwd))
             if _app_info.has_backend and _app_info.has_frontend:
-                api_contract_violations = run_api_contract_scan(Path(cwd), scope=scan_scope)
-                if api_contract_violations:
-                    print_warning(
-                        f"API contract scan: {len(api_contract_violations)} "
-                        f"field mismatch violation(s) found."
-                    )
-                    recovery_types.append("api_contract_fix")
-                    try:
-                        api_fix_cost = asyncio.run(_run_api_contract_fix(
-                            cwd=cwd,
-                            config=config,
-                            api_violations=api_contract_violations,
-                            task_text=args.task,
-                            constraints=constraints,
-                            intervention=intervention,
-                            depth=depth if not _use_milestones else "standard",
-                        ))
-                        if _current_state:
-                            _current_state.total_cost += api_fix_cost
-                    except Exception as exc:
-                        print_warning(f"API contract fix recovery failed: {exc}")
-                else:
-                    print_success("API contract scan: no field mismatches detected.")
+                _max_passes = config.post_orchestration_scans.max_scan_fix_passes
+                for _fix_pass in range(max(1, _max_passes) if _max_passes > 0 else 1):
+                    api_contract_violations = run_api_contract_scan(Path(cwd), scope=scan_scope)
+                    if api_contract_violations:
+                        if _fix_pass > 0:
+                            print_info(f"API contract scan pass {_fix_pass + 1}: {len(api_contract_violations)} residual violation(s)")
+                        else:
+                            print_warning(
+                                f"API contract scan: {len(api_contract_violations)} "
+                                f"field mismatch violation(s) found."
+                            )
+                        if _fix_pass == 0:
+                            recovery_types.append("api_contract_fix")
+                        if _max_passes > 0:
+                            try:
+                                api_fix_cost = asyncio.run(_run_api_contract_fix(
+                                    cwd=cwd,
+                                    config=config,
+                                    api_violations=api_contract_violations,
+                                    task_text=args.task,
+                                    constraints=constraints,
+                                    intervention=intervention,
+                                    depth=depth if not _use_milestones else "standard",
+                                ))
+                                if _current_state:
+                                    _current_state.total_cost += api_fix_cost
+                            except Exception as exc:
+                                print_warning(f"API contract fix recovery failed: {exc}")
+                                break
+                        else:
+                            break  # scan-only mode
+                    else:
+                        if _fix_pass == 0:
+                            print_info("API contract scan: 0 violations (clean)")
+                        else:
+                            print_info(f"API contract scan pass {_fix_pass + 1}: all violations resolved")
+                        break
             else:
                 print_info("API contract scan: skipped (not a full-stack app).")
         except Exception as exc:

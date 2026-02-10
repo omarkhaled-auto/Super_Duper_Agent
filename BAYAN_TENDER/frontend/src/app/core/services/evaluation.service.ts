@@ -606,23 +606,30 @@ export class EvaluationService {
 
     return this.api.post<any>(`/tenders/${tenderId}/approval/initiate`, body).pipe(
       switchMap(() => this.api.get<any>(`/tenders/${tenderId}/approval`)),
-      map((dto: any) => ({
-        tenderId: dto.tenderId || tenderId,
-        currentStep: dto.currentLevel || 1,
-        totalSteps: (dto.levels || []).length,
-        steps: (dto.levels || []).map((l: any) => ({
-          id: l.id,
+      map((dto: any) => {
+        const statusMap: Record<number, string> = { 0: 'pending', 1: 'in_progress', 2: 'approved', 3: 'rejected', 4: 'returned' };
+        const decisionMap: Record<number, string> = { 0: 'approved', 1: 'rejected', 2: 'returned' };
+        const mapStatus = (v: any) => typeof v === 'number' ? (statusMap[v] || 'pending') : String(v || 'pending').toLowerCase();
+        const mapDecision = (v: any) => typeof v === 'number' ? (decisionMap[v] || 'pending') : String(v || 'pending').toLowerCase();
+
+        return {
           tenderId: dto.tenderId || tenderId,
-          stepOrder: l.levelOrder || l.level,
-          approverUserId: l.approverUserId,
-          approverName: l.approverName || '',
-          status: (l.decision || 'pending').toLowerCase() as 'pending' | 'approved' | 'rejected',
-          comments: l.comments,
-          decidedAt: l.decidedAt
-        })),
-        isComplete: dto.isComplete || dto.status === 'Approved' || dto.status === 'Rejected',
-        finalStatus: (dto.status || 'pending').toLowerCase() as 'pending' | 'approved' | 'rejected'
-      } as ApprovalWorkflow)),
+          currentStep: dto.currentLevel || 1,
+          totalSteps: (dto.levels || []).length,
+          steps: (dto.levels || []).map((l: any) => ({
+            id: l.id,
+            tenderId: dto.tenderId || tenderId,
+            stepOrder: l.levelNumber || l.levelOrder || l.level,
+            approverUserId: l.approverUserId,
+            approverName: l.approverName || '',
+            status: (l.decision != null ? mapDecision(l.decision) : 'pending') as 'pending' | 'approved' | 'rejected',
+            comments: l.decisionComment || l.comments,
+            decidedAt: l.decidedAt
+          })),
+          isComplete: dto.isComplete || mapStatus(dto.status) === 'approved' || mapStatus(dto.status) === 'rejected',
+          finalStatus: mapStatus(dto.status) as 'pending' | 'approved' | 'rejected'
+        } as ApprovalWorkflow;
+      }),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);

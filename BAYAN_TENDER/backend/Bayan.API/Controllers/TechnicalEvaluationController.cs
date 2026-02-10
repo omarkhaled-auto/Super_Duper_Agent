@@ -214,7 +214,7 @@ public class TechnicalEvaluationController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The save result.</returns>
     [HttpPost("scores")]
-    [Authorize(Roles = "TechnicalPanelist")]
+    [Authorize(Roles = "Admin,TenderManager,TechnicalPanelist")]
     [ProducesResponseType(typeof(SaveTechnicalScoresResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<SaveTechnicalScoresResult>> SaveTechnicalScores(

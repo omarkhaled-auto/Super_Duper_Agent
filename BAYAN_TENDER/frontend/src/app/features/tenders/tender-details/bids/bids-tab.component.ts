@@ -34,6 +34,7 @@ import {
 import { OpenBidsDialogComponent } from './open-bids-dialog.component';
 import { BidDetailsDialogComponent } from './bid-details-dialog.component';
 import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.component';
+import { BidImportDialogComponent } from './bid-import-dialog.component';
 
 @Component({
   selector: 'app-bids-tab',
@@ -55,7 +56,8 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
     DividerModule,
     OpenBidsDialogComponent,
     BidDetailsDialogComponent,
-    LateBidRejectionDialogComponent
+    LateBidRejectionDialogComponent,
+    BidImportDialogComponent
   ],
   providers: [MessageService, ConfirmationService],
   template: `
@@ -336,6 +338,18 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
       (visibleChange)="showRejectDialog = $event"
       (rejected)="onLateBidRejected($event)"
     ></app-late-bid-rejection-dialog>
+
+    <!-- Bid Import Wizard Dialog -->
+    @if (showImportDialog && selectedImportBidId) {
+      <app-bid-import-dialog
+        [visible]="showImportDialog"
+        [tenderId]="tenderId"
+        [bidId]="selectedImportBidId"
+        [bidDocument]="null"
+        (visibleChange)="showImportDialog = $event"
+        (imported)="onImportWizardComplete($event)"
+      ></app-bid-import-dialog>
+    }
   `,
   styles: [`
     .bids-tab-container {
@@ -544,8 +558,10 @@ export class BidsTabComponent implements OnInit, OnDestroy {
   showOpenBidsDialog = false;
   showBidDetailsDialog = false;
   showRejectDialog = false;
+  showImportDialog = false;
   selectedBidId: number | null = null;
   selectedLateBid: BidListItem | null = null;
+  selectedImportBidId: number | null = null;
 
   // Loading states
   isDownloading = signal<boolean>(false);
@@ -658,32 +674,19 @@ export class BidsTabComponent implements OnInit, OnDestroy {
   }
 
   importBoq(bid: BidListItem): void {
-    this.confirmationService.confirm({
-      message: `Are you sure you want to import the BOQ from ${bid.bidderName}?`,
-      header: 'Confirm Import',
-      icon: 'pi pi-file-import',
-      accept: () => {
-        this.bidService.importBoq(this.tenderId, bid.id).pipe(
-          takeUntil(this.destroy$)
-        ).subscribe({
-          next: () => {
-            this.messageService.add({
-              severity: 'success',
-              summary: 'Success',
-              detail: 'BOQ imported successfully'
-            });
-            this.loadData();
-          },
-          error: (error) => {
-            this.messageService.add({
-              severity: 'error',
-              summary: 'Error',
-              detail: error.message || 'Failed to import BOQ'
-            });
-          }
-        });
-      }
+    this.selectedImportBidId = bid.id;
+    this.showImportDialog = true;
+  }
+
+  onImportWizardComplete(result: any): void {
+    this.showImportDialog = false;
+    this.selectedImportBidId = null;
+    this.messageService.add({
+      severity: 'success',
+      summary: 'Import Complete',
+      detail: `BOQ imported successfully — ${result.importedCount || 0} items`
     });
+    this.loadData();
   }
 
   onOpenBidsConfirmed(): void {

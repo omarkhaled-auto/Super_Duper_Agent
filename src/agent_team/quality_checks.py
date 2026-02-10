@@ -2289,6 +2289,12 @@ def run_default_value_scan(project_root: Path, scope: ScanScope | None = None) -
                         pattern = re.compile(rf'\.{re.escape(tname)}\.(?!\s*\?)(\w+)')
                         for tm in pattern.finditer(sf_content):
                             pos = tm.start()
+                            # v10: Skip Prisma client delegate accesses
+                            # prisma.model.method() is NOT a nullable access —
+                            # Prisma client delegates are always defined
+                            _pre_word = sf_content[max(0, pos - 30):pos].rstrip()
+                            if re.search(r'\bprisma\s*$', _pre_word):
+                                continue
                             # Check for optional chaining in nearby context
                             pre = sf_content[max(0, pos - 50):pos]
                             context_start = max(0, sf_content.rfind("\n", 0, max(0, pos - 500)))

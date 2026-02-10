@@ -241,7 +241,7 @@ import {
             label="View Detailed Comments"
             icon="pi pi-comments"
             class="p-button-outlined"
-            (click)="showCommentsDialog = true"
+            (click)="showCommentsDialog = true; loadComments()"
           ></button>
 
           <button

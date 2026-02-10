@@ -57,7 +57,7 @@ export class BidImportService {
           rawData: Object.values(row)
         }));
 
-        const detectedColumns: string[] = (dto.columns || []).map((c: any) => c.letter || c.header || `Col${c.index}`);
+        const detectedColumns: string[] = (dto.columns || []).map((c: any) => c.header || c.letter || `Col${c.index}`);
 
         return {
           success: dto.success,
@@ -256,12 +256,12 @@ export class BidImportService {
       currency: fieldMap['currency'] ? String(row.cells[fieldMap['currency']] || 'SAR') : null
     }));
 
-    // First call map-columns to transition bid to 'Mapped' status, then match
+    // First call map-columns to extract all items from the full file, then match using those items
     return this.api.post<any>(`${this.importUrl(tenderId, bidId)}/map-columns`, {
       columnMappings: columnMappings
     }).pipe(
-      switchMap(() => this.api.post<any>(`${this.importUrl(tenderId, bidId)}/match`, {
-        items,
+      switchMap((mapResult) => this.api.post<any>(`${this.importUrl(tenderId, bidId)}/match`, {
+        items: mapResult.items || items,
         fuzzyMatchThreshold: 80.0,
         alternativeMatchCount: 3
       })),

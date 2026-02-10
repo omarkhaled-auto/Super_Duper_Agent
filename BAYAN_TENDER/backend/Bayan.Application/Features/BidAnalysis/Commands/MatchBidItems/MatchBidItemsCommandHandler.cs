@@ -204,6 +204,51 @@ public class MatchBidItemsCommandHandler : IRequestHandler<MatchBidItemsCommand,
             // Calculate summary statistics
             result.Summary = CalculateSummary(result, request.Items.Count, boqItems.Count);
 
+            // Persist BidPricing records for matched and extra items
+            // Clear any existing pricing from previous attempts
+            var existingPricing = await _context.BidPricings
+                .Where(bp => bp.BidSubmissionId == bid.Id)
+                .ToListAsync(cancellationToken);
+            if (existingPricing.Count > 0)
+            {
+                _context.BidPricings.RemoveRange(existingPricing);
+            }
+
+            // Create BidPricing for exact matches
+            foreach (var match in result.ExactMatches)
+            {
+                _context.BidPricings.Add(CreateBidPricing(bid.Id, match, MatchType.ExactMatch));
+            }
+            // Create BidPricing for fuzzy matches
+            foreach (var match in result.FuzzyMatches)
+            {
+                _context.BidPricings.Add(CreateBidPricing(bid.Id, match, MatchType.FuzzyMatch));
+            }
+            // Create BidPricing for extra/unmatched items
+            foreach (var match in result.Unmatched)
+            {
+                _context.BidPricings.Add(CreateBidPricing(bid.Id, match, MatchType.ExtraItem));
+            }
+            // Create NoBid BidPricing for BOQ items not covered
+            foreach (var noBid in result.NoBidItems)
+            {
+                _context.BidPricings.Add(new BidPricing
+                {
+                    Id = Guid.NewGuid(),
+                    BidSubmissionId = bid.Id,
+                    BoqItemId = noBid.BoqItemId,
+                    BidderItemNumber = noBid.ItemNumber,
+                    BidderDescription = noBid.Description,
+                    BidderQuantity = noBid.Quantity,
+                    BidderUom = noBid.Uom,
+                    NativeCurrency = "AED",
+                    MatchType = MatchType.NoBid,
+                    MatchConfidence = 0,
+                    IsNoBid = true,
+                    IsIncludedInTotal = false
+                });
+            }
+
             // Update status to matched
             bid.ImportStatus = BidImportStatus.Matched;
             await _context.SaveChangesAsync(cancellationToken);
@@ -224,6 +269,26 @@ public class MatchBidItemsCommandHandler : IRequestHandler<MatchBidItemsCommand,
 
             throw new InvalidOperationException($"Error matching items: {ex.Message}", ex);
         }
+    }
+
+    private static BidPricing CreateBidPricing(Guid bidSubmissionId, BidItemMatchDto match, MatchType matchType)
+    {
+        return new BidPricing
+        {
+            Id = Guid.NewGuid(),
+            BidSubmissionId = bidSubmissionId,
+            BoqItemId = match.MatchedBoqItemId,
+            BidderItemNumber = match.BidItemNumber,
+            BidderDescription = match.BidDescription,
+            BidderQuantity = match.BidQuantity,
+            BidderUom = match.BidUom,
+            NativeUnitRate = match.BidUnitRate,
+            NativeAmount = match.BidAmount,
+            NativeCurrency = match.Currency ?? "AED",
+            MatchType = matchType,
+            MatchConfidence = match.Confidence,
+            IsIncludedInTotal = matchType != MatchType.ExtraItem
+        };
     }
 
     private static string NormalizeItemNumber(string itemNumber)

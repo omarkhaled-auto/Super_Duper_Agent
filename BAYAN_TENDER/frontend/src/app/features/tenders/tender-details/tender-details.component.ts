@@ -40,6 +40,7 @@ import { ComparableSheetComponent } from './evaluation/comparable-sheet.componen
 import { EvaluationSetupComponent } from './evaluation/evaluation-setup.component';
 import { TechnicalScoringComponent } from './evaluation/technical-scoring.component';
 import { CombinedScorecardComponent } from './evaluation/combined-scorecard.component';
+import { TechnicalSummaryComponent } from './evaluation/technical-summary.component';
 import { ApprovalTabComponent } from './approval/approval-tab.component';
 import { DocumentsTabComponent } from './documents/documents-tab.component';
 import { EvaluationService } from '../../../core/services/evaluation.service';
@@ -96,6 +97,7 @@ interface CountdownTime {
     EvaluationSetupComponent,
     TechnicalScoringComponent,
     CombinedScorecardComponent,
+    TechnicalSummaryComponent,
     ApprovalTabComponent,
     DocumentsTabComponent
   ],
@@ -489,6 +491,12 @@ interface CountdownTime {
                 class="p-button-sm"
                 (click)="evaluationSubView.set('technical')"></button>
               <button pButton
+                label="Technical Summary"
+                [outlined]="evaluationSubView() !== 'technical-summary'"
+                icon="pi pi-chart-line"
+                class="p-button-sm"
+                (click)="evaluationSubView.set('technical-summary')"></button>
+              <button pButton
                 label="Combined Scorecard"
                 [outlined]="evaluationSubView() !== 'scorecard'"
                 icon="pi pi-chart-bar"
@@ -511,6 +519,9 @@ interface CountdownTime {
                     <p>Loading evaluation configuration...</p>
                   </div>
                 }
+              }
+              @case ('technical-summary') {
+                <app-technical-summary [tenderId]="tender()!.id"></app-technical-summary>
               }
               @case ('scorecard') {
                 <app-combined-scorecard [tenderId]="tender()!.id"></app-combined-scorecard>
@@ -941,7 +952,7 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
   submissionCountdown = signal<CountdownTime | null>(null);
   activeTabIndex = 0;
   showInviteBiddersDialog = false;
-  evaluationSubView = signal<'comparable' | 'setup' | 'technical' | 'scorecard'>('comparable');
+  evaluationSubView = signal<'comparable' | 'setup' | 'technical' | 'technical-summary' | 'scorecard'>('comparable');
   evaluationSetup = signal<EvaluationSetup | null>(null);
 
   breadcrumbItems: MenuItem[] = [];

@@ -1223,13 +1223,11 @@ export class BidImportDialogComponent implements OnChanges {
   }
 
   parseFile(): void {
-    if (!this.bidDocument) return;
-
     this.isParsing.set(true);
 
-    // Create a mock file since we don't have the actual file object
-    const mockFile = new File([''], this.bidDocument.filename, {
-      type: this.bidDocument.mimeType
+    // Backend reads the file from OriginalFilePath — no file upload needed
+    const mockFile = new File([''], 'bid.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     });
 
     this.bidImportService.parseFile(this.tenderId, this.bidId, mockFile).subscribe({
