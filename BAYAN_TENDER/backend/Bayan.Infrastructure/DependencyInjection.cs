@@ -6,6 +6,7 @@ using Bayan.Infrastructure.Email;
 using Bayan.Infrastructure.Excel;
 using Bayan.Infrastructure.FileStorage;
 using Bayan.Infrastructure.Identity;
+using Bayan.Infrastructure.Matching;
 using Bayan.Infrastructure.Jobs;
 using Bayan.Infrastructure.Pdf;
 using Bayan.Infrastructure.Persistence;
@@ -110,6 +111,9 @@ public static class DependencyInjection
 
         // Register PDF services
         services.AddScoped<IPdfService, PdfService>();
+
+        // Register Fuzzy Matching service
+        services.AddScoped<IFuzzyMatchingService, FuzzyMatchingService>();
 
         // Register UOM Conversion service
         services.AddMemoryCache();

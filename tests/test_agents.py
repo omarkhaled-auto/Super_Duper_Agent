@@ -688,7 +688,7 @@ class TestUIDesignStandardsInjection:
         assert "Design System Architecture" in ARCHITECT_PROMPT
 
     def test_code_writer_has_ui_quality_standards(self):
-        assert "UI Quality Standards" in CODE_WRITER_PROMPT
+        assert "UI COMPLIANCE POLICY" in CODE_WRITER_PROMPT
 
     def test_code_reviewer_has_design_quality_review(self):
         assert "Design Quality Review" in CODE_REVIEWER_PROMPT

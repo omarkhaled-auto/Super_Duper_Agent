@@ -73,7 +73,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
     <p-toast></p-toast>
     <p-confirmDialog></p-confirmDialog>
 
-    <div class="clarifications-tab-container">
+    <div class="clarifications-tab-container" data-testid="clarifications-tab">
       <!-- Toolbar -->
       <div class="clarifications-toolbar">
         <div class="toolbar-left">
@@ -81,6 +81,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
             pButton
             icon="pi pi-plus"
             label="New Internal RFI"
+            data-testid="create-question-btn"
             (click)="showRfiDialog = true"
           ></button>
           <button
@@ -115,6 +116,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
       <!-- Filters -->
       <div class="filters-row">
         <p-dropdown
+          data-testid="clarification-status-filter"
           [options]="statusOptions"
           [(ngModel)]="filterStatus"
           placeholder="All Statuses"
@@ -167,7 +169,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
       } @else if (clarifications().length === 0) {
         <!-- Empty State -->
         <div class="empty-state">
-          <i class="pi pi-comments" style="font-size: 3rem; color: #ccc;"></i>
+          <i class="pi pi-comments" style="font-size: 3rem; color: var(--bayan-border, #e4e4e7);"></i>
           <h3>No Clarifications Yet</h3>
           <p>Create an internal RFI or wait for bidder questions.</p>
           <button
@@ -180,6 +182,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
       } @else {
         <!-- Clarifications Table with Row Expansion -->
         <p-table
+          data-testid="clarifications-table"
           [value]="clarifications()"
           dataKey="id"
           [expandedRowKeys]="expandedRows"
@@ -453,8 +456,8 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
       flex-wrap: wrap;
       gap: 1rem;
       padding: 1rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .toolbar-left {
@@ -476,20 +479,20 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
     .stat-value {
       font-size: 1.25rem;
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .stat-label {
       font-size: 0.75rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .stat.pending .stat-value {
-      color: #ef6c00;
+      color: #d97706;
     }
 
     .stat.answered .stat-value {
-      color: #2e7d32;
+      color: #16a34a;
     }
 
     .filters-row {
@@ -521,7 +524,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
     }
 
     .loading-container p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .empty-state {
@@ -536,20 +539,20 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
 
     .empty-state h3 {
       margin: 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .empty-state p {
       margin: 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .reference-badge {
       font-family: monospace;
-      font-size: 0.85rem;
-      background-color: #f0f0f0;
+      font-size: 0.875rem;
+      background-color: var(--bayan-accent, #f4f4f5);
       padding: 0.25rem 0.5rem;
-      border-radius: 4px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .subject-cell {
@@ -564,7 +567,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
 
     .section-link {
       font-size: 0.8rem;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
       display: flex;
       align-items: center;
       gap: 0.25rem;
@@ -574,13 +577,13 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
       display: inline-flex;
       align-items: center;
       gap: 0.25rem;
-      font-size: 0.85rem;
-      color: #666;
+      font-size: 0.875rem;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .expansion-content {
       padding: 1rem 2rem;
-      background-color: #fafafa;
+      background-color: var(--bayan-muted, #f4f4f5);
     }
 
     .qa-section {
@@ -591,7 +594,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
     .answer-block {
       padding: 1rem;
       background-color: white;
-      border-radius: 8px;
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .question-block h5,
@@ -600,19 +603,19 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
       align-items: center;
       gap: 0.5rem;
       margin: 0 0 0.5rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .question-block p,
     .answer-block p {
       margin: 0 0 0.5rem;
-      color: #555;
+      color: var(--bayan-muted-foreground, #71717a);
       line-height: 1.6;
     }
 
     .meta {
       font-size: 0.8rem;
-      color: #888;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .action-buttons {
@@ -620,7 +623,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
       gap: 0.5rem;
       margin-top: 1rem;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .answer-dialog-content {
@@ -631,18 +634,18 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
 
     .original-question {
       padding: 1rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .original-question h5 {
       margin: 0 0 0.5rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .original-question p {
       margin: 0;
-      color: #555;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .answer-input {
@@ -653,7 +656,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
 
     .answer-input label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .required {
@@ -666,7 +669,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
       gap: 0.5rem;
       margin-top: 1rem;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     @media (max-width: 768px) {
@@ -787,7 +790,7 @@ export class ClarificationsTabComponent implements OnInit, OnDestroy {
   }
 
   submitClarification(clarification: Clarification): void {
-    this.clarificationService.submitClarification(clarification.id)
+    this.clarificationService.submitClarification(this.tenderId, clarification.id)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {
@@ -809,7 +812,7 @@ export class ClarificationsTabComponent implements OnInit, OnDestroy {
   }
 
   startReview(clarification: Clarification): void {
-    this.clarificationService.startReview(clarification.id)
+    this.clarificationService.startReview(this.tenderId, clarification.id)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {
@@ -834,7 +837,7 @@ export class ClarificationsTabComponent implements OnInit, OnDestroy {
 
     this.isSavingAnswer.set(true);
 
-    this.clarificationService.answerClarification(this.selectedClarification.id, {
+    this.clarificationService.answerClarification(this.tenderId, this.selectedClarification.id, {
       answer: this.answerText.trim()
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
@@ -865,7 +868,7 @@ export class ClarificationsTabComponent implements OnInit, OnDestroy {
       icon: 'pi pi-exclamation-triangle',
       acceptButtonStyleClass: 'p-button-danger',
       accept: () => {
-        this.clarificationService.deleteClarification(clarification.id)
+        this.clarificationService.deleteClarification(this.tenderId, clarification.id)
           .pipe(takeUntil(this.destroy$))
           .subscribe({
             next: () => {
@@ -888,7 +891,7 @@ export class ClarificationsTabComponent implements OnInit, OnDestroy {
       icon: 'pi pi-exclamation-triangle',
       acceptButtonStyleClass: 'p-button-danger',
       accept: () => {
-        this.clarificationService.rejectClarification(clarification.id)
+        this.clarificationService.rejectClarification(this.tenderId, clarification.id)
           .pipe(takeUntil(this.destroy$))
           .subscribe({
             next: () => {

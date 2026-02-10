@@ -450,6 +450,6 @@ class TestPRDChunkingConfig:
         from agent_team.config import load_config
 
         # Test with defaults (no yaml file)
-        config = load_config()
+        config, _ = load_config()
         assert config.prd_chunking.enabled is True
         assert config.prd_chunking.threshold == 50000

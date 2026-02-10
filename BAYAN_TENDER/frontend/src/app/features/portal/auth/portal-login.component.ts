@@ -32,7 +32,7 @@ import { PortalService } from '../../../core/services/portal.service';
         <!-- Left Panel - Branding -->
         <div class="branding-panel">
           <div class="branding-content">
-            <img src="assets/images/logo-white.png" alt="Bayan" class="brand-logo" />
+            <i class="pi pi-briefcase" style="font-size: 2.5rem; margin-bottom: 1rem;"></i>
             <h1 class="brand-title">Bidder Portal</h1>
             <p class="brand-subtitle">
               Access tender documents, submit clarifications, and submit your bid through our secure portal.
@@ -67,7 +67,7 @@ import { PortalService } from '../../../core/services/portal.service';
             </div>
 
             @if (errorMessage()) {
-              <p-message severity="error" [text]="errorMessage()!" styleClass="w-full mb-4"></p-message>
+              <p-message severity="error" [text]="errorMessage()!" styleClass="w-full mb-4" data-testid="portal-login-error"></p-message>
             }
 
             <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
@@ -83,6 +83,7 @@ import { PortalService } from '../../../core/services/portal.service';
                     formControlName="tenderCode"
                     placeholder="Enter tender reference code"
                     class="w-full"
+                    data-testid="portal-tender-code"
                   />
                 </span>
                 <small class="field-hint">If you have a tender code, enter it to go directly to that tender</small>
@@ -102,6 +103,7 @@ import { PortalService } from '../../../core/services/portal.service';
                     formControlName="email"
                     placeholder="Enter your email"
                     class="w-full"
+                    data-testid="portal-login-email"
                     [class.ng-invalid]="isFieldInvalid('email')"
                   />
                 </span>
@@ -128,6 +130,7 @@ import { PortalService } from '../../../core/services/portal.service';
                   [toggleMask]="true"
                   styleClass="w-full"
                   inputStyleClass="w-full"
+                  data-testid="portal-login-password"
                   [class.ng-invalid]="isFieldInvalid('password')"
                 ></p-password>
                 @if (isFieldInvalid('password')) {
@@ -150,6 +153,7 @@ import { PortalService } from '../../../core/services/portal.service';
                 label="Sign In to Portal"
                 icon="pi pi-sign-in"
                 class="w-full submit-btn"
+                data-testid="portal-login-submit"
                 [loading]="isLoading()"
                 [disabled]="loginForm.invalid || isLoading()"
               ></button>
@@ -175,7 +179,7 @@ import { PortalService } from '../../../core/services/portal.service';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #f0f2f5;
+      background: var(--bayan-muted, #f4f4f5);
       padding: 1rem;
     }
 
@@ -183,16 +187,17 @@ import { PortalService } from '../../../core/services/portal.service';
       display: flex;
       max-width: 1000px;
       width: 100%;
-      background: white;
-      border-radius: 16px;
+      background: var(--bayan-card, #ffffff);
+      border-radius: var(--bayan-radius-xl, 1rem);
       overflow: hidden;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      box-shadow: var(--bayan-shadow, 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1));
     }
 
     /* Branding Panel */
     .branding-panel {
       flex: 1;
-      background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%);
+      background: var(--bayan-primary, #18181b);
       color: white;
       padding: 3rem;
       display: flex;
@@ -262,50 +267,51 @@ import { PortalService } from '../../../core/services/portal.service';
     .form-header h2 {
       font-size: 1.75rem;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
       margin: 0 0 0.5rem 0;
     }
 
     .form-header p {
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
       margin: 0;
     }
 
     .form-field {
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.25rem;
     }
 
     .form-field label {
       display: block;
       margin-bottom: 0.5rem;
-      font-weight: 500;
-      color: #334155;
+      font-weight: 600;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .field-hint {
       display: block;
       margin-top: 0.25rem;
-      color: #64748b;
-      font-size: 0.8125rem;
+      color: var(--bayan-muted-foreground, #71717a);
+      font-size: 0.8rem;
     }
 
     .submit-btn {
-      height: 48px;
-      font-size: 1rem;
+      height: 46px;
+      font-size: 0.9375rem;
+      font-weight: 600;
       margin-top: 0.5rem;
     }
 
     .form-footer {
       margin-top: 2rem;
       padding-top: 1.5rem;
-      border-top: 1px solid #e2e8f0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .help-text {
       display: flex;
       align-items: flex-start;
       gap: 0.5rem;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
       font-size: 0.875rem;
       margin: 0 0 1rem 0;
       line-height: 1.5;
@@ -313,18 +319,18 @@ import { PortalService } from '../../../core/services/portal.service';
 
     .help-text i {
       margin-top: 2px;
-      color: #3b82f6;
+      color: var(--bayan-primary, #18181b);
     }
 
     .contact-text {
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
       font-size: 0.875rem;
       margin: 0;
       text-align: center;
     }
 
     .contact-text a {
-      color: #1565C0;
+      color: var(--bayan-primary, #18181b);
       text-decoration: none;
       font-weight: 500;
     }
@@ -341,20 +347,30 @@ import { PortalService } from '../../../core/services/portal.service';
     :host ::ng-deep {
       .p-inputtext {
         width: 100%;
+        height: 44px;
         padding-left: 2.5rem;
       }
 
       .p-input-icon-left > i {
         left: 0.875rem;
-        color: #94a3b8;
+        color: var(--bayan-muted-foreground, #71717a);
       }
 
       .p-password {
         width: 100%;
+
+        .p-inputtext {
+          height: 44px;
+        }
       }
 
       .p-password-input {
         width: 100%;
+      }
+
+      .p-button {
+        border-radius: var(--bayan-radius, 0.5rem);
+        justify-content: center;
       }
 
       .p-divider {

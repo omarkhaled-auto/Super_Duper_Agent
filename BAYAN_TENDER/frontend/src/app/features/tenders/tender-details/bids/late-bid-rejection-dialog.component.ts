@@ -108,7 +108,7 @@ import { MessageModule } from 'primeng/message';
 
     .warning-content i {
       font-size: 1.25rem;
-      color: #ef6c00;
+      color: #d97706;
       flex-shrink: 0;
     }
 
@@ -124,7 +124,7 @@ import { MessageModule } from 'primeng/message';
 
     .form-field label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .required {

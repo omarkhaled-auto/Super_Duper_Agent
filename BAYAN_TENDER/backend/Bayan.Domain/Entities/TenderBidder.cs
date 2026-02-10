@@ -63,6 +63,11 @@ public class TenderBidder : BaseEntity
     /// </summary>
     public DateTime? QualifiedAt { get; set; }
 
+    /// <summary>
+    /// Reason for the qualification decision.
+    /// </summary>
+    public string? QualificationReason { get; set; }
+
     // Navigation properties
     /// <summary>
     /// The tender.

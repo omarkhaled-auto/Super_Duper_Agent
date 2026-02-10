@@ -3,6 +3,7 @@ import {
   Input,
   OnInit,
   OnDestroy,
+  ViewChild,
   inject,
   signal,
   computed
@@ -22,6 +23,7 @@ import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { MessageModule } from 'primeng/message';
 import { MenuItem, MessageService, ConfirmationService, TreeNode } from 'primeng/api';
+import { Menu } from 'primeng/menu';
 
 import { BoqService } from '../../../../core/services/boq.service';
 import {
@@ -64,7 +66,7 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
     <p-toast></p-toast>
     <p-confirmDialog></p-confirmDialog>
 
-    <div class="boq-tab-container">
+    <div class="boq-tab-container" data-testid="boq-tab">
       <!-- Toolbar -->
       <div class="boq-toolbar">
         <div class="toolbar-left">
@@ -73,6 +75,7 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
             icon="pi pi-upload"
             label="Import from Excel"
             class="p-button-outlined"
+            data-testid="import-boq-btn"
             (click)="showImportDialog = true"
           ></button>
           <button
@@ -80,6 +83,7 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
             icon="pi pi-download"
             label="Export Template"
             class="p-button-outlined"
+            data-testid="export-boq-btn"
             (click)="showExportDialog = true"
           ></button>
         </div>
@@ -89,12 +93,14 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
             icon="pi pi-folder-plus"
             label="Add Section"
             class="p-button-outlined"
+            data-testid="add-section-btn"
             (click)="openSectionDialog()"
           ></button>
           <button
             pButton
             icon="pi pi-plus"
             label="Add Item"
+            data-testid="add-item-btn"
             (click)="openItemDialog()"
           ></button>
         </div>
@@ -121,7 +127,7 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
       } @else if (boqTree().length === 0) {
         <!-- Empty State -->
         <div class="empty-state">
-          <i class="pi pi-list" style="font-size: 3rem; color: #ccc;"></i>
+          <i class="pi pi-list" style="font-size: 3rem; color: var(--bayan-border, #e4e4e7);"></i>
           <h3>No Bill of Quantities Items</h3>
           <p>Start by importing from Excel or adding sections and items manually.</p>
           <div class="empty-actions">
@@ -148,6 +154,7 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
           scrollHeight="calc(100vh - 400px)"
           [loading]="boqService.isLoading()"
           styleClass="p-treetable-sm"
+          data-testid="boq-tree-table"
         >
           <ng-template pTemplate="header">
             <tr>
@@ -296,8 +303,8 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
       flex-wrap: wrap;
       gap: 1rem;
       padding: 1rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .toolbar-left,
@@ -317,7 +324,7 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
     }
 
     .loading-container p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .empty-state {
@@ -332,12 +339,12 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
 
     .empty-state h3 {
       margin: 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .empty-state p {
       margin: 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .empty-actions {
@@ -347,22 +354,22 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
     }
 
     :host ::ng-deep .p-treetable .section-row {
-      background-color: #f0f7ff !important;
+      background-color: var(--bayan-muted, #f4f4f5) !important;
       font-weight: 500;
     }
 
     :host ::ng-deep .p-treetable .section-row:hover {
-      background-color: #e3f2fd !important;
+      background-color: var(--bayan-accent, #f4f4f5) !important;
     }
 
     .section-number {
       font-weight: 600;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .section-title {
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .action-cell {
@@ -375,8 +382,8 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
       align-items: center;
       gap: 1.5rem;
       padding: 1rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
       flex-wrap: wrap;
     }
 
@@ -388,18 +395,18 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
 
     .summary-label {
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .summary-value {
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .summary-divider {
       width: 1px;
       height: 20px;
-      background-color: #ddd;
+      background-color: var(--bayan-border, #e4e4e7);
     }
 
     :host ::ng-deep .p-treetable-scrollable .p-treetable-wrapper {
@@ -430,6 +437,8 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
 })
 export class BoqTabComponent implements OnInit, OnDestroy {
   @Input() tenderId!: number;
+
+  @ViewChild('rowMenu') rowMenu!: Menu;
 
   readonly boqService = inject(BoqService);
   private readonly messageService = inject(MessageService);
@@ -568,11 +577,8 @@ export class BoqTabComponent implements OnInit, OnDestroy {
       ];
     }
 
-    // Get reference to the menu and toggle it
-    const menuElement = document.querySelector('p-menu');
-    if (menuElement) {
-      (menuElement as any).toggle(event);
-    }
+    // Toggle the popup menu
+    this.rowMenu.toggle(event);
   }
 
   openSectionDialog(parentSection?: BoqSection): void {

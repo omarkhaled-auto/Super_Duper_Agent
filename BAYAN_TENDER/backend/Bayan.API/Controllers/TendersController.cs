@@ -10,6 +10,7 @@ using Bayan.Application.Features.Tenders.Commands.CreateTender;
 using Bayan.Application.Features.Tenders.Commands.InviteBidders;
 using Bayan.Application.Features.Tenders.Commands.PublishTender;
 using Bayan.Application.Features.Tenders.Commands.RemoveTenderBidder;
+using Bayan.Application.Features.Tenders.Commands.UpdateBidderQualification;
 using Bayan.Application.Features.Tenders.Commands.UpdateTender;
 using Bayan.Application.Features.Tenders.DTOs;
 using Bayan.Application.Features.Tenders.Queries.GetNextTenderReference;
@@ -29,7 +30,7 @@ namespace Bayan.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin,TenderManager,CommercialAnalyst,Approver,Auditor")]
+[Authorize(Roles = "Admin,TenderManager,CommercialAnalyst,Approver,Auditor,TechnicalPanelist")]
 public class TendersController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -147,6 +148,7 @@ public class TendersController : ControllerBase
             ClientId = dto.ClientId,
             TenderType = dto.TenderType,
             BaseCurrency = dto.BaseCurrency,
+            EstimatedValue = dto.EstimatedValue,
             BidValidityDays = dto.BidValidityDays,
             IssueDate = dto.IssueDate,
             ClarificationDeadline = dto.ClarificationDeadline,
@@ -185,6 +187,7 @@ public class TendersController : ControllerBase
             ClientId = dto.ClientId,
             TenderType = dto.TenderType,
             BaseCurrency = dto.BaseCurrency,
+            EstimatedValue = dto.EstimatedValue,
             BidValidityDays = dto.BidValidityDays,
             IssueDate = dto.IssueDate,
             ClarificationDeadline = dto.ClarificationDeadline,
@@ -363,6 +366,44 @@ public class TendersController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// Updates the qualification status of a bidder for a tender.
+    /// </summary>
+    /// <param name="tenderId">The tender's unique identifier.</param>
+    /// <param name="bidderId">The bidder's unique identifier.</param>
+    /// <param name="request">The qualification update request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Success status.</returns>
+    [HttpPut("{tenderId:guid}/bidders/{bidderId:guid}/qualification")]
+    [Authorize(Roles = "Admin,TenderManager")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateBidderQualification(
+        Guid tenderId,
+        Guid bidderId,
+        [FromBody] UpdateBidderQualificationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var command = new UpdateBidderQualificationCommand
+        {
+            TenderId = tenderId,
+            BidderId = bidderId,
+            QualificationStatus = request.QualificationStatus,
+            Reason = request.Reason
+        };
+
+        try
+        {
+            await _mediator.Send(command, cancellationToken);
+            return Ok(ApiResponse<object>.SuccessResponse(new { message = "Bidder qualification status updated successfully." }));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.FailureResponse(ex.Message));
+        }
+    }
+
     #region Addenda Endpoints
 
     /// <summary>
@@ -513,4 +554,20 @@ public class AcknowledgeAddendumRequest
     /// ID of the bidder acknowledging the addendum.
     /// </summary>
     public Guid BidderId { get; set; }
+}
+
+/// <summary>
+/// Request model for updating bidder qualification status.
+/// </summary>
+public class UpdateBidderQualificationRequest
+{
+    /// <summary>
+    /// The new qualification status (Qualified or Rejected).
+    /// </summary>
+    public string QualificationStatus { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Optional reason for the qualification decision.
+    /// </summary>
+    public string? Reason { get; set; }
 }

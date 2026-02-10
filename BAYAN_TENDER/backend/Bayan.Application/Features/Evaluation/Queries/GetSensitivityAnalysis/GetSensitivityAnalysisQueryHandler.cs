@@ -8,7 +8,7 @@ namespace Bayan.Application.Features.Evaluation.Queries.GetSensitivityAnalysis;
 
 /// <summary>
 /// Handler for GetSensitivityAnalysisQuery.
-/// Runs calculations for multiple weight splits (30/70, 40/60, 50/50, 60/40, 70/30).
+/// Runs calculations for 9 weight splits (30/70 through 70/30 in 5% increments).
 /// </summary>
 public class GetSensitivityAnalysisQueryHandler : IRequestHandler<GetSensitivityAnalysisQuery, SensitivityAnalysisDto>
 {
@@ -19,9 +19,13 @@ public class GetSensitivityAnalysisQueryHandler : IRequestHandler<GetSensitivity
     private static readonly (int Tech, int Comm, string Label)[] WeightSplits =
     {
         (30, 70, "30/70"),
+        (35, 65, "35/65"),
         (40, 60, "40/60"),
+        (45, 55, "45/55"),
         (50, 50, "50/50"),
+        (55, 45, "55/45"),
         (60, 40, "60/40"),
+        (65, 35, "65/35"),
         (70, 30, "70/30")
     };
 

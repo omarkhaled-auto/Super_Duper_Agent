@@ -144,6 +144,44 @@ public class PortalController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Activates a bidder account by setting the password.
+    /// </summary>
+    /// <param name="request">Activation request with token and new password.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Success response if activated.</returns>
+    [HttpPost("auth/activate")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ActivateAccount(
+        [FromBody] ActivateAccountRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var command = new ActivateBidderAccountCommand
+        {
+            Email = request.Email,
+            ActivationToken = request.ActivationToken,
+            Password = request.Password,
+            ConfirmPassword = request.ConfirmPassword
+        };
+
+        try
+        {
+            await _mediator.Send(command, cancellationToken);
+            return Ok(ApiResponse<object>.SuccessResponse(new { message = "Account activated successfully." }));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(ApiResponse<object>.FailureResponse(ex.Message));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.FailureResponse(ex.Message));
+        }
+    }
+
     #endregion
 
     #region Tender Information
@@ -259,20 +297,9 @@ public class PortalController : ControllerBase
                 return NotFound(ApiResponse<object>.FailureResponse("Document not found."));
             }
 
-            // Generate presigned URL
-            var downloadUrl = await _fileStorage.GetPresignedUrlAsync(
-                document.FilePath,
-                TimeSpan.FromMinutes(15),
-                cancellationToken);
-
-            return Ok(ApiResponse<DocumentDownloadResponse>.SuccessResponse(new DocumentDownloadResponse
-            {
-                DocumentId = document.Id,
-                FileName = document.FileName,
-                ContentType = document.ContentType,
-                DownloadUrl = downloadUrl,
-                ExpiresAt = DateTime.UtcNow.AddMinutes(15)
-            }));
+            // Stream file directly from storage
+            var stream = await _fileStorage.DownloadFileAsync(document.FilePath, cancellationToken);
+            return File(stream, document.ContentType, document.FileName);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -345,6 +372,48 @@ public class PortalController : ControllerBase
 
             await _mediator.Send(command, cancellationToken);
             return Ok(ApiResponse<object>.SuccessResponse(new { message = "Addendum acknowledged successfully." }));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(ApiResponse<object>.FailureResponse(ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Gets BOQ sections for a tender (used in clarification question dropdown).
+    /// </summary>
+    [HttpGet("tenders/{tenderId:guid}/boq-sections")]
+    [Authorize(Roles = "Bidder")]
+    [ProducesResponseType(typeof(List<object>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetBoqSections(
+        Guid tenderId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var bidderId = GetBidderId();
+
+            // Validate bidder access
+            var tenderBidder = await _context.TenderBidders
+                .FirstOrDefaultAsync(tb => tb.TenderId == tenderId && tb.BidderId == bidderId, cancellationToken);
+
+            if (tenderBidder == null)
+            {
+                return Unauthorized(ApiResponse<object>.FailureResponse("You do not have access to this tender."));
+            }
+
+            var sections = await _context.BoqSections
+                .Where(s => s.TenderId == tenderId)
+                .OrderBy(s => s.SortOrder)
+                .Select(s => new
+                {
+                    id = s.Id,
+                    sectionNumber = s.SectionNumber,
+                    title = s.Title
+                })
+                .ToListAsync(cancellationToken);
+
+            return Ok(ApiResponse<object>.SuccessResponse(sections));
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -770,6 +839,32 @@ public class SubmitBidRequestDto
     /// Bid validity period in days.
     /// </summary>
     public int BidValidityDays { get; set; } = 90;
+}
+
+/// <summary>
+/// Request DTO for bidder account activation.
+/// </summary>
+public class ActivateAccountRequest
+{
+    /// <summary>
+    /// Bidder's email address.
+    /// </summary>
+    public string Email { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The activation token from the invitation email.
+    /// </summary>
+    public string ActivationToken { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The new password.
+    /// </summary>
+    public string Password { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Confirmation of the new password.
+    /// </summary>
+    public string ConfirmPassword { get; set; } = string.Empty;
 }
 
 #endregion

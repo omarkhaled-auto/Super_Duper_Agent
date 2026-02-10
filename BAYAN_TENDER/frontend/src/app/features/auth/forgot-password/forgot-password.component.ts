@@ -24,7 +24,7 @@ import { AuthService } from '../../../core/auth/auth.service';
     <div class="forgot-container">
       <div class="forgot-card">
         <div class="forgot-header">
-          <img src="assets/images/logo.png" alt="Bayan" class="logo" />
+          <img src="assets/images/logo.svg" alt="Bayan" class="logo" />
           <h1>Forgot Password</h1>
           <p>Enter your email to receive a password reset link</p>
         </div>
@@ -87,17 +87,18 @@ import { AuthService } from '../../../core/auth/auth.service';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+      background: var(--bayan-muted, #f4f4f5);
       padding: 2rem;
     }
 
     .forgot-card {
-      background: #ffffff;
-      border-radius: 16px;
+      background: var(--bayan-card, #ffffff);
+      border-radius: var(--bayan-radius-xl, 1rem);
       padding: 2.5rem;
       width: 100%;
       max-width: 420px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      box-shadow: var(--bayan-shadow, 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1));
     }
 
     .forgot-header {
@@ -114,23 +115,23 @@ import { AuthService } from '../../../core/auth/auth.service';
       margin: 0;
       font-size: 1.75rem;
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .forgot-header p {
       margin: 0.5rem 0 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .form-field {
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.25rem;
     }
 
     .form-field label {
       display: block;
       margin-bottom: 0.5rem;
-      font-weight: 500;
-      color: #333;
+      font-weight: 600;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .forgot-footer {
@@ -139,7 +140,7 @@ import { AuthService } from '../../../core/auth/auth.service';
     }
 
     .forgot-footer a {
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
       text-decoration: none;
       display: inline-flex;
       align-items: center;
@@ -158,11 +159,16 @@ import { AuthService } from '../../../core/auth/auth.service';
     :host ::ng-deep {
       .p-inputtext {
         width: 100%;
+        height: 44px;
       }
 
       .p-button {
-        height: 48px;
-        font-size: 1rem;
+        width: 100%;
+        height: 46px;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        border-radius: var(--bayan-radius, 0.5rem);
+        justify-content: center;
       }
 
       .p-message {

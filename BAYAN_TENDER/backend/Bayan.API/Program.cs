@@ -140,11 +140,12 @@ app.UseExceptionHandling();
 // Add security headers middleware
 app.UseSecurityHeaders();
 
-// Add rate limiting middleware (100 requests per minute per user)
+// Add rate limiting middleware (reads from RateLimiting config section)
+var rateLimitConfig = builder.Configuration.GetSection("RateLimiting");
 app.UseRateLimiting(options =>
 {
-    options.RequestsPerMinute = 100;
-    options.Enabled = true;
+    options.RequestsPerMinute = rateLimitConfig.GetValue<int?>("PermitLimit") ?? 100;
+    options.Enabled = rateLimitConfig.GetValue<bool?>("EnableRateLimiting") ?? !app.Environment.IsDevelopment();
 });
 
 // Add request size limiting

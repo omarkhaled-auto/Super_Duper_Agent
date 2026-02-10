@@ -48,6 +48,11 @@ public class TenderDetailDto
     public string BaseCurrency { get; set; } = string.Empty;
 
     /// <summary>
+    /// Estimated value of the tender.
+    /// </summary>
+    public decimal? EstimatedValue { get; set; }
+
+    /// <summary>
     /// Number of days the bid is valid.
     /// </summary>
     public int BidValidityDays { get; set; }

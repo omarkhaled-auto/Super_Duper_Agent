@@ -657,13 +657,13 @@ import { BidDocument } from '../../../../core/models/bid.model';
 
     .file-info-card {
       padding: 1.5rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .file-info-card h4 {
       margin: 0 0 1rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .file-details {
@@ -674,7 +674,7 @@ import { BidDocument } from '../../../../core/models/bid.model';
 
     .file-icon {
       font-size: 2.5rem;
-      color: #4caf50;
+      color: var(--bayan-success, #22c55e);
     }
 
     .file-meta {
@@ -684,12 +684,12 @@ import { BidDocument } from '../../../../core/models/bid.model';
 
     .file-name {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .file-size {
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .parse-section {
@@ -699,13 +699,13 @@ import { BidDocument } from '../../../../core/models/bid.model';
       gap: 1rem;
       padding: 2rem;
       background-color: #fff;
-      border: 2px dashed #ddd;
-      border-radius: 8px;
+      border: 2px dashed var(--bayan-border, #e4e4e7);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .parse-hint {
       margin: 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .parse-result {
@@ -717,18 +717,18 @@ import { BidDocument } from '../../../../core/models/bid.model';
       align-items: center;
       gap: 0.75rem;
       padding: 1rem;
-      background-color: #e8f5e9;
-      border-radius: 8px;
+      background-color: var(--bayan-success-bg, #f0fdf4);
+      border-radius: var(--bayan-radius, 0.5rem);
       margin-bottom: 1rem;
     }
 
     .success-icon {
       font-size: 1.5rem;
-      color: #4caf50;
+      color: var(--bayan-success, #22c55e);
     }
 
     .result-text {
-      color: #2e7d32;
+      color: #16a34a;
     }
 
     .preview-table-container {
@@ -752,12 +752,12 @@ import { BidDocument } from '../../../../core/models/bid.model';
 
     .mapping-header h4 {
       margin: 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .mapping-header p {
       margin: 0.25rem 0 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .column-mapping-header {
@@ -769,19 +769,19 @@ import { BidDocument } from '../../../../core/models/bid.model';
 
     .excel-col-label {
       font-weight: 600;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .required-badge {
       font-size: 0.7rem;
       padding: 0.15rem 0.4rem;
-      background-color: #ffebee;
-      color: #c62828;
-      border-radius: 4px;
+      background-color: var(--bayan-danger-bg, #fef2f2);
+      color: #dc2626;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .mapped-cell {
-      background-color: #e3f2fd !important;
+      background-color: var(--bayan-muted, #f4f4f5) !important;
     }
 
     .mapping-feedback {
@@ -824,7 +824,7 @@ import { BidDocument } from '../../../../core/models/bid.model';
       align-items: center;
       gap: 1rem;
       padding: 1.25rem;
-      border-radius: 8px;
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .summary-card i {
@@ -833,29 +833,29 @@ import { BidDocument } from '../../../../core/models/bid.model';
 
     .summary-card.exact,
     .summary-card.valid {
-      background-color: #e8f5e9;
-      color: #2e7d32;
+      background-color: var(--bayan-success-bg, #f0fdf4);
+      color: #16a34a;
     }
 
     .summary-card.fuzzy {
-      background-color: #e3f2fd;
-      color: #1976D2;
+      background-color: var(--bayan-muted, #f4f4f5);
+      color: var(--bayan-primary, #18181b);
     }
 
     .summary-card.unmatched,
     .summary-card.warning {
-      background-color: #fff3e0;
-      color: #ef6c00;
+      background-color: var(--bayan-warning-bg, #fffbeb);
+      color: #d97706;
     }
 
     .summary-card.extra {
-      background-color: #f3e5f5;
-      color: #7b1fa2;
+      background-color: #faf5ff;
+      color: #9333ea;
     }
 
     .summary-card.error {
-      background-color: #ffebee;
-      color: #c62828;
+      background-color: var(--bayan-danger-bg, #fef2f2);
+      color: #dc2626;
     }
 
     .summary-content {
@@ -886,8 +886,8 @@ import { BidDocument } from '../../../../core/models/bid.model';
       align-items: center;
       padding: 1rem;
       background-color: #fff;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      border-radius: var(--bayan-radius, 0.5rem);
       gap: 1rem;
       flex-wrap: wrap;
     }
@@ -901,12 +901,12 @@ import { BidDocument } from '../../../../core/models/bid.model';
     .item-number {
       font-family: monospace;
       font-weight: 600;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
       min-width: 80px;
     }
 
     .item-desc {
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .match-controls {
@@ -932,7 +932,7 @@ import { BidDocument } from '../../../../core/models/bid.model';
 
     .side-label {
       font-size: 0.75rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       text-transform: uppercase;
     }
 
@@ -946,12 +946,12 @@ import { BidDocument } from '../../../../core/models/bid.model';
     .confidence {
       font-size: 0.8rem;
       font-weight: 600;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .extra-note {
       margin: 0 0 1rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .extra-list {
@@ -965,8 +965,8 @@ import { BidDocument } from '../../../../core/models/bid.model';
       align-items: center;
       gap: 1rem;
       padding: 0.75rem;
-      background-color: #f8f9fa;
-      border-radius: 4px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .item-amount {
@@ -986,13 +986,13 @@ import { BidDocument } from '../../../../core/models/bid.model';
       align-items: center;
       gap: 0.5rem;
       margin: 0 0 1rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .currency-form {
       padding: 1rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .form-row {
@@ -1015,17 +1015,17 @@ import { BidDocument } from '../../../../core/models/bid.model';
 
     .form-field label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .fx-preview {
       margin-top: 1rem;
       padding: 0.75rem;
-      background-color: #e3f2fd;
-      border-radius: 4px;
+      background-color: var(--bayan-muted, #f4f4f5);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
       text-align: center;
       font-weight: 500;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     /* Step 5: Validate */
@@ -1046,19 +1046,19 @@ import { BidDocument } from '../../../../core/models/bid.model';
       align-items: center;
       gap: 0.75rem;
       padding: 0.75rem;
-      border-radius: 4px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .issue-item.issue-error {
-      background-color: #ffebee;
+      background-color: var(--bayan-danger-bg, #fef2f2);
     }
 
     .issue-item.issue-warning {
-      background-color: #fff3e0;
+      background-color: var(--bayan-warning-bg, #fffbeb);
     }
 
     .issue-item.issue-info {
-      background-color: #e3f2fd;
+      background-color: var(--bayan-muted, #f4f4f5);
     }
 
     .issue-item i {
@@ -1078,7 +1078,7 @@ import { BidDocument } from '../../../../core/models/bid.model';
 
     .issue-message {
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .import-actions {
@@ -1095,8 +1095,8 @@ import { BidDocument } from '../../../../core/models/bid.model';
       align-items: center;
       gap: 1rem;
       padding: 2rem;
-      background-color: #e8f5e9;
-      border-radius: 8px;
+      background-color: var(--bayan-success-bg, #f0fdf4);
+      border-radius: var(--bayan-radius, 0.5rem);
       margin-top: 1.5rem;
     }
 
@@ -1106,7 +1106,7 @@ import { BidDocument } from '../../../../core/models/bid.model';
 
     .import-result h3 {
       margin: 0;
-      color: #2e7d32;
+      color: #16a34a;
     }
 
     .result-details {
@@ -1118,7 +1118,7 @@ import { BidDocument } from '../../../../core/models/bid.model';
     }
 
     .result-details .skipped {
-      color: #ef6c00;
+      color: #d97706;
     }
 
     /* Footer */
@@ -1127,7 +1127,7 @@ import { BidDocument } from '../../../../core/models/bid.model';
       justify-content: space-between;
       align-items: center;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
       margin-top: auto;
     }
 
@@ -1232,7 +1232,7 @@ export class BidImportDialogComponent implements OnChanges {
       type: this.bidDocument.mimeType
     });
 
-    this.bidImportService.parseFile(this.bidId, mockFile).subscribe({
+    this.bidImportService.parseFile(this.tenderId, this.bidId, mockFile).subscribe({
       next: (result) => {
         this.isParsing.set(false);
         this.parseResult.set(result);
@@ -1397,7 +1397,7 @@ export class BidImportDialogComponent implements OnChanges {
 
     const includedItems = this.matchResult()!.items.filter(i => i.isIncluded);
 
-    this.bidImportService.normalize(this.tenderId, includedItems).subscribe({
+    this.bidImportService.normalize(this.tenderId, this.bidId, includedItems).subscribe({
       next: (result) => {
         this.isNormalizing.set(false);
         this.normalizationResult.set(result);
@@ -1413,7 +1413,7 @@ export class BidImportDialogComponent implements OnChanges {
 
     this.isValidating.set(true);
 
-    this.bidImportService.validate(this.normalizationResult()!.normalizedItems).subscribe({
+    this.bidImportService.validate(this.tenderId, this.bidId, this.normalizationResult()!.normalizedItems).subscribe({
       next: (result) => {
         this.isValidating.set(false);
         this.validationResult.set(result);
@@ -1429,12 +1429,15 @@ export class BidImportDialogComponent implements OnChanges {
 
     this.isImporting.set(true);
 
+    const hasWarnings = (this.validationResult()?.warningCount ?? 0) > 0;
+
     this.bidImportService.executeImport({
       bidId: this.bidId,
       tenderId: this.tenderId,
       items: this.normalizationResult()!.normalizedItems,
       currency: this.normalizationResult()!.currency,
-      includeExtras: true
+      includeExtras: true,
+      forceImport: hasWarnings
     }).subscribe({
       next: (result) => {
         this.isImporting.set(false);

@@ -65,7 +65,7 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
     <p-toast></p-toast>
     <p-confirmDialog></p-confirmDialog>
 
-    <div class="combined-scorecard-container">
+    <div class="combined-scorecard-container" data-testid="combined-scorecard">
       <!-- Loading State -->
       @if (isLoading()) {
         <div class="loading-container">
@@ -260,7 +260,7 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
       } @else {
         <!-- No Data -->
         <div class="empty-state">
-          <i class="pi pi-chart-bar" style="font-size: 3rem; color: #ccc;"></i>
+          <i class="pi pi-chart-bar" style="font-size: 3rem; color: var(--bayan-muted-foreground, #71717a); opacity: 0.5;"></i>
           <h3>No Scorecard Available</h3>
           <p>Combined scorecard data is not yet available. Please complete technical and commercial evaluation first.</p>
         </div>
@@ -293,7 +293,7 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
     }
 
     .loading-container p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       margin: 0;
     }
 
@@ -313,7 +313,7 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
 
     .weight-field label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     :host ::ng-deep .weight-input {
@@ -325,7 +325,7 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
       align-items: center;
       justify-content: center;
       padding: 0.5rem;
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .weight-total {
@@ -333,29 +333,29 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
       flex-direction: column;
       align-items: center;
       padding: 0.5rem 1rem;
-      background: #f0f7ff;
+      background: var(--bayan-accent, #f4f4f5);
       border-radius: 6px;
-      border: 2px solid #1976D2;
+      border: 2px solid var(--bayan-primary, #18181b);
     }
 
     .weight-total.invalid {
-      background: #ffebee;
-      border-color: #c62828;
+      background: var(--bayan-danger-bg, #fef2f2);
+      border-color: #dc2626;
     }
 
     .total-label {
       font-size: 0.8rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .total-value {
       font-size: 1.25rem;
       font-weight: 700;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .weight-total.invalid .total-value {
-      color: #c62828;
+      color: #dc2626;
     }
 
     .preset-weights {
@@ -364,13 +364,13 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
       gap: 0.5rem;
       margin-top: 1rem;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
       flex-wrap: wrap;
     }
 
     .preset-label {
       font-size: 0.9rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     /* Scorecard Table */
@@ -383,19 +383,19 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
 
     .weight-badge {
       font-size: 0.75rem;
-      color: #666;
-      background: #f0f0f0;
+      color: var(--bayan-muted-foreground, #71717a);
+      background: var(--bayan-accent, #f4f4f5);
       padding: 0.125rem 0.5rem;
-      border-radius: 4px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
       font-weight: 400;
     }
 
     .winner-row {
-      background: #e8f5e9 !important;
+      background: var(--bayan-success-bg, #f0fdf4) !important;
     }
 
     .disqualified-row {
-      background: #ffebee !important;
+      background: var(--bayan-danger-bg, #fef2f2) !important;
       opacity: 0.7;
     }
 
@@ -407,15 +407,15 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
       width: 32px;
       height: 32px;
       border-radius: 50%;
-      background: #e0e0e0;
+      background: var(--bayan-border, #e4e4e7);
       font-weight: 600;
       font-size: 0.875rem;
     }
 
     .rank-badge.rank-1,
     .final-rank.rank-1 {
-      background: linear-gradient(135deg, #ffd700, #ffaa00);
-      color: #333;
+      background: var(--bayan-warning-bg, #fffbeb); border: 1px solid var(--bayan-warning, #f59e0b);
+      color: var(--bayan-foreground, #09090b);
     }
 
     .bidder-cell {
@@ -432,22 +432,22 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
     }
 
     .rank-value {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .combined-score {
       font-size: 1.125rem;
       font-weight: 700;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .combined-score.winner {
-      color: #2e7d32;
+      color: #16a34a;
     }
 
     /* Recommendation Card */
     :host ::ng-deep .recommendation-card {
-      background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+      background: var(--bayan-success-bg, #f0fdf4); border: 1px solid var(--bayan-success, #22c55e);
     }
 
     .recommendation {
@@ -462,19 +462,19 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, #ffd700, #ffaa00);
+      background: var(--bayan-warning-bg, #fffbeb); border: 1px solid var(--bayan-warning, #f59e0b);
       border-radius: 50%;
     }
 
     .recommendation-icon i {
       font-size: 2rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .recommendation-text h3 {
       margin: 0 0 0.5rem 0;
       font-size: 1rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       font-weight: 500;
     }
 
@@ -482,13 +482,13 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
       margin: 0;
       font-size: 1.5rem;
       font-weight: 700;
-      color: #2e7d32;
+      color: #16a34a;
     }
 
     .recommendation-score {
       margin: 0.25rem 0 0 0;
       font-size: 0.9rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     /* Action Bar */
@@ -517,12 +517,12 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
 
     .empty-state h3 {
       margin: 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .empty-state p {
       margin: 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       max-width: 400px;
     }
 

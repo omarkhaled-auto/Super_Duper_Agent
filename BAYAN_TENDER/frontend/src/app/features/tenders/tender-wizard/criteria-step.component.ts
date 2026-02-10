@@ -240,18 +240,18 @@ import { EvaluationCriterion, DEFAULT_EVALUATION_CRITERIA } from '../../../core/
 
     .weight-distribution {
       padding: 1.5rem;
-      background-color: #f8f9fa;
-      border-radius: 12px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .weight-distribution h3 {
       margin: 0 0 0.5rem 0;
       font-size: 1.1rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .weight-description {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       font-size: 0.9rem;
       margin: 0 0 1.5rem 0;
     }
@@ -271,7 +271,7 @@ import { EvaluationCriterion, DEFAULT_EVALUATION_CRITERIA } from '../../../core/
     .weight-field label {
       display: block;
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       margin-bottom: 0.5rem;
       font-size: 0.9rem;
     }
@@ -289,7 +289,7 @@ import { EvaluationCriterion, DEFAULT_EVALUATION_CRITERIA } from '../../../core/
       width: 40px;
       height: 40px;
       font-size: 1.5rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       margin-top: 1.5rem;
     }
 
@@ -299,20 +299,20 @@ import { EvaluationCriterion, DEFAULT_EVALUATION_CRITERIA } from '../../../core/
       align-items: center;
       justify-content: center;
       padding: 1rem 1.5rem;
-      border-radius: 8px;
+      border-radius: var(--bayan-radius, 0.5rem);
       background-color: #fff;
-      border: 2px solid #e0e0e0;
+      border: 2px solid var(--bayan-border, #e4e4e7);
       margin-top: 1.5rem;
     }
 
     .weight-total.valid {
-      border-color: #4caf50;
-      background-color: #e8f5e9;
+      border-color: var(--bayan-success, #22c55e);
+      background-color: var(--bayan-success-bg, #f0fdf4);
     }
 
     .weight-total.invalid {
       border-color: #f44336;
-      background-color: #ffebee;
+      background-color: var(--bayan-danger-bg, #fef2f2);
     }
 
     .total-value {
@@ -321,16 +321,16 @@ import { EvaluationCriterion, DEFAULT_EVALUATION_CRITERIA } from '../../../core/
     }
 
     .weight-total.valid .total-value {
-      color: #2e7d32;
+      color: #16a34a;
     }
 
     .weight-total.invalid .total-value {
-      color: #c62828;
+      color: #dc2626;
     }
 
     .total-label {
       font-size: 0.8rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .evaluation-criteria {
@@ -350,7 +350,7 @@ import { EvaluationCriterion, DEFAULT_EVALUATION_CRITERIA } from '../../../core/
     .criteria-header h3 {
       margin: 0;
       font-size: 1.1rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .criteria-actions {
@@ -375,11 +375,11 @@ import { EvaluationCriterion, DEFAULT_EVALUATION_CRITERIA } from '../../../core/
     }
 
     .text-success {
-      color: #2e7d32;
+      color: #16a34a;
     }
 
     .text-danger {
-      color: #c62828;
+      color: #dc2626;
     }
 
     @media (max-width: 768px) {

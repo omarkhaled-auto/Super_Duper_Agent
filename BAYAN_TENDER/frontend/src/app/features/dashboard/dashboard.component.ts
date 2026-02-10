@@ -54,7 +54,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
       </div>
 
       <!-- KPI Cards -->
-      <div class="kpi-grid">
+      <div class="kpi-grid" data-testid="kpi-grid">
         @if (isLoading()) {
           @for (i of [1, 2, 3, 4]; track i) {
             <p-card styleClass="kpi-card">
@@ -63,7 +63,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
           }
         } @else {
           @for (kpi of dashboardData()?.kpis; track kpi.name) {
-            <p-card [styleClass]="'kpi-card kpi-' + kpi.color">
+            <p-card [styleClass]="'kpi-card kpi-' + kpi.color" [attr.data-testid]="'kpi-card-' + kpi.name">
               <div class="kpi-content">
                 <div class="kpi-info">
                   <span class="kpi-title">{{ kpi.name }}</span>
@@ -89,7 +89,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
         <!-- Left Column: Active Tenders Table + Upcoming Deadlines -->
         <div class="left-column">
           <!-- Active Tenders Table -->
-          <p-card header="Active Tenders" styleClass="table-card">
+          <p-card styleClass="table-card" data-testid="active-tenders-card">
             <ng-template pTemplate="header">
               <div class="card-header">
                 <h3>Active Tenders</h3>
@@ -150,7 +150,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
           </p-card>
 
           <!-- Upcoming Deadlines Widget -->
-          <p-card header="Upcoming Deadlines" styleClass="deadlines-card">
+          <p-card styleClass="deadlines-card">
             <ng-template pTemplate="header">
               <div class="card-header">
                 <h3>Upcoming Deadlines</h3>
@@ -199,7 +199,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
 
         <!-- Right Column: Activity Feed -->
         <div class="right-column">
-          <p-card header="Recent Activity" styleClass="activity-card">
+          <p-card styleClass="activity-card">
             <ng-template pTemplate="header">
               <div class="card-header">
                 <h3>Recent Activity</h3>
@@ -208,7 +208,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
             @if (isLoading()) {
               <p-skeleton width="100%" height="400px"></p-skeleton>
             } @else {
-              <div class="activity-feed">
+              <div class="activity-feed" data-testid="activity-feed">
                 @for (activity of dashboardData()?.recentActivity; track activity.id) {
                   <div class="activity-item" [routerLink]="getActivityLink(activity)"
                        [class.clickable]="!!activity.entityId">
@@ -257,13 +257,13 @@ import { Subject, takeUntil, interval } from 'rxjs';
     .header-left h1 {
       margin: 0;
       font-size: 1.75rem;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
       font-weight: 600;
     }
 
     .header-left p {
       margin: 0.25rem 0 0;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .header-actions {
@@ -284,7 +284,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
       }
     }
 
-    @media (max-width: 600px) {
+    @media (max-width: 640px) {
       .kpi-grid {
         grid-template-columns: 1fr;
       }
@@ -310,14 +310,14 @@ import { Subject, takeUntil, interval } from 'rxjs';
 
     .kpi-title {
       font-size: 0.875rem;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
       font-weight: 500;
     }
 
     .kpi-value {
       font-size: 2rem;
       font-weight: 700;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .kpi-change {
@@ -338,24 +338,31 @@ import { Subject, takeUntil, interval } from 'rxjs';
     .kpi-icon {
       width: 56px;
       height: 56px;
-      border-radius: 12px;
+      border-radius: var(--bayan-radius, 0.5rem);
       display: flex;
       align-items: center;
       justify-content: center;
+      background: var(--bayan-accent, #f4f4f5);
     }
 
     .kpi-icon i {
       font-size: 1.5rem;
-      color: white;
     }
 
-    .icon-blue { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); }
-    .icon-green { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); }
-    .icon-orange { background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); }
-    .icon-red { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
-    .icon-purple { background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%); }
-    .icon-gray { background: linear-gradient(135deg, #64748b 0%, #475569 100%); }
-    .icon-gold { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+    .icon-blue { background: #eff6ff; }
+    .icon-blue i { color: #2563eb; }
+    .icon-green { background: #f0fdf4; }
+    .icon-green i { color: #16a34a; }
+    .icon-orange { background: #fffbeb; }
+    .icon-orange i { color: #d97706; }
+    .icon-red { background: #fef2f2; }
+    .icon-red i { color: #dc2626; }
+    .icon-purple { background: #faf5ff; }
+    .icon-purple i { color: #9333ea; }
+    .icon-gray { background: var(--bayan-accent, #f4f4f5); }
+    .icon-gray i { color: var(--bayan-muted-foreground, #71717a); }
+    .icon-gold { background: #fefce8; }
+    .icon-gold i { color: #ca8a04; }
 
     /* Main Grid */
     .main-grid {
@@ -382,21 +389,21 @@ import { Subject, takeUntil, interval } from 'rxjs';
       justify-content: space-between;
       align-items: center;
       padding: 1rem 1.25rem;
-      border-bottom: 1px solid #e2e8f0;
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .card-header h3 {
       margin: 0;
       font-size: 1rem;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .card-header .badge {
-      background: #e2e8f0;
-      color: #475569;
+      background: var(--bayan-accent, #f4f4f5);
+      color: var(--bayan-muted-foreground, #71717a);
       padding: 0.25rem 0.5rem;
-      border-radius: 4px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
       font-size: 0.75rem;
       font-weight: 500;
     }
@@ -418,9 +425,9 @@ import { Subject, takeUntil, interval } from 'rxjs';
     /* Table Styles */
     :host ::ng-deep .p-datatable {
       .p-datatable-thead > tr > th {
-        background: #f8fafc;
+        background: var(--bayan-accent, #f4f4f5);
         font-weight: 600;
-        color: #475569;
+        color: var(--bayan-muted-foreground, #71717a);
         font-size: 0.75rem;
         text-transform: uppercase;
         padding: 0.75rem 1rem;
@@ -432,12 +439,12 @@ import { Subject, takeUntil, interval } from 'rxjs';
     }
 
     .tender-title {
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .bid-count {
       font-weight: 500;
-      color: #3b82f6;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .text-danger {
@@ -461,7 +468,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
       align-items: center;
       gap: 1rem;
       padding: 1rem 1.25rem;
-      border-bottom: 1px solid #f1f5f9;
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
       transition: background-color 0.2s;
     }
 
@@ -470,7 +477,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
     }
 
     .deadline-item:hover {
-      background-color: #f8fafc;
+      background-color: var(--bayan-accent, #f4f4f5);
     }
 
     .deadline-item.urgent {
@@ -484,8 +491,8 @@ import { Subject, takeUntil, interval } from 'rxjs';
     .deadline-icon {
       width: 40px;
       height: 40px;
-      border-radius: 8px;
-      background: #e2e8f0;
+      border-radius: var(--bayan-radius, 0.5rem);
+      background: var(--bayan-accent, #f4f4f5);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -494,7 +501,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
 
     .deadline-icon i {
       font-size: 1rem;
-      color: #475569;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .deadline-item.urgent .deadline-icon {
@@ -527,21 +534,21 @@ import { Subject, takeUntil, interval } from 'rxjs';
 
     .deadline-reference {
       font-weight: 600;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
       font-size: 0.875rem;
     }
 
     .deadline-type {
       font-size: 0.75rem;
-      color: #64748b;
-      background: #f1f5f9;
+      color: var(--bayan-muted-foreground, #71717a);
+      background: var(--bayan-accent, #f4f4f5);
       padding: 0.125rem 0.375rem;
-      border-radius: 4px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .deadline-title {
-      font-size: 0.8125rem;
-      color: #64748b;
+      font-size: 0.8rem;
+      color: var(--bayan-muted-foreground, #71717a);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -554,7 +561,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
     .countdown {
       font-weight: 600;
       font-size: 0.875rem;
-      color: #475569;
+      color: var(--bayan-muted-foreground, #71717a);
       display: flex;
       align-items: center;
       gap: 0.25rem;
@@ -580,7 +587,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
       display: flex;
       gap: 0.75rem;
       padding: 1rem 1.25rem;
-      border-bottom: 1px solid #f1f5f9;
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
       transition: background-color 0.2s;
     }
 
@@ -593,7 +600,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
     }
 
     .activity-item.clickable:hover {
-      background-color: #f8fafc;
+      background-color: var(--bayan-accent, #f4f4f5);
     }
 
     .activity-icon {
@@ -619,7 +626,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
     .activity-description {
       margin: 0 0 0.25rem;
       font-size: 0.875rem;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
       line-height: 1.4;
     }
 
@@ -628,7 +635,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
       align-items: center;
       gap: 0.75rem;
       font-size: 0.75rem;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .activity-user {
@@ -647,13 +654,14 @@ import { Subject, takeUntil, interval } from 'rxjs';
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 2rem;
-      color: #94a3b8;
+      padding: 3rem;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .empty-state i {
       font-size: 2.5rem;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.75rem;
+      color: var(--bayan-border, #e4e4e7);
     }
 
     .empty-state p {

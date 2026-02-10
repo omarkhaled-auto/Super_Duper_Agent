@@ -329,7 +329,7 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       align-items: center;
       justify-content: center;
       padding: 4rem 2rem;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .loading-container p {
@@ -343,21 +343,22 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       align-items: flex-start;
       margin-bottom: 1.5rem;
       padding: 1.5rem;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      background: var(--bayan-card, #ffffff);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
     }
 
     .header-info h2 {
       margin: 0 0 0.25rem 0;
       font-size: 1.5rem;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .header-info p {
       margin: 0;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     /* Empty State */
@@ -367,7 +368,7 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       align-items: center;
       justify-content: center;
       padding: 4rem 2rem;
-      color: #94a3b8;
+      color: var(--bayan-muted-foreground, #71717a);
       text-align: center;
     }
 
@@ -379,7 +380,7 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
     .empty-state p {
       margin: 0;
       font-size: 1.125rem;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .empty-state small {
@@ -402,12 +403,12 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
 
     .bulletin-info strong {
       font-size: 1rem;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .bulletin-date {
-      font-size: 0.8125rem;
-      color: #64748b;
+      font-size: 0.8rem;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .bulletin-meta {
@@ -418,18 +419,18 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
 
     .bulletin-intro {
       padding: 1rem;
-      background: #f8fafc;
-      border-radius: 8px;
+      background: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .bulletin-intro h4 {
       margin: 0 0 0.5rem 0;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .bulletin-intro p {
       margin: 0;
-      color: #475569;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     /* Q&A List */
@@ -443,15 +444,15 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       display: flex;
       gap: 1rem;
       padding: 1.25rem;
-      background: #f8fafc;
-      border-radius: 8px;
-      border-left: 4px solid #1565C0;
+      background: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
+      border-left: 4px solid var(--bayan-primary, #18181b);
     }
 
     .qa-number {
       font-weight: 700;
       font-size: 1.25rem;
-      color: #1565C0;
+      color: var(--bayan-primary, #18181b);
       min-width: 40px;
     }
 
@@ -466,12 +467,12 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
     .qa-question strong {
       display: block;
       margin-bottom: 0.5rem;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .qa-question p {
       margin: 0;
-      color: #475569;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .boq-ref {
@@ -479,15 +480,15 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       align-items: center;
       gap: 0.25rem;
       margin-top: 0.5rem;
-      font-size: 0.8125rem;
-      color: #64748b;
+      font-size: 0.8rem;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .qa-answer {
       padding: 1rem;
-      background: white;
-      border-radius: 6px;
-      border: 1px solid #e2e8f0;
+      background: var(--bayan-card, #ffffff);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
+      border: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .answer-label {
@@ -499,14 +500,14 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
 
     .qa-answer p {
       margin: 0;
-      color: #334155;
+      color: var(--bayan-foreground, #09090b);
     }
 
     /* My Questions Table */
     .reference-code {
       font-family: monospace;
       font-size: 0.875rem;
-      color: #1565C0;
+      color: var(--bayan-primary, #18181b);
     }
 
     .subject-text {
@@ -533,13 +534,14 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
     }
 
     .details-dialog {
-      background: white;
-      border-radius: 12px;
+      background: var(--bayan-card, #ffffff);
+      border-radius: var(--bayan-radius, 0.5rem);
       width: 100%;
       max-width: 600px;
       max-height: 80vh;
       overflow-y: auto;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
     }
 
     .details-header {
@@ -547,13 +549,13 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       justify-content: space-between;
       align-items: center;
       padding: 1.25rem 1.5rem;
-      border-bottom: 1px solid #e2e8f0;
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .details-header h3 {
       margin: 0;
       font-size: 1.25rem;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .details-content {
@@ -569,12 +571,12 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
 
     .detail-label {
       font-weight: 500;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
       min-width: 100px;
     }
 
     .detail-value {
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .detail-section {
@@ -585,21 +587,21 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       margin: 0 0 0.5rem 0;
       font-size: 0.875rem;
       font-weight: 600;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
 
     .detail-section p {
       margin: 0;
-      color: #334155;
+      color: var(--bayan-foreground, #09090b);
       line-height: 1.6;
     }
 
     .answer-section {
       padding: 1rem;
       background: #f0fdf4;
-      border-radius: 8px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
       border-left: 4px solid #16a34a;
     }
 
@@ -613,7 +615,7 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
     .answered-date {
       display: block;
       margin-top: 0.75rem;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .pending-section {
@@ -621,8 +623,8 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       align-items: flex-start;
       gap: 0.75rem;
       padding: 1rem;
-      background: #fef3c7;
-      border-radius: 8px;
+      background: #fffbeb;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
       color: #92400e;
     }
 
@@ -685,10 +687,10 @@ export class PortalClarificationsComponent implements OnInit {
   error = signal<string | null>(null);
   selectedClarification = signal<PortalClarification | null>(null);
 
-  private tenderId!: number;
+  private tenderId!: string | number;
 
   ngOnInit(): void {
-    this.tenderId = parseInt(this.route.snapshot.params['tenderId'], 10);
+    this.tenderId = this.route.parent?.snapshot.params['tenderId'] || this.route.snapshot.params['tenderId'];
     this.loadData();
   }
 
@@ -745,7 +747,7 @@ export class PortalClarificationsComponent implements OnInit {
   downloadBulletinPdf(bulletin: PortalBulletin, event: Event): void {
     event.stopPropagation();
 
-    this.portalService.downloadBulletinPdf(bulletin.id).subscribe({
+    this.portalService.downloadBulletinPdf(this.tenderId, bulletin.id).subscribe({
       next: (blob) => {
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -775,17 +777,25 @@ export class PortalClarificationsComponent implements OnInit {
   getStatusLabel(status: string): string {
     const labels: Record<string, string> = {
       submitted: 'Submitted',
+      pending: 'Pending',
+      draft_answer: 'Draft Answer',
       answered: 'Answered',
-      published: 'Published'
+      published: 'Published',
+      duplicate: 'Duplicate',
+      rejected: 'Rejected'
     };
-    return labels[status] || status;
+    return labels[status] || status || 'Unknown';
   }
 
   getStatusSeverity(status: string): 'secondary' | 'success' | 'info' | 'warn' | 'danger' | 'contrast' {
     const severities: Record<string, 'secondary' | 'success' | 'info' | 'warn' | 'danger' | 'contrast'> = {
       submitted: 'info',
+      pending: 'warn',
+      draft_answer: 'secondary',
       answered: 'success',
-      published: 'contrast'
+      published: 'contrast',
+      duplicate: 'secondary',
+      rejected: 'danger'
     };
     return severities[status] || 'secondary';
   }

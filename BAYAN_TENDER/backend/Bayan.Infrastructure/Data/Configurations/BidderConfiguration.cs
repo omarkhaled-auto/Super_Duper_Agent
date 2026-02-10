@@ -23,6 +23,10 @@ public class BidderConfiguration : IEntityTypeConfiguration<Bidder>
             .HasMaxLength(300)
             .IsRequired();
 
+        builder.Property(e => e.CRNumber)
+            .HasColumnName("cr_number")
+            .HasMaxLength(100);
+
         builder.Property(e => e.LicenseNumber)
             .HasColumnName("license_number")
             .HasMaxLength(100);
@@ -49,7 +53,7 @@ public class BidderConfiguration : IEntityTypeConfiguration<Bidder>
             .HasColumnName("prequalification_status")
             .HasMaxLength(50)
             .HasConversion<string>()
-            .HasDefaultValue("Pending");
+            .HasDefaultValueSql("'Pending'");
 
         builder.Property(e => e.CompanyProfilePath)
             .HasColumnName("company_profile_path")
@@ -65,6 +69,13 @@ public class BidderConfiguration : IEntityTypeConfiguration<Bidder>
 
         builder.Property(e => e.LastLoginAt)
             .HasColumnName("last_login_at");
+
+        builder.Property(e => e.ActivationToken)
+            .HasColumnName("activation_token")
+            .HasMaxLength(500);
+
+        builder.Property(e => e.ActivationTokenExpiry)
+            .HasColumnName("activation_token_expiry");
 
         builder.Property(e => e.CreatedAt)
             .HasColumnName("created_at")

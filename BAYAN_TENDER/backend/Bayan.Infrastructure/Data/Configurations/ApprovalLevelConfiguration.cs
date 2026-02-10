@@ -47,7 +47,7 @@ public class ApprovalLevelConfiguration : IEntityTypeConfiguration<ApprovalLevel
             .HasColumnName("status")
             .HasMaxLength(50)
             .HasConversion<string>()
-            .HasDefaultValue("Waiting")
+            .HasDefaultValueSql("'Waiting'")
             .IsRequired();
 
         builder.Property(e => e.NotifiedAt)

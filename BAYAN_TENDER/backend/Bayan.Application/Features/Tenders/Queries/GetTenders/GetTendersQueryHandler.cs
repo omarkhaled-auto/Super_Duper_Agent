@@ -102,6 +102,8 @@ public class GetTendersQueryHandler : IRequestHandler<GetTendersQuery, Paginated
             ClientName = t.Client.Name,
             TenderType = t.TenderType,
             Status = t.Status,
+            BaseCurrency = t.BaseCurrency,
+            EstimatedValue = t.EstimatedValue,
             SubmissionDeadline = t.SubmissionDeadline,
             BidderCount = t.TenderBidders.Count,
             DaysRemaining = (int)(t.SubmissionDeadline - DateTime.UtcNow).TotalDays,

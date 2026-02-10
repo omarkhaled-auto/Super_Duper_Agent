@@ -51,7 +51,7 @@ public class BoqItemConfiguration : IEntityTypeConfiguration<BoqItem>
             .HasColumnName("item_type")
             .HasMaxLength(50)
             .HasConversion<string>()
-            .HasDefaultValue("Base")
+            .HasDefaultValueSql("'Base'")
             .IsRequired();
 
         builder.Property(e => e.Notes)

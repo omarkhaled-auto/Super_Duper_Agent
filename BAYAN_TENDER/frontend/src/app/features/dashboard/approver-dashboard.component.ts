@@ -243,13 +243,13 @@ import { Subject, takeUntil, interval } from 'rxjs';
     .header-left h1 {
       margin: 0;
       font-size: 1.75rem;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
       font-weight: 600;
     }
 
     .header-left p {
       margin: 0.25rem 0 0;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .header-stats {
@@ -262,7 +262,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
       align-items: center;
       gap: 0.5rem;
       padding: 0.5rem 1rem;
-      border-radius: 8px;
+      border-radius: var(--bayan-radius, 0.5rem);
       font-size: 0.875rem;
       font-weight: 500;
     }
@@ -273,8 +273,8 @@ import { Subject, takeUntil, interval } from 'rxjs';
     }
 
     .stat-badge.info {
-      background: #e0f2fe;
-      color: #0369a1;
+      background: var(--bayan-accent, #f4f4f5);
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     /* Main Grid */
@@ -302,7 +302,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
       justify-content: space-between;
       align-items: center;
       padding: 1rem 1.25rem;
-      border-bottom: 1px solid #e2e8f0;
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .header-title {
@@ -315,7 +315,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
       margin: 0;
       font-size: 1rem;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
     }
 
     :host ::ng-deep .pending-card,
@@ -345,7 +345,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
 
     .approval-card {
       padding: 1.25rem;
-      border-bottom: 1px solid #f1f5f9;
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
       transition: background-color 0.2s;
     }
 
@@ -354,16 +354,16 @@ import { Subject, takeUntil, interval } from 'rxjs';
     }
 
     .approval-card:hover {
-      background-color: #f8fafc;
+      background-color: var(--bayan-accent, #f4f4f5);
     }
 
     .approval-card.urgent {
-      background: linear-gradient(to right, #fef9c3 0%, #ffffff 30%);
+      background: #fef9c3;
       border-left: 4px solid #f59e0b;
     }
 
     .approval-card.overdue {
-      background: linear-gradient(to right, #fee2e2 0%, #ffffff 30%);
+      background: #fee2e2;
       border-left: 4px solid #ef4444;
     }
 
@@ -382,15 +382,15 @@ import { Subject, takeUntil, interval } from 'rxjs';
 
     .reference {
       font-weight: 600;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
       font-size: 0.9375rem;
     }
 
     .level-badge {
-      background: #e2e8f0;
-      color: #475569;
+      background: var(--bayan-accent, #f4f4f5);
+      color: var(--bayan-muted-foreground, #71717a);
       padding: 0.125rem 0.5rem;
-      border-radius: 4px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
       font-size: 0.75rem;
       font-weight: 500;
     }
@@ -400,7 +400,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
       align-items: center;
       gap: 0.25rem;
       padding: 0.25rem 0.5rem;
-      border-radius: 4px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
       font-size: 0.75rem;
       font-weight: 600;
     }
@@ -416,15 +416,15 @@ import { Subject, takeUntil, interval } from 'rxjs';
     }
 
     .urgency-tag.normal {
-      background: #f1f5f9;
-      color: #475569;
+      background: var(--bayan-accent, #f4f4f5);
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .approval-title {
       margin: 0 0 0.75rem;
       font-size: 1rem;
       font-weight: 500;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
       line-height: 1.4;
     }
 
@@ -439,13 +439,13 @@ import { Subject, takeUntil, interval } from 'rxjs';
       display: flex;
       align-items: center;
       gap: 0.375rem;
-      font-size: 0.8125rem;
-      color: #64748b;
+      font-size: 0.8rem;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .detail-item i {
       font-size: 0.75rem;
-      color: #94a3b8;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .approval-actions {
@@ -471,14 +471,14 @@ import { Subject, takeUntil, interval } from 'rxjs';
     .summary-label {
       display: block;
       font-size: 0.75rem;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
       margin-bottom: 0.25rem;
     }
 
     .summary-value {
       font-size: 1.25rem;
       font-weight: 700;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
     }
 
     /* Decisions List */
@@ -491,7 +491,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
       display: flex;
       gap: 0.75rem;
       padding: 1rem 1.25rem;
-      border-bottom: 1px solid #f1f5f9;
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
       cursor: pointer;
       transition: background-color 0.2s;
     }
@@ -501,7 +501,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
     }
 
     .decision-item:hover {
-      background-color: #f8fafc;
+      background-color: var(--bayan-accent, #f4f4f5);
     }
 
     .decision-icon {
@@ -520,15 +520,15 @@ import { Subject, takeUntil, interval } from 'rxjs';
     }
 
     .decision-icon.approved {
-      background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+      background: #22c55e;
     }
 
     .decision-icon.rejected {
-      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      background: #ef4444;
     }
 
     .decision-icon.returned {
-      background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+      background: #f97316;
     }
 
     .decision-content {
@@ -545,8 +545,8 @@ import { Subject, takeUntil, interval } from 'rxjs';
 
     .decision-reference {
       font-weight: 600;
-      font-size: 0.8125rem;
-      color: #1e293b;
+      font-size: 0.8rem;
+      color: var(--bayan-foreground, #09090b);
     }
 
     :host ::ng-deep .decision-tag {
@@ -556,8 +556,8 @@ import { Subject, takeUntil, interval } from 'rxjs';
 
     .decision-title {
       margin: 0 0 0.25rem;
-      font-size: 0.8125rem;
-      color: #64748b;
+      font-size: 0.8rem;
+      color: var(--bayan-muted-foreground, #71717a);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -566,13 +566,13 @@ import { Subject, takeUntil, interval } from 'rxjs';
     .decision-comment {
       margin: 0 0 0.25rem;
       font-size: 0.75rem;
-      color: #94a3b8;
+      color: var(--bayan-muted-foreground, #71717a);
       font-style: italic;
     }
 
     .decision-time {
       font-size: 0.6875rem;
-      color: #94a3b8;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     /* Empty States */
@@ -582,19 +582,19 @@ import { Subject, takeUntil, interval } from 'rxjs';
       align-items: center;
       justify-content: center;
       padding: 3rem 2rem;
-      color: #94a3b8;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .empty-state i {
-      font-size: 3rem;
+      font-size: 2.5rem;
       margin-bottom: 1rem;
-      color: #cbd5e1;
+      color: var(--bayan-border, #e4e4e7);
     }
 
     .empty-state h4 {
       margin: 0 0 0.5rem;
       font-size: 1.125rem;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .empty-state p {

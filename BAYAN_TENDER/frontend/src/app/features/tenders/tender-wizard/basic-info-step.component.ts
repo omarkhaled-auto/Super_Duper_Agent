@@ -311,7 +311,7 @@ import { TENDER_TYPE_OPTIONS, CURRENCY_OPTIONS } from '../../../core/models/tend
 
     .form-field label {
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       font-size: 0.9rem;
     }
 
@@ -330,7 +330,7 @@ import { TENDER_TYPE_OPTIONS, CURRENCY_OPTIONS } from '../../../core/models/tend
       top: 50%;
       transform: translateY(-50%);
       font-size: 0.75rem;
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .char-counter.warning {
@@ -360,8 +360,8 @@ import { TENDER_TYPE_OPTIONS, CURRENCY_OPTIONS } from '../../../core/models/tend
     }
 
     .client-location {
-      font-size: 0.85rem;
-      color: #666;
+      font-size: 0.875rem;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .tender-type-options {
@@ -375,20 +375,20 @@ import { TENDER_TYPE_OPTIONS, CURRENCY_OPTIONS } from '../../../core/models/tend
       align-items: flex-start;
       gap: 0.75rem;
       padding: 1rem;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      border-radius: var(--bayan-radius, 0.5rem);
       cursor: pointer;
       transition: all 0.2s;
     }
 
     .type-option:hover {
-      border-color: #1976D2;
-      background-color: #f8f9fa;
+      border-color: var(--bayan-primary, #18181b);
+      background-color: var(--bayan-accent, #f4f4f5);
     }
 
     .type-option.selected {
-      border-color: #1976D2;
-      background-color: #e3f2fd;
+      border-color: var(--bayan-primary, #18181b);
+      background-color: var(--bayan-accent, #f4f4f5);
     }
 
     .type-label {
@@ -400,16 +400,16 @@ import { TENDER_TYPE_OPTIONS, CURRENCY_OPTIONS } from '../../../core/models/tend
 
     .type-name {
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .type-description {
-      font-size: 0.85rem;
-      color: #666;
+      font-size: 0.875rem;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .field-hint {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       font-size: 0.8rem;
     }
 

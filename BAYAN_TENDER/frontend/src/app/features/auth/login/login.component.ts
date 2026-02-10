@@ -30,13 +30,13 @@ import { AuthService } from '../../../core/auth/auth.service';
     <div class="login-container">
       <div class="login-card">
         <div class="login-header">
-          <img src="assets/images/logo.png" alt="Bayan" class="logo" />
+          <img src="assets/images/logo.svg" alt="Bayan" class="logo" />
           <h1>Welcome Back</h1>
           <p>Sign in to your Bayan Tender account</p>
         </div>
 
         @if (errorMessage()) {
-          <p-message severity="error" [text]="errorMessage()!" styleClass="w-full mb-3"></p-message>
+          <p-message severity="error" [text]="errorMessage()!" styleClass="w-full mb-3" data-testid="login-error"></p-message>
         }
 
         <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
@@ -49,6 +49,7 @@ import { AuthService } from '../../../core/auth/auth.service';
               formControlName="email"
               placeholder="Enter your email"
               class="w-full"
+              data-testid="login-email"
               [class.ng-invalid]="isFieldInvalid('email')"
             />
             @if (isFieldInvalid('email')) {
@@ -73,6 +74,7 @@ import { AuthService } from '../../../core/auth/auth.service';
               [toggleMask]="true"
               styleClass="w-full"
               inputStyleClass="w-full"
+              data-testid="login-password"
               [class.ng-invalid]="isFieldInvalid('password')"
             ></p-password>
             @if (isFieldInvalid('password')) {
@@ -93,6 +95,7 @@ import { AuthService } from '../../../core/auth/auth.service';
                 formControlName="rememberMe"
                 [binary]="true"
                 inputId="rememberMe"
+                data-testid="login-remember"
               ></p-checkbox>
               <label for="rememberMe">Remember me</label>
             </div>
@@ -107,6 +110,7 @@ import { AuthService } from '../../../core/auth/auth.service';
             type="submit"
             label="Sign In"
             class="w-full"
+            data-testid="login-submit"
             [loading]="isLoading()"
             [disabled]="loginForm.invalid || isLoading()"
           ></button>
@@ -127,17 +131,18 @@ import { AuthService } from '../../../core/auth/auth.service';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+      background: var(--bayan-muted, #f4f4f5);
       padding: 2rem;
     }
 
     .login-card {
-      background: #ffffff;
-      border-radius: 16px;
+      background: var(--bayan-card, #ffffff);
+      border-radius: var(--bayan-radius-xl, 1rem);
       padding: 2.5rem;
       width: 100%;
       max-width: 420px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      box-shadow: var(--bayan-shadow, 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1));
     }
 
     .login-header {
@@ -154,23 +159,23 @@ import { AuthService } from '../../../core/auth/auth.service';
       margin: 0;
       font-size: 1.75rem;
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .login-header p {
       margin: 0.5rem 0 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .form-field {
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.25rem;
     }
 
     .form-field label {
       display: block;
       margin-bottom: 0.5rem;
-      font-weight: 500;
-      color: #333;
+      font-weight: 600;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .form-options {
@@ -188,11 +193,11 @@ import { AuthService } from '../../../core/auth/auth.service';
 
     .remember-me label {
       cursor: pointer;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .forgot-link {
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
       text-decoration: none;
       font-size: 0.875rem;
     }
@@ -205,16 +210,16 @@ import { AuthService } from '../../../core/auth/auth.service';
       text-align: center;
       margin-top: 1.5rem;
       padding-top: 1.5rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .login-footer p {
       margin: 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .login-footer a {
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
       text-decoration: none;
       font-weight: 500;
     }
@@ -231,20 +236,34 @@ import { AuthService } from '../../../core/auth/auth.service';
     :host ::ng-deep {
       .p-inputtext {
         width: 100%;
+        height: 44px;
       }
 
       .p-password {
         width: 100%;
+
+        .p-inputtext {
+          height: 44px;
+        }
       }
 
       .p-button {
-        height: 48px;
-        font-size: 1rem;
+        width: 100%;
+        height: 46px;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        border-radius: var(--bayan-radius, 0.5rem);
+        justify-content: center;
       }
 
       .p-message {
         width: 100%;
         margin-bottom: 1rem;
+      }
+
+      .p-checkbox .p-checkbox-box {
+        width: 1rem;
+        height: 1rem;
       }
     }
   `]

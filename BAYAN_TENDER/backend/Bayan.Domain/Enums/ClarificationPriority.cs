@@ -6,12 +6,22 @@ namespace Bayan.Domain.Enums;
 public enum ClarificationPriority
 {
     /// <summary>
-    /// Normal priority.
+    /// Low priority.
     /// </summary>
-    Normal = 0,
+    Low = 0,
+
+    /// <summary>
+    /// Normal / Medium priority.
+    /// </summary>
+    Normal = 1,
+
+    /// <summary>
+    /// High priority.
+    /// </summary>
+    High = 2,
 
     /// <summary>
     /// Urgent priority.
     /// </summary>
-    Urgent = 1
+    Urgent = 3
 }

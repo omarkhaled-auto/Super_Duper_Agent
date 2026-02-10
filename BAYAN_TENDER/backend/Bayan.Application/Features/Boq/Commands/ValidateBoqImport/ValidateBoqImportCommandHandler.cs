@@ -68,11 +68,12 @@ public class ValidateBoqImportCommandHandler : IRequestHandler<ValidateBoqImport
 
         // Validate all rows
         var issues = new List<ImportValidationIssue>();
-        var itemNumbers = new List<string>();
+        var rowContexts = new List<BoqRowContext>();
         var uomCodes = new HashSet<string>();
         var seenItemNumbers = new HashSet<string>();
         var validRowCount = 0;
         var skippedRowCount = 0;
+        var sectionHeaderCount = 0;
 
         for (var rowIndex = 0; rowIndex < sheet.Rows.Count; rowIndex++)
         {
@@ -97,6 +98,33 @@ public class ValidateBoqImportCommandHandler : IRequestHandler<ValidateBoqImport
                     Message = "Row is empty and will be skipped."
                 });
                 continue;
+            }
+
+            // Collect row context for section detection
+            if (!string.IsNullOrWhiteSpace(itemNumber))
+            {
+                rowContexts.Add(new BoqRowContext
+                {
+                    ItemNumber = itemNumber,
+                    Description = description,
+                    Quantity = quantityStr,
+                    Uom = uom
+                });
+            }
+
+            // Check if this is a section header row (no quantity, no uom)
+            var isSectionHeader = _sectionDetectionService.IsSectionHeaderRow(itemNumber, quantityStr, uom);
+            if (isSectionHeader)
+            {
+                sectionHeaderCount++;
+                issues.Add(new ImportValidationIssue
+                {
+                    RowNumber = rowNumber,
+                    Severity = ValidationSeverity.Info,
+                    IssueCode = "SECTION_HEADER",
+                    Message = $"Section header detected: {itemNumber} - {description}"
+                });
+                continue; // Section headers don't count as items
             }
 
             var rowHasError = false;
@@ -151,7 +179,6 @@ public class ValidateBoqImportCommandHandler : IRequestHandler<ValidateBoqImport
                 else
                 {
                     seenItemNumbers.Add(itemNumber.ToLower());
-                    itemNumbers.Add(itemNumber);
                 }
             }
 
@@ -226,8 +253,8 @@ public class ValidateBoqImportCommandHandler : IRequestHandler<ValidateBoqImport
             }
         }
 
-        // Detect sections from item numbers
-        var detectedSections = _sectionDetectionService.DetectSections(itemNumbers);
+        // Detect sections using full row context (titles from section header rows)
+        var detectedSections = _sectionDetectionService.DetectSectionsFromRows(rowContexts);
 
         // Find unknown UOM codes
         var unknownUomCodes = uomCodes

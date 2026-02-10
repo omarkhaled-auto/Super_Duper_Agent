@@ -19,7 +19,7 @@ import { DialogModule } from 'primeng/dialog';
 import { InputTextModule } from 'primeng/inputtext';
 import { InputTextarea } from 'primeng/inputtextarea';
 import { DropdownModule } from 'primeng/dropdown';
-import { CalendarModule } from 'primeng/calendar';
+import { DatePickerModule } from 'primeng/datepicker';
 import { FileUploadModule } from 'primeng/fileupload';
 import { ButtonModule } from 'primeng/button';
 import { MessageModule } from 'primeng/message';
@@ -45,7 +45,7 @@ import { BoqSection } from '../../../../core/models/boq.model';
     InputTextModule,
     InputTextarea,
     DropdownModule,
-    CalendarModule,
+    DatePickerModule,
     FileUploadModule,
     ButtonModule,
     MessageModule,
@@ -80,6 +80,7 @@ import { BoqSection } from '../../../../core/models/boq.model';
               formControlName="subject"
               placeholder="Enter a concise subject"
               class="w-full"
+              data-testid="rfi-subject"
               [class.ng-invalid]="isFieldInvalid('subject')"
             />
             @if (isFieldInvalid('subject')) {
@@ -142,7 +143,7 @@ import { BoqSection } from '../../../../core/models/boq.model';
 
           <div class="form-field">
             <label for="dueDate">Due Date</label>
-            <p-calendar
+            <p-datepicker
               id="dueDate"
               formControlName="dueDate"
               [showIcon]="true"
@@ -151,7 +152,7 @@ import { BoqSection } from '../../../../core/models/boq.model';
               dateFormat="dd/mm/yy"
               placeholder="Select due date (optional)"
               styleClass="w-full"
-            ></p-calendar>
+            ></p-datepicker>
           </div>
 
           <div class="form-field full-width">
@@ -198,6 +199,7 @@ import { BoqSection } from '../../../../core/models/boq.model';
             pButton
             type="submit"
             [label]="mode === 'create' ? 'Create RFI' : 'Update RFI'"
+            data-testid="rfi-submit-btn"
             [loading]="isLoading"
             [disabled]="rfiForm.invalid || isLoading"
           ></button>
@@ -224,7 +226,7 @@ import { BoqSection } from '../../../../core/models/boq.model';
 
     .form-field label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .required {
@@ -243,14 +245,14 @@ import { BoqSection } from '../../../../core/models/boq.model';
       align-items: center;
       gap: 0.5rem;
       padding: 0.5rem;
-      background-color: #f8f9fa;
-      border-radius: 4px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .file-item span {
       flex: 1;
       font-size: 0.875rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .dialog-actions {
@@ -259,19 +261,19 @@ import { BoqSection } from '../../../../core/models/boq.model';
       gap: 0.5rem;
       margin-top: 1.5rem;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     :host ::ng-deep {
       .p-dropdown,
       .p-inputtext,
-      .p-calendar {
+      .p-datepicker {
         width: 100%;
       }
 
       .p-editor-container {
         .p-editor-toolbar {
-          background-color: #f8f9fa;
+          background-color: var(--bayan-accent, #f4f4f5);
         }
       }
     }
@@ -411,7 +413,7 @@ export class InternalRfiDialogComponent implements OnInit, OnChanges {
         dueDate: formValue.dueDate || null
       };
 
-      this.clarificationService.updateClarification(this.clarification!.id, updateDto).subscribe({
+      this.clarificationService.updateClarification(this.tenderId, this.clarification!.id, updateDto).subscribe({
         next: (clarification) => {
           this.isLoading = false;
           this.saved.emit(clarification);

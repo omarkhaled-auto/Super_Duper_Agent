@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, tap, catchError, throwError, of, delay, map } from 'rxjs';
+import { Observable, tap, catchError, throwError, map } from 'rxjs';
 import { ApiService } from './api.service';
 import { PaginatedResponse, PaginationParams } from '../models';
 import {
@@ -8,7 +8,6 @@ import {
   ClarificationPriority,
   ClarificationSource,
   ClarificationBulletin,
-  ClarificationAttachment,
   CreateClarificationDto,
   UpdateClarificationDto,
   AnswerClarificationDto,
@@ -18,6 +17,14 @@ import {
   ClarificationSummary
 } from '../models/clarification.model';
 
+// Backend ClarificationPriority enum: Low=0, Normal=1, High=2, Urgent=3
+const PRIORITY_TO_API: Record<string, number> = {
+  'low': 0,
+  'medium': 1,
+  'high': 2,
+  'urgent': 3
+};
+
 export interface ClarificationQueryParams extends PaginationParams, ClarificationFilterParams {}
 
 @Injectable({
@@ -25,7 +32,6 @@ export interface ClarificationQueryParams extends PaginationParams, Clarificatio
 })
 export class ClarificationService {
   private readonly api = inject(ApiService);
-  private readonly endpoint = '/clarifications';
 
   private readonly _isLoading = signal<boolean>(false);
   private readonly _error = signal<string | null>(null);
@@ -33,146 +39,10 @@ export class ClarificationService {
   readonly isLoading = this._isLoading.asReadonly();
   readonly error = this._error.asReadonly();
 
-  // Mock data for development
-  private mockClarifications: Clarification[] = [
-    {
-      id: 1,
-      tenderId: 1,
-      referenceNumber: 'RFI-001',
-      subject: 'Clarification on concrete specifications',
-      question: 'Please confirm the required concrete grade for foundation works. The technical specifications mention Grade 40, but the drawings indicate Grade 35.',
-      answer: 'The correct concrete grade for foundation works is Grade 40 as specified in the technical specifications. The drawings will be updated in an addendum.',
-      status: 'answered',
-      priority: 'high',
-      source: 'bidder',
-      bidderId: 1,
-      bidderName: 'Tech Solutions Ltd',
-      relatedBoqSectionId: 6,
-      relatedBoqSectionTitle: '2.2 - Concrete Works',
-      submittedAt: new Date('2026-01-20'),
-      answeredAt: new Date('2026-01-22'),
-      createdAt: new Date('2026-01-20'),
-      updatedAt: new Date('2026-01-22'),
-      submittedById: 10,
-      submittedByName: 'John Doe',
-      answeredById: 1,
-      answeredByName: 'Admin User'
-    },
-    {
-      id: 2,
-      tenderId: 1,
-      referenceNumber: 'RFI-002',
-      subject: 'Site access during construction',
-      question: 'What are the working hours allowed for construction activities on site? Are there any restrictions during weekends or holidays?',
-      status: 'submitted',
-      priority: 'medium',
-      source: 'bidder',
-      bidderId: 2,
-      bidderName: 'SecureTech Solutions',
-      submittedAt: new Date('2026-01-25'),
-      createdAt: new Date('2026-01-25'),
-      updatedAt: new Date('2026-01-25'),
-      submittedById: 11,
-      submittedByName: 'Jane Smith'
-    },
-    {
-      id: 3,
-      tenderId: 1,
-      referenceNumber: 'RFI-003',
-      subject: 'Payment terms clarification',
-      question: 'The tender documents mention 30-day payment terms, but the contract draft shows 45 days. Which one applies?',
-      answer: 'The payment terms are 30 days as stated in the tender documents. The contract will be amended accordingly.',
-      status: 'published',
-      priority: 'high',
-      source: 'bidder',
-      bidderId: 1,
-      bidderName: 'Tech Solutions Ltd',
-      bulletinId: 1,
-      bulletinNumber: 'QB-001',
-      submittedAt: new Date('2026-01-18'),
-      answeredAt: new Date('2026-01-19'),
-      publishedAt: new Date('2026-01-21'),
-      createdAt: new Date('2026-01-18'),
-      updatedAt: new Date('2026-01-21'),
-      submittedById: 10,
-      submittedByName: 'John Doe',
-      answeredById: 1,
-      answeredByName: 'Admin User'
-    },
-    {
-      id: 4,
-      tenderId: 1,
-      referenceNumber: 'INT-001',
-      subject: 'Internal review - Equipment specifications',
-      question: 'Need to verify if the HVAC equipment specifications are complete. The consultant mentioned possible updates.',
-      status: 'under_review',
-      priority: 'medium',
-      source: 'internal',
-      dueDate: new Date('2026-02-05'),
-      createdAt: new Date('2026-01-28'),
-      updatedAt: new Date('2026-01-28'),
-      submittedById: 2,
-      submittedByName: 'Manager User'
-    },
-    {
-      id: 5,
-      tenderId: 1,
-      referenceNumber: 'RFI-004',
-      subject: 'Insurance requirements',
-      question: 'What are the minimum insurance coverage requirements for the contractor?',
-      status: 'draft',
-      priority: 'low',
-      source: 'internal',
-      createdAt: new Date('2026-01-30'),
-      updatedAt: new Date('2026-01-30'),
-      submittedById: 2,
-      submittedByName: 'Manager User'
-    },
-    {
-      id: 6,
-      tenderId: 1,
-      referenceNumber: 'RFI-005',
-      subject: 'Alternative materials acceptance',
-      question: 'Will alternative materials be considered if they meet the same performance specifications?',
-      answer: 'Alternative materials may be proposed as alternates. Bidders must submit technical data sheets and certifications for evaluation.',
-      status: 'answered',
-      priority: 'medium',
-      source: 'bidder',
-      bidderId: 3,
-      bidderName: 'Global Contractors Inc',
-      submittedAt: new Date('2026-01-26'),
-      answeredAt: new Date('2026-01-28'),
-      createdAt: new Date('2026-01-26'),
-      updatedAt: new Date('2026-01-28'),
-      submittedById: 12,
-      submittedByName: 'Mike Johnson',
-      answeredById: 1,
-      answeredByName: 'Admin User'
-    }
-  ];
-
-  private mockBulletins: ClarificationBulletin[] = [
-    {
-      id: 1,
-      tenderId: 1,
-      bulletinNumber: 'QB-001',
-      issueDate: new Date('2026-01-21'),
-      title: 'Q&A Bulletin #1',
-      introduction: 'This bulletin addresses questions received from bidders regarding the IT Infrastructure Upgrade Project.',
-      closingNotes: 'All bidders are requested to acknowledge receipt of this bulletin.',
-      clarificationIds: [3],
-      status: 'published',
-      publishedAt: new Date('2026-01-21'),
-      publishedById: 1,
-      publishedByName: 'Admin User',
-      pdfUrl: '/api/bulletins/1/pdf',
-      createdAt: new Date('2026-01-21'),
-      updatedAt: new Date('2026-01-21')
-    }
-  ];
-
-  private lastClarificationId = 6;
-  private lastBulletinId = 1;
+  /** Build the base endpoint for a tender's clarifications */
+  private basePath(tenderId: number): string {
+    return `/tenders/${tenderId}/clarifications`;
+  }
 
   /**
    * Get clarifications for a tender with filtering and pagination
@@ -184,67 +54,31 @@ export class ClarificationService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(400),
-      map(() => {
-        let filtered = this.mockClarifications.filter(c => c.tenderId === tenderId);
+    const queryParams: Record<string, string | number | boolean | undefined> = {
+      page: params?.page ?? 1,
+      pageSize: params?.pageSize ?? 10,
+      search: params?.search || undefined,
+      sortBy: params?.sortBy || 'SubmittedAt',
+      sortDescending: params?.sortOrder === 'asc' ? false : true,
+    };
 
-        // Apply filters
-        if (params?.search) {
-          const term = params.search.toLowerCase();
-          filtered = filtered.filter(c =>
-            c.subject.toLowerCase().includes(term) ||
-            c.question.toLowerCase().includes(term) ||
-            c.referenceNumber.toLowerCase().includes(term)
-          );
-        }
+    // Map frontend filter values to backend query params
+    if (params?.status) {
+      const statuses = Array.isArray(params.status) ? params.status : [params.status];
+      queryParams['status'] = statuses[0]; // Backend accepts single status
+    }
+    if (params?.priority) {
+      const priorities = Array.isArray(params.priority) ? params.priority : [params.priority];
+      queryParams['priority'] = priorities[0];
+    }
+    if (params?.bidderId) {
+      queryParams['bidderId'] = params.bidderId;
+    }
+    if (params?.boqSectionId) {
+      queryParams['section'] = params.boqSectionId;
+    }
 
-        if (params?.status) {
-          const statuses = Array.isArray(params.status) ? params.status : [params.status];
-          filtered = filtered.filter(c => statuses.includes(c.status));
-        }
-
-        if (params?.source) {
-          const sources = Array.isArray(params.source) ? params.source : [params.source];
-          filtered = filtered.filter(c => sources.includes(c.source));
-        }
-
-        if (params?.priority) {
-          const priorities = Array.isArray(params.priority) ? params.priority : [params.priority];
-          filtered = filtered.filter(c => priorities.includes(c.priority));
-        }
-
-        if (params?.boqSectionId) {
-          filtered = filtered.filter(c => c.relatedBoqSectionId === params.boqSectionId);
-        }
-
-        if (params?.bidderId) {
-          filtered = filtered.filter(c => c.bidderId === params.bidderId);
-        }
-
-        // Sort by date descending
-        filtered.sort((a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-
-        // Apply pagination
-        const page = params?.page || 1;
-        const pageSize = params?.pageSize || 10;
-        const startIndex = (page - 1) * pageSize;
-        const paginatedItems = filtered.slice(startIndex, startIndex + pageSize);
-
-        return {
-          items: paginatedItems,
-          pagination: {
-            currentPage: page,
-            pageSize,
-            totalItems: filtered.length,
-            totalPages: Math.ceil(filtered.length / pageSize),
-            hasNextPage: page < Math.ceil(filtered.length / pageSize),
-            hasPreviousPage: page > 1
-          }
-        };
-      }),
+    return this.api.getList<Clarification>(this.basePath(tenderId), queryParams as any).pipe(
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -257,19 +91,11 @@ export class ClarificationService {
   /**
    * Get a single clarification by ID
    */
-  getClarificationById(id: number): Observable<Clarification> {
+  getClarificationById(tenderId: number, id: number): Observable<Clarification> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(200),
-      map(() => {
-        const clarification = this.mockClarifications.find(c => c.id === id);
-        if (!clarification) {
-          throw new Error('Clarification not found');
-        }
-        return clarification;
-      }),
+    return this.api.get<Clarification>(`${this.basePath(tenderId)}/${id}`).pipe(
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -280,13 +106,13 @@ export class ClarificationService {
   }
 
   /**
-   * Get clarification summary statistics for a tender
+   * Get clarification summary statistics for a tender.
+   * Computed client-side from a full fetch (backend has no dedicated summary endpoint).
    */
   getSummary(tenderId: number): Observable<ClarificationSummary> {
-    return of(null).pipe(
-      delay(200),
-      map(() => {
-        const clarifications = this.mockClarifications.filter(c => c.tenderId === tenderId);
+    return this.api.getList<Clarification>(this.basePath(tenderId), { page: 1, pageSize: 1000 } as any).pipe(
+      map(result => {
+        const clarifications = result.items;
 
         const byStatus: Record<ClarificationStatus, number> = {
           draft: 0,
@@ -311,9 +137,9 @@ export class ClarificationService {
         };
 
         clarifications.forEach(c => {
-          byStatus[c.status]++;
-          byPriority[c.priority]++;
-          bySource[c.source]++;
+          if (byStatus[c.status] !== undefined) byStatus[c.status]++;
+          if (byPriority[c.priority] !== undefined) byPriority[c.priority]++;
+          if (bySource[c.source] !== undefined) bySource[c.source]++;
         });
 
         return {
@@ -321,48 +147,32 @@ export class ClarificationService {
           byStatus,
           byPriority,
           bySource,
-          pendingAnswers: byStatus.submitted + byStatus.under_review,
-          averageResponseTime: 24 // Mock: 24 hours average
+          pendingAnswers: byStatus.submitted + byStatus.under_review
         };
       })
     );
   }
 
   /**
-   * Create a new clarification (internal RFI)
+   * Create a new clarification.
+   * Routes to internal-rfi endpoint for internal source, otherwise to the standard submit endpoint.
    */
   createClarification(data: CreateClarificationDto): Observable<Clarification> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(400),
-      map(() => {
-        const refPrefix = data.source === 'internal' ? 'INT' : 'RFI';
-        const count = this.mockClarifications.filter(c =>
-          c.tenderId === data.tenderId && c.source === data.source
-        ).length + 1;
+    const base = this.basePath(data.tenderId);
+    const endpoint = data.source === 'internal'
+      ? `${base}/internal-rfi`
+      : base;
 
-        const newClarification: Clarification = {
-          id: ++this.lastClarificationId,
-          tenderId: data.tenderId,
-          referenceNumber: `${refPrefix}-${String(count).padStart(3, '0')}`,
-          subject: data.subject,
-          question: data.question,
-          status: data.source === 'internal' ? 'draft' : 'submitted',
-          priority: data.priority || 'medium',
-          source: data.source,
-          relatedBoqSectionId: data.relatedBoqSectionId,
-          dueDate: data.dueDate,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          submittedById: 1, // Current user
-          submittedByName: 'Current User'
-        };
-
-        this.mockClarifications.push(newClarification);
-        return newClarification;
-      }),
+    return this.api.post<Clarification>(endpoint, {
+      subject: data.subject,
+      question: data.question,
+      relatedBoqSection: data.relatedBoqSectionId ? String(data.relatedBoqSectionId) : undefined,
+      priority: PRIORITY_TO_API[data.priority || 'medium'] ?? 1,
+      attachmentIds: data.attachmentIds || []
+    }).pipe(
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -375,25 +185,11 @@ export class ClarificationService {
   /**
    * Update a clarification
    */
-  updateClarification(id: number, data: UpdateClarificationDto): Observable<Clarification> {
+  updateClarification(tenderId: number, id: number, data: UpdateClarificationDto): Observable<Clarification> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(300),
-      map(() => {
-        const index = this.mockClarifications.findIndex(c => c.id === id);
-        if (index === -1) {
-          throw new Error('Clarification not found');
-        }
-        const updated: Clarification = {
-          ...this.mockClarifications[index],
-          ...data,
-          updatedAt: new Date()
-        };
-        this.mockClarifications[index] = updated;
-        return updated;
-      }),
+    return this.api.put<Clarification>(`${this.basePath(tenderId)}/${id}`, data).pipe(
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -404,31 +200,16 @@ export class ClarificationService {
   }
 
   /**
-   * Answer a clarification
+   * Answer a clarification (draft answer).
+   * Backend endpoint: POST /api/tenders/{tenderId}/clarifications/{id}/answer
    */
-  answerClarification(id: number, data: AnswerClarificationDto): Observable<Clarification> {
+  answerClarification(tenderId: number, id: number, data: AnswerClarificationDto): Observable<Clarification> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(400),
-      map(() => {
-        const index = this.mockClarifications.findIndex(c => c.id === id);
-        if (index === -1) {
-          throw new Error('Clarification not found');
-        }
-        const updated: Clarification = {
-          ...this.mockClarifications[index],
-          answer: data.answer,
-          status: 'answered',
-          answeredAt: new Date(),
-          answeredById: 1,
-          answeredByName: 'Admin User',
-          updatedAt: new Date()
-        };
-        this.mockClarifications[index] = updated;
-        return updated;
-      }),
+    return this.api.post<Clarification>(`${this.basePath(tenderId)}/${id}/answer`, {
+      answer: data.answer
+    }).pipe(
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -439,52 +220,118 @@ export class ClarificationService {
   }
 
   /**
-   * Submit a draft clarification for review
+   * Submit a draft clarification for review.
+   * Uses PUT to update the clarification status.
    */
-  submitClarification(id: number): Observable<Clarification> {
-    return this.updateStatus(id, 'submitted');
-  }
-
-  /**
-   * Mark clarification as under review
-   */
-  startReview(id: number): Observable<Clarification> {
-    return this.updateStatus(id, 'under_review');
-  }
-
-  /**
-   * Reject a clarification
-   */
-  rejectClarification(id: number, reason?: string): Observable<Clarification> {
-    return this.updateStatus(id, 'rejected');
-  }
-
-  private updateStatus(id: number, status: ClarificationStatus): Observable<Clarification> {
+  submitClarification(tenderId: number, id: number): Observable<Clarification> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(300),
-      map(() => {
-        const index = this.mockClarifications.findIndex(c => c.id === id);
-        if (index === -1) {
-          throw new Error('Clarification not found');
-        }
-        const updated: Clarification = {
-          ...this.mockClarifications[index],
-          status,
-          updatedAt: new Date()
-        };
-        if (status === 'submitted') {
-          updated.submittedAt = new Date();
-        }
-        this.mockClarifications[index] = updated;
-        return updated;
-      }),
+    return this.api.put<Clarification>(`${this.basePath(tenderId)}/${id}`, {
+      status: 'submitted'
+    }).pipe(
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
-        this._error.set(error.message || 'Failed to update status');
+        this._error.set(error.message || 'Failed to submit clarification');
+        return throwError(() => error);
+      })
+    );
+  }
+
+  /**
+   * Mark clarification as under review.
+   * Uses PUT to update the clarification status.
+   */
+  startReview(tenderId: number, id: number): Observable<Clarification> {
+    this._isLoading.set(true);
+    this._error.set(null);
+
+    return this.api.put<Clarification>(`${this.basePath(tenderId)}/${id}`, {
+      status: 'under_review'
+    }).pipe(
+      tap(() => this._isLoading.set(false)),
+      catchError(error => {
+        this._isLoading.set(false);
+        this._error.set(error.message || 'Failed to start review');
+        return throwError(() => error);
+      })
+    );
+  }
+
+  /**
+   * Approve a drafted answer, changing status to Answered.
+   * Backend endpoint: POST /api/tenders/{tenderId}/clarifications/{id}/approve
+   */
+  approveClarification(tenderId: number, id: number): Observable<Clarification> {
+    this._isLoading.set(true);
+    this._error.set(null);
+
+    return this.api.post<Clarification>(`${this.basePath(tenderId)}/${id}/approve`, {}).pipe(
+      tap(() => this._isLoading.set(false)),
+      catchError(error => {
+        this._isLoading.set(false);
+        this._error.set(error.message || 'Failed to approve clarification');
+        return throwError(() => error);
+      })
+    );
+  }
+
+  /**
+   * Assign a clarification to a team member.
+   * Backend endpoint: POST /api/tenders/{tenderId}/clarifications/{id}/assign
+   */
+  assignClarification(tenderId: number, id: number, assignToUserId: string): Observable<Clarification> {
+    this._isLoading.set(true);
+    this._error.set(null);
+
+    return this.api.post<Clarification>(`${this.basePath(tenderId)}/${id}/assign`, {
+      assignToUserId
+    }).pipe(
+      tap(() => this._isLoading.set(false)),
+      catchError(error => {
+        this._isLoading.set(false);
+        this._error.set(error.message || 'Failed to assign clarification');
+        return throwError(() => error);
+      })
+    );
+  }
+
+  /**
+   * Mark a clarification as duplicate.
+   * Backend endpoint: POST /api/tenders/{tenderId}/clarifications/{id}/duplicate
+   */
+  markDuplicate(tenderId: number, id: number, originalClarificationId: string): Observable<Clarification> {
+    this._isLoading.set(true);
+    this._error.set(null);
+
+    return this.api.post<Clarification>(`${this.basePath(tenderId)}/${id}/duplicate`, {
+      originalClarificationId
+    }).pipe(
+      tap(() => this._isLoading.set(false)),
+      catchError(error => {
+        this._isLoading.set(false);
+        this._error.set(error.message || 'Failed to mark as duplicate');
+        return throwError(() => error);
+      })
+    );
+  }
+
+  /**
+   * Reject a clarification with a reason.
+   * Backend endpoint: POST /api/tenders/{tenderId}/clarifications/{id}/reject
+   */
+  rejectClarification(tenderId: number, id: number, reason?: string): Observable<Clarification> {
+    this._isLoading.set(true);
+    this._error.set(null);
+
+    return this.api.post<Clarification>(`${this.basePath(tenderId)}/${id}/reject`, {
+      reason: reason || ''
+    }).pipe(
+      tap(() => this._isLoading.set(false)),
+      catchError(error => {
+        this._isLoading.set(false);
+        this._error.set(error.message || 'Failed to reject clarification');
         return throwError(() => error);
       })
     );
@@ -493,22 +340,11 @@ export class ClarificationService {
   /**
    * Delete a clarification (only drafts)
    */
-  deleteClarification(id: number): Observable<void> {
+  deleteClarification(tenderId: number, id: number): Observable<void> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(300),
-      map(() => {
-        const index = this.mockClarifications.findIndex(c => c.id === id);
-        if (index === -1) {
-          throw new Error('Clarification not found');
-        }
-        if (this.mockClarifications[index].status !== 'draft') {
-          throw new Error('Only draft clarifications can be deleted');
-        }
-        this.mockClarifications.splice(index, 1);
-      }),
+    return this.api.delete<void>(`${this.basePath(tenderId)}/${id}`).pipe(
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -521,15 +357,14 @@ export class ClarificationService {
   // ========== Bulletin Methods ==========
 
   /**
-   * Get all bulletins for a tender
+   * Get all bulletins for a tender.
+   * Backend endpoint: GET /api/tenders/{tenderId}/clarifications/bulletins
    */
   getBulletins(tenderId: number): Observable<ClarificationBulletin[]> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(300),
-      map(() => this.mockBulletins.filter(b => b.tenderId === tenderId)),
+    return this.api.get<ClarificationBulletin[]>(`${this.basePath(tenderId)}/bulletins`).pipe(
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -540,23 +375,19 @@ export class ClarificationService {
   }
 
   /**
-   * Get a single bulletin by ID
+   * Get a single bulletin by ID.
+   * Fetches all bulletins for the tender and filters client-side (no dedicated backend endpoint).
    */
-  getBulletinById(id: number): Observable<ClarificationBulletin> {
+  getBulletinById(tenderId: number, id: number): Observable<ClarificationBulletin> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(200),
-      map(() => {
-        const bulletin = this.mockBulletins.find(b => b.id === id);
+    return this.api.get<ClarificationBulletin[]>(`${this.basePath(tenderId)}/bulletins`).pipe(
+      map(bulletins => {
+        const bulletin = bulletins.find((b: any) => b.id === id);
         if (!bulletin) {
           throw new Error('Bulletin not found');
         }
-        // Include clarifications
-        bulletin.clarifications = this.mockClarifications.filter(
-          c => bulletin.clarificationIds.includes(c.id)
-        );
         return bulletin;
       }),
       tap(() => this._isLoading.set(false)),
@@ -569,45 +400,33 @@ export class ClarificationService {
   }
 
   /**
-   * Get answered clarifications available for bulletin
+   * Get answered clarifications available for bulletin.
+   * Fetches clarifications with status filter = 'answered'.
    */
   getAnsweredClarifications(tenderId: number): Observable<Clarification[]> {
-    return of(null).pipe(
-      delay(200),
-      map(() =>
-        this.mockClarifications.filter(
-          c => c.tenderId === tenderId && c.status === 'answered'
-        )
-      )
+    return this.api.getList<Clarification>(this.basePath(tenderId), {
+      page: 1,
+      pageSize: 1000,
+      status: 'answered'
+    } as any).pipe(
+      map(result => result.items)
     );
   }
 
   /**
-   * Create a new bulletin (draft)
+   * Create and publish a new bulletin.
+   * Backend endpoint: POST /api/tenders/{tenderId}/clarifications/bulletins
+   * Note: The backend creates and publishes in a single step.
    */
   createBulletin(data: CreateBulletinDto): Observable<ClarificationBulletin> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(400),
-      map(() => {
-        const newBulletin: ClarificationBulletin = {
-          id: ++this.lastBulletinId,
-          tenderId: data.tenderId,
-          bulletinNumber: data.bulletinNumber,
-          issueDate: data.issueDate,
-          title: data.title,
-          introduction: data.introduction,
-          closingNotes: data.closingNotes,
-          clarificationIds: data.clarificationIds,
-          status: 'draft',
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-        this.mockBulletins.push(newBulletin);
-        return newBulletin;
-      }),
+    return this.api.post<ClarificationBulletin>(`${this.basePath(data.tenderId)}/bulletins`, {
+      clarificationIds: data.clarificationIds,
+      introduction: data.introduction,
+      closingNotes: data.closingNotes
+    }).pipe(
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -620,25 +439,11 @@ export class ClarificationService {
   /**
    * Update a bulletin
    */
-  updateBulletin(id: number, data: UpdateBulletinDto): Observable<ClarificationBulletin> {
+  updateBulletin(tenderId: number, id: number, data: UpdateBulletinDto): Observable<ClarificationBulletin> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(300),
-      map(() => {
-        const index = this.mockBulletins.findIndex(b => b.id === id);
-        if (index === -1) {
-          throw new Error('Bulletin not found');
-        }
-        const updated: ClarificationBulletin = {
-          ...this.mockBulletins[index],
-          ...data,
-          updatedAt: new Date()
-        };
-        this.mockBulletins[index] = updated;
-        return updated;
-      }),
+    return this.api.put<ClarificationBulletin>(`${this.basePath(tenderId)}/bulletins/${id}`, data).pipe(
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -649,49 +454,16 @@ export class ClarificationService {
   }
 
   /**
-   * Publish a bulletin and send to bidders
+   * Publish a bulletin and send to bidders.
+   * Note: The backend POST /bulletins endpoint creates and publishes in a single step.
+   * This method is kept for compatibility with the component's create-then-publish flow.
+   * It re-fetches the bulletin to confirm published state.
    */
-  publishBulletin(id: number): Observable<ClarificationBulletin> {
+  publishBulletin(tenderId: number, id: number): Observable<ClarificationBulletin> {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return of(null).pipe(
-      delay(500),
-      map(() => {
-        const index = this.mockBulletins.findIndex(b => b.id === id);
-        if (index === -1) {
-          throw new Error('Bulletin not found');
-        }
-
-        const bulletin = this.mockBulletins[index];
-        const updated: ClarificationBulletin = {
-          ...bulletin,
-          status: 'published',
-          publishedAt: new Date(),
-          publishedById: 1,
-          publishedByName: 'Admin User',
-          pdfUrl: `/api/bulletins/${id}/pdf`,
-          updatedAt: new Date()
-        };
-        this.mockBulletins[index] = updated;
-
-        // Update included clarifications to published status
-        bulletin.clarificationIds.forEach(cId => {
-          const cIndex = this.mockClarifications.findIndex(c => c.id === cId);
-          if (cIndex !== -1) {
-            this.mockClarifications[cIndex] = {
-              ...this.mockClarifications[cIndex],
-              status: 'published',
-              publishedAt: new Date(),
-              bulletinId: id,
-              bulletinNumber: bulletin.bulletinNumber,
-              updatedAt: new Date()
-            };
-          }
-        });
-
-        return updated;
-      }),
+    return this.getBulletinById(tenderId, id).pipe(
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -702,36 +474,27 @@ export class ClarificationService {
   }
 
   /**
-   * Generate next bulletin number
+   * Get the next available clarification reference number.
+   * Backend endpoint: GET /api/tenders/{tenderId}/clarifications/next-reference
    */
   generateBulletinNumber(tenderId: number): Observable<string> {
-    return of(null).pipe(
-      delay(100),
-      map(() => {
-        const count = this.mockBulletins.filter(b => b.tenderId === tenderId).length + 1;
-        return `QB-${String(count).padStart(3, '0')}`;
-      })
-    );
+    return this.api.get<string>(`${this.basePath(tenderId)}/next-reference`);
   }
 
   /**
-   * Get bulletin PDF preview
+   * Get bulletin PDF preview.
+   * Backend endpoint: GET /api/tenders/{tenderId}/clarifications/bulletins/{bulletinId}/download
    */
-  getBulletinPdfPreview(id: number): Observable<Blob> {
-    return of(null).pipe(
-      delay(500),
-      map(() => new Blob([''], { type: 'application/pdf' }))
-    );
+  getBulletinPdfPreview(tenderId: number, id: number): Observable<Blob> {
+    return this.api.download(`${this.basePath(tenderId)}/bulletins/${id}/download`);
   }
 
   /**
-   * Download bulletin PDF
+   * Download bulletin PDF.
+   * Backend endpoint: GET /api/tenders/{tenderId}/clarifications/bulletins/{bulletinId}/download
    */
-  downloadBulletinPdf(id: number): Observable<Blob> {
-    return of(null).pipe(
-      delay(500),
-      map(() => new Blob([''], { type: 'application/pdf' }))
-    );
+  downloadBulletinPdf(tenderId: number, id: number): Observable<Blob> {
+    return this.api.download(`${this.basePath(tenderId)}/bulletins/${id}/download`);
   }
 
   clearError(): void {

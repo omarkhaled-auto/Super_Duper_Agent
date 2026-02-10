@@ -47,6 +47,7 @@ export interface ClientFormDialogData {
               placeholder="Enter company name"
               class="w-full"
               [class.ng-invalid]="isFieldInvalid('name')"
+              data-testid="client-form-name"
             />
             @if (isFieldInvalid('name')) {
               <small class="p-error">Company name is required</small>
@@ -228,6 +229,7 @@ export interface ClientFormDialogData {
             [label]="isCreateMode() ? 'Create Client' : 'Update Client'"
             [loading]="isLoading()"
             [disabled]="clientForm.invalid || isLoading()"
+            data-testid="client-form-save"
           ></button>
         </div>
       </form>
@@ -243,7 +245,7 @@ export interface ClientFormDialogData {
     h4 {
       margin: 0 0 1rem;
       font-size: 1rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       font-weight: 600;
     }
 
@@ -265,7 +267,7 @@ export interface ClientFormDialogData {
 
     .form-field label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .required {
@@ -288,7 +290,7 @@ export interface ClientFormDialogData {
       gap: 0.5rem;
       margin-top: 1.5rem;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .p-error {

@@ -31,10 +31,11 @@ import { AuthService } from '../../core/auth/auth.service';
           type="button"
           icon="pi pi-bars"
           class="p-button-text p-button-rounded"
+          data-testid="sidebar-toggle"
           (click)="toggleSidebar.emit()"
         ></button>
         <div class="logo">
-          <img src="assets/images/logo.png" alt="Bayan" height="32" *ngIf="!collapsed" />
+          <i class="pi pi-briefcase logo-icon" *ngIf="!collapsed"></i>
           <span class="logo-text" *ngIf="!collapsed">Bayan Tender</span>
         </div>
       </div>
@@ -46,16 +47,17 @@ import { AuthService } from '../../core/auth/auth.service';
           type="button"
           icon="pi pi-bell"
           class="p-button-text p-button-rounded notification-btn"
+          data-testid="notification-btn"
           pBadge
           value="3"
           severity="danger"
         ></button>
 
-        <div class="user-menu">
+        <div class="user-menu" data-testid="user-menu">
           <p-avatar
             [label]="userInitials"
             shape="circle"
-            [style]="{ 'background-color': '#2196F3', color: '#ffffff', cursor: 'pointer' }"
+            [style]="{ 'background-color': 'var(--bayan-primary, #18181b)', color: 'var(--bayan-primary-foreground, #fafafa)', cursor: 'pointer' }"
             (click)="userMenu.toggle($event)"
           ></p-avatar>
           <span class="user-name" (click)="userMenu.toggle($event)">
@@ -74,8 +76,8 @@ import { AuthService } from '../../core/auth/auth.service';
       align-items: center;
       padding: 0 1rem;
       height: 64px;
-      background: #ffffff;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+      background: var(--bayan-card, #ffffff);
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
       position: fixed;
       top: 0;
       left: 0;
@@ -95,10 +97,16 @@ import { AuthService } from '../../core/auth/auth.service';
       gap: 0.5rem;
     }
 
+    .logo-icon {
+      font-size: 1.5rem;
+      color: var(--bayan-foreground, #09090b);
+    }
+
     .logo-text {
       font-size: 1.25rem;
-      font-weight: 600;
-      color: #1976D2;
+      font-weight: 700;
+      color: var(--bayan-foreground, #09090b);
+      letter-spacing: -0.025em;
     }
 
     .header-right {
@@ -117,17 +125,18 @@ import { AuthService } from '../../core/auth/auth.service';
       gap: 0.5rem;
       cursor: pointer;
       padding: 0.5rem;
-      border-radius: 8px;
-      transition: background-color 0.2s;
+      border-radius: 0.375rem;
+      transition: background-color 150ms ease;
     }
 
     .user-menu:hover {
-      background-color: #f5f5f5;
+      background-color: var(--bayan-accent, #f4f4f5);
     }
 
     .user-name {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
+      font-size: 0.875rem;
     }
 
     :host ::ng-deep .p-badge {

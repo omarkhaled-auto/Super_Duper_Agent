@@ -188,12 +188,12 @@ import {
     .review-header h3 {
       margin: 0 0 0.25rem 0;
       font-size: 1.25rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .review-header p {
       margin: 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .review-grid {
@@ -229,7 +229,7 @@ import {
       justify-content: space-between;
       align-items: flex-start;
       padding: 0.5rem 0;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .review-item:last-child {
@@ -237,26 +237,26 @@ import {
     }
 
     .item-label {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       font-size: 0.9rem;
     }
 
     .item-value {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       text-align: right;
       max-width: 60%;
     }
 
     .item-value.reference {
       font-family: monospace;
-      background-color: #f0f0f0;
+      background-color: var(--bayan-muted, #f4f4f5);
       padding: 0.25rem 0.5rem;
-      border-radius: 4px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .item-value.highlight {
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
       font-weight: 600;
     }
 
@@ -267,7 +267,7 @@ import {
     .weight-bar {
       display: flex;
       height: 40px;
-      border-radius: 8px;
+      border-radius: var(--bayan-radius, 0.5rem);
       overflow: hidden;
     }
 
@@ -277,15 +277,15 @@ import {
       justify-content: center;
       color: white;
       font-weight: 600;
-      font-size: 0.85rem;
+      font-size: 0.875rem;
     }
 
     .weight-segment.technical {
-      background: linear-gradient(135deg, #1976D2, #1565C0);
+      background-color: var(--bayan-primary, #18181b);
     }
 
     .weight-segment.commercial {
-      background: linear-gradient(135deg, #4caf50, #388e3c);
+      background-color: #16a34a;
     }
 
     .criteria-list {
@@ -299,8 +299,8 @@ import {
       justify-content: space-between;
       align-items: center;
       padding: 0.75rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .criterion-info {
@@ -311,12 +311,12 @@ import {
 
     .criterion-name {
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .criterion-description {
       font-size: 0.8rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .criterion-weight {
@@ -329,25 +329,25 @@ import {
 
     .weight-value {
       font-weight: 600;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .weight-bar-small {
       width: 80px;
       height: 4px;
-      background-color: #e0e0e0;
+      background-color: var(--bayan-border, #e4e4e7);
       border-radius: 2px;
       overflow: hidden;
     }
 
     .weight-fill {
       height: 100%;
-      background-color: #1976D2;
+      background-color: var(--bayan-primary, #18181b);
       transition: width 0.3s ease;
     }
 
     .no-criteria {
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
       font-style: italic;
       text-align: center;
       padding: 1rem;
@@ -362,17 +362,17 @@ import {
     }
 
     .criteria-total .valid {
-      color: #2e7d32;
+      color: #16a34a;
     }
 
     .criteria-total .invalid {
-      color: #c62828;
+      color: #dc2626;
     }
 
     .description-preview {
       padding: 1rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
       max-height: 200px;
       overflow-y: auto;
     }
@@ -383,9 +383,9 @@ import {
     }
 
     .validation-summary {
-      background-color: #fff3e0;
-      border: 1px solid #ff9800;
-      border-radius: 8px;
+      background-color: #fff7ed;
+      border: 1px solid #fb923c;
+      border-radius: var(--bayan-radius, 0.5rem);
       padding: 1rem;
     }
 
@@ -400,7 +400,7 @@ import {
     .validation-summary ul {
       margin: 0;
       padding-left: 1.5rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .validation-summary li {

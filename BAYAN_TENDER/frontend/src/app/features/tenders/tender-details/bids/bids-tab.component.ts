@@ -62,7 +62,7 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
     <p-toast></p-toast>
     <p-confirmDialog></p-confirmDialog>
 
-    <div class="bids-tab-container">
+    <div class="bids-tab-container" data-testid="bids-tab">
       <!-- Header Stats & Actions -->
       <div class="bids-header">
         <div class="header-stats">
@@ -84,6 +84,7 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
             icon="pi pi-download"
             label="Download All Bids"
             class="p-button-outlined"
+            data-testid="download-all-bids-btn"
             [disabled]="bids().length === 0"
             [loading]="isDownloading()"
             (click)="downloadAllBids()"
@@ -95,6 +96,7 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
               icon="pi pi-eye"
               label="Open Bids"
               class="p-button-warning"
+              data-testid="open-bids-btn"
               [disabled]="regularBids().length === 0"
               (click)="showOpenBidsDialog = true"
             ></button>
@@ -125,13 +127,14 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
       } @else if (bids().length === 0) {
         <!-- Empty State -->
         <div class="empty-state">
-          <i class="pi pi-inbox" style="font-size: 3rem; color: #ccc;"></i>
+          <i class="pi pi-inbox" style="font-size: 3rem; color: var(--bayan-border, #e4e4e7);"></i>
           <h3>No Bids Received</h3>
           <p>No bids have been submitted for this tender yet.</p>
         </div>
       } @else {
         <!-- Bids Table -->
         <p-table
+          data-testid="bids-table"
           [value]="regularBids()"
           [(selection)]="selectedBids"
           dataKey="id"
@@ -346,19 +349,19 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
       justify-content: space-between;
       align-items: center;
       padding: 1rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
       flex-wrap: wrap;
       gap: 1rem;
     }
 
     .header-stats {
       font-size: 1rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .late-indicator {
-      color: #ef6c00;
+      color: #d97706;
     }
 
     .header-actions {
@@ -377,7 +380,7 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
     }
 
     .loading-container p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .empty-state {
@@ -392,12 +395,12 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
 
     .empty-state h3 {
       margin: 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .empty-state p {
       margin: 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .bidder-info {
@@ -407,19 +410,19 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
 
     .bidder-name {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .bid-amount {
       font-weight: 600;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .hidden-amount {
       display: flex;
       align-items: center;
       gap: 0.25rem;
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
       font-size: 0.875rem;
     }
 
@@ -427,7 +430,7 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
       display: flex;
       align-items: center;
       gap: 0.25rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .action-buttons {
@@ -441,7 +444,7 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
     }
 
     :host ::ng-deep .late-bids-panel .p-panel-header {
-      background-color: #fff3e0;
+      background-color: var(--bayan-warning-bg, #fffbeb);
       border-color: #ffcc02;
     }
 
@@ -449,7 +452,7 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      color: #ef6c00;
+      color: #d97706;
       font-weight: 600;
     }
 
@@ -465,8 +468,8 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
       align-items: center;
       padding: 1rem;
       background-color: #fff;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      border-radius: var(--bayan-radius, 0.5rem);
       flex-wrap: wrap;
       gap: 1rem;
     }
@@ -487,7 +490,7 @@ import { LateBidRejectionDialogComponent } from './late-bid-rejection-dialog.com
       display: flex;
       gap: 1rem;
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .late-bid-meta span {
@@ -593,7 +596,7 @@ export class BidsTabComponent implements OnInit, OnDestroy {
   }
 
   downloadBidFiles(bid: BidListItem): void {
-    this.bidService.downloadBidFiles(bid.id).pipe(
+    this.bidService.downloadBidFiles(this.tenderId, bid.id).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: (blob) => {
@@ -660,7 +663,7 @@ export class BidsTabComponent implements OnInit, OnDestroy {
       header: 'Confirm Import',
       icon: 'pi pi-file-import',
       accept: () => {
-        this.bidService.importBoq(bid.id).pipe(
+        this.bidService.importBoq(this.tenderId, bid.id).pipe(
           takeUntil(this.destroy$)
         ).subscribe({
           next: () => {
@@ -713,7 +716,7 @@ export class BidsTabComponent implements OnInit, OnDestroy {
       icon: 'pi pi-check',
       acceptButtonStyleClass: 'p-button-success',
       accept: () => {
-        this.bidService.acceptLateBid(bid.id).pipe(
+        this.bidService.acceptLateBid(this.tenderId, bid.id).pipe(
           takeUntil(this.destroy$)
         ).subscribe({
           next: () => {
@@ -744,7 +747,7 @@ export class BidsTabComponent implements OnInit, OnDestroy {
   onLateBidRejected(reason: string): void {
     if (!this.selectedLateBid) return;
 
-    this.bidService.rejectLateBid(this.selectedLateBid.id, { reason }).pipe(
+    this.bidService.rejectLateBid(this.tenderId, this.selectedLateBid.id, { reason }).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: () => {

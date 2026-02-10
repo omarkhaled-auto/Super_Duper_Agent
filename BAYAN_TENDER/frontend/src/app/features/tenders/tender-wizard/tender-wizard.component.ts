@@ -100,6 +100,7 @@ import { CreateTenderDto, Tender, DEFAULT_EVALUATION_CRITERIA } from '../../../c
                 icon="pi pi-arrow-left"
                 label="Previous"
                 class="p-button-outlined"
+                data-testid="wizard-prev"
                 (click)="previousStep()"
               ></button>
             }
@@ -112,6 +113,7 @@ import { CreateTenderDto, Tender, DEFAULT_EVALUATION_CRITERIA } from '../../../c
                 icon="pi pi-arrow-right"
                 iconPos="right"
                 label="Next"
+                data-testid="wizard-next"
                 (click)="nextStep()"
                 [disabled]="!isCurrentStepValid()"
               ></button>
@@ -121,6 +123,7 @@ import { CreateTenderDto, Tender, DEFAULT_EVALUATION_CRITERIA } from '../../../c
                 icon="pi pi-save"
                 label="Save as Draft"
                 class="p-button-outlined"
+                data-testid="wizard-save-draft"
                 (click)="saveDraft()"
                 [loading]="saving()"
               ></button>
@@ -128,6 +131,7 @@ import { CreateTenderDto, Tender, DEFAULT_EVALUATION_CRITERIA } from '../../../c
                 pButton
                 icon="pi pi-check"
                 label="{{ isEditMode() ? 'Update Tender' : 'Create Tender' }}"
+                data-testid="wizard-create"
                 (click)="createTender()"
                 [loading]="saving()"
                 [disabled]="!tenderForm.valid"
@@ -156,12 +160,12 @@ import { CreateTenderDto, Tender, DEFAULT_EVALUATION_CRITERIA } from '../../../c
     .header-content h1 {
       margin: 0;
       font-size: 1.75rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .header-content p {
       margin: 0.25rem 0 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     :host ::ng-deep .wizard-steps {
@@ -197,7 +201,7 @@ import { CreateTenderDto, Tender, DEFAULT_EVALUATION_CRITERIA } from '../../../c
     }
 
     .loading-container p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .wizard-navigation {
@@ -205,7 +209,7 @@ import { CreateTenderDto, Tender, DEFAULT_EVALUATION_CRITERIA } from '../../../c
       justify-content: space-between;
       align-items: center;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .nav-left, .nav-right {
@@ -259,7 +263,7 @@ export class TenderWizardComponent implements OnInit, OnDestroy {
   loading = signal<boolean>(false);
   saving = signal<boolean>(false);
   isEditMode = signal<boolean>(false);
-  tenderId = signal<number | null>(null);
+  tenderId = signal<string | number | null>(null);
 
   steps: MenuItem[] = [
     { label: 'Basic Info', icon: 'pi pi-file' },
@@ -322,16 +326,16 @@ export class TenderWizardComponent implements OnInit, OnDestroy {
       switchMap(params => {
         if (params['id']) {
           this.isEditMode.set(true);
-          this.tenderId.set(+params['id']);
+          this.tenderId.set(params['id']);
           this.loading.set(true);
-          return this.tenderService.getTenderById(+params['id']);
+          return this.tenderService.getTenderById(params['id']);
         }
 
         // Check for duplicate query param
         const duplicateId = this.route.snapshot.queryParams['duplicate'];
         if (duplicateId) {
           this.loading.set(true);
-          return this.tenderService.getTenderById(+duplicateId);
+          return this.tenderService.getTenderById(duplicateId);
         }
 
         return of(null);

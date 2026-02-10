@@ -285,7 +285,7 @@ interface CriterionScoreForm {
         } @else {
           <!-- No Bidders -->
           <div class="empty-state">
-            <i class="pi pi-users" style="font-size: 3rem; color: #ccc;"></i>
+            <i class="pi pi-users" style="font-size: 3rem; color: var(--bayan-border, #e4e4e7);"></i>
             <h3>No Bidders Available</h3>
             <p>There are no bidders to score for this tender.</p>
           </div>
@@ -310,7 +310,7 @@ interface CriterionScoreForm {
     }
 
     .loading-container p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       margin: 0;
     }
 
@@ -318,8 +318,9 @@ interface CriterionScoreForm {
     .progress-section {
       background: white;
       padding: 1.25rem;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      border-radius: var(--bayan-radius, 0.5rem);
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
     }
 
     .progress-info {
@@ -331,17 +332,17 @@ interface CriterionScoreForm {
 
     .progress-label {
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .progress-value {
       font-size: 0.9rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     :host ::ng-deep .progress-bar .p-progressbar {
       height: 8px;
-      border-radius: 4px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     /* Bidder Header Card */
@@ -364,12 +365,12 @@ interface CriterionScoreForm {
     .bidder-info h2 {
       margin: 0;
       font-size: 1.5rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .bidder-position {
       font-size: 1rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       font-weight: 500;
     }
 
@@ -385,18 +386,18 @@ interface CriterionScoreForm {
       align-items: center;
       gap: 0.5rem;
       padding: 0.75rem 1rem;
-      background: #f8f9fa;
+      background: var(--bayan-accent, #f4f4f5);
       border-radius: 6px;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       text-decoration: none;
       transition: all 0.2s ease;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .document-link:hover {
-      background: #e3f2fd;
-      border-color: #1976D2;
-      color: #1976D2;
+      background: var(--bayan-muted, #f4f4f5);
+      border-color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #18181b);
     }
 
     .document-link i:first-child {
@@ -411,9 +412,9 @@ interface CriterionScoreForm {
     /* Criterion Card */
     :host ::ng-deep .criterion-card {
       .p-card-header {
-        background: #f8f9fa;
+        background: var(--bayan-accent, #f4f4f5);
         padding: 1rem;
-        border-bottom: 1px solid #e0e0e0;
+        border-bottom: 1px solid var(--bayan-border, #e4e4e7);
       }
 
       .p-card-body {
@@ -430,7 +431,7 @@ interface CriterionScoreForm {
     .criterion-info h3 {
       margin: 0 0 0.5rem 0;
       font-size: 1.125rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .criterion-meta {
@@ -443,13 +444,13 @@ interface CriterionScoreForm {
       display: flex;
       align-items: center;
       gap: 0.375rem;
-      font-size: 0.85rem;
-      color: #666;
+      font-size: 0.875rem;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .weight-badge i,
     .max-score-badge i {
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     /* Guidance Notes */
@@ -466,7 +467,7 @@ interface CriterionScoreForm {
     }
 
     .guidance-notes i {
-      color: #ff9800;
+      color: var(--bayan-warning, #f59e0b);
       margin-top: 0.125rem;
     }
 
@@ -478,7 +479,7 @@ interface CriterionScoreForm {
     .score-input-section > label {
       display: block;
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       margin-bottom: 0.75rem;
     }
 
@@ -503,26 +504,26 @@ interface CriterionScoreForm {
       align-items: center;
       margin-top: 0.5rem;
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .current-score {
       font-size: 1.5rem;
       font-weight: 700;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       padding: 0.25rem 0.75rem;
-      background: #f0f0f0;
+      background: var(--bayan-accent, #f4f4f5);
       border-radius: 6px;
     }
 
     .current-score.low {
       background: #ffcdd2;
-      color: #c62828;
+      color: #dc2626;
     }
 
     .current-score.high {
       background: #c8e6c9;
-      color: #2e7d32;
+      color: #16a34a;
     }
 
     .rating-container {
@@ -534,7 +535,7 @@ interface CriterionScoreForm {
     .rating-value {
       font-size: 1.25rem;
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     /* Comment Section */
@@ -546,17 +547,17 @@ interface CriterionScoreForm {
 
     .comment-section label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .comment-section label.required {
-      color: #c62828;
+      color: #dc2626;
     }
 
     .required-indicator {
       font-size: 0.8rem;
       font-weight: 400;
-      color: #c62828;
+      color: #dc2626;
     }
 
     .comment-section textarea {
@@ -571,8 +572,9 @@ interface CriterionScoreForm {
       align-items: center;
       padding: 1.25rem;
       background: white;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      border-radius: var(--bayan-radius, 0.5rem);
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
       margin-top: 0.5rem;
     }
 
@@ -611,12 +613,12 @@ interface CriterionScoreForm {
 
     .empty-state h3 {
       margin: 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .empty-state p {
       margin: 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     /* Responsive */

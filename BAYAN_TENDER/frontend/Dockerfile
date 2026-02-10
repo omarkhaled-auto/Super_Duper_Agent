@@ -18,7 +18,7 @@ RUN npm install -g @angular/cli@18
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --legacy-peer-deps
+RUN npm install --legacy-peer-deps
 
 # Copy source code
 COPY . .
@@ -43,7 +43,7 @@ COPY nginx.conf /etc/nginx/nginx.conf
 COPY nginx-default.conf /etc/nginx/conf.d/default.conf
 
 # Copy built application from build stage
-COPY --from=build /app/dist/bayan-ui/browser /usr/share/nginx/html
+COPY --from=build /app/dist/bayan-tender/browser /usr/share/nginx/html
 
 # Create non-root user for security (nginx runs as nginx user by default)
 RUN chown -R nginx:nginx /usr/share/nginx/html

@@ -1,23 +1,20 @@
-import { Component, inject, OnInit, OnDestroy, signal, computed } from '@angular/core';
+import { Component, inject, OnInit, OnDestroy, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute, Router } from '@angular/router';
 import { interval, Subscription } from 'rxjs';
 import { ButtonModule } from 'primeng/button';
-import { TabMenuModule } from 'primeng/tabmenu';
-import { MenuItem } from 'primeng/api';
 import { TooltipModule } from 'primeng/tooltip';
 import { TagModule } from 'primeng/tag';
 import { PortalService } from '../../../core/services/portal.service';
-import { PortalTenderInfo } from '../../../core/models/portal.model';
 
 @Component({
   selector: 'app-portal-layout',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CommonModule,
     RouterModule,
     ButtonModule,
-    TabMenuModule,
     TooltipModule,
     TagModule
   ],
@@ -27,7 +24,7 @@ import { PortalTenderInfo } from '../../../core/models/portal.model';
       <header class="portal-header">
         <div class="header-content">
           <div class="header-left">
-            <img src="assets/images/logo-white.png" alt="Bayan" class="portal-logo" />
+            <img src="assets/images/logo-white.svg" alt="Bayan" class="portal-logo" />
             <div class="tender-info" *ngIf="tender()">
               <h1 class="tender-title">{{ tender()?.title }}</h1>
               <span class="tender-reference">{{ tender()?.reference }}</span>
@@ -45,18 +42,13 @@ import { PortalTenderInfo } from '../../../core/models/portal.model';
                 </div>
                 <span class="countdown-separator">:</span>
                 <div class="countdown-unit">
-                  <span class="countdown-value">{{ countdown().hours | number:'2.0-0' }}</span>
+                  <span class="countdown-value">{{ padZero(countdown().hours) }}</span>
                   <span class="countdown-text">Hours</span>
                 </div>
                 <span class="countdown-separator">:</span>
                 <div class="countdown-unit">
-                  <span class="countdown-value">{{ countdown().minutes | number:'2.0-0' }}</span>
+                  <span class="countdown-value">{{ padZero(countdown().minutes) }}</span>
                   <span class="countdown-text">Min</span>
-                </div>
-                <span class="countdown-separator">:</span>
-                <div class="countdown-unit">
-                  <span class="countdown-value">{{ countdown().seconds | number:'2.0-0' }}</span>
-                  <span class="countdown-text">Sec</span>
                 </div>
               </div>
             </div>
@@ -83,10 +75,18 @@ import { PortalTenderInfo } from '../../../core/models/portal.model';
           </div>
         </div>
 
-        <!-- Navigation Tabs -->
-        <div class="portal-nav" *ngIf="tender()">
-          <p-tabMenu [model]="menuItems" [activeItem]="activeItem()"></p-tabMenu>
-        </div>
+        <!-- Navigation Tabs — plain Angular routerLink -->
+        <nav class="portal-nav" *ngIf="tenderId">
+          <a
+            *ngFor="let tab of tabs"
+            [routerLink]="['/portal/tenders', tenderId, tab.path]"
+            routerLinkActive="active"
+            class="nav-tab"
+          >
+            <i class="pi {{ tab.icon }}"></i>
+            <span>{{ tab.label }}</span>
+          </a>
+        </nav>
       </header>
 
       <!-- Main Content -->
@@ -117,17 +117,17 @@ import { PortalTenderInfo } from '../../../core/models/portal.model';
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      background-color: #f8f9fa;
+      background-color: var(--bayan-muted, #f4f4f5);
     }
 
-    /* Header Styles */
     .portal-header {
-      background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%);
+      background: var(--bayan-primary, #18181b);
       color: white;
       position: sticky;
       top: 0;
       z-index: 1000;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
+      box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
     }
 
     .header-content {
@@ -146,9 +146,7 @@ import { PortalTenderInfo } from '../../../core/models/portal.model';
       gap: 1.5rem;
     }
 
-    .portal-logo {
-      height: 40px;
-    }
+    .portal-logo { height: 40px; }
 
     .tender-info {
       border-left: 1px solid rgba(255, 255, 255, 0.3);
@@ -166,10 +164,7 @@ import { PortalTenderInfo } from '../../../core/models/portal.model';
       text-overflow: ellipsis;
     }
 
-    .tender-reference {
-      font-size: 0.875rem;
-      opacity: 0.8;
-    }
+    .tender-reference { font-size: 0.875rem; opacity: 0.8; }
 
     .header-right {
       display: flex;
@@ -177,18 +172,13 @@ import { PortalTenderInfo } from '../../../core/models/portal.model';
       gap: 2rem;
     }
 
-    /* Countdown Styles */
     .deadline-countdown {
       display: flex;
       flex-direction: column;
       align-items: flex-end;
     }
 
-    .countdown-label {
-      font-size: 0.75rem;
-      opacity: 0.8;
-      margin-bottom: 0.25rem;
-    }
+    .countdown-label { font-size: 0.75rem; opacity: 0.8; margin-bottom: 0.25rem; }
 
     .countdown-timer {
       display: flex;
@@ -196,7 +186,7 @@ import { PortalTenderInfo } from '../../../core/models/portal.model';
       gap: 0.25rem;
       background: rgba(255, 255, 255, 0.1);
       padding: 0.5rem 0.75rem;
-      border-radius: 8px;
+      border-radius: 0.375rem;
     }
 
     .countdown-unit {
@@ -206,25 +196,10 @@ import { PortalTenderInfo } from '../../../core/models/portal.model';
       min-width: 40px;
     }
 
-    .countdown-value {
-      font-size: 1.25rem;
-      font-weight: 700;
-      line-height: 1;
-    }
+    .countdown-value { font-size: 1.25rem; font-weight: 700; line-height: 1; }
+    .countdown-text { font-size: 0.625rem; text-transform: uppercase; opacity: 0.7; }
+    .countdown-separator { font-size: 1.25rem; font-weight: 700; opacity: 0.5; }
 
-    .countdown-text {
-      font-size: 0.625rem;
-      text-transform: uppercase;
-      opacity: 0.7;
-    }
-
-    .countdown-separator {
-      font-size: 1.25rem;
-      font-weight: 700;
-      opacity: 0.5;
-    }
-
-    /* User Info */
     .user-info {
       display: flex;
       align-items: center;
@@ -241,83 +216,56 @@ import { PortalTenderInfo } from '../../../core/models/portal.model';
       text-overflow: ellipsis;
     }
 
-    .logout-btn {
-      color: white !important;
-    }
+    .logout-btn { color: white !important; }
+    .logout-btn:hover { background: rgba(255, 255, 255, 0.1) !important; }
 
-    .logout-btn:hover {
-      background: rgba(255, 255, 255, 0.1) !important;
-    }
-
-    /* Navigation */
+    /* Navigation Tabs */
     .portal-nav {
-      background: rgba(255, 255, 255, 0.05);
+      display: flex;
+      gap: 0.25rem;
       padding: 0 2rem;
       max-width: 1400px;
       margin: 0 auto;
       width: 100%;
+      background: rgba(255, 255, 255, 0.05);
     }
 
-    :host ::ng-deep {
-      .portal-nav .p-tabmenu {
-        background: transparent;
-        border: none;
-      }
+    .nav-tab {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.875rem 1.5rem;
+      color: rgba(255, 255, 255, 0.7);
+      text-decoration: none;
+      border-radius: 0.375rem 0.375rem 0 0;
+      transition: background 0.15s ease, color 0.15s ease;
+      font-weight: 500;
+      font-size: 0.9375rem;
+      cursor: pointer;
+      user-select: none;
+    }
 
-      .portal-nav .p-tabmenu-nav {
-        background: transparent;
-        border: none;
-        gap: 0.5rem;
-      }
+    .nav-tab:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+    }
 
-      .portal-nav .p-tabmenuitem {
-        .p-menuitem-link {
-          background: transparent;
-          color: rgba(255, 255, 255, 0.7);
-          border: none;
-          padding: 1rem 1.5rem;
-          border-radius: 8px 8px 0 0;
-          transition: all 0.2s ease;
+    .nav-tab.active {
+      background: var(--bayan-card, #ffffff);
+      color: var(--bayan-primary, #18181b);
+    }
 
-          .p-menuitem-icon {
-            color: rgba(255, 255, 255, 0.7);
-          }
-
-          &:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-
-            .p-menuitem-icon {
-              color: white;
-            }
-          }
-        }
-
-        &.p-highlight .p-menuitem-link {
-          background: white;
-          color: #1565C0;
-
-          .p-menuitem-icon {
-            color: #1565C0;
-          }
-        }
-      }
+    .nav-tab.active i {
+      color: var(--bayan-primary, #18181b);
     }
 
     /* Main Content */
-    .portal-main {
-      flex: 1;
-      padding: 2rem;
-    }
-
-    .portal-content {
-      max-width: 1400px;
-      margin: 0 auto;
-    }
+    .portal-main { flex: 1; padding: 2rem; }
+    .portal-content { max-width: 1400px; margin: 0 auto; }
 
     /* Footer */
     .portal-footer {
-      background: #1e293b;
+      background: var(--bayan-foreground, #09090b);
       color: rgba(255, 255, 255, 0.7);
       padding: 1rem 2rem;
       margin-top: auto;
@@ -332,56 +280,23 @@ import { PortalTenderInfo } from '../../../core/models/portal.model';
       font-size: 0.875rem;
     }
 
-    .copyright {
-      opacity: 0.7;
-    }
+    .copyright { opacity: 0.7; }
 
-    /* Responsive */
     @media (max-width: 991px) {
-      .header-content {
-        flex-wrap: wrap;
-        gap: 1rem;
-        padding: 1rem;
-      }
-
-      .tender-info {
-        display: none;
-      }
-
-      .deadline-countdown {
-        flex: 1;
-        align-items: center;
-      }
-
-      .countdown-timer {
-        width: 100%;
-        justify-content: center;
-      }
-
-      .user-info {
-        border-left: none;
-        padding-left: 0;
-      }
-
-      .footer-content {
-        flex-direction: column;
-        gap: 0.5rem;
-        text-align: center;
-      }
+      .header-content { flex-wrap: wrap; gap: 1rem; padding: 1rem; }
+      .tender-info { display: none; }
+      .deadline-countdown { flex: 1; align-items: center; }
+      .countdown-timer { width: 100%; justify-content: center; }
+      .user-info { border-left: none; padding-left: 0; }
+      .footer-content { flex-direction: column; gap: 0.5rem; text-align: center; }
     }
 
     @media (max-width: 576px) {
-      .portal-main {
-        padding: 1rem;
-      }
-
-      .countdown-unit {
-        min-width: 30px;
-      }
-
-      .countdown-value {
-        font-size: 1rem;
-      }
+      .portal-main { padding: 1rem; }
+      .portal-nav { padding: 0 1rem; gap: 0; }
+      .nav-tab { padding: 0.75rem 1rem; font-size: 0.8125rem; }
+      .countdown-unit { min-width: 30px; }
+      .countdown-value { font-size: 1rem; }
     }
   `]
 })
@@ -394,6 +309,7 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
 
   tender = this.portalService.currentTender;
   user = this.portalService.currentUser;
+  tenderId = '';
 
   countdown = signal({
     days: 0,
@@ -404,11 +320,14 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
     totalSeconds: 0
   });
 
-  menuItems: MenuItem[] = [];
-  activeItem = signal<MenuItem | undefined>(undefined);
+  tabs = [
+    { label: 'Documents', icon: 'pi-folder', path: 'documents' },
+    { label: 'Clarifications', icon: 'pi-comments', path: 'clarifications' },
+    { label: 'Submit Bid', icon: 'pi-upload', path: 'submit' }
+  ];
 
   ngOnInit(): void {
-    this.setupNavigation();
+    this.tenderId = this.route.snapshot.params['tenderId'] || '';
     this.loadTenderInfo();
     this.startCountdown();
   }
@@ -417,80 +336,25 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
     this.countdownSubscription?.unsubscribe();
   }
 
-  private setupNavigation(): void {
-    const tenderId = this.getTenderId();
-
-    this.menuItems = [
-      {
-        label: 'Documents',
-        icon: 'pi pi-folder',
-        routerLink: `/portal/tenders/${tenderId}/documents`,
-        command: () => this.setActiveByLabel('Documents')
-      },
-      {
-        label: 'Clarifications',
-        icon: 'pi pi-comments',
-        routerLink: `/portal/tenders/${tenderId}/clarifications`,
-        command: () => this.setActiveByLabel('Clarifications')
-      },
-      {
-        label: 'Submit Bid',
-        icon: 'pi pi-upload',
-        routerLink: `/portal/tenders/${tenderId}/submit`,
-        command: () => this.setActiveByLabel('Submit Bid')
-      }
-    ];
-
-    // Set initial active item based on current route
-    this.setActiveItemFromRoute();
-  }
-
-  private setActiveItemFromRoute(): void {
-    const currentUrl = this.router.url;
-    if (currentUrl.includes('/documents')) {
-      this.setActiveByLabel('Documents');
-    } else if (currentUrl.includes('/clarifications')) {
-      this.setActiveByLabel('Clarifications');
-    } else if (currentUrl.includes('/submit')) {
-      this.setActiveByLabel('Submit Bid');
-    }
-  }
-
-  private setActiveByLabel(label: string): void {
-    const item = this.menuItems.find(i => i.label === label);
-    if (item) {
-      this.activeItem.set(item);
-    }
-  }
-
-  private getTenderId(): number {
-    // Try to get from route params first, then from stored tender
-    const routeTenderId = this.route.firstChild?.snapshot.params['tenderId'];
-    if (routeTenderId) {
-      return parseInt(routeTenderId, 10);
-    }
-    return this.tender()?.id || 0;
+  padZero(n: number): string {
+    return n < 10 ? '0' + n : '' + n;
   }
 
   private loadTenderInfo(): void {
-    const tenderId = this.getTenderId();
-    if (tenderId && !this.tender()) {
-      this.portalService.getTenderInfo(tenderId).subscribe();
+    if (this.tenderId && !this.tender()) {
+      this.portalService.getTenderInfo(this.tenderId).subscribe();
     }
   }
 
   private startCountdown(): void {
-    // Update countdown every second
-    this.countdownSubscription = interval(1000).subscribe(() => {
-      const tender = this.tender();
-      if (tender?.submissionDeadline) {
-        this.countdown.set(
-          this.portalService.getDeadlineCountdown(tender.submissionDeadline)
-        );
-      }
+    // Update countdown every 30 seconds (not every second — reduces change detection)
+    this.countdownSubscription = interval(30000).subscribe(() => {
+      this.updateCountdown();
     });
+    this.updateCountdown();
+  }
 
-    // Initial calculation
+  private updateCountdown(): void {
     const tender = this.tender();
     if (tender?.submissionDeadline) {
       this.countdown.set(

@@ -14,7 +14,7 @@ import { Subject, takeUntil } from 'rxjs';
 import { DialogModule } from 'primeng/dialog';
 import { ButtonModule } from 'primeng/button';
 import { DropdownModule } from 'primeng/dropdown';
-import { CalendarModule } from 'primeng/calendar';
+import { DatePickerModule } from 'primeng/datepicker';
 import { DividerModule } from 'primeng/divider';
 import { MessageModule } from 'primeng/message';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
@@ -37,7 +37,7 @@ import {
     DialogModule,
     ButtonModule,
     DropdownModule,
-    CalendarModule,
+    DatePickerModule,
     DividerModule,
     MessageModule,
     ProgressSpinnerModule,
@@ -103,7 +103,7 @@ import {
               </div>
               <div class="form-field deadline-field">
                 <label for="level1Deadline">Deadline</label>
-                <p-calendar
+                <p-datepicker
                   id="level1Deadline"
                   formControlName="level1Deadline"
                   [minDate]="minDate"
@@ -113,7 +113,7 @@ import {
                   placeholder="Select deadline"
                   styleClass="w-full"
                   pTooltip="Optional deadline for this approval level"
-                ></p-calendar>
+                ></p-datepicker>
               </div>
             </div>
           </div>
@@ -154,7 +154,7 @@ import {
               </div>
               <div class="form-field deadline-field">
                 <label for="level2Deadline">Deadline</label>
-                <p-calendar
+                <p-datepicker
                   id="level2Deadline"
                   formControlName="level2Deadline"
                   [minDate]="getLevel2MinDate()"
@@ -164,7 +164,7 @@ import {
                   placeholder="Select deadline"
                   styleClass="w-full"
                   pTooltip="Optional deadline for this approval level"
-                ></p-calendar>
+                ></p-datepicker>
               </div>
             </div>
           </div>
@@ -205,7 +205,7 @@ import {
               </div>
               <div class="form-field deadline-field">
                 <label for="level3Deadline">Deadline</label>
-                <p-calendar
+                <p-datepicker
                   id="level3Deadline"
                   formControlName="level3Deadline"
                   [minDate]="getLevel3MinDate()"
@@ -215,7 +215,7 @@ import {
                   placeholder="Select deadline"
                   styleClass="w-full"
                   pTooltip="Optional deadline for this approval level"
-                ></p-calendar>
+                ></p-datepicker>
               </div>
             </div>
           </div>
@@ -245,6 +245,7 @@ import {
             type="submit"
             label="Initiate Workflow"
             icon="pi pi-play"
+            data-testid="initiate-approval-submit"
             [loading]="isSubmitting()"
             [disabled]="form.invalid || isSubmitting() || isLoadingApprovers()"
             (click)="onSubmit()"
@@ -264,7 +265,7 @@ import {
     }
 
     .loading-container p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .level-section {
@@ -291,7 +292,7 @@ import {
     }
 
     .level-badge.level-1 {
-      background-color: #1976D2;
+      background-color: var(--bayan-primary, #18181b);
     }
 
     .level-badge.level-2 {
@@ -304,7 +305,7 @@ import {
 
     .level-header h4 {
       margin: 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       font-size: 1rem;
     }
 
@@ -323,7 +324,7 @@ import {
 
     .form-field label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       font-size: 0.9rem;
     }
 
@@ -338,12 +339,12 @@ import {
 
     .approver-name {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .approver-email {
-      font-size: 0.85rem;
-      color: #666;
+      font-size: 0.875rem;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .dialog-footer {

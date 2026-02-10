@@ -39,6 +39,11 @@ export const routes: Routes = [
         loadChildren: () => import('./features/admin/admin.routes').then(m => m.ADMIN_ROUTES)
       },
       {
+        path: 'vendor-pricing',
+        loadChildren: () => import('./features/vendor-pricing/vendor-pricing.routes').then(m => m.VENDOR_PRICING_ROUTES),
+        title: 'Vendor Pricing - Bayan'
+      },
+      {
         path: 'settings',
         children: [
           {

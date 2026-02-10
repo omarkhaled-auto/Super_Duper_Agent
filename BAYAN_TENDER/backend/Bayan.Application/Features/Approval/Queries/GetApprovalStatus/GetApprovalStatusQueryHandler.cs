@@ -39,17 +39,19 @@ public class GetApprovalStatusQueryHandler : IRequestHandler<GetApprovalStatusQu
         var currentLevel = workflow.Levels
             .OrderBy(l => l.LevelNumber)
             .FirstOrDefault(l => l.Status == ApprovalLevelStatus.Active)?.LevelNumber ??
-            (workflow.Status == ApprovalWorkflowStatus.Approved ? workflow.Levels.Max(l => l.LevelNumber) : 0);
+            (workflow.Status == ApprovalWorkflowStatus.Approved && workflow.Levels.Any()
+                ? workflow.Levels.Max(l => l.LevelNumber)
+                : 0);
 
         return new ApprovalWorkflowDto
         {
             Id = workflow.Id,
             TenderId = workflow.TenderId,
-            TenderReference = workflow.Tender.Reference,
-            TenderTitle = workflow.Tender.Title,
+            TenderReference = workflow.Tender?.Reference ?? "",
+            TenderTitle = workflow.Tender?.Title ?? "",
             Status = workflow.Status,
             InitiatedBy = workflow.InitiatedBy,
-            InitiatedByName = workflow.Initiator.FullName,
+            InitiatedByName = workflow.Initiator?.FullName ?? "Unknown",
             InitiatedAt = workflow.InitiatedAt,
             CompletedAt = workflow.CompletedAt,
             AwardPackPdfPath = workflow.AwardPackPdfPath,

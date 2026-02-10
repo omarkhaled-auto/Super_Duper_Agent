@@ -15,8 +15,8 @@ export interface PortalLoginCredentials {
 }
 
 export interface PortalUser {
-  id: number;
-  bidderId: number;
+  id: string | number;
+  bidderId: string | number;
   companyName: string;
   companyNameAr?: string;
   email: string;
@@ -28,12 +28,24 @@ export interface PortalUser {
 export interface PortalAuthResponse {
   accessToken: string;
   refreshToken: string;
-  user: PortalUser;
+  user?: PortalUser;
+  bidder?: {
+    id: string;
+    companyName: string;
+    contactPerson: string;
+    email: string;
+    phone?: string;
+    tradeSpecialization?: string;
+    tenderAccess: Array<{ tenderId: string; tenderTitle: string; tenderReference: string; qualificationStatus: string }>;
+  };
+  accessTokenExpiresAt?: string;
+  refreshTokenExpiresAt?: string;
+  tokenType?: string;
   tenderId?: number;
 }
 
 export interface PortalTenderInfo {
-  id: number;
+  id: string | number;
   title: string;
   reference: string;
   clientName: string;
@@ -60,19 +72,17 @@ export type DocumentCategory =
   | 'other';
 
 export interface TenderDocument {
-  id: number;
-  tenderId: number;
-  category: DocumentCategory;
-  folderName?: string;
+  id: string;
+  folderPath: string;
   fileName: string;
-  fileSize: number;
-  mimeType: string;
-  url: string;
+  fileSizeBytes: number;
+  fileSizeDisplay: string;
+  contentType: string;
   version: number;
-  uploadedAt: Date | string;
-  uploadedByName?: string;
-  description?: string;
-  isRequired: boolean;
+  createdAt: Date | string;
+  isLatest: boolean;
+  // Computed on frontend
+  category?: DocumentCategory;
 }
 
 export interface TenderAddendum {
@@ -110,16 +120,18 @@ export const DOCUMENT_CATEGORY_CONFIG: Record<DocumentCategory, { label: string;
 // ============================================
 
 export interface PortalClarification {
-  id: number;
+  id: number | string;
   referenceNumber: string;
   subject: string;
   question: string;
   answer?: string;
-  status: 'submitted' | 'answered' | 'published';
+  status: string;
+  statusDisplay?: string;
   submittedAt: Date | string;
   answeredAt?: Date | string;
+  relatedBoqSection?: string;
   relatedBoqSectionTitle?: string;
-  isAnonymous: boolean;
+  isAnonymous?: boolean;
 }
 
 export interface PortalBulletin {
@@ -133,7 +145,7 @@ export interface PortalBulletin {
 }
 
 export interface SubmitQuestionDto {
-  tenderId: number;
+  tenderId: string | number;
   subject: string;
   question: string;
   relatedBoqSectionId?: number;
@@ -202,7 +214,7 @@ export interface PortalBidSubmission {
 }
 
 export interface SubmitBidDto {
-  tenderId: number;
+  tenderId: string | number;
   bidValidityDays: number;
   termsAccepted: boolean;
   documentIds: number[];

@@ -59,6 +59,7 @@ interface UploadSection {
           class="deadline-banner"
           [class.urgent]="countdown().totalSeconds < 86400"
           [class.critical]="countdown().totalSeconds < 3600"
+          data-testid="deadline-banner"
         >
           <div class="banner-icon">
             <i class="pi pi-clock"></i>
@@ -86,7 +87,7 @@ interface UploadSection {
         <!-- Commercial Bid Section -->
         <p-card styleClass="section-card mb-4">
           <ng-template pTemplate="header">
-            <div class="section-header commercial">
+            <div class="section-header commercial" data-testid="commercial-bid-section">
               <div class="header-info">
                 <i class="pi pi-dollar"></i>
                 <h3>Commercial Bid</h3>
@@ -149,7 +150,7 @@ interface UploadSection {
         <!-- Technical Bid Section -->
         <p-card styleClass="section-card mb-4">
           <ng-template pTemplate="header">
-            <div class="section-header technical">
+            <div class="section-header technical" data-testid="technical-bid-section">
               <div class="header-info">
                 <i class="pi pi-file"></i>
                 <h3>Technical Bid</h3>
@@ -215,7 +216,7 @@ interface UploadSection {
         <!-- Supporting Documents Section -->
         <p-card styleClass="section-card mb-4">
           <ng-template pTemplate="header">
-            <div class="section-header supporting">
+            <div class="section-header supporting" data-testid="supporting-docs-section">
               <div class="header-info">
                 <i class="pi pi-paperclip"></i>
                 <h3>Supporting Documents</h3>
@@ -323,6 +324,7 @@ interface UploadSection {
                 formControlName="termsAccepted"
                 [binary]="true"
                 inputId="terms"
+                data-testid="terms-checkbox"
               ></p-checkbox>
               <label for="terms" class="terms-label">
                 I confirm that:
@@ -342,6 +344,7 @@ interface UploadSection {
                 label="Submit Bid"
                 icon="pi pi-send"
                 class="submit-btn"
+                data-testid="submit-bid-btn"
                 [loading]="isSubmitting()"
                 [disabled]="!canSubmit()"
                 (click)="onSubmit()"
@@ -379,19 +382,19 @@ interface UploadSection {
       align-items: center;
       gap: 1rem;
       padding: 1rem 1.5rem;
-      background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-      border: 1px solid #93c5fd;
-      border-radius: 12px;
+      background: var(--bayan-accent, #f4f4f5);
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      border-radius: var(--bayan-radius, 0.5rem);
       margin-bottom: 1.5rem;
     }
 
     .deadline-banner.urgent {
-      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      background: #fffbeb;
       border-color: #fbbf24;
     }
 
     .deadline-banner.critical {
-      background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+      background: #fef2f2;
       border-color: #f87171;
       animation: pulse 2s infinite;
     }
@@ -403,7 +406,7 @@ interface UploadSection {
 
     .banner-icon {
       font-size: 2rem;
-      color: #1565C0;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .deadline-banner.urgent .banner-icon {
@@ -421,7 +424,7 @@ interface UploadSection {
     .banner-content strong {
       display: block;
       margin-bottom: 0.25rem;
-      color: #1e40af;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .deadline-banner.urgent .banner-content strong {
@@ -435,7 +438,7 @@ interface UploadSection {
     .deadline-time {
       font-size: 1.25rem;
       font-weight: 700;
-      color: #1e40af;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .deadline-banner.urgent .deadline-time {
@@ -448,7 +451,7 @@ interface UploadSection {
 
     .banner-date {
       font-size: 0.875rem;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     /* Section Cards */
@@ -457,23 +460,23 @@ interface UploadSection {
       justify-content: space-between;
       align-items: center;
       padding: 1rem 1.5rem;
-      border-bottom: 1px solid #e2e8f0;
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .section-header.commercial {
-      background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+      background: #f0fdf4;
     }
 
     .section-header.technical {
-      background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+      background: var(--bayan-accent, #f4f4f5);
     }
 
     .section-header.supporting {
-      background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
+      background: var(--bayan-muted, #f4f4f5);
     }
 
     .section-header.submit {
-      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      background: #fffbeb;
     }
 
     .header-info {
@@ -490,7 +493,7 @@ interface UploadSection {
       margin: 0;
       font-size: 1.125rem;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
     }
 
     /* Upload Zone */
@@ -499,14 +502,14 @@ interface UploadSection {
     }
 
     .section-description {
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
       margin: 0 0 1.5rem 0;
     }
 
     .upload-item {
       padding: 1rem;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
       margin-bottom: 1rem;
     }
 
@@ -523,7 +526,7 @@ interface UploadSection {
 
     .upload-label > i {
       font-size: 1.5rem;
-      color: #1565C0;
+      color: var(--bayan-primary, #18181b);
       margin-top: 2px;
     }
 
@@ -533,20 +536,20 @@ interface UploadSection {
 
     .label-info strong {
       display: block;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
       margin-bottom: 0.25rem;
     }
 
     .label-info small {
       display: block;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
       margin-bottom: 0.25rem;
     }
 
     .file-info {
       display: block;
       font-size: 0.75rem;
-      color: #94a3b8;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .dropzone {
@@ -556,25 +559,25 @@ interface UploadSection {
       justify-content: center;
       gap: 0.5rem;
       padding: 2rem;
-      border: 2px dashed #cbd5e1;
-      border-radius: 8px;
-      background: #f8fafc;
+      border: 2px dashed var(--bayan-border, #e4e4e7);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
+      background: var(--bayan-accent, #f4f4f5);
       cursor: pointer;
       transition: all 0.2s ease;
     }
 
     .dropzone:hover {
-      border-color: #1565C0;
-      background: #eff6ff;
+      border-color: var(--bayan-primary, #18181b);
+      background: var(--bayan-muted, #f4f4f5);
     }
 
     .dropzone i {
       font-size: 2rem;
-      color: #94a3b8;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .dropzone span {
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .uploaded-file {
@@ -584,7 +587,7 @@ interface UploadSection {
       padding: 0.75rem 1rem;
       background: #f0fdf4;
       border: 1px solid #86efac;
-      border-radius: 8px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .uploaded-files-list {
@@ -607,7 +610,7 @@ interface UploadSection {
 
     .file-name {
       font-weight: 500;
-      color: #1e293b;
+      color: var(--bayan-foreground, #09090b);
       max-width: 300px;
       white-space: nowrap;
       overflow: hidden;
@@ -615,20 +618,20 @@ interface UploadSection {
     }
 
     .file-size {
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
       font-size: 0.875rem;
     }
 
     .upload-progress {
       padding: 1rem;
-      background: #f8fafc;
-      border-radius: 8px;
+      background: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .upload-progress span {
       display: block;
       margin-bottom: 0.5rem;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
       font-size: 0.875rem;
     }
 
@@ -641,14 +644,14 @@ interface UploadSection {
       display: block;
       margin-bottom: 0.5rem;
       font-weight: 500;
-      color: #334155;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .field-hint {
       display: block;
       margin-top: 0.25rem;
-      color: #64748b;
-      font-size: 0.8125rem;
+      color: var(--bayan-muted-foreground, #71717a);
+      font-size: 0.8rem;
     }
 
     .upload-summary {
@@ -658,7 +661,7 @@ interface UploadSection {
     .upload-summary h4 {
       margin: 0 0 1rem 0;
       font-size: 1rem;
-      color: #334155;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .summary-grid {
@@ -672,9 +675,9 @@ interface UploadSection {
       align-items: center;
       gap: 0.5rem;
       padding: 0.5rem 0.75rem;
-      background: #f8fafc;
-      border-radius: 6px;
-      color: #94a3b8;
+      background: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .summary-item.complete {
@@ -696,20 +699,20 @@ interface UploadSection {
       align-items: flex-start;
       gap: 1rem;
       padding: 1.5rem;
-      background: #f8fafc;
-      border-radius: 8px;
+      background: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
       margin-bottom: 1.5rem;
     }
 
     .terms-label {
       cursor: pointer;
-      color: #334155;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .terms-label ul {
       margin: 0.5rem 0 0 0;
       padding-left: 1.25rem;
-      color: #64748b;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .terms-label li {
@@ -789,11 +792,11 @@ export class PortalSubmitComponent implements OnInit, OnDestroy {
 
   allSections: UploadSection[] = [];
 
-  private tenderId!: number;
+  private tenderId!: string | number;
   private fileInputRefs = new Map<PortalBidDocumentType, HTMLInputElement>();
 
   ngOnInit(): void {
-    this.tenderId = parseInt(this.route.snapshot.params['tenderId'], 10);
+    this.tenderId = this.route.parent?.snapshot.params['tenderId'] || this.route.snapshot.params['tenderId'];
     this.initForm();
     this.initSections();
     this.startCountdown();
@@ -925,6 +928,8 @@ export class PortalSubmitComponent implements OnInit, OnDestroy {
       this.portalService.uploadBidDocument(this.tenderId, documentType, file).subscribe({
         next: (doc) => {
           if (doc) {
+            // Normalize documentType to frontend format (backend returns PascalCase e.g. "PricedBOQ")
+            doc.documentType = documentType;
             const current = this.uploadedDocuments();
             // For non-supporting docs, replace existing
             if (documentType !== 'supporting_documents') {

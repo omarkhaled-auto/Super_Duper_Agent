@@ -1,0 +1,29 @@
+{
+  "name": "bayan-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright E2E tests for BAYAN Tender Management System",
+  "scripts": {
+    "test": "npx playwright test",
+    "test:headed": "npx playwright test --headed",
+    "test:ui": "npx playwright test --ui",
+    "test:debug": "npx playwright test --debug",
+    "test:auth": "npx playwright test tests/auth.spec.ts",
+    "test:dashboard": "npx playwright test tests/dashboard.spec.ts",
+    "test:tenders": "npx playwright test tests/tender-list.spec.ts tests/tender-wizard.spec.ts tests/tender-details.spec.ts",
+    "test:boq": "npx playwright test tests/boq.spec.ts",
+    "test:portal": "npx playwright test tests/portal-bidder.spec.ts",
+    "test:evaluation": "npx playwright test tests/evaluation.spec.ts",
+    "test:approval": "npx playwright test tests/approval.spec.ts",
+    "test:admin": "npx playwright test tests/admin.spec.ts",
+    "test:rbac": "npx playwright test tests/rbac.spec.ts",
+    "test:lifecycle": "npx playwright test tests/full-lifecycle.spec.ts",
+    "report": "npx playwright show-report",
+    "install-browsers": "npx playwright install --with-deps chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  }
+}

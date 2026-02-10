@@ -25,7 +25,7 @@ public class ApprovalWorkflowConfiguration : IEntityTypeConfiguration<ApprovalWo
             .HasColumnName("status")
             .HasMaxLength(50)
             .HasConversion<string>()
-            .HasDefaultValue("Pending")
+            .HasDefaultValueSql("'Pending'")
             .IsRequired();
 
         builder.Property(e => e.InitiatedBy)

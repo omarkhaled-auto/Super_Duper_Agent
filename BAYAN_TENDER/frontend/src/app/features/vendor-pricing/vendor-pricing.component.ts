@@ -7,7 +7,7 @@ import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { DropdownModule } from 'primeng/dropdown';
 import { MultiSelectModule } from 'primeng/multiselect';
-import { CalendarModule } from 'primeng/calendar';
+import { DatePickerModule } from 'primeng/datepicker';
 import { ChartModule } from 'primeng/chart';
 import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
@@ -45,7 +45,7 @@ interface TradeOption {
     InputTextModule,
     DropdownModule,
     MultiSelectModule,
-    CalendarModule,
+    DatePickerModule,
     ChartModule,
     TagModule,
     TooltipModule,
@@ -95,7 +95,7 @@ interface TradeOption {
             (onChange)="onFilterChange()"
           ></p-dropdown>
 
-          <p-calendar
+          <p-datepicker
             [(ngModel)]="dateRange"
             selectionMode="range"
             [showIcon]="true"
@@ -103,7 +103,7 @@ interface TradeOption {
             dateFormat="yy-mm-dd"
             (onSelect)="onFilterChange()"
             (onClear)="onFilterChange()"
-          ></p-calendar>
+          ></p-datepicker>
 
           <button
             pButton
@@ -382,11 +382,12 @@ interface TradeOption {
                 <h3>Selected Vendors for Comparison</h3>
                 <div class="selected-vendors">
                   @for (vendor of selectedVendorsForComparison(); track vendor.bidderId) {
-                    <p-tag
-                      [value]="vendor.companyName"
-                      [removable]="true"
-                      (onRemove)="removeFromComparison(vendor)"
-                    ></p-tag>
+                    <p-tag [value]="vendor.companyName">
+                      <ng-template pTemplate="content">
+                        {{ vendor.companyName }}
+                        <i class="pi pi-times ml-2 cursor-pointer" (click)="removeFromComparison(vendor)"></i>
+                      </ng-template>
+                    </p-tag>
                   }
                   @if (selectedVendorsForComparison().length === 0) {
                     <span class="no-selection">Select 2-5 vendors from the Vendor Search tab</span>
@@ -579,12 +580,12 @@ interface TradeOption {
     .page-header h1 {
       margin: 0;
       font-size: 1.75rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .page-header p {
       margin: 0.25rem 0 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .header-actions {
@@ -630,7 +631,7 @@ interface TradeOption {
 
     .summary-icon {
       font-size: 2rem;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .summary-text {
@@ -641,12 +642,12 @@ interface TradeOption {
     .summary-value {
       font-size: 1.5rem;
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .summary-label {
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .dashboard-grid {
@@ -668,7 +669,7 @@ interface TradeOption {
       align-items: center;
       justify-content: center;
       min-height: 200px;
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .trend-cell {
@@ -688,7 +689,7 @@ interface TradeOption {
 
     .tender-title {
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       display: block;
     }
 
@@ -718,7 +719,7 @@ interface TradeOption {
 
     .email {
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .comparison-header {
@@ -742,7 +743,7 @@ interface TradeOption {
     }
 
     .no-selection {
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
       font-style: italic;
     }
 
@@ -761,11 +762,11 @@ interface TradeOption {
     }
 
     .lowest-rate {
-      background-color: #e8f5e9 !important;
+      background-color: var(--bayan-success-bg, #f0fdf4) !important;
     }
 
     .lowest-rate .rate-value {
-      color: #2e7d32;
+      color: #16a34a;
     }
 
     .trends-dialog-content {
@@ -779,8 +780,8 @@ interface TradeOption {
       flex-wrap: wrap;
       gap: 2rem;
       padding: 1rem;
-      background: #f8f9fa;
-      border-radius: 8px;
+      background: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .summary-item {
@@ -790,7 +791,7 @@ interface TradeOption {
 
     .summary-item .label {
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .summary-item .value {
@@ -908,7 +909,7 @@ export class VendorPricingComponent implements OnInit {
         label: 'Average Rate',
         data: dash.rateTrends.map(t => t.averageRate),
         fill: false,
-        borderColor: '#1976D2',
+        borderColor: '#18181b',
         tension: 0.4
       }]
     };
@@ -918,7 +919,7 @@ export class VendorPricingComponent implements OnInit {
     const dash = this.dashboard();
     if (!dash?.tradeBreakdown?.length) return null;
 
-    const colors = ['#1976D2', '#388E3C', '#F57C00', '#7B1FA2', '#C2185B', '#00796B', '#5D4037', '#455A64'];
+    const colors = ['#18181b', '#71717a', '#a1a1aa', '#d4d4d8', '#52525b', '#3f3f46', '#27272a', '#e4e4e7'];
 
     return {
       labels: dash.tradeBreakdown.map(t => t.trade),
@@ -940,7 +941,7 @@ export class VendorPricingComponent implements OnInit {
           label: 'Average Rate',
           data: trends.trendPoints.map(t => t.averageRate),
           fill: false,
-          borderColor: '#1976D2',
+          borderColor: '#18181b',
           tension: 0.4
         },
         {

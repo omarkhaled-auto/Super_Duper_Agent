@@ -35,14 +35,15 @@ import { SidebarComponent } from './sidebar/sidebar.component';
   styles: [`
     .layout-wrapper {
       min-height: 100vh;
-      background-color: #f5f7fa;
+      background-color: var(--bayan-background, #ffffff);
     }
 
     .main-content {
       margin-left: 280px;
       margin-top: 64px;
       min-height: calc(100vh - 64px);
-      transition: margin-left 0.3s ease;
+      transition: margin-left 0.2s ease;
+      background-color: var(--bayan-muted, #f4f4f5);
     }
 
     .layout-wrapper.sidebar-collapsed .main-content {
@@ -61,7 +62,7 @@ import { SidebarComponent } from './sidebar/sidebar.component';
       left: 0;
       right: 0;
       bottom: 0;
-      background-color: rgba(0, 0, 0, 0.5);
+      background-color: rgba(0, 0, 0, 0.8);
       z-index: 998;
     }
 

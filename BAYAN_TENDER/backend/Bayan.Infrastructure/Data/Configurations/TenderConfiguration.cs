@@ -51,6 +51,10 @@ public class TenderConfiguration : IEntityTypeConfiguration<Tender>
             .HasDefaultValue("AED")
             .IsRequired();
 
+        builder.Property(e => e.EstimatedValue)
+            .HasColumnName("estimated_value")
+            .HasColumnType("numeric(18,2)");
+
         builder.Property(e => e.BidValidityDays)
             .HasColumnName("bid_validity_days")
             .HasDefaultValue(90)
@@ -86,7 +90,7 @@ public class TenderConfiguration : IEntityTypeConfiguration<Tender>
             .HasColumnName("status")
             .HasMaxLength(50)
             .HasConversion<string>()
-            .HasDefaultValue("Draft")
+            .HasDefaultValueSql("'Draft'")
             .IsRequired();
 
         builder.Property(e => e.CreatedBy)

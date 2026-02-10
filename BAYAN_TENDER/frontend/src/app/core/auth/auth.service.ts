@@ -10,7 +10,8 @@ import {
   LoginResponse,
   RegisterData,
   PasswordResetRequest,
-  PasswordResetConfirm
+  PasswordResetConfirm,
+  mapApiRole
 } from '../models/user.model';
 import { ApiResponse } from '../models/api-response.model';
 
@@ -46,7 +47,9 @@ export class AuthService {
   private loadUserFromStorage(): void {
     const user = this.storage.getUser<User>();
     if (user && this.storage.getAccessToken()) {
-      this._currentUser.set(user);
+      // Ensure role is mapped correctly (handles stale storage with numeric roles)
+      const mappedUser = { ...user, role: mapApiRole(user.role as any) };
+      this._currentUser.set(mappedUser);
     }
   }
 
@@ -114,8 +117,10 @@ export class AuthService {
   private handleAuthSuccess(data: LoginResponse): void {
     this.storage.setAccessToken(data.accessToken);
     this.storage.setRefreshToken(data.refreshToken);
-    this.storage.setUser(data.user);
-    this._currentUser.set(data.user);
+    // Map numeric role from API to string enum
+    const user = { ...data.user, role: mapApiRole(data.user.role as any) };
+    this.storage.setUser(user);
+    this._currentUser.set(user);
   }
 
   refreshToken(): Observable<{ accessToken: string; refreshToken: string }> {

@@ -40,13 +40,13 @@ import { ClientFormDialogComponent, ClientFormDialogData } from './client-form-d
   providers: [ConfirmationService, MessageService, DialogService],
   template: `
     <p-toast></p-toast>
-    <div class="client-list-container">
+    <div class="client-list-container" data-testid="client-list">
       <div class="page-header">
         <div>
           <h1>Client Management</h1>
           <p>Manage client organizations and contacts</p>
         </div>
-        <button pButton label="Add Client" icon="pi pi-plus" (click)="showClientDialog()"></button>
+        <button pButton label="Add Client" icon="pi pi-plus" (click)="showClientDialog()" data-testid="create-client-btn"></button>
       </div>
 
       <!-- Filters -->
@@ -60,6 +60,7 @@ import { ClientFormDialogComponent, ClientFormDialogData } from './client-form-d
               [(ngModel)]="searchTerm"
               placeholder="Search clients..."
               (input)="onSearch()"
+              data-testid="client-search"
             />
           </p-iconField>
 
@@ -84,6 +85,7 @@ import { ClientFormDialogComponent, ClientFormDialogData } from './client-form-d
       <!-- Clients Table -->
       <p-card styleClass="table-card">
         <p-table
+          data-testid="client-table"
           [value]="filteredClients()"
           [paginator]="true"
           [rows]="10"
@@ -184,7 +186,7 @@ import { ClientFormDialogComponent, ClientFormDialogData } from './client-form-d
             <tr>
               <td colspan="7" class="text-center p-4">
                 <div class="empty-state">
-                  <i class="pi pi-building" style="font-size: 3rem; color: #ccc;"></i>
+                  <i class="pi pi-building" style="font-size: 3rem; color: var(--bayan-muted-foreground, #71717a);"></i>
                   <p>No clients found.</p>
                   <button pButton label="Add First Client" icon="pi pi-plus" class="p-button-outlined" (click)="showClientDialog()"></button>
                 </div>
@@ -213,12 +215,12 @@ import { ClientFormDialogComponent, ClientFormDialogData } from './client-form-d
     .page-header h1 {
       margin: 0;
       font-size: 1.75rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .page-header p {
       margin: 0.25rem 0 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     :host ::ng-deep .filter-card .p-card-body {
@@ -260,8 +262,8 @@ import { ClientFormDialogComponent, ClientFormDialogData } from './client-form-d
     .avatar {
       width: 40px;
       height: 40px;
-      border-radius: 8px;
-      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      border-radius: var(--bayan-radius, 0.5rem);
+      background: var(--bayan-primary, #18181b);
       color: white;
       display: flex;
       align-items: center;
@@ -277,12 +279,12 @@ import { ClientFormDialogComponent, ClientFormDialogData } from './client-form-d
 
     .primary-name {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .secondary-name {
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       direction: rtl;
     }
 
@@ -292,16 +294,16 @@ import { ClientFormDialogComponent, ClientFormDialogData } from './client-form-d
     }
 
     .contact-info small {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .no-data {
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .tender-count {
       font-weight: 600;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .action-buttons {
@@ -314,11 +316,11 @@ import { ClientFormDialogComponent, ClientFormDialogData } from './client-form-d
       flex-direction: column;
       align-items: center;
       gap: 1rem;
-      padding: 2rem;
+      padding: 3rem;
     }
 
     .empty-state p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       margin: 0;
     }
   `]

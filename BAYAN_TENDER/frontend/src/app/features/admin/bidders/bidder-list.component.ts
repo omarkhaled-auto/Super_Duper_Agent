@@ -47,13 +47,13 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
   providers: [ConfirmationService, MessageService, DialogService],
   template: `
     <p-toast></p-toast>
-    <div class="bidder-list-container">
+    <div class="bidder-list-container" data-testid="bidder-list">
       <div class="page-header">
         <div>
           <h1>Bidder Management</h1>
           <p>Manage registered bidders and their prequalification status</p>
         </div>
-        <button pButton label="Add Bidder" icon="pi pi-plus" (click)="showBidderDialog()"></button>
+        <button pButton label="Add Bidder" icon="pi pi-plus" (click)="showBidderDialog()" data-testid="create-bidder-btn"></button>
       </div>
 
       <!-- Filters -->
@@ -67,6 +67,7 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
               [(ngModel)]="searchTerm"
               placeholder="Search by company name, email, or CR number..."
               (input)="onSearch()"
+              data-testid="bidder-search"
             />
           </p-iconField>
 
@@ -99,6 +100,7 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
       <!-- Bidders Table -->
       <p-card styleClass="table-card">
         <p-table
+          data-testid="bidder-table"
           [value]="filteredBidders()"
           [paginator]="true"
           [rows]="10"
@@ -210,7 +212,7 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
             <tr>
               <td colspan="6" class="text-center p-4">
                 <div class="empty-state">
-                  <i class="pi pi-building" style="font-size: 3rem; color: #ccc;"></i>
+                  <i class="pi pi-building" style="font-size: 3rem; color: var(--bayan-muted-foreground, #71717a);"></i>
                   <p>No bidders found.</p>
                   <button pButton label="Add First Bidder" icon="pi pi-plus" class="p-button-outlined" (click)="showBidderDialog()"></button>
                 </div>
@@ -239,12 +241,12 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
     .page-header h1 {
       margin: 0;
       font-size: 1.75rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .page-header p {
       margin: 0.25rem 0 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     :host ::ng-deep .filter-card .p-card-body {
@@ -286,8 +288,8 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
     .company-avatar {
       width: 40px;
       height: 40px;
-      border-radius: 8px;
-      background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+      border-radius: var(--bayan-radius, 0.5rem);
+      background: var(--bayan-primary, #18181b);
       color: white;
       display: flex;
       align-items: center;
@@ -303,18 +305,18 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
 
     .company-name {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .company-name-ar {
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       direction: rtl;
     }
 
     .cr-number {
       font-size: 0.75rem;
-      color: #888;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .contact-info {
@@ -324,7 +326,7 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
 
     .contact-info .phone {
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .trade-tags {
@@ -340,7 +342,7 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
 
     .more-trades {
       font-size: 0.75rem;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
       cursor: pointer;
     }
 
@@ -354,11 +356,11 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
       flex-direction: column;
       align-items: center;
       gap: 1rem;
-      padding: 2rem;
+      padding: 3rem;
     }
 
     .empty-state p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       margin: 0;
     }
 

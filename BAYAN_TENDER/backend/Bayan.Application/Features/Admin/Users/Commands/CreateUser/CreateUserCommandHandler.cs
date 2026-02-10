@@ -47,7 +47,7 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Creat
             Department = request.Department?.Trim(),
             JobTitle = request.JobTitle?.Trim(),
             IsActive = true,
-            EmailVerified = false,
+            EmailVerified = true,
             CreatedAt = DateTime.UtcNow
         };
 

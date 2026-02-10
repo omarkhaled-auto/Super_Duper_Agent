@@ -96,7 +96,7 @@ export class ApiService {
 
   delete<T>(endpoint: string): Observable<T> {
     return this.http.delete<ApiResponse<T>>(`${this.baseUrl}${endpoint}`).pipe(
-      map(response => response.data),
+      map(response => (response?.data ?? undefined) as T),
       catchError(this.handleError)
     );
   }
@@ -110,6 +110,14 @@ export class ApiService {
 
   download(endpoint: string, filename?: string): Observable<Blob> {
     return this.http.get(`${this.baseUrl}${endpoint}`, {
+      responseType: 'blob'
+    }).pipe(
+      catchError(this.handleError)
+    );
+  }
+
+  downloadPost(endpoint: string, data: unknown): Observable<Blob> {
+    return this.http.post(`${this.baseUrl}${endpoint}`, data, {
       responseType: 'blob'
     }).pipe(
       catchError(this.handleError)

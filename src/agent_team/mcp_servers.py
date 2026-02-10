@@ -101,3 +101,20 @@ def is_firecrawl_available(config: AgentTeamConfig) -> bool:
     if not firecrawl_cfg or not firecrawl_cfg.enabled:
         return False
     return bool(os.environ.get("FIRECRAWL_API_KEY"))
+
+
+def get_firecrawl_only_servers(config: AgentTeamConfig) -> dict[str, Any]:
+    """Return MCP servers dict with ONLY Firecrawl (for focused extraction sessions).
+
+    Used by Phase 0.6 design reference extraction to create a minimal
+    Claude session that can only scrape/search — no Context7, no ST.
+
+    Returns empty dict if Firecrawl is unavailable.
+    """
+    servers: dict[str, Any] = {}
+    firecrawl_cfg = config.mcp_servers.get("firecrawl")
+    if firecrawl_cfg and firecrawl_cfg.enabled:
+        fc = _firecrawl_server()
+        if fc:
+            servers["firecrawl"] = fc
+    return servers

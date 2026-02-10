@@ -16,7 +16,7 @@ public class ApplicationDbContextSeed
 
     // Default password for demo users: Bayan@2024
     // BCrypt hash generated with work factor 12
-    private const string DefaultPasswordHash = "$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.EQDQlQpJjTLGQa";
+    private const string DefaultPasswordHash = "$2a$12$5hpH3Ub2qoomrv7AKSWM9el09hhaxLCjZ3/CYZ0QmdyJ.xoc.wD8a";
 
     public ApplicationDbContextSeed(
         ApplicationDbContext context,
@@ -36,6 +36,7 @@ public class ApplicationDbContextSeed
             await SeedUnitsOfMeasureAsync();
             await SeedSystemSettingsAsync();
             await SeedDemoUsersAsync();
+            await SeedDemoBiddersAsync();
 
             _logger.LogInformation("Database seeding completed successfully");
         }
@@ -582,6 +583,63 @@ public class ApplicationDbContextSeed
 
         _logger.LogInformation("Seeded {Count} demo users", demoUsers.Count);
         _logger.LogInformation("Default password for all demo users: Bayan@2024");
+    }
+
+    /// <summary>
+    /// Seeds demo bidders for development and testing.
+    /// These are portal-facing entities (separate from Users) that allow
+    /// external vendors to log in via the bidder portal.
+    /// Default password: Bayan@2024
+    /// </summary>
+    private async Task SeedDemoBiddersAsync()
+    {
+        if (await _context.Bidders.AnyAsync(b => b.Email == "bidder@vendor.ae"))
+        {
+            _logger.LogInformation("Demo bidders already seeded, skipping...");
+            return;
+        }
+
+        _logger.LogInformation("Seeding demo bidders...");
+
+        var demoBidders = new List<Bidder>
+        {
+            new Bidder
+            {
+                Id = Guid.NewGuid(),
+                CompanyName = "ABC Construction LLC",
+                CRNumber = "CR-12345",
+                LicenseNumber = "TL-2024-001",
+                ContactPerson = "Ali Contractor",
+                Email = "bidder@vendor.ae",
+                Phone = "+971-50-1234567",
+                TradeSpecialization = "General Construction",
+                PrequalificationStatus = PrequalificationStatus.Qualified,
+                IsActive = true,
+                PasswordHash = DefaultPasswordHash,
+                CreatedAt = DateTime.UtcNow
+            },
+            new Bidder
+            {
+                Id = Guid.NewGuid(),
+                CompanyName = "Gulf MEP Services",
+                CRNumber = "CR-67890",
+                LicenseNumber = "TL-2024-002",
+                ContactPerson = "Hassan Al-Noor",
+                Email = "bidder2@vendor.ae",
+                Phone = "+971-50-9876543",
+                TradeSpecialization = "MEP Works",
+                PrequalificationStatus = PrequalificationStatus.Qualified,
+                IsActive = true,
+                PasswordHash = DefaultPasswordHash,
+                CreatedAt = DateTime.UtcNow
+            }
+        };
+
+        await _context.Bidders.AddRangeAsync(demoBidders);
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("Seeded {Count} demo bidders", demoBidders.Count);
+        _logger.LogInformation("Default password for all demo bidders: Bayan@2024");
     }
 
     /// <summary>

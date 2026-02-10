@@ -39,6 +39,16 @@ public class TenderListDto
     public TenderStatus Status { get; set; }
 
     /// <summary>
+    /// Base currency for the tender.
+    /// </summary>
+    public string BaseCurrency { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Estimated value of the tender.
+    /// </summary>
+    public decimal? EstimatedValue { get; set; }
+
+    /// <summary>
     /// Deadline for bid submissions.
     /// </summary>
     public DateTime SubmissionDeadline { get; set; }

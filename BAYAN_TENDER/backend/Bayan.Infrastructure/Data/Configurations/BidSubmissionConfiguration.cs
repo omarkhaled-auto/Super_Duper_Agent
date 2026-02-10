@@ -78,7 +78,7 @@ public class BidSubmissionConfiguration : IEntityTypeConfiguration<BidSubmission
             .HasColumnName("import_status")
             .HasMaxLength(50)
             .HasConversion<string>()
-            .HasDefaultValue("Uploaded")
+            .HasDefaultValueSql("'Uploaded'")
             .IsRequired();
 
         builder.Property(e => e.ImportStartedAt)
@@ -107,7 +107,7 @@ public class BidSubmissionConfiguration : IEntityTypeConfiguration<BidSubmission
             .HasColumnName("status")
             .HasMaxLength(50)
             .HasConversion<string>()
-            .HasDefaultValue("Submitted")
+            .HasDefaultValueSql("'Submitted'")
             .IsRequired();
 
         builder.Property(e => e.CreatedAt)

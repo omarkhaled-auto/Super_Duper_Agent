@@ -97,6 +97,7 @@ public interface IEmailService
         string tenderTitle,
         string tenderReference,
         DateTime submissionDeadline,
+        string? activationToken = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

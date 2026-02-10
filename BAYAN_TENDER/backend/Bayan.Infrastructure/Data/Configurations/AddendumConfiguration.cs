@@ -45,7 +45,7 @@ public class AddendumConfiguration : IEntityTypeConfiguration<Addendum>
             .HasColumnName("status")
             .HasMaxLength(50)
             .HasConversion<string>()
-            .HasDefaultValue("Draft")
+            .HasDefaultValueSql("'Draft'")
             .IsRequired();
 
         builder.Property(e => e.IssuedBy)

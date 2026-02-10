@@ -37,7 +37,13 @@ import { BoqTabComponent } from './boq/boq-tab.component';
 import { ClarificationsTabComponent } from './clarifications/clarifications-tab.component';
 import { BidsTabComponent } from './bids/bids-tab.component';
 import { ComparableSheetComponent } from './evaluation/comparable-sheet.component';
+import { EvaluationSetupComponent } from './evaluation/evaluation-setup.component';
+import { TechnicalScoringComponent } from './evaluation/technical-scoring.component';
+import { CombinedScorecardComponent } from './evaluation/combined-scorecard.component';
 import { ApprovalTabComponent } from './approval/approval-tab.component';
+import { DocumentsTabComponent } from './documents/documents-tab.component';
+import { EvaluationService } from '../../../core/services/evaluation.service';
+import { EvaluationSetup } from '../../../core/models/evaluation.model';
 
 interface Tender {
   id: number;
@@ -50,7 +56,7 @@ interface Tender {
   category: string;
   publishDate?: Date;
   deadline: Date;
-  budget: number;
+  budget: number | null;
   currency: string;
 }
 
@@ -87,7 +93,11 @@ interface CountdownTime {
     ClarificationsTabComponent,
     BidsTabComponent,
     ComparableSheetComponent,
-    ApprovalTabComponent
+    EvaluationSetupComponent,
+    TechnicalScoringComponent,
+    CombinedScorecardComponent,
+    ApprovalTabComponent,
+    DocumentsTabComponent
   ],
   providers: [MessageService, ConfirmationService],
   template: `
@@ -101,12 +111,13 @@ interface CountdownTime {
         <div class="header-content">
           <button pButton icon="pi pi-arrow-left" class="p-button-text" routerLink="/tenders"></button>
           <div class="tender-title-section">
-            <h1>{{ tender()?.title }}</h1>
+            <h1 data-testid="tender-title">{{ tender()?.title }}</h1>
             <div class="tender-meta">
-              <span class="reference">{{ tender()?.referenceNumber }}</span>
+              <span class="reference" data-testid="tender-reference">{{ tender()?.referenceNumber }}</span>
               <p-tag
                 [value]="getStatusLabel(tender()?.status)"
                 [severity]="getStatusSeverity(tender()?.status)"
+                data-testid="tender-status"
               ></p-tag>
             </div>
           </div>
@@ -118,12 +129,14 @@ interface CountdownTime {
               label="Edit"
               icon="pi pi-pencil"
               class="p-button-outlined"
+              data-testid="edit-tender-btn"
               (click)="editTender()"
             ></button>
             <button
               pButton
               label="Publish"
               icon="pi pi-send"
+              data-testid="publish-tender-btn"
               (click)="publishTender()"
             ></button>
           }
@@ -219,7 +232,11 @@ interface CountdownTime {
                 </div>
                 <div class="info-item">
                   <label>Budget</label>
-                  <span>{{ tender()?.budget | currency:tender()?.currency:'symbol':'1.0-0' }}</span>
+                  @if (tender()?.budget) {
+                    <span>{{ tender()?.budget | currency:tender()?.currency:'symbol':'1.0-0' }}</span>
+                  } @else {
+                    <span>Not specified</span>
+                  }
                 </div>
                 <div class="info-item">
                   <label>Currency</label>
@@ -227,7 +244,11 @@ interface CountdownTime {
                 </div>
                 <div class="info-item full-width">
                   <label>Description</label>
-                  <p>{{ tender()?.description || 'No description provided.' }}</p>
+                  @if (tender()?.description) {
+                    <div class="description-content" [innerHTML]="tender()!.description"></div>
+                  } @else {
+                    <p>No description provided.</p>
+                  }
                 </div>
               </div>
             </p-card>
@@ -395,7 +416,7 @@ interface CountdownTime {
               </p-table>
             } @else {
               <div class="empty-state">
-                <i class="pi pi-users" style="font-size: 3rem; color: #ccc;"></i>
+                <i class="pi pi-users" style="font-size: 3rem; color: var(--bayan-border, #e4e4e7);"></i>
                 <p>No bidders have been invited yet.</p>
                 <button
                   pButton
@@ -411,46 +432,100 @@ interface CountdownTime {
 
         <!-- Documents Tab -->
         <p-tabPanel header="Documents">
-          <div class="empty-state">
-            <i class="pi pi-file" style="font-size: 3rem; color: #ccc;"></i>
-            <h3>Documents</h3>
-            <p>Document management will be implemented in a future milestone.</p>
-          </div>
+          @if (tender()) {
+            <app-documents-tab
+              [tenderId]="tender()!.id"
+            ></app-documents-tab>
+          }
         </p-tabPanel>
 
         <!-- Clarifications Tab -->
         <p-tabPanel header="Clarifications">
-          <app-clarifications-tab
-            [tenderId]="tender()?.id || 0"
-          ></app-clarifications-tab>
+          @if (tender()) {
+            <app-clarifications-tab
+              [tenderId]="tender()!.id"
+            ></app-clarifications-tab>
+          }
         </p-tabPanel>
 
         <!-- BOQ Tab -->
         <p-tabPanel header="BOQ">
-          <app-boq-tab
-            [tenderId]="tender()?.id || 0"
-          ></app-boq-tab>
+          @if (tender()) {
+            <app-boq-tab
+              [tenderId]="tender()!.id"
+            ></app-boq-tab>
+          }
         </p-tabPanel>
 
         <!-- Bids Tab -->
         <p-tabPanel header="Bids">
-          <app-bids-tab
-            [tenderId]="tender()?.id || 0"
-          ></app-bids-tab>
+          @if (tender()) {
+            <app-bids-tab
+              [tenderId]="tender()!.id"
+            ></app-bids-tab>
+          }
         </p-tabPanel>
 
         <!-- Evaluation Tab -->
         <p-tabPanel header="Evaluation">
-          <app-comparable-sheet
-            [tenderId]="tender()?.id || 0"
-          ></app-comparable-sheet>
+          @if (tender()) {
+            <div class="evaluation-sub-nav">
+              <button pButton
+                label="Comparable Sheet"
+                [outlined]="evaluationSubView() !== 'comparable'"
+                icon="pi pi-table"
+                class="p-button-sm"
+                (click)="evaluationSubView.set('comparable')"></button>
+              <button pButton
+                label="Evaluation Setup"
+                [outlined]="evaluationSubView() !== 'setup'"
+                icon="pi pi-cog"
+                class="p-button-sm"
+                (click)="evaluationSubView.set('setup')"></button>
+              <button pButton
+                label="Technical Scoring"
+                [outlined]="evaluationSubView() !== 'technical'"
+                icon="pi pi-check-square"
+                class="p-button-sm"
+                (click)="evaluationSubView.set('technical')"></button>
+              <button pButton
+                label="Combined Scorecard"
+                [outlined]="evaluationSubView() !== 'scorecard'"
+                icon="pi pi-chart-bar"
+                class="p-button-sm"
+                (click)="evaluationSubView.set('scorecard')"></button>
+            </div>
+            @switch (evaluationSubView()) {
+              @case ('comparable') {
+                <app-comparable-sheet [tenderId]="tender()!.id"></app-comparable-sheet>
+              }
+              @case ('setup') {
+                <app-evaluation-setup [tenderId]="tender()!.id"></app-evaluation-setup>
+              }
+              @case ('technical') {
+                @if (evaluationSetup()) {
+                  <app-technical-scoring [tenderId]="tender()!.id" [setup]="evaluationSetup()!"></app-technical-scoring>
+                } @else {
+                  <div class="empty-state">
+                    <i class="pi pi-spin pi-spinner" style="font-size: 2rem; color: var(--bayan-muted-foreground, #71717a);"></i>
+                    <p>Loading evaluation configuration...</p>
+                  </div>
+                }
+              }
+              @case ('scorecard') {
+                <app-combined-scorecard [tenderId]="tender()!.id"></app-combined-scorecard>
+              }
+            }
+          }
         </p-tabPanel>
 
         <!-- Approval Tab -->
         <p-tabPanel header="Approval">
-          <app-approval-tab
-            [tenderId]="tender()?.id || 0"
-          ></app-approval-tab>
+          @if (tender()) {
+            <app-approval-tab
+              [tenderId]="tender()!.id"
+            ></app-approval-tab>
+          }
         </p-tabPanel>
       </p-tabView>
 
@@ -496,7 +571,7 @@ interface CountdownTime {
     .tender-title-section h1 {
       margin: 0;
       font-size: 1.75rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .tender-meta {
@@ -508,7 +583,7 @@ interface CountdownTime {
 
     .reference {
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       font-family: monospace;
     }
 
@@ -552,12 +627,12 @@ interface CountdownTime {
     .info-item label {
       font-size: 0.875rem;
       font-weight: 500;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .info-item span,
     .info-item p {
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       margin: 0;
     }
 
@@ -572,24 +647,24 @@ interface CountdownTime {
       flex-direction: column;
       align-items: center;
       padding: 1rem;
-      background: #f5f5f5;
-      border-radius: 8px;
+      background: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .stat-value {
       font-size: 2rem;
       font-weight: 700;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .stat-label {
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .stat-divider {
       width: 1px;
-      background-color: #e0e0e0;
+      background-color: var(--bayan-border, #e4e4e7);
     }
 
     .bidder-stats {
@@ -604,14 +679,14 @@ interface CountdownTime {
 
     .progress-bar {
       height: 8px;
-      background-color: #e0e0e0;
-      border-radius: 4px;
+      background-color: var(--bayan-border, #e4e4e7);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
       overflow: hidden;
     }
 
     .progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, #1976D2, #42a5f5);
+      background: var(--bayan-primary, #18181b);
       transition: width 0.3s ease;
     }
 
@@ -619,8 +694,8 @@ interface CountdownTime {
       display: block;
       text-align: center;
       margin-top: 0.5rem;
-      font-size: 0.85rem;
-      color: #666;
+      font-size: 0.875rem;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .dates-grid {
@@ -631,24 +706,24 @@ interface CountdownTime {
 
     .date-item {
       padding: 1rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .date-item.highlight {
-      background-color: #e3f2fd;
-      border: 1px solid #1976D2;
+      background-color: var(--bayan-muted, #f4f4f5);
+      border: 1px solid var(--bayan-primary, #18181b);
     }
 
     .date-label {
       font-size: 0.8rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       margin-bottom: 0.25rem;
     }
 
     .date-value {
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .countdown {
@@ -658,10 +733,10 @@ interface CountdownTime {
     }
 
     .countdown-item {
-      background-color: #1976D2;
-      color: white;
+      background-color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary-foreground, #fafafa);
       padding: 0.25rem 0.5rem;
-      border-radius: 4px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
       font-size: 0.8rem;
       font-weight: 600;
     }
@@ -684,12 +759,12 @@ interface CountdownTime {
 
     .timeline-title {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .timeline-date {
       font-size: 0.8rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .activity-feed {
@@ -702,8 +777,8 @@ interface CountdownTime {
       display: flex;
       gap: 1rem;
       padding: 1rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .activity-icon {
@@ -712,33 +787,33 @@ interface CountdownTime {
       justify-content: center;
       width: 40px;
       height: 40px;
-      border-radius: 8px;
+      border-radius: var(--bayan-radius, 0.5rem);
       flex-shrink: 0;
     }
 
     .activity-icon.created {
-      background-color: #e3f2fd;
-      color: #1976D2;
+      background-color: var(--bayan-muted, #f4f4f5);
+      color: var(--bayan-primary, #18181b);
     }
 
     .activity-icon.updated {
-      background-color: #fff3e0;
-      color: #ff9800;
+      background-color: var(--bayan-warning-bg, #fffbeb);
+      color: var(--bayan-warning, #f59e0b);
     }
 
     .activity-icon.published {
-      background-color: #e8f5e9;
-      color: #4caf50;
+      background-color: var(--bayan-success-bg, #f0fdf4);
+      color: var(--bayan-success, #22c55e);
     }
 
     .activity-icon.bid_received {
-      background-color: #f3e5f5;
-      color: #9c27b0;
+      background-color: #faf5ff;
+      color: #9333ea;
     }
 
     .activity-icon.default {
-      background-color: #f5f5f5;
-      color: #666;
+      background-color: var(--bayan-accent, #f4f4f5);
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .activity-content {
@@ -748,14 +823,14 @@ interface CountdownTime {
     }
 
     .activity-description {
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .activity-meta {
       display: flex;
       gap: 0.5rem;
       font-size: 0.8rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .activity-user {
@@ -764,14 +839,14 @@ interface CountdownTime {
 
     .no-activity {
       text-align: center;
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
       padding: 2rem;
     }
 
     .view-all-link {
       text-align: center;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
       margin-top: 1rem;
     }
 
@@ -798,7 +873,7 @@ interface CountdownTime {
     .bidders-header h3 {
       margin: 0;
       font-size: 1.25rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .bidder-info {
@@ -808,12 +883,12 @@ interface CountdownTime {
 
     .company-name {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .company-name-ar {
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       direction: rtl;
     }
 
@@ -832,8 +907,17 @@ interface CountdownTime {
     }
 
     .empty-state p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       margin: 0;
+    }
+
+    .evaluation-sub-nav {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
+      flex-wrap: wrap;
     }
 
     :host ::ng-deep .p-tabview-panels {
@@ -846,6 +930,7 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly bidderService = inject(BidderService);
   private readonly tenderService = inject(TenderService);
+  private readonly evaluationService = inject(EvaluationService);
   private readonly messageService = inject(MessageService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly destroy$ = new Subject<void>();
@@ -856,6 +941,8 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
   submissionCountdown = signal<CountdownTime | null>(null);
   activeTabIndex = 0;
   showInviteBiddersDialog = false;
+  evaluationSubView = signal<'comparable' | 'setup' | 'technical' | 'scorecard'>('comparable');
+  evaluationSetup = signal<EvaluationSetup | null>(null);
 
   breadcrumbItems: MenuItem[] = [];
   homeItem: MenuItem = { icon: 'pi pi-home', routerLink: '/dashboard' };
@@ -877,7 +964,7 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
         title: 'Issue Date',
         date: new Date(t.publishDate),
         icon: 'pi pi-calendar',
-        color: '#1976D2'
+        color: '#18181b'
       });
     }
 
@@ -885,7 +972,7 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
       title: 'Submission Deadline',
       date: new Date(t.deadline),
       icon: 'pi pi-send',
-      color: '#4caf50'
+      color: '#22c55e'
     });
 
     return events.sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -895,6 +982,7 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
     this.loadTenderDetails();
     this.loadInvitedBidders();
     this.loadActivities();
+    this.loadEvaluationSetup();
     this.startCountdown();
   }
 
@@ -934,7 +1022,8 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
 
   private loadActivities(): void {
     const tenderId = this.route.snapshot.params['id'];
-    this.tenderService.getActivityLog(+tenderId).pipe(
+    if (!tenderId) return;
+    this.tenderService.getActivityLog(tenderId).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: (activities) => {
@@ -943,27 +1032,67 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
     });
   }
 
-  private loadTenderDetails(): void {
-    // Mock tender data - in production, fetch from API using route param
+  private loadEvaluationSetup(): void {
     const tenderId = this.route.snapshot.params['id'];
+    if (!tenderId) return;
+    this.evaluationService.getEvaluationSetup(tenderId).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (setup) => {
+        this.evaluationSetup.set(setup);
+      },
+      error: () => {
+        // Evaluation setup not configured yet - leave as null
+        this.evaluationSetup.set(null);
+      }
+    });
+  }
 
-    const mockTender: Tender = {
-      id: parseInt(tenderId) || 1,
-      title: 'IT Infrastructure Upgrade Project',
-      titleAr: 'مشروع تطوير البنية التحتية لتقنية المعلومات',
-      referenceNumber: 'TND-2026-001',
-      description: 'This tender is for the complete upgrade of IT infrastructure including servers, networking equipment, and security systems across all regional offices.',
-      status: 'open',
-      organization: 'Ministry of Finance',
-      category: 'IT & Technology',
-      publishDate: new Date('2026-01-15'),
-      deadline: new Date('2026-03-15'),
-      budget: 500000,
-      currency: 'SAR'
+  private loadTenderDetails(): void {
+    const tenderId = this.route.snapshot.params['id'];
+    if (!tenderId) return;
+
+    this.tenderService.getTenderById(tenderId).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (apiTender) => {
+        // Map service Tender model to local view model
+        const tender: Tender = {
+          id: apiTender.id as number,
+          title: apiTender.title,
+          referenceNumber: apiTender.reference,
+          description: apiTender.description,
+          status: this.mapServiceStatus(apiTender.status),
+          organization: apiTender.clientName || '',
+          category: apiTender.type || 'open',
+          publishDate: apiTender.dates?.issueDate ? new Date(String(apiTender.dates.issueDate)) : undefined,
+          deadline: apiTender.dates?.submissionDeadline ? new Date(String(apiTender.dates.submissionDeadline)) : new Date(),
+          budget: apiTender.estimatedValue ?? null,
+          currency: apiTender.currency || 'AED'
+        };
+        this.tender.set(tender);
+        this.updateBreadcrumb(tender);
+      },
+      error: () => {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Failed to load tender details'
+        });
+      }
+    });
+  }
+
+  private mapServiceStatus(status: string): Tender['status'] {
+    const statusMap: Record<string, Tender['status']> = {
+      'draft': 'draft',
+      'active': 'open',
+      'evaluation': 'closed',
+      'awarded': 'awarded',
+      'closed': 'closed',
+      'cancelled': 'cancelled'
     };
-
-    this.tender.set(mockTender);
-    this.updateBreadcrumb(mockTender);
+    return statusMap[status] || 'draft';
   }
 
   private updateBreadcrumb(tender: Tender): void {
@@ -988,11 +1117,22 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
       accept: () => {
         const t = this.tender();
         if (t) {
-          this.tender.set({ ...t, status: 'open' });
-          this.messageService.add({
-            severity: 'success',
-            summary: 'Success',
-            detail: 'Tender published successfully'
+          this.tenderService.updateTenderStatus(t.id, 'active').subscribe({
+            next: () => {
+              this.tender.set({ ...t, status: 'open' });
+              this.messageService.add({
+                severity: 'success',
+                summary: 'Success',
+                detail: 'Tender published successfully'
+              });
+            },
+            error: (err: any) => {
+              this.messageService.add({
+                severity: 'error',
+                summary: 'Error',
+                detail: err?.message || 'Failed to publish tender'
+              });
+            }
           });
         }
       }
@@ -1007,11 +1147,22 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
       accept: () => {
         const t = this.tender();
         if (t) {
-          this.tender.set({ ...t, status: 'closed' });
-          this.messageService.add({
-            severity: 'success',
-            summary: 'Success',
-            detail: 'Tender closed successfully'
+          this.tenderService.updateTenderStatus(t.id, 'closed').subscribe({
+            next: () => {
+              this.tender.set({ ...t, status: 'closed' });
+              this.messageService.add({
+                severity: 'success',
+                summary: 'Success',
+                detail: 'Tender closed successfully'
+              });
+            },
+            error: (err: any) => {
+              this.messageService.add({
+                severity: 'error',
+                summary: 'Error',
+                detail: err?.message || 'Failed to close tender'
+              });
+            }
           });
         }
       }
@@ -1026,11 +1177,22 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
       accept: () => {
         const t = this.tender();
         if (t) {
-          this.tender.set({ ...t, status: 'cancelled' });
-          this.messageService.add({
-            severity: 'success',
-            summary: 'Success',
-            detail: 'Tender archived successfully'
+          this.tenderService.updateTenderStatus(t.id, 'cancelled').subscribe({
+            next: () => {
+              this.tender.set({ ...t, status: 'cancelled' });
+              this.messageService.add({
+                severity: 'success',
+                summary: 'Success',
+                detail: 'Tender archived successfully'
+              });
+            },
+            error: (err: any) => {
+              this.messageService.add({
+                severity: 'error',
+                summary: 'Error',
+                detail: err?.message || 'Failed to archive tender'
+              });
+            }
           });
         }
       }
@@ -1053,55 +1215,52 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
   }
 
   private loadInvitedBidders(): void {
-    // Mock invited bidders - in production, fetch from API
-    const mockInvitedBidders: TenderBidder[] = [
-      {
-        id: 1,
-        tenderId: 1,
-        bidderId: 1,
-        bidder: {
-          id: 1,
-          companyNameEn: 'Tech Solutions Ltd',
-          companyNameAr: 'حلول تقنية المحدودة',
-          email: 'info@techsolutions.sa',
-          tradeSpecializations: [],
-          prequalificationStatus: PrequalificationStatus.APPROVED,
-          ndaStatus: 'signed' as any,
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        invitedAt: new Date('2026-01-20'),
-        invitedBy: 1,
-        invitationStatus: InvitationStatus.ACCEPTED,
-        invitationSentAt: new Date('2026-01-20')
-      },
-      {
-        id: 2,
-        tenderId: 1,
-        bidderId: 2,
-        bidder: {
-          id: 2,
-          companyNameEn: 'SecureTech Solutions',
-          email: 'info@securetech.sa',
-          tradeSpecializations: [],
-          prequalificationStatus: PrequalificationStatus.APPROVED,
-          ndaStatus: 'signed' as any,
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        invitedAt: new Date('2026-01-22'),
-        invitedBy: 1,
-        invitationStatus: InvitationStatus.SENT,
-        invitationSentAt: new Date('2026-01-22')
-      }
-    ];
+    const tenderId = this.route.snapshot.params['id'];
+    if (!tenderId) return;
 
-    this.invitedBidders.set(mockInvitedBidders);
+    this.tenderService.getInvitedBidders(tenderId).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (invitedList) => {
+        // Map TenderInvitedBidder to TenderBidder for template compatibility
+        const bidders: TenderBidder[] = invitedList.map(tib => ({
+          id: tib.id,
+          tenderId: tib.tenderId,
+          bidderId: tib.bidderId,
+          bidder: {
+            id: tib.bidderId,
+            companyNameEn: tib.bidderName,
+            email: tib.bidderEmail,
+            tradeSpecializations: [],
+            prequalificationStatus: PrequalificationStatus.APPROVED,
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          } as any,
+          invitedAt: new Date(tib.invitedAt),
+          invitedBy: 0,
+          invitationStatus: this.mapToInvitationStatus(tib.status),
+          bidSubmittedAt: tib.status === 'submitted' ? (tib.submittedAt ? new Date(String(tib.submittedAt)) : new Date()) : undefined
+        }));
+        this.invitedBidders.set(bidders);
+      },
+      error: () => {
+        // No bidders or endpoint not available - show empty state
+        this.invitedBidders.set([]);
+      }
+    });
   }
 
-  getExistingBidderIds(): number[] {
+  private mapToInvitationStatus(status: string): InvitationStatus {
+    switch (status) {
+      case 'viewed': return InvitationStatus.VIEWED;
+      case 'declined': return InvitationStatus.DECLINED;
+      case 'submitted': return InvitationStatus.ACCEPTED;
+      default: return InvitationStatus.SENT;
+    }
+  }
+
+  getExistingBidderIds(): (number | string)[] {
     return this.invitedBidders().map(tb => tb.bidderId);
   }
 
@@ -1113,7 +1272,7 @@ export class TenderDetailsComponent implements OnInit, OnDestroy {
 
   getSubmittedCount(): number {
     return this.invitedBidders().filter(
-      tb => tb.bidSubmittedAt !== undefined
+      tb => tb.bidSubmittedAt !== undefined || tb.invitationStatus === InvitationStatus.ACCEPTED
     ).length;
   }
 

@@ -86,6 +86,7 @@ import {
               formControlName="sectionNumber"
               placeholder="e.g., 1, 1.1, 2.1.1"
               class="w-full"
+              data-testid="section-number"
               [class.ng-invalid]="isFieldInvalid('sectionNumber')"
             />
             @if (isFieldInvalid('sectionNumber')) {
@@ -101,6 +102,7 @@ import {
               formControlName="title"
               placeholder="Enter section title"
               class="w-full"
+              data-testid="section-title"
               [class.ng-invalid]="isFieldInvalid('title')"
             />
             @if (isFieldInvalid('title')) {
@@ -136,6 +138,7 @@ import {
             [label]="mode === 'create' ? 'Add Section' : 'Update Section'"
             [loading]="isLoading"
             [disabled]="sectionForm.invalid || isLoading"
+            data-testid="section-save-btn"
           ></button>
         </div>
       </form>
@@ -156,7 +159,7 @@ import {
 
     .form-field label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .required {
@@ -164,7 +167,7 @@ import {
     }
 
     .field-hint {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       font-size: 0.8rem;
     }
 
@@ -174,7 +177,7 @@ import {
       gap: 0.5rem;
       margin-top: 1.5rem;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     :host ::ng-deep {

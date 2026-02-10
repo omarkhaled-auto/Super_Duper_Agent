@@ -1,6 +1,8 @@
 import { Component, OnInit, inject, signal, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
+import { environment } from '../../../../../environments/environment';
 import { CardModule } from 'primeng/card';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
@@ -14,6 +16,7 @@ import { DividerModule } from 'primeng/divider';
 import { PanelModule } from 'primeng/panel';
 import { ToastModule } from 'primeng/toast';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
+import { DialogModule } from 'primeng/dialog';
 import { DialogService, DynamicDialog, DynamicDialogRef } from 'primeng/dynamicdialog';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { IconFieldModule } from 'primeng/iconfield';
@@ -24,7 +27,8 @@ import {
   TenderBidder,
   PrequalificationStatus,
   TradeSpecialization,
-  InvitationStatus
+  InvitationStatus,
+  QualificationStatus
 } from '../../../../core/models/bidder.model';
 import { BidderService } from '../../../../core/services/bidder.service';
 import { BidderFormDialogComponent, BidderFormDialogData } from '../../../admin/bidders/bidder-form-dialog.component';
@@ -55,6 +59,7 @@ interface Tender {
     PanelModule,
     ToastModule,
     ConfirmDialogModule,
+    DialogModule,
     DynamicDialog,
     IconFieldModule,
     InputIconModule,
@@ -204,7 +209,8 @@ interface Tender {
               <tr>
                 <th>Company</th>
                 <th>Email</th>
-                <th style="width: 60px">Remove</th>
+                <th style="width: 100px">Status</th>
+                <th style="width: 120px">Actions</th>
               </tr>
             </ng-template>
             <ng-template pTemplate="body" let-bidder>
@@ -216,21 +222,48 @@ interface Tender {
                   <span class="email">{{ bidder.email }}</span>
                 </td>
                 <td>
-                  <button
-                    pButton
-                    icon="pi pi-times"
-                    class="p-button-text p-button-sm p-button-danger"
-                    pTooltip="Remove"
-                    (click)="removeBidderFromSelection(bidder)"
-                  ></button>
+                  @if (bidder.qualificationStatus) {
+                    <p-tag
+                      [value]="bidder.qualificationStatus"
+                      [severity]="getQualificationSeverity(bidder.qualificationStatus)"
+                      styleClass="status-tag-sm"
+                    ></p-tag>
+                  } @else {
+                    <p-tag value="Pending" severity="warn" styleClass="status-tag-sm"></p-tag>
+                  }
+                </td>
+                <td>
+                  <div style="display: flex; gap: 0.25rem;">
+                    <button
+                      pButton
+                      icon="pi pi-check"
+                      class="p-button-text p-button-sm p-button-success"
+                      pTooltip="Qualify"
+                      (click)="openQualifyDialog(bidder)"
+                    ></button>
+                    <button
+                      pButton
+                      icon="pi pi-times"
+                      class="p-button-text p-button-sm p-button-danger"
+                      pTooltip="Reject"
+                      (click)="openRejectDialog(bidder)"
+                    ></button>
+                    <button
+                      pButton
+                      icon="pi pi-trash"
+                      class="p-button-text p-button-sm p-button-secondary"
+                      pTooltip="Remove"
+                      (click)="removeBidderFromSelection(bidder)"
+                    ></button>
+                  </div>
                 </td>
               </tr>
             </ng-template>
             <ng-template pTemplate="emptymessage">
               <tr>
-                <td colspan="3" class="text-center p-4">
+                <td colspan="4" class="text-center p-4">
                   <div class="empty-selection">
-                    <i class="pi pi-users" style="font-size: 2rem; color: #ccc;"></i>
+                    <i class="pi pi-users" style="font-size: 2rem; color: var(--bayan-muted-foreground, #71717a); opacity: 0.5;"></i>
                     <p>No bidders selected</p>
                     <small>Select bidders from the available list</small>
                   </div>
@@ -316,6 +349,51 @@ interface Tender {
       </div>
 
       <p-confirmDialog></p-confirmDialog>
+
+      <!-- Qualification Dialog -->
+      <p-dialog
+        [(visible)]="showQualificationDialog"
+        [header]="qualificationAction === 'Qualified' ? 'Qualify Bidder' : 'Reject Bidder'"
+        [modal]="true"
+        [style]="{width: '450px'}"
+        [closable]="true"
+      >
+        <div class="qualification-dialog">
+          @if (qualificationBidder) {
+            <p>
+              Are you sure you want to <strong>{{ qualificationAction === 'Qualified' ? 'qualify' : 'reject' }}</strong>
+              <strong>{{ qualificationBidder.companyNameEn }}</strong>?
+            </p>
+          }
+          <div class="form-field" style="margin-top: 1rem;">
+            <label for="qualificationReason">Reason (Optional)</label>
+            <textarea
+              pInputTextarea
+              id="qualificationReason"
+              [(ngModel)]="qualificationReason"
+              placeholder="Enter reason for this decision..."
+              rows="3"
+              class="w-full"
+            ></textarea>
+          </div>
+        </div>
+        <ng-template pTemplate="footer">
+          <button
+            pButton
+            label="Cancel"
+            class="p-button-text"
+            (click)="showQualificationDialog = false"
+          ></button>
+          <button
+            pButton
+            [label]="qualificationAction === 'Qualified' ? 'Qualify' : 'Reject'"
+            [icon]="qualificationAction === 'Qualified' ? 'pi pi-check' : 'pi pi-times'"
+            [class]="qualificationAction === 'Qualified' ? '' : 'p-button-danger'"
+            [loading]="qualificationLoading()"
+            (click)="confirmQualification()"
+          ></button>
+        </ng-template>
+      </p-dialog>
     </div>
   `,
   styles: [`
@@ -334,16 +412,16 @@ interface Tender {
     .page-header h2 {
       margin: 0;
       font-size: 1.5rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .page-header p {
       margin: 0.25rem 0 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .selected-label {
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
       font-weight: 500;
     }
 
@@ -362,7 +440,7 @@ interface Tender {
     :host ::ng-deep .bidders-panel {
       .p-card-header {
         padding: 1rem;
-        border-bottom: 1px solid #e0e0e0;
+        border-bottom: 1px solid var(--bayan-border, #e4e4e7);
       }
 
       .p-card-body {
@@ -383,7 +461,7 @@ interface Tender {
     .panel-header h3 {
       margin: 0;
       font-size: 1.1rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .filters {
@@ -407,12 +485,12 @@ interface Tender {
 
     .company-name {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .email {
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .trade-tags {
@@ -432,15 +510,15 @@ interface Tender {
 
     .more-count {
       font-size: 0.75rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .selected-row {
-      background-color: #e3f2fd !important;
+      background-color: var(--bayan-accent, #f4f4f5) !important;
     }
 
     :host ::ng-deep .selected-panel {
-      border: 2px solid #1976D2;
+      border: 2px solid var(--bayan-primary, #18181b);
     }
 
     .empty-selection {
@@ -453,11 +531,11 @@ interface Tender {
 
     .empty-selection p {
       margin: 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .empty-selection small {
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     :host ::ng-deep .email-preview-panel {
@@ -475,7 +553,7 @@ interface Tender {
     .merge-fields-info h4 {
       margin: 0 0 0.5rem;
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .merge-fields {
@@ -485,31 +563,31 @@ interface Tender {
     }
 
     .merge-fields code {
-      background: #f5f5f5;
+      background: var(--bayan-accent, #f4f4f5);
       padding: 0.25rem 0.5rem;
-      border-radius: 4px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
       font-size: 0.875rem;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .email-content label {
       display: block;
       margin-bottom: 0.5rem;
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .email-sample h4 {
       margin: 0 0 0.5rem;
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .email-body {
-      background: #f9f9f9;
+      background: var(--bayan-accent, #f4f4f5);
       padding: 1rem;
-      border-radius: 8px;
-      border: 1px solid #e0e0e0;
+      border-radius: var(--bayan-radius, 0.5rem);
+      border: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .email-body p {
@@ -520,7 +598,7 @@ interface Tender {
     .custom-message {
       background: #fff3cd;
       padding: 0.75rem;
-      border-radius: 4px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
       border-left: 4px solid #ffc107;
     }
 
@@ -529,7 +607,7 @@ interface Tender {
       justify-content: flex-end;
       gap: 0.5rem;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
   `]
 })
@@ -538,9 +616,10 @@ export class InviteBiddersComponent implements OnInit {
   private readonly messageService = inject(MessageService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly dialogService = inject(DialogService);
+  private readonly http = inject(HttpClient);
 
   @Input() tender?: Tender;
-  @Input() existingBidderIds: number[] = [];
+  @Input() existingBidderIds: (number | string)[] = [];
   @Output() invitationsSent = new EventEmitter<Bidder[]>();
   @Output() cancelled = new EventEmitter<void>();
 
@@ -553,6 +632,13 @@ export class InviteBiddersComponent implements OnInit {
   selectedTrade: TradeSpecialization | null = null;
   selectAllAvailable = false;
   customMessage = '';
+
+  // Qualification management
+  showQualificationDialog = false;
+  qualificationAction: 'Qualified' | 'Rejected' = 'Qualified';
+  qualificationReason = '';
+  qualificationBidder: Bidder | null = null;
+  qualificationLoading = signal(false);
 
   private dialogRef: DynamicDialogRef | null = null;
 
@@ -577,71 +663,45 @@ export class InviteBiddersComponent implements OnInit {
   }
 
   private loadAvailableBidders(): void {
-    // Mock data - in production, fetch from API excluding already invited bidders
-    const mockBidders: Bidder[] = [
-      {
-        id: 1,
-        companyNameEn: 'Tech Solutions Ltd',
-        companyNameAr: 'حلول تقنية المحدودة',
-        email: 'info@techsolutions.sa',
-        phone: '+966 11 234 5678',
-        crNumber: '1010123456',
-        tradeSpecializations: [TradeSpecialization.IT_SERVICES, TradeSpecialization.TELECOMMUNICATIONS],
-        prequalificationStatus: PrequalificationStatus.APPROVED,
-        ndaStatus: 'signed' as any,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
+    this.bidderService.getBidders({ pageSize: 100, isActive: true }).subscribe({
+      next: (response) => {
+        const bidders: Bidder[] = ((response as any).items || [])
+          .map((b: any) => ({
+            id: b.id,
+            companyNameEn: b.companyName || b.companyNameEn || '',
+            companyNameAr: b.companyNameAr || '',
+            email: b.email || '',
+            phone: b.phone || '',
+            crNumber: b.crNumber || '',
+            contactPersonName: b.contactPerson || '',
+            tradeSpecializations: b.tradeSpecialization
+              ? [b.tradeSpecialization as TradeSpecialization]
+              : (b.tradeSpecializations || []),
+            prequalificationStatus: this.mapPrequalStatus(b.prequalificationStatus),
+            ndaStatus: b.ndaStatus || 'pending' as any,
+            isActive: b.isActive ?? true,
+            createdAt: b.createdAt ? new Date(b.createdAt) : new Date(),
+            updatedAt: b.updatedAt ? new Date(b.updatedAt) : new Date()
+          }))
+          .filter((b: Bidder) => !this.existingBidderIds.includes(b.id));
+        this.availableBidders.set(bidders);
+        this.filteredAvailableBidders.set(bidders);
       },
-      {
-        id: 2,
-        companyNameEn: 'Al-Bina Construction',
-        companyNameAr: 'البناء للمقاولات',
-        email: 'contact@albina.sa',
-        tradeSpecializations: [TradeSpecialization.CONSTRUCTION, TradeSpecialization.ENGINEERING],
-        prequalificationStatus: PrequalificationStatus.APPROVED,
-        ndaStatus: 'signed' as any,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      },
-      {
-        id: 3,
-        companyNameEn: 'Global Supplies Co',
-        email: 'sales@globalsupplies.sa',
-        tradeSpecializations: [TradeSpecialization.SUPPLIES, TradeSpecialization.LOGISTICS],
-        prequalificationStatus: PrequalificationStatus.PENDING,
-        ndaStatus: 'sent' as any,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      },
-      {
-        id: 4,
-        companyNameEn: 'Strategic Consulting Group',
-        email: 'hello@strategicconsulting.sa',
-        tradeSpecializations: [TradeSpecialization.CONSULTING, TradeSpecialization.FINANCIAL],
-        prequalificationStatus: PrequalificationStatus.APPROVED,
-        ndaStatus: 'signed' as any,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      },
-      {
-        id: 5,
-        companyNameEn: 'SecureTech Solutions',
-        email: 'info@securetech.sa',
-        tradeSpecializations: [TradeSpecialization.SECURITY, TradeSpecialization.IT_SERVICES],
-        prequalificationStatus: PrequalificationStatus.APPROVED,
-        ndaStatus: 'signed' as any,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
+      error: (err) => {
+        console.error('Failed to load available bidders:', err);
+        this.availableBidders.set([]);
+        this.filteredAvailableBidders.set([]);
       }
-    ].filter(b => !this.existingBidderIds.includes(b.id));
+    });
+  }
 
-    this.availableBidders.set(mockBidders);
-    this.filteredAvailableBidders.set(mockBidders);
+  private mapPrequalStatus(status: number | string): PrequalificationStatus {
+    if (typeof status === 'number') {
+      return status === 1 ? PrequalificationStatus.APPROVED
+        : status === 2 ? PrequalificationStatus.REJECTED
+        : PrequalificationStatus.PENDING;
+    }
+    return (status as PrequalificationStatus) || PrequalificationStatus.PENDING;
   }
 
   onSearch(): void {
@@ -760,19 +820,95 @@ export class InviteBiddersComponent implements OnInit {
       header: 'Confirm Send Invitations',
       icon: 'pi pi-send',
       accept: () => {
-        // In production: call bidderService.inviteBiddersToTender()
-        this.messageService.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: `Invitations sent to ${this.selectedBidders().length} bidder(s)`
+        const bidderIds = this.selectedBidders().map(b => b.id);
+        this.bidderService.inviteBiddersToTender(this.tender!.id, bidderIds).subscribe({
+          next: (result: any) => {
+            const count = result?.invitedCount ?? this.selectedBidders().length;
+            this.messageService.add({
+              severity: 'success',
+              summary: 'Success',
+              detail: `${count} bidder(s) invited successfully`
+            });
+            this.invitationsSent.emit(this.selectedBidders());
+          },
+          error: (err: any) => {
+            this.messageService.add({
+              severity: 'error',
+              summary: 'Error',
+              detail: err?.message || 'Failed to send invitations'
+            });
+          }
         });
-        this.invitationsSent.emit(this.selectedBidders());
       }
     });
   }
 
   onCancel(): void {
     this.cancelled.emit();
+  }
+
+  openQualifyDialog(bidder: Bidder): void {
+    this.qualificationBidder = bidder;
+    this.qualificationAction = 'Qualified';
+    this.qualificationReason = '';
+    this.showQualificationDialog = true;
+  }
+
+  openRejectDialog(bidder: Bidder): void {
+    this.qualificationBidder = bidder;
+    this.qualificationAction = 'Rejected';
+    this.qualificationReason = '';
+    this.showQualificationDialog = true;
+  }
+
+  confirmQualification(): void {
+    if (!this.qualificationBidder || !this.tender) return;
+
+    this.qualificationLoading.set(true);
+
+    const apiUrl = environment.apiUrl;
+
+    this.http.put(`${apiUrl}/tenders/${this.tender.id}/bidders/${this.qualificationBidder.id}/qualification`, {
+      qualificationStatus: this.qualificationAction,
+      reason: this.qualificationReason || undefined
+    }).subscribe({
+      next: () => {
+        this.qualificationLoading.set(false);
+        this.showQualificationDialog = false;
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Success',
+          detail: `Bidder ${this.qualificationAction === 'Qualified' ? 'qualified' : 'rejected'} successfully`
+        });
+        // Update the bidder's qualification status in the selected list
+        if (this.qualificationBidder) {
+          this.selectedBidders.update(bidders =>
+            bidders.map(b =>
+              b.id === this.qualificationBidder!.id
+                ? { ...b, qualificationStatus: this.qualificationAction as any }
+                : b
+            )
+          );
+        }
+      },
+      error: (error: any) => {
+        this.qualificationLoading.set(false);
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: error.error?.message || 'Failed to update qualification status'
+        });
+      }
+    });
+  }
+
+  getQualificationSeverity(status: string): 'success' | 'warn' | 'danger' | 'info' {
+    switch (status) {
+      case 'Qualified': return 'success';
+      case 'Rejected': return 'danger';
+      case 'Pending': return 'warn';
+      default: return 'info';
+    }
   }
 
   getTradeLabel(trade: TradeSpecialization): string {

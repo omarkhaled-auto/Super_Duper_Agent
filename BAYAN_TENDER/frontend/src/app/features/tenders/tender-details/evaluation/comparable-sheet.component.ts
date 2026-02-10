@@ -13,15 +13,18 @@ import { CommonModule, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
 
-// AG Grid type stubs (ag-grid not installed)
-type ColDef = any;
-type GridApi = any;
-type GridReadyEvent = any;
-type CellClassParams = any;
-type ValueFormatterParams = any;
-type ITooltipParams = any;
-type RowClassParams = any;
-type GetRowIdParams = any;
+// AG Grid
+import { AgGridAngular } from 'ag-grid-angular';
+import type {
+  ColDef,
+  GridApi,
+  GridReadyEvent,
+  CellClassParams,
+  ValueFormatterParams,
+  ITooltipParams,
+  RowClassParams,
+  GetRowIdParams
+} from 'ag-grid-community';
 
 // PrimeNG
 import { ButtonModule } from 'primeng/button';
@@ -97,6 +100,7 @@ interface GridRowData {
   imports: [
     CommonModule,
     FormsModule,
+    AgGridAngular,
     ButtonModule,
     DropdownModule,
     InputTextModule,
@@ -114,7 +118,7 @@ interface GridRowData {
   template: `
     <p-toast></p-toast>
 
-    <div class="comparable-sheet-container">
+    <div class="comparable-sheet-container" data-testid="comparable-sheet">
       <!-- Toolbar -->
       <div class="toolbar">
         <div class="toolbar-left">
@@ -236,17 +240,25 @@ interface GridRowData {
       } @else if (!gridData().length) {
         <!-- Empty State -->
         <div class="empty-state">
-          <i class="pi pi-table" style="font-size: 3rem; color: #ccc;"></i>
+          <i class="pi pi-table" style="font-size: 3rem; color: var(--bayan-border, #e4e4e7);"></i>
           <h3>No Data Available</h3>
           <p>The comparable sheet will be available after bids are opened and BOQ data is imported.</p>
         </div>
       } @else {
         <!-- AG Grid -->
         <div class="grid-container">
-          <!-- AG Grid placeholder - install ag-grid-angular and ag-grid-community to enable -->
-          <div class="ag-grid-placeholder" style="width: 100%; min-height: 200px; display: flex; align-items: center; justify-content: center; border: 1px dashed #ccc; border-radius: 8px; color: #999;">
-            <span>Comparable Sheet Grid (requires ag-grid installation)</span>
-          </div>
+          <ag-grid-angular
+            class="ag-theme-alpine"
+            style="width: 100%; height: 500px;"
+            data-testid="comparable-sheet-table"
+            [rowData]="filteredGridData()"
+            [columnDefs]="columnDefs()"
+            [defaultColDef]="defaultColDef"
+            [getRowId]="getRowId"
+            [getRowClass]="getRowClass"
+            [tooltipShowDelay]="500"
+            (gridReady)="onGridReady($event)"
+          />
         </div>
 
         <!-- Legend -->
@@ -266,11 +278,11 @@ interface GridRowData {
               <span class="legend-text">Major Outlier (&gt;20%)</span>
             </div>
             <div class="legend-item">
-              <span class="legend-color" [style.background-color]="'#e9ecef'"></span>
+              <span class="legend-color" [style.background-color]="'#f4f4f5'"></span>
               <span class="legend-text">No Bid (NB)</span>
             </div>
             <div class="legend-item">
-              <span class="legend-color" [style.background-color]="'#f3e5f5'"></span>
+              <span class="legend-color" [style.background-color]="'#faf5ff'"></span>
               <span class="legend-text">Non-Comparable</span>
             </div>
           </div>
@@ -400,8 +412,8 @@ interface GridRowData {
       justify-content: space-between;
       align-items: center;
       padding: 1rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
       flex-wrap: wrap;
       gap: 1rem;
     }
@@ -422,7 +434,7 @@ interface GridRowData {
     .p-input-icon-left i {
       position: absolute;
       left: 0.75rem;
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .p-input-icon-left input {
@@ -435,8 +447,8 @@ interface GridRowData {
       align-items: center;
       gap: 1.5rem;
       padding: 1rem 1.5rem;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border-radius: 8px;
+      background: var(--bayan-primary, #18181b);
+      border-radius: var(--bayan-radius, 0.5rem);
       color: white;
       flex-wrap: wrap;
     }
@@ -495,30 +507,30 @@ interface GridRowData {
 
     .loading-container p,
     .empty-state p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       margin: 0;
     }
 
     .empty-state h3 {
       margin: 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     /* Grid Container */
     .grid-container {
       flex: 1;
       min-height: 400px;
-      border-radius: 8px;
+      border-radius: var(--bayan-radius, 0.5rem);
       overflow: hidden;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     /* AG Grid Custom Styles */
     :host ::ng-deep .ag-theme-alpine {
-      --ag-header-background-color: #f5f5f5;
-      --ag-header-foreground-color: #333;
-      --ag-row-hover-color: #f0f7ff;
-      --ag-selected-row-background-color: #e3f2fd;
+      --ag-header-background-color: var(--bayan-accent, #f4f4f5);
+      --ag-header-foreground-color: var(--bayan-foreground, #09090b);
+      --ag-row-hover-color: var(--bayan-muted, #f4f4f5);
+      --ag-selected-row-background-color: var(--bayan-accent, #f4f4f5);
       font-family: inherit;
     }
 
@@ -527,21 +539,21 @@ interface GridRowData {
     }
 
     :host ::ng-deep .frozen-column {
-      background-color: #fafafa;
+      background-color: var(--bayan-muted, #f4f4f5);
     }
 
     :host ::ng-deep .section-header-row {
-      background-color: #e3f2fd !important;
+      background-color: var(--bayan-accent, #f4f4f5) !important;
       font-weight: 600;
     }
 
     :host ::ng-deep .section-subtotal-row {
-      background-color: #f5f5f5 !important;
+      background-color: var(--bayan-accent, #f4f4f5) !important;
       font-weight: 600;
     }
 
     :host ::ng-deep .grand-total-row {
-      background-color: #e8f5e9 !important;
+      background-color: var(--bayan-success-bg, #f0fdf4) !important;
       font-weight: 700;
       font-size: 1.05em;
     }
@@ -572,14 +584,14 @@ interface GridRowData {
     }
 
     :host ::ng-deep .cell-no-bid {
-      background-color: #e9ecef;
+      background-color: var(--bayan-accent, #f4f4f5);
       color: #6c757d;
       font-style: italic;
     }
 
     :host ::ng-deep .cell-non-comparable {
-      background-color: #f3e5f5;
-      color: #6f42c1;
+      background-color: #faf5ff;
+      color: #9333ea;
     }
 
     :host ::ng-deep .cell-lowest {
@@ -600,7 +612,7 @@ interface GridRowData {
 
     :host ::ng-deep .bidder-header .bidder-total {
       font-size: 0.85em;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       display: block;
     }
 
@@ -610,14 +622,14 @@ interface GridRowData {
       align-items: center;
       gap: 1rem;
       padding: 1rem;
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
       flex-wrap: wrap;
     }
 
     .legend-title {
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .legend-items {
@@ -635,13 +647,13 @@ interface GridRowData {
     .legend-color {
       width: 20px;
       height: 20px;
-      border-radius: 4px;
+      border-radius: var(--bayan-radius-sm, 0.375rem);
       border: 1px solid #ddd;
     }
 
     .legend-text {
       font-size: 0.875rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     /* Settings Dialog */
@@ -653,7 +665,7 @@ interface GridRowData {
 
     .settings-content h4 {
       margin: 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .settings-group {
@@ -669,7 +681,7 @@ interface GridRowData {
     }
 
     .setting-item label {
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .threshold-settings {
@@ -686,7 +698,7 @@ interface GridRowData {
 
     .threshold-item label {
       min-width: 120px;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     /* Responsive */

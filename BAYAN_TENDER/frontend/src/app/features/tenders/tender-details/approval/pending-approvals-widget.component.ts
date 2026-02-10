@@ -165,8 +165,8 @@ import { PendingApprovalItem } from '../../../../core/models/approval.model';
 
     :host ::ng-deep .pending-approvals-card .p-card-header {
       padding: 1rem 1.25rem;
-      background-color: #f8f9fa;
-      border-bottom: 1px solid #e0e0e0;
+      background-color: var(--bayan-accent, #f4f4f5);
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     :host ::ng-deep .pending-approvals-card .p-card-body {
@@ -188,12 +188,12 @@ import { PendingApprovalItem } from '../../../../core/models/approval.model';
       align-items: center;
       gap: 0.5rem;
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .header-title i {
       font-size: 1.25rem;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .loading-container {
@@ -212,19 +212,19 @@ import { PendingApprovalItem } from '../../../../core/models/approval.model';
 
     .empty-icon {
       font-size: 3rem;
-      color: #4CAF50;
+      color: var(--bayan-success, #22c55e);
       margin-bottom: 0.5rem;
     }
 
     .empty-state p {
       margin: 0;
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .empty-subtitle {
       font-size: 0.9rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .approvals-list {
@@ -238,16 +238,16 @@ import { PendingApprovalItem } from '../../../../core/models/approval.model';
     }
 
     .approval-card:hover {
-      background-color: #f8f9fa;
+      background-color: var(--bayan-accent, #f4f4f5);
     }
 
     .approval-card.overdue {
       border-left: 4px solid #f44336;
-      background-color: #ffebee;
+      background-color: var(--bayan-danger-bg, #fef2f2);
     }
 
     .approval-card.approaching {
-      border-left: 4px solid #ff9800;
+      border-left: 4px solid var(--bayan-warning, #f59e0b);
       background-color: #fff8e1;
     }
 
@@ -266,13 +266,13 @@ import { PendingApprovalItem } from '../../../../core/models/approval.model';
 
     .tender-title {
       font-weight: 600;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       font-size: 0.95rem;
     }
 
     .tender-reference {
       font-size: 0.8rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       font-family: monospace;
     }
 
@@ -297,19 +297,19 @@ import { PendingApprovalItem } from '../../../../core/models/approval.model';
 
     .info-label {
       font-size: 0.75rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
 
     .info-value {
       font-size: 0.9rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .value-highlight {
       font-weight: 600;
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
     }
 
     .level-badge {
@@ -319,7 +319,7 @@ import { PendingApprovalItem } from '../../../../core/models/approval.model';
       width: 24px;
       height: 24px;
       border-radius: 50%;
-      background-color: #1976D2;
+      background-color: var(--bayan-primary, #18181b);
       color: white;
       font-weight: 600;
       font-size: 0.8rem;
@@ -350,8 +350,8 @@ import { PendingApprovalItem } from '../../../../core/models/approval.model';
       display: flex;
       justify-content: center;
       padding: 0.75rem;
-      border-top: 1px solid #e0e0e0;
-      background-color: #f8f9fa;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      background-color: var(--bayan-accent, #f4f4f5);
     }
 
     :host ::ng-deep .p-divider {

@@ -368,7 +368,8 @@ class TestMain:
     def test_design_ref_deduplication(self, env_with_api_keys):
         """Design reference URLs should be deduplicated."""
         with patch("agent_team.cli._parse_args") as mock_parse, \
-             patch("agent_team.cli.asyncio") as mock_asyncio:
+             patch("agent_team.cli.asyncio") as mock_asyncio, \
+             patch("agent_team.mcp_servers.is_firecrawl_available", return_value=False):
             mock_parse.return_value = argparse.Namespace(
                 task="test", prd=None, depth="quick", agents=None,
                 model=None, max_turns=None, config=None, cwd=None,

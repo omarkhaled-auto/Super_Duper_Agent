@@ -49,6 +49,14 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
           <div class="checkbox-grid">
             <div class="checkbox-item">
               <p-checkbox
+                [(ngModel)]="options.columns.section"
+                [binary]="true"
+                inputId="col-section"
+              ></p-checkbox>
+              <label for="col-section">Section</label>
+            </div>
+            <div class="checkbox-item">
+              <p-checkbox
                 [(ngModel)]="options.columns.itemNumber"
                 [binary]="true"
                 inputId="col-itemNumber"
@@ -78,14 +86,6 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
                 inputId="col-uom"
               ></p-checkbox>
               <label for="col-uom">Unit of Measure</label>
-            </div>
-            <div class="checkbox-item">
-              <p-checkbox
-                [(ngModel)]="options.columns.type"
-                [binary]="true"
-                inputId="col-type"
-              ></p-checkbox>
-              <label for="col-type">Item Type</label>
             </div>
             <div class="checkbox-item">
               <p-checkbox
@@ -152,6 +152,7 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
               optionLabel="label"
               optionValue="value"
               styleClass="w-full"
+              data-testid="boq-export-language"
             ></p-dropdown>
           </div>
         </div>
@@ -169,6 +170,7 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
           label="Download"
           icon="pi pi-download"
           [loading]="isExporting()"
+          data-testid="boq-export-btn"
           (click)="exportBoq()"
         ></button>
       </div>
@@ -183,7 +185,7 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
 
     .option-section h4 {
       margin: 0 0 1rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       font-size: 1rem;
     }
 
@@ -201,7 +203,7 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
 
     .checkbox-item label {
       cursor: pointer;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .dropdown-field {
@@ -213,7 +215,7 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
 
     .dropdown-field label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .dialog-footer {
@@ -222,7 +224,7 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
       gap: 0.5rem;
       margin-top: 1.5rem;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     :host ::ng-deep .p-dropdown {
@@ -242,11 +244,11 @@ export class BoqExportDialogComponent implements OnChanges {
 
   options: BoqExportOptions = {
     columns: {
+      section: true,
       itemNumber: true,
       description: true,
       quantity: true,
       uom: true,
-      type: true,
       notes: true,
       unitRate: true,
       totalAmount: true
@@ -271,11 +273,11 @@ export class BoqExportDialogComponent implements OnChanges {
   private resetOptions(): void {
     this.options = {
       columns: {
+        section: true,
         itemNumber: true,
         description: true,
         quantity: true,
         uom: true,
-        type: true,
         notes: true,
         unitRate: true,
         totalAmount: true

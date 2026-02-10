@@ -353,8 +353,12 @@ export const EVALUATION_STATUS_CONFIG: Record<EvaluationStatus, { label: string;
 
 export const DEFAULT_WEIGHT_SPLITS: WeightSplit[] = [
   { technicalWeight: 30, commercialWeight: 70 },
+  { technicalWeight: 35, commercialWeight: 65 },
   { technicalWeight: 40, commercialWeight: 60 },
+  { technicalWeight: 45, commercialWeight: 55 },
   { technicalWeight: 50, commercialWeight: 50 },
+  { technicalWeight: 55, commercialWeight: 45 },
   { technicalWeight: 60, commercialWeight: 40 },
+  { technicalWeight: 65, commercialWeight: 35 },
   { technicalWeight: 70, commercialWeight: 30 }
 ];

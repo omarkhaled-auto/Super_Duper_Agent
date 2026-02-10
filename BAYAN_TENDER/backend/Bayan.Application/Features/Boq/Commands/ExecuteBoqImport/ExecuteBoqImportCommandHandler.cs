@@ -284,6 +284,9 @@ public class ExecuteBoqImportCommandHandler : IRequestHandler<ExecuteBoqImportCo
             throw new ApplicationException("No sections available for import.");
         }
 
+        // Build set of known section numbers for best-section lookup
+        var knownSectionNumbers = new HashSet<string>(sections.Keys, StringComparer.OrdinalIgnoreCase);
+
         for (var rowIndex = 0; rowIndex < sheet.Rows.Count; rowIndex++)
         {
             var row = sheet.Rows[rowIndex];
@@ -317,32 +320,37 @@ public class ExecuteBoqImportCommandHandler : IRequestHandler<ExecuteBoqImportCo
                 continue;
             }
 
-            // Determine section for this item
-            var sectionNumber = "1"; // default
-            if (!string.IsNullOrWhiteSpace(itemNumber))
+            // Skip section header rows (they were already created as sections)
+            if (_sectionDetectionService.IsSectionHeaderRow(itemNumber, quantityStr, uom))
             {
-                var parseResult = _sectionDetectionService.ParseItemNumber(itemNumber);
-                if (parseResult.Success && !parseResult.IsSectionHeader)
-                {
-                    sectionNumber = parseResult.SectionNumber;
-                }
+                skippedRows++;
+                continue;
             }
 
-            // Find the section or use default
-            if (!sections.TryGetValue(sectionNumber, out var section))
+            // Determine best section for this item using context-aware lookup
+            BoqSection section;
+            if (!string.IsNullOrWhiteSpace(itemNumber))
             {
-                // Try parent sections
-                var parentNumber = _sectionDetectionService.GetParentSectionNumber(sectionNumber);
-                while (!string.IsNullOrEmpty(parentNumber))
+                var sectionNumber = _sectionDetectionService.FindBestSection(itemNumber, knownSectionNumbers);
+                if (!sections.TryGetValue(sectionNumber, out section!))
                 {
-                    if (sections.TryGetValue(parentNumber, out section))
+                    // Try parent sections
+                    var parentNumber = _sectionDetectionService.GetParentSectionNumber(sectionNumber);
+                    while (!string.IsNullOrEmpty(parentNumber))
                     {
-                        break;
+                        if (sections.TryGetValue(parentNumber, out section!))
+                        {
+                            break;
+                        }
+                        parentNumber = _sectionDetectionService.GetParentSectionNumber(parentNumber);
                     }
-                    parentNumber = _sectionDetectionService.GetParentSectionNumber(parentNumber);
-                }
 
-                section ??= defaultSection;
+                    section ??= defaultSection;
+                }
+            }
+            else
+            {
+                section = defaultSection;
             }
 
             // Parse quantity

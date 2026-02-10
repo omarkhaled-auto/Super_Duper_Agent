@@ -27,6 +27,13 @@ import {
   BoqSectionOption
 } from '../models/portal.model';
 
+export interface ActivateAccountRequest {
+  email: string;
+  activationToken: string;
+  password: string;
+  confirmPassword: string;
+}
+
 const PORTAL_TOKEN_KEY = 'portal_access_token';
 const PORTAL_REFRESH_TOKEN_KEY = 'portal_refresh_token';
 const PORTAL_USER_KEY = 'portal_user';
@@ -109,8 +116,22 @@ export class PortalService {
   private handleAuthSuccess(data: PortalAuthResponse): void {
     localStorage.setItem(PORTAL_TOKEN_KEY, data.accessToken);
     localStorage.setItem(PORTAL_REFRESH_TOKEN_KEY, data.refreshToken);
-    localStorage.setItem(PORTAL_USER_KEY, JSON.stringify(data.user));
-    this._currentUser.set(data.user);
+
+    // API returns "bidder" not "user" — map to PortalUser
+    const user: PortalUser = data.user ?? (data.bidder ? {
+      id: Number(data.bidder.id) || 0,
+      bidderId: Number(data.bidder.id) || 0,
+      companyName: data.bidder.companyName,
+      email: data.bidder.email,
+      contactPersonName: data.bidder.contactPerson,
+      phone: data.bidder.phone,
+      crNumber: undefined
+    } : { id: 0, bidderId: 0, companyName: '', email: '' });
+
+    // Store user with tenderAccess for the portal landing page
+    const userWithAccess = { ...user, tenderAccess: data.bidder?.tenderAccess || [] };
+    localStorage.setItem(PORTAL_USER_KEY, JSON.stringify(userWithAccess));
+    this._currentUser.set(user);
   }
 
   logout(): void {
@@ -163,11 +184,28 @@ export class PortalService {
     this._error.set(null);
   }
 
+  activateAccount(data: ActivateAccountRequest): Observable<any> {
+    this._isLoading.set(true);
+    this._error.set(null);
+
+    return this.http.post<ApiResponse<any>>(`${this.apiUrl}/auth/activate`, data).pipe(
+      tap(() => {
+        this._isLoading.set(false);
+      }),
+      map(response => response.data),
+      catchError(error => {
+        this._isLoading.set(false);
+        this._error.set(error.error?.message || 'Account activation failed. Please try again.');
+        return throwError(() => error);
+      })
+    );
+  }
+
   // ============================================
   // Tender Information
   // ============================================
 
-  getTenderInfo(tenderId: number): Observable<PortalTenderInfo> {
+  getTenderInfo(tenderId: string | number): Observable<PortalTenderInfo> {
     this._isLoading.set(true);
 
     return this.http.get<ApiResponse<PortalTenderInfo>>(`${this.apiUrl}/tenders/${tenderId}`).pipe(
@@ -188,61 +226,117 @@ export class PortalService {
   // Document Methods
   // ============================================
 
-  getTenderDocuments(tenderId: number): Observable<TenderDocument[]> {
+  getTenderDocuments(tenderId: string | number): Observable<TenderDocument[]> {
     return this.http.get<ApiResponse<TenderDocument[]>>(`${this.apiUrl}/tenders/${tenderId}/documents`).pipe(
       map(response => response.data),
       catchError(error => throwError(() => error))
     );
   }
 
-  getDocumentsByFolder(tenderId: number): Observable<DocumentFolder[]> {
+  getDocumentsByFolder(tenderId: string | number): Observable<DocumentFolder[]> {
     return this.getTenderDocuments(tenderId).pipe(
       map(documents => this.organizeDocumentsByCategory(documents))
     );
   }
 
   private organizeDocumentsByCategory(documents: TenderDocument[]): DocumentFolder[] {
-    const folderMap = new Map<DocumentCategory, TenderDocument[]>();
+    // Group documents by folderPath from backend
+    const folderMap = new Map<string, TenderDocument[]>();
 
-    // Initialize all categories
-    Object.keys(DOCUMENT_CATEGORY_CONFIG).forEach(cat => {
-      folderMap.set(cat as DocumentCategory, []);
-    });
-
-    // Distribute documents to categories
     documents.forEach(doc => {
-      const category = doc.category || 'other';
-      const existing = folderMap.get(category) || [];
+      const folderKey = doc.folderPath || 'other';
+      const existing = folderMap.get(folderKey) || [];
       existing.push(doc);
-      folderMap.set(category, existing);
+      folderMap.set(folderKey, existing);
     });
 
     // Convert to DocumentFolder array
     const folders: DocumentFolder[] = [];
-    folderMap.forEach((docs, category) => {
-      if (docs.length > 0) {
-        const config = DOCUMENT_CATEGORY_CONFIG[category];
-        folders.push({
-          category,
-          displayName: config.label,
-          icon: config.icon,
-          documents: docs.sort((a, b) => a.fileName.localeCompare(b.fileName)),
-          totalSize: docs.reduce((sum, d) => sum + d.fileSize, 0)
-        });
-      }
+    folderMap.forEach((docs, folderPath) => {
+      // Try to match folderPath to a known category
+      const category = this.folderPathToCategory(folderPath);
+      const config = DOCUMENT_CATEGORY_CONFIG[category];
+      folders.push({
+        category,
+        displayName: config?.label || folderPath,
+        icon: config?.icon || 'pi-folder',
+        documents: docs.sort((a, b) => a.fileName.localeCompare(b.fileName)),
+        totalSize: docs.reduce((sum, d) => sum + (d.fileSizeBytes || 0), 0)
+      });
     });
 
     return folders;
   }
 
-  getAddenda(tenderId: number): Observable<TenderAddendum[]> {
+  /**
+   * Normalize a clarification response from either GET (PortalClarificationDto)
+   * or POST (BidderQuestionDto) into a consistent PortalClarification shape.
+   *
+   * GET returns status as integer enum (0=Submitted, 1=Pending, ...)
+   * POST returns statusDisplay as string, no status field
+   */
+  private normalizeClarification(raw: any): PortalClarification {
+    // Map integer enum values to lowercase string names
+    const statusMap: Record<number, string> = {
+      0: 'submitted',
+      1: 'pending',
+      2: 'draft_answer',
+      3: 'answered',
+      4: 'published',
+      5: 'duplicate',
+      6: 'rejected'
+    };
+
+    let status: string;
+    if (raw.status !== undefined && raw.status !== null) {
+      if (typeof raw.status === 'number') {
+        status = statusMap[raw.status] || 'submitted';
+      } else {
+        // Could be PascalCase string — normalize to lowercase
+        status = String(raw.status).toLowerCase();
+      }
+    } else if (raw.statusDisplay) {
+      // POST response has statusDisplay instead of status
+      status = String(raw.statusDisplay).toLowerCase();
+    } else {
+      status = 'submitted';
+    }
+
+    return {
+      id: raw.id,
+      referenceNumber: raw.referenceNumber || '',
+      subject: raw.subject || '',
+      question: raw.question || '',
+      answer: raw.answer,
+      status,
+      statusDisplay: raw.statusDisplay,
+      submittedAt: raw.submittedAt,
+      answeredAt: raw.answeredAt,
+      relatedBoqSection: raw.relatedBoqSection || raw.relatedBoqSectionTitle,
+      relatedBoqSectionTitle: raw.relatedBoqSection || raw.relatedBoqSectionTitle,
+      isAnonymous: raw.isAnonymous ?? false
+    };
+  }
+
+  private folderPathToCategory(folderPath: string): DocumentCategory {
+    const lower = folderPath.toLowerCase();
+    if (lower.includes('drawing')) return 'drawings';
+    if (lower.includes('spec')) return 'specifications';
+    if (lower.includes('boq') || lower.includes('bill')) return 'boq';
+    if (lower.includes('contract')) return 'contract_documents';
+    if (lower.includes('addend')) return 'addenda';
+    if (lower.includes('tender') || lower.includes('rfp')) return 'tender_documents';
+    return 'other';
+  }
+
+  getAddenda(tenderId: string | number): Observable<TenderAddendum[]> {
     return this.http.get<ApiResponse<TenderAddendum[]>>(`${this.apiUrl}/tenders/${tenderId}/addenda`).pipe(
       map(response => response.data),
       catchError(error => throwError(() => error))
     );
   }
 
-  acknowledgeAddendum(tenderId: number, addendumId: number): Observable<TenderAddendum> {
+  acknowledgeAddendum(tenderId: string | number, addendumId: number): Observable<TenderAddendum> {
     return this.http.post<ApiResponse<TenderAddendum>>(
       `${this.apiUrl}/tenders/${tenderId}/addenda/${addendumId}/acknowledge`,
       {}
@@ -252,8 +346,8 @@ export class PortalService {
     );
   }
 
-  downloadDocument(documentId: number): Observable<Blob> {
-    return this.http.get(`${this.apiUrl}/documents/${documentId}/download`, {
+  downloadDocument(tenderId: string | number, documentId: string | number): Observable<Blob> {
+    return this.http.get(`${this.apiUrl}/tenders/${tenderId}/documents/${documentId}/download`, {
       responseType: 'blob'
     }).pipe(
       catchError(error => throwError(() => error))
@@ -264,16 +358,16 @@ export class PortalService {
   // Clarification Methods
   // ============================================
 
-  getClarifications(tenderId: number): Observable<PortalClarification[]> {
-    return this.http.get<ApiResponse<PortalClarification[]>>(
+  getClarifications(tenderId: string | number): Observable<PortalClarification[]> {
+    return this.http.get<ApiResponse<any[]>>(
       `${this.apiUrl}/tenders/${tenderId}/clarifications`
     ).pipe(
-      map(response => response.data),
+      map(response => (response.data || []).map(c => this.normalizeClarification(c))),
       catchError(error => throwError(() => error))
     );
   }
 
-  getBulletins(tenderId: number): Observable<PortalBulletin[]> {
+  getBulletins(tenderId: string | number): Observable<PortalBulletin[]> {
     return this.http.get<ApiResponse<PortalBulletin[]>>(
       `${this.apiUrl}/tenders/${tenderId}/bulletins`
     ).pipe(
@@ -283,16 +377,16 @@ export class PortalService {
   }
 
   submitQuestion(data: SubmitQuestionDto): Observable<PortalClarification> {
-    return this.http.post<ApiResponse<PortalClarification>>(
+    return this.http.post<ApiResponse<any>>(
       `${this.apiUrl}/tenders/${data.tenderId}/clarifications`,
       data
     ).pipe(
-      map(response => response.data),
+      map(response => this.normalizeClarification(response.data)),
       catchError(error => throwError(() => error))
     );
   }
 
-  getBoqSections(tenderId: number): Observable<BoqSectionOption[]> {
+  getBoqSections(tenderId: string | number): Observable<BoqSectionOption[]> {
     return this.http.get<ApiResponse<BoqSectionOption[]>>(
       `${this.apiUrl}/tenders/${tenderId}/boq-sections`
     ).pipe(
@@ -301,8 +395,8 @@ export class PortalService {
     );
   }
 
-  downloadBulletinPdf(bulletinId: number): Observable<Blob> {
-    return this.http.get(`${this.apiUrl}/bulletins/${bulletinId}/pdf`, {
+  downloadBulletinPdf(tenderId: string | number, bulletinId: string | number): Observable<Blob> {
+    return this.http.get(`${this.apiUrl}/tenders/${tenderId}/bulletins/${bulletinId}/download`, {
       responseType: 'blob'
     }).pipe(
       catchError(error => throwError(() => error))
@@ -313,7 +407,7 @@ export class PortalService {
   // Bid Submission Methods
   // ============================================
 
-  getDraftBid(tenderId: number): Observable<PortalBidSubmission | null> {
+  getDraftBid(tenderId: string | number): Observable<PortalBidSubmission | null> {
     return this.http.get<ApiResponse<PortalBidSubmission | null>>(
       `${this.apiUrl}/tenders/${tenderId}/bid/draft`
     ).pipe(
@@ -328,13 +422,15 @@ export class PortalService {
   }
 
   uploadBidDocument(
-    tenderId: number,
+    tenderId: string | number,
     documentType: PortalBidDocumentType,
     file: File
   ): Observable<PortalBidDocument> {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('documentType', documentType);
+
+    // Map frontend document type to backend enum
+    const backendDocType = this.mapDocumentType(documentType);
 
     // Initialize progress tracking
     const progressMap = this._uploadProgress.value;
@@ -347,7 +443,7 @@ export class PortalService {
     this._uploadProgress.next(new Map(progressMap));
 
     return this.http.post<ApiResponse<PortalBidDocument>>(
-      `${this.apiUrl}/tenders/${tenderId}/bid/documents`,
+      `${this.apiUrl}/tenders/${tenderId}/bids/upload?documentType=${backendDocType}`,
       formData,
       {
         reportProgress: true,
@@ -395,7 +491,7 @@ export class PortalService {
     ) as Observable<PortalBidDocument>;
   }
 
-  deleteBidDocument(tenderId: number, documentId: number): Observable<void> {
+  deleteBidDocument(tenderId: string | number, documentId: number): Observable<void> {
     return this.http.delete<ApiResponse<void>>(
       `${this.apiUrl}/tenders/${tenderId}/bid/documents/${documentId}`
     ).pipe(
@@ -407,12 +503,18 @@ export class PortalService {
   submitBid(data: SubmitBidDto): Observable<PortalBidReceipt> {
     this._isLoading.set(true);
 
-    return this.http.post<ApiResponse<PortalBidReceipt>>(
-      `${this.apiUrl}/tenders/${data.tenderId}/bid/submit`,
+    return this.http.post<ApiResponse<any>>(
+      `${this.apiUrl}/tenders/${data.tenderId}/bids/submit`,
       data
     ).pipe(
       tap(() => this._isLoading.set(false)),
-      map(response => response.data),
+      map(response => {
+        // Backend returns SubmitBidResultDto { receipt: BidReceiptDto, isLate: bool }
+        const result = response.data;
+        const receipt = result.receipt || result;
+        // Normalize bidId to id for frontend model
+        return { ...receipt, id: receipt.bidId || receipt.id } as PortalBidReceipt;
+      }),
       catchError(error => {
         this._isLoading.set(false);
         return throwError(() => error);
@@ -420,7 +522,7 @@ export class PortalService {
     );
   }
 
-  getBidReceipt(bidId: number): Observable<PortalBidReceipt> {
+  getBidReceipt(bidId: string | number): Observable<PortalBidReceipt> {
     return this.http.get<ApiResponse<PortalBidReceipt>>(
       `${this.apiUrl}/bids/${bidId}/receipt`
     ).pipe(
@@ -429,8 +531,8 @@ export class PortalService {
     );
   }
 
-  downloadReceiptPdf(bidId: number): Observable<Blob> {
-    return this.http.get(`${this.apiUrl}/bids/${bidId}/receipt/pdf`, {
+  downloadReceiptPdf(bidId: string | number): Observable<Blob> {
+    return this.http.get(`${this.apiUrl}/bids/${bidId}/receipt/download`, {
       responseType: 'blob'
     }).pipe(
       catchError(error => throwError(() => error))
@@ -439,6 +541,19 @@ export class PortalService {
 
   clearUploadProgress(): void {
     this._uploadProgress.next(new Map());
+  }
+
+  private mapDocumentType(frontendType: PortalBidDocumentType): string {
+    const mapping: Record<PortalBidDocumentType, string> = {
+      'priced_boq': 'PricedBOQ',
+      'methodology': 'Methodology',
+      'team_cvs': 'TeamCVs',
+      'program': 'Program',
+      'hse_plan': 'HSEPlan',
+      'qa_qc_plan': 'Supporting',
+      'supporting_documents': 'Supporting'
+    };
+    return mapping[frontendType] || 'Supporting';
   }
 
   // ============================================

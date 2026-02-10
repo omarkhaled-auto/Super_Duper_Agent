@@ -40,7 +40,7 @@ export enum TradeSpecialization {
  * Main Bidder interface representing a registered bidder/vendor
  */
 export interface Bidder {
-  id: number;
+  id: number | string;
   companyNameEn: string;
   companyNameAr?: string;
   email: string;
@@ -59,6 +59,7 @@ export interface Bidder {
   tendersCount?: number; // Number of tenders participated in
   activeTendersCount?: number;
   lastActivityDate?: Date;
+  qualificationStatus?: string;
 }
 
 /**
@@ -90,9 +91,9 @@ export interface UpdateBidderDto extends Partial<CreateBidderDto> {
  * Represents a bidder invited to a specific tender
  */
 export interface TenderBidder {
-  id: number;
-  tenderId: number;
-  bidderId: number;
+  id: number | string;
+  tenderId: number | string;
+  bidderId: number | string;
   bidder: Bidder;
   invitedAt: Date;
   invitedBy: number;
@@ -103,6 +104,8 @@ export interface TenderBidder {
   declineReason?: string;
   bidSubmittedAt?: Date;
   bidStatus?: BidStatus;
+  qualificationStatus?: QualificationStatus;
+  qualifiedAt?: Date;
 }
 
 /**
@@ -162,4 +165,14 @@ export interface InvitationEmailMergeFields {
   tenderTitle: string;
   deadlineDate: string;
   portalLink: string;
+}
+
+/**
+ * Qualification status for tender bidders
+ */
+export enum QualificationStatus {
+  PENDING = 'Pending',
+  QUALIFIED = 'Qualified',
+  REJECTED = 'Rejected',
+  REMOVED = 'Removed'
 }

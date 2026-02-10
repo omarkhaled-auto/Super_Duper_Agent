@@ -70,7 +70,7 @@ interface BidderOption {
     <p-toast></p-toast>
     <p-confirmDialog></p-confirmDialog>
 
-    <div class="exceptions-panel-container">
+    <div class="exceptions-panel-container" data-testid="exceptions-panel">
       <!-- Add Exception Form -->
       <p-panel header="Log New Exception" [toggleable]="true" [collapsed]="!showForm">
         <div class="exception-form">
@@ -289,7 +289,7 @@ interface BidderOption {
               <tr>
                 <td colspan="7" class="text-center p-4">
                   <div class="empty-state">
-                    <i class="pi pi-list" style="font-size: 2rem; color: #ccc;"></i>
+                    <i class="pi pi-list" style="font-size: 2rem; color: var(--bayan-muted-foreground, #71717a); opacity: 0.5;"></i>
                     <p>No exceptions logged yet.</p>
                   </div>
                 </td>
@@ -321,7 +321,7 @@ interface BidderOption {
           </div>
         } @else {
           <div class="empty-state">
-            <i class="pi pi-check-circle" style="font-size: 2.5rem; color: #4caf50;"></i>
+            <i class="pi pi-check-circle" style="font-size: 2.5rem; color: var(--bayan-success, #22c55e);"></i>
             <h3>No Exceptions</h3>
             <p>No exceptions or deviations have been logged for this tender.</p>
             <button
@@ -353,7 +353,7 @@ interface BidderOption {
     }
 
     .loading-container p {
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
       margin: 0;
     }
 
@@ -382,7 +382,7 @@ interface BidderOption {
 
     .form-field label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       font-size: 0.9rem;
     }
 
@@ -400,7 +400,7 @@ interface BidderOption {
       gap: 0.75rem;
       margin-top: 0.5rem;
       padding-top: 1rem;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     /* Table Styles */
@@ -415,22 +415,22 @@ interface BidderOption {
     }
 
     .description-text {
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .mitigation-text {
       display: flex;
       align-items: flex-start;
       gap: 0.375rem;
-      font-size: 0.85rem;
-      color: #666;
+      font-size: 0.875rem;
+      color: var(--bayan-muted-foreground, #71717a);
       padding: 0.375rem 0.5rem;
-      background: #f8f9fa;
-      border-radius: 4px;
+      background: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .mitigation-text i {
-      color: #1976D2;
+      color: var(--bayan-primary, #18181b);
       margin-top: 0.125rem;
     }
 
@@ -443,15 +443,15 @@ interface BidderOption {
     }
 
     .positive {
-      color: #c62828;
+      color: #dc2626;
     }
 
     .negative {
-      color: #2e7d32;
+      color: #16a34a;
     }
 
     .no-value {
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     /* Summary Stats */
@@ -460,8 +460,8 @@ interface BidderOption {
       align-items: center;
       gap: 1.5rem;
       padding: 1rem;
-      background: #f8f9fa;
-      border-radius: 8px;
+      background: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius, 0.5rem);
       margin-top: 1rem;
       flex-wrap: wrap;
     }
@@ -474,23 +474,23 @@ interface BidderOption {
 
     .summary-label {
       font-size: 0.8rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .summary-value {
       font-size: 1.25rem;
       font-weight: 700;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .summary-value.risk-high {
-      color: #c62828;
+      color: #dc2626;
     }
 
     .summary-divider {
       width: 1px;
       height: 40px;
-      background: #ddd;
+      background: var(--bayan-border, #e4e4e7);
     }
 
     /* Empty State */
@@ -506,12 +506,12 @@ interface BidderOption {
 
     .empty-state h3 {
       margin: 0;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .empty-state p {
       margin: 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     /* Responsive */
@@ -534,7 +534,7 @@ interface BidderOption {
         justify-content: space-between;
         align-items: center;
         padding: 0.5rem 0;
-        border-bottom: 1px solid #e0e0e0;
+        border-bottom: 1px solid var(--bayan-border, #e4e4e7);
       }
 
       .summary-item:last-child {
@@ -691,7 +691,7 @@ export class ExceptionsPanelComponent implements OnInit, OnDestroy {
   }
 
   private deleteException(exceptionId: number): void {
-    this.evaluationService.deleteException(exceptionId)
+    this.evaluationService.deleteException(this.tenderId, exceptionId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {

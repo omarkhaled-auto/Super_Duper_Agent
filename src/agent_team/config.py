@@ -28,6 +28,7 @@ class OrchestratorConfig:
 class DepthConfig:
     default: str = "standard"
     auto_detect: bool = True
+    scan_scope_mode: str = "auto"  # "auto" (depth-based), "full" (always full), "changed" (always changed-only)
     keyword_map: dict[str, list[str]] = field(default_factory=lambda: {
         "quick": ["quick", "fast", "simple"],
         "thorough": [
@@ -168,6 +169,11 @@ class DesignReferenceConfig:
     max_pages_per_site: int = 5
     cache_ttl_seconds: int = 7200  # 2 hours
     standards_file: str = ""  # empty = built-in; path = custom file
+    require_ui_doc: bool = True          # Hard-fail when extraction fails
+    ui_requirements_file: str = "UI_REQUIREMENTS.md"  # Output filename
+    extraction_retries: int = 2          # retry attempts for Firecrawl extraction
+    fallback_generation: bool = True     # generate heuristic UI doc when extraction fails
+    content_quality_check: bool = True   # validate section CONTENT, not just headers
 
 
 @dataclass
@@ -279,6 +285,21 @@ class MilestoneConfig:
     resume_from_milestone: str | None = None
     wiring_fix_retries: int = 1
     max_milestones_warning: int = 30
+    review_recovery_retries: int = 1  # Max review recovery attempts per milestone
+    mock_data_scan: bool = True       # Scan for mock data after each milestone
+    ui_compliance_scan: bool = True      # scan for UI compliance after each milestone
+
+
+@dataclass
+class PostOrchestrationScanConfig:
+    """Configuration for post-orchestration quality scans.
+
+    These scans run after the main orchestration loop in ALL modes.
+    They were previously on MilestoneConfig but are mode-agnostic.
+    """
+
+    mock_data_scan: bool = True       # Scan for mock data in service files
+    ui_compliance_scan: bool = True   # Scan for UI compliance violations
 
 
 @dataclass
@@ -296,6 +317,71 @@ class PRDChunkingConfig:
 
 
 @dataclass
+class E2ETestingConfig:
+    """Configuration for the end-to-end testing phase.
+
+    When ``enabled`` is True, the E2E phase runs after UI compliance scan
+    to verify the built application actually works end-to-end.  Explicit
+    opt-in because it is an expensive phase (sub-orchestrator sessions).
+    """
+
+    enabled: bool = False               # Explicit opt-in (expensive phase)
+    backend_api_tests: bool = True      # Part 1: Backend API E2E
+    frontend_playwright_tests: bool = True  # Part 2: Playwright E2E
+    max_fix_retries: int = 5            # Fix-rerun cycles per part (min 1)
+    test_port: int = 9876               # Non-standard port for test isolation
+    skip_if_no_api: bool = True         # Auto-skip Part 1 if no API detected
+    skip_if_no_frontend: bool = True    # Auto-skip Part 2 if no frontend detected
+
+
+@dataclass
+class IntegrityScanConfig:
+    """Configuration for post-build integrity scans.
+
+    Three lightweight static analysis checks that run before the E2E phase:
+    deployment config verification, PRD reconciliation, and asset integrity.
+    All produce warnings (non-blocking) and default to enabled since they
+    are cheap regex/filesystem scans.
+    """
+
+    deployment_scan: bool = True      # Scan docker-compose/nginx for port/env/CORS mismatches
+    asset_scan: bool = True           # Scan templates for broken asset references
+    prd_reconciliation: bool = True   # Verify quantitative PRD claims match code
+
+
+@dataclass
+class TrackingDocumentsConfig:
+    """Configuration for per-phase tracking documents.
+
+    Three documents provide structured memory across agent phases:
+    - E2E Coverage Matrix maps requirements to tests for completeness
+    - Fix Cycle Log tracks fix attempts to prevent repeated strategies
+    - Milestone Handoff documents interfaces between milestones
+    """
+
+    e2e_coverage_matrix: bool = True       # Generate E2E_COVERAGE_MATRIX.md before E2E testing
+    fix_cycle_log: bool = True             # Maintain FIX_CYCLE_LOG.md across all fix loops
+    milestone_handoff: bool = True         # Generate MILESTONE_HANDOFF.md in PRD+ mode
+    coverage_completeness_gate: float = 0.8   # Minimum coverage ratio to pass E2E (0.0-1.0)
+    wiring_completeness_gate: float = 1.0     # Minimum wiring ratio to pass milestone (0.0-1.0)
+
+
+@dataclass
+class DatabaseScanConfig:
+    """Configuration for database integrity static scans.
+
+    Three lightweight static analysis checks that detect cross-layer type
+    inconsistencies, missing defaults, and incomplete ORM relationships.
+    All produce warnings (non-blocking) and default to enabled since they
+    are cheap regex/filesystem scans.
+    """
+
+    dual_orm_scan: bool = True        # Detect type mismatches between ORM and raw queries
+    default_value_scan: bool = True   # Detect missing defaults and unsafe nullable access
+    relationship_scan: bool = True    # Detect incomplete ORM relationship configuration
+
+
+@dataclass
 class AgentTeamConfig:
     orchestrator: OrchestratorConfig = field(default_factory=OrchestratorConfig)
     depth: DepthConfig = field(default_factory=DepthConfig)
@@ -310,6 +396,11 @@ class AgentTeamConfig:
     orchestrator_st: OrchestratorSTConfig = field(default_factory=OrchestratorSTConfig)
     milestone: MilestoneConfig = field(default_factory=MilestoneConfig)
     prd_chunking: PRDChunkingConfig = field(default_factory=PRDChunkingConfig)
+    e2e_testing: E2ETestingConfig = field(default_factory=E2ETestingConfig)
+    integrity_scans: IntegrityScanConfig = field(default_factory=IntegrityScanConfig)
+    tracking_documents: TrackingDocumentsConfig = field(default_factory=TrackingDocumentsConfig)
+    database_scans: DatabaseScanConfig = field(default_factory=DatabaseScanConfig)
+    post_orchestration_scans: PostOrchestrationScanConfig = field(default_factory=PostOrchestrationScanConfig)
     # Agent keys use underscores (Python convention) in config files.
     # The SDK uses hyphens (e.g., "code-writer"). See agents.py for the mapping.
     agents: dict[str, AgentConfig] = field(default_factory=lambda: {
@@ -371,15 +462,69 @@ def detect_depth(task: str, config: AgentTeamConfig) -> DepthDetection:
     return DepthDetection(config.depth.default, "default", [], "No keyword matches")
 
 
-def apply_depth_quality_gating(depth: str, config: AgentTeamConfig) -> None:
-    """Apply depth-based gating to QualityConfig.
+def apply_depth_quality_gating(
+    depth: str,
+    config: AgentTeamConfig,
+    user_overrides: set[str] | None = None,
+) -> None:
+    """Apply depth-based gating to quality and scan config fields.
 
-    QUICK depth disables production_defaults and craft_review to keep
-    runs fast. STANDARD and above keep the defaults (all True).
+    The *user_overrides* set (from :func:`load_config`) lists dotted key
+    paths that the user explicitly set in their config file.  When a key
+    is in *user_overrides* it is **never** changed by depth gating,
+    respecting the user's intentional choice.
+
+    Depth effects:
+    - **quick**: disables all scans, 0 review retries, disables quality
+    - **standard**: disables PRD reconciliation, keeps scans on
+    - **thorough**: auto-enables E2E testing, 2 review retries
+    - **exhaustive**: auto-enables E2E testing, 3 review retries
     """
+    overrides = user_overrides or set()
+
+    def _gate(key: str, value: object, target: object, attr: str) -> None:
+        """Set *target.attr* to *value* unless *key* is user-overridden."""
+        if key not in overrides:
+            setattr(target, attr, value)
+
     if depth == "quick":
-        config.quality.production_defaults = False
-        config.quality.craft_review = False
+        # Quality
+        _gate("quality.production_defaults", False, config.quality, "production_defaults")
+        _gate("quality.craft_review", False, config.quality, "craft_review")
+        # Post-orchestration scans
+        _gate("post_orchestration_scans.mock_data_scan", False, config.post_orchestration_scans, "mock_data_scan")
+        _gate("post_orchestration_scans.ui_compliance_scan", False, config.post_orchestration_scans, "ui_compliance_scan")
+        # Milestone scans (legacy fields)
+        _gate("milestone.mock_data_scan", False, config.milestone, "mock_data_scan")
+        _gate("milestone.ui_compliance_scan", False, config.milestone, "ui_compliance_scan")
+        _gate("milestone.review_recovery_retries", 0, config.milestone, "review_recovery_retries")
+        # Integrity scans
+        _gate("integrity_scans.deployment_scan", False, config.integrity_scans, "deployment_scan")
+        _gate("integrity_scans.asset_scan", False, config.integrity_scans, "asset_scan")
+        _gate("integrity_scans.prd_reconciliation", False, config.integrity_scans, "prd_reconciliation")
+        # Database scans
+        _gate("database_scans.dual_orm_scan", False, config.database_scans, "dual_orm_scan")
+        _gate("database_scans.default_value_scan", False, config.database_scans, "default_value_scan")
+        _gate("database_scans.relationship_scan", False, config.database_scans, "relationship_scan")
+        # E2E testing
+        _gate("e2e_testing.enabled", False, config.e2e_testing, "enabled")
+        _gate("e2e_testing.max_fix_retries", 1, config.e2e_testing, "max_fix_retries")
+
+    elif depth == "standard":
+        # Standard disables PRD reconciliation (expensive LLM call)
+        _gate("integrity_scans.prd_reconciliation", False, config.integrity_scans, "prd_reconciliation")
+
+    elif depth == "thorough":
+        # Thorough auto-enables E2E and bumps retries
+        _gate("e2e_testing.enabled", True, config.e2e_testing, "enabled")
+        _gate("e2e_testing.max_fix_retries", 2, config.e2e_testing, "max_fix_retries")
+        _gate("milestone.review_recovery_retries", 2, config.milestone, "review_recovery_retries")
+
+    elif depth == "exhaustive":
+        # Exhaustive: full E2E + highest retries
+        _gate("e2e_testing.enabled", True, config.e2e_testing, "enabled")
+        _gate("e2e_testing.max_fix_retries", 3, config.e2e_testing, "max_fix_retries")
+        _gate("milestone.review_recovery_retries", 3, config.milestone, "review_recovery_retries")
 
 
 def get_agent_counts(depth: str) -> dict[str, tuple[int, int]]:
@@ -639,9 +784,17 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return merged
 
 
-def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
-    """Convert a raw dict (from YAML) into an AgentTeamConfig."""
+def _dict_to_config(data: dict[str, Any]) -> tuple[AgentTeamConfig, set[str]]:
+    """Convert a raw dict (from YAML) into an AgentTeamConfig and user overrides.
+
+    Returns:
+        Tuple of (config, user_overrides) where user_overrides is the set of
+        dotted key paths explicitly set by the user in the YAML file (e.g.
+        ``"milestone.mock_data_scan"``).  This allows depth-gating to respect
+        intentional user choices.
+    """
     cfg = AgentTeamConfig()
+    user_overrides: set[str] = set()
 
     if "orchestrator" in data:
         o = data["orchestrator"]
@@ -664,9 +817,16 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
 
     if "depth" in data:
         d = data["depth"]
+        scan_scope_mode = d.get("scan_scope_mode", cfg.depth.scan_scope_mode)
+        if scan_scope_mode not in ("auto", "full", "changed"):
+            raise ValueError(
+                f"Invalid depth.scan_scope_mode: {scan_scope_mode!r}. "
+                f"Must be one of: auto, full, changed"
+            )
         cfg.depth = DepthConfig(
             default=d.get("default", cfg.depth.default),
             auto_detect=d.get("auto_detect", cfg.depth.auto_detect),
+            scan_scope_mode=scan_scope_mode,
             keyword_map=d.get("keyword_map", cfg.depth.keyword_map),
         )
 
@@ -707,6 +867,11 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
             max_pages_per_site=dr.get("max_pages_per_site", cfg.design_reference.max_pages_per_site),
             cache_ttl_seconds=dr.get("cache_ttl_seconds", cfg.design_reference.cache_ttl_seconds),
             standards_file=dr.get("standards_file", cfg.design_reference.standards_file),
+            require_ui_doc=dr.get("require_ui_doc", cfg.design_reference.require_ui_doc),
+            ui_requirements_file=dr.get("ui_requirements_file", cfg.design_reference.ui_requirements_file),
+            extraction_retries=dr.get("extraction_retries", cfg.design_reference.extraction_retries),
+            fallback_generation=dr.get("fallback_generation", cfg.design_reference.fallback_generation),
+            content_quality_check=dr.get("content_quality_check", cfg.design_reference.content_quality_check),
         )
 
         # Validate design_reference.depth enum value
@@ -714,6 +879,13 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
             raise ValueError(
                 f"Invalid design_reference.depth: {cfg.design_reference.depth!r}. "
                 f"Must be one of: branding, screenshots, full"
+            )
+
+        # Validate extraction_retries is non-negative
+        if cfg.design_reference.extraction_retries < 0:
+            raise ValueError(
+                f"Invalid design_reference.extraction_retries: {cfg.design_reference.extraction_retries}. "
+                f"Must be >= 0"
             )
 
     if "codebase_map" in data and isinstance(data["codebase_map"], dict):
@@ -762,6 +934,9 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
 
     if "quality" in data and isinstance(data["quality"], dict):
         q = data["quality"]
+        for key in ("production_defaults", "craft_review", "quality_triggers_reloop"):
+            if key in q:
+                user_overrides.add(f"quality.{key}")
         cfg.quality = QualityConfig(
             production_defaults=q.get("production_defaults", cfg.quality.production_defaults),
             craft_review=q.get("craft_review", cfg.quality.craft_review),
@@ -801,6 +976,9 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
 
     if "milestone" in data and isinstance(data["milestone"], dict):
         ms = data["milestone"]
+        for key in ("mock_data_scan", "ui_compliance_scan", "review_recovery_retries"):
+            if key in ms:
+                user_overrides.add(f"milestone.{key}")
         resume_val = ms.get("resume_from_milestone", cfg.milestone.resume_from_milestone)
         cfg.milestone = MilestoneConfig(
             enabled=ms.get("enabled", cfg.milestone.enabled),
@@ -816,7 +994,22 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
             max_milestones_warning=ms.get(
                 "max_milestones_warning", cfg.milestone.max_milestones_warning,
             ),
+            review_recovery_retries=ms.get(
+                "review_recovery_retries", cfg.milestone.review_recovery_retries,
+            ),
+            mock_data_scan=ms.get(
+                "mock_data_scan", cfg.milestone.mock_data_scan,
+            ),
+            ui_compliance_scan=ms.get(
+                "ui_compliance_scan", cfg.milestone.ui_compliance_scan,
+            ),
         )
+        # Validate: review_recovery_retries >= 0
+        if cfg.milestone.review_recovery_retries < 0:
+            raise ValueError(
+                f"Invalid milestone.review_recovery_retries: "
+                f"{cfg.milestone.review_recovery_retries}. Must be >= 0"
+            )
 
     if "prd_chunking" in data and isinstance(data["prd_chunking"], dict):
         pc = data["prd_chunking"]
@@ -825,6 +1018,95 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
             threshold=pc.get("threshold", cfg.prd_chunking.threshold),
             max_chunk_size=pc.get("max_chunk_size", cfg.prd_chunking.max_chunk_size),
         )
+
+    if "integrity_scans" in data and isinstance(data["integrity_scans"], dict):
+        isc = data["integrity_scans"]
+        for key in ("deployment_scan", "asset_scan", "prd_reconciliation"):
+            if key in isc:
+                user_overrides.add(f"integrity_scans.{key}")
+        cfg.integrity_scans = IntegrityScanConfig(
+            deployment_scan=isc.get("deployment_scan", cfg.integrity_scans.deployment_scan),
+            asset_scan=isc.get("asset_scan", cfg.integrity_scans.asset_scan),
+            prd_reconciliation=isc.get("prd_reconciliation", cfg.integrity_scans.prd_reconciliation),
+        )
+
+    if "e2e_testing" in data and isinstance(data["e2e_testing"], dict):
+        et = data["e2e_testing"]
+        for key in ("enabled", "max_fix_retries"):
+            if key in et:
+                user_overrides.add(f"e2e_testing.{key}")
+        # Silently ignore legacy budget_limit_usd key
+        cfg.e2e_testing = E2ETestingConfig(
+            enabled=et.get("enabled", cfg.e2e_testing.enabled),
+            backend_api_tests=et.get("backend_api_tests", cfg.e2e_testing.backend_api_tests),
+            frontend_playwright_tests=et.get("frontend_playwright_tests", cfg.e2e_testing.frontend_playwright_tests),
+            max_fix_retries=et.get("max_fix_retries", cfg.e2e_testing.max_fix_retries),
+            test_port=et.get("test_port", cfg.e2e_testing.test_port),
+            skip_if_no_api=et.get("skip_if_no_api", cfg.e2e_testing.skip_if_no_api),
+            skip_if_no_frontend=et.get("skip_if_no_frontend", cfg.e2e_testing.skip_if_no_frontend),
+        )
+        # Validate: max_fix_retries >= 1 (at least one fix attempt mandatory)
+        if cfg.e2e_testing.max_fix_retries < 1:
+            raise ValueError(
+                f"Invalid e2e_testing.max_fix_retries: {cfg.e2e_testing.max_fix_retries}. "
+                f"Must be >= 1"
+            )
+        # Validate: test_port in valid range
+        if not (1024 <= cfg.e2e_testing.test_port <= 65535):
+            raise ValueError(
+                f"Invalid e2e_testing.test_port: {cfg.e2e_testing.test_port}. "
+                f"Must be between 1024 and 65535"
+            )
+
+    if "tracking_documents" in data and isinstance(data["tracking_documents"], dict):
+        td = data["tracking_documents"]
+        cfg.tracking_documents = TrackingDocumentsConfig(
+            e2e_coverage_matrix=td.get("e2e_coverage_matrix", cfg.tracking_documents.e2e_coverage_matrix),
+            fix_cycle_log=td.get("fix_cycle_log", cfg.tracking_documents.fix_cycle_log),
+            milestone_handoff=td.get("milestone_handoff", cfg.tracking_documents.milestone_handoff),
+            coverage_completeness_gate=td.get("coverage_completeness_gate", cfg.tracking_documents.coverage_completeness_gate),
+            wiring_completeness_gate=td.get("wiring_completeness_gate", cfg.tracking_documents.wiring_completeness_gate),
+        )
+        # Validate: coverage_completeness_gate in [0.0, 1.0]
+        if not (0.0 <= cfg.tracking_documents.coverage_completeness_gate <= 1.0):
+            raise ValueError(
+                f"Invalid tracking_documents.coverage_completeness_gate: "
+                f"{cfg.tracking_documents.coverage_completeness_gate}. Must be between 0.0 and 1.0"
+            )
+        # Validate: wiring_completeness_gate in [0.0, 1.0]
+        if not (0.0 <= cfg.tracking_documents.wiring_completeness_gate <= 1.0):
+            raise ValueError(
+                f"Invalid tracking_documents.wiring_completeness_gate: "
+                f"{cfg.tracking_documents.wiring_completeness_gate}. Must be between 0.0 and 1.0"
+            )
+
+    if "database_scans" in data and isinstance(data["database_scans"], dict):
+        dsc = data["database_scans"]
+        for key in ("dual_orm_scan", "default_value_scan", "relationship_scan"):
+            if key in dsc:
+                user_overrides.add(f"database_scans.{key}")
+        cfg.database_scans = DatabaseScanConfig(
+            dual_orm_scan=dsc.get("dual_orm_scan", cfg.database_scans.dual_orm_scan),
+            default_value_scan=dsc.get("default_value_scan", cfg.database_scans.default_value_scan),
+            relationship_scan=dsc.get("relationship_scan", cfg.database_scans.relationship_scan),
+        )
+
+    if "post_orchestration_scans" in data and isinstance(data["post_orchestration_scans"], dict):
+        pos = data["post_orchestration_scans"]
+        for key in ("mock_data_scan", "ui_compliance_scan"):
+            if key in pos:
+                user_overrides.add(f"post_orchestration_scans.{key}")
+        cfg.post_orchestration_scans = PostOrchestrationScanConfig(
+            mock_data_scan=pos.get("mock_data_scan", cfg.post_orchestration_scans.mock_data_scan),
+            ui_compliance_scan=pos.get("ui_compliance_scan", cfg.post_orchestration_scans.ui_compliance_scan),
+        )
+    elif "milestone" in data and isinstance(data["milestone"], dict):
+        # Backward compat: migrate milestone.mock_data_scan / ui_compliance_scan
+        ms = data["milestone"]
+        if "mock_data_scan" in ms:
+            cfg.post_orchestration_scans.mock_data_scan = ms["mock_data_scan"]
+        if "ui_compliance_scan" in ms:
+            cfg.post_orchestration_scans.ui_compliance_scan = ms["ui_compliance_scan"]
 
     if "agents" in data:
         for name, agent_data in data["agents"].items():
@@ -851,13 +1133,13 @@ def _dict_to_config(data: dict[str, Any]) -> AgentTeamConfig:
             verbose=d.get("verbose", cfg.display.verbose),
         )
 
-    return cfg
+    return cfg, user_overrides
 
 
 def load_config(
     config_path: str | Path | None = None,
     cli_overrides: dict[str, Any] | None = None,
-) -> AgentTeamConfig:
+) -> tuple[AgentTeamConfig, set[str]]:
     """Load configuration from YAML files with CLI overrides.
 
     Search order:
@@ -865,6 +1147,10 @@ def load_config(
     2. ./config.yaml (cwd)
     3. ~/.agent-team/config.yaml (user home fallback)
     4. Built-in defaults
+
+    Returns:
+        Tuple of (config, user_overrides) where user_overrides tracks which
+        depth-gatable keys were explicitly set by the user.
     """
     raw: dict[str, Any] = {}
 

@@ -43,6 +43,11 @@ public class TenderDto
     public string BaseCurrency { get; set; } = string.Empty;
 
     /// <summary>
+    /// Estimated value of the tender.
+    /// </summary>
+    public decimal? EstimatedValue { get; set; }
+
+    /// <summary>
     /// Current status of the tender.
     /// </summary>
     public TenderStatus Status { get; set; }

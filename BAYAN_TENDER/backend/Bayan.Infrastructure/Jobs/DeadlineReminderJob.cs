@@ -146,10 +146,10 @@ public class DeadlineReminderJob
     <style>
         body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
         .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background: linear-gradient(135deg, #1976D2, #1565C0); color: white; padding: 20px; text-align: center; }}
+        .header {{ background: linear-gradient(135deg, #18181b, #09090b); color: white; padding: 20px; text-align: center; }}
         .content {{ padding: 20px; background: #f8f9fa; }}
         .deadline-box {{ background: #fff; border-left: 4px solid #e74c3c; padding: 15px; margin: 15px 0; }}
-        .button {{ display: inline-block; background: #1976D2; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; }}
+        .button {{ display: inline-block; background: #18181b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; }}
         .footer {{ padding: 15px; font-size: 12px; color: #666; text-align: center; }}
     </style>
 </head>

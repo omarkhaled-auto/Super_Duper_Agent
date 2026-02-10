@@ -18,7 +18,7 @@ public class ExportBoqTemplateDto
     /// </summary>
     public List<string> IncludeColumns { get; set; } = new()
     {
-        "ItemNumber", "Description", "Quantity", "Uom", "UnitRate", "Amount"
+        "Section", "ItemNumber", "Description", "Quantity", "Uom", "UnitRate", "Amount"
     };
 
     /// <summary>

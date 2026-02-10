@@ -60,7 +60,7 @@ public class ClarificationConfiguration : IEntityTypeConfiguration<Clarification
             .HasColumnName("priority")
             .HasMaxLength(20)
             .HasConversion<string>()
-            .HasDefaultValue("Normal");
+            .HasDefaultValueSql("'Normal'");
 
         builder.Property(e => e.Answer)
             .HasColumnName("answer");
@@ -75,14 +75,14 @@ public class ClarificationConfiguration : IEntityTypeConfiguration<Clarification
             .HasColumnName("clarification_type")
             .HasMaxLength(50)
             .HasConversion<string>()
-            .HasDefaultValue("BidderQuestion")
+            .HasDefaultValueSql("'BidderQuestion'")
             .IsRequired();
 
         builder.Property(e => e.Status)
             .HasColumnName("status")
             .HasMaxLength(50)
             .HasConversion<string>()
-            .HasDefaultValue("Submitted")
+            .HasDefaultValueSql("'Submitted'")
             .IsRequired();
 
         builder.Property(e => e.DuplicateOfId)

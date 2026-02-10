@@ -1,3 +1,4 @@
+using Bayan.Application.Common.Interfaces;
 using Bayan.Application.Common.Models;
 using Bayan.Application.Features.Documents.Commands.CreateFolder;
 using Bayan.Application.Features.Documents.Commands.DeleteDocument;
@@ -10,6 +11,7 @@ using Bayan.Application.Features.Documents.Queries.GetFolders;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Bayan.API.Controllers;
 
@@ -23,11 +25,19 @@ public class DocumentsController : ControllerBase
 {
     private readonly IMediator _mediator;
     private readonly ILogger<DocumentsController> _logger;
+    private readonly IFileStorageService _fileStorage;
+    private readonly IApplicationDbContext _context;
 
-    public DocumentsController(IMediator mediator, ILogger<DocumentsController> logger)
+    public DocumentsController(
+        IMediator mediator,
+        ILogger<DocumentsController> logger,
+        IFileStorageService fileStorage,
+        IApplicationDbContext context)
     {
         _mediator = mediator;
         _logger = logger;
+        _fileStorage = fileStorage;
+        _context = context;
     }
 
     /// <summary>
@@ -130,29 +140,41 @@ public class DocumentsController : ControllerBase
     }
 
     /// <summary>
-    /// Gets a presigned download URL for a document.
+    /// Downloads a document file directly (streamed from storage).
     /// </summary>
     /// <param name="tenderId">The tender ID.</param>
     /// <param name="docId">The document ID.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>Download URL information.</returns>
+    /// <returns>The file as a download.</returns>
     [HttpGet("{docId:guid}/download")]
-    [ProducesResponseType(typeof(DocumentDownloadDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<DocumentDownloadDto>> GetDocumentDownload(
+    public async Task<IActionResult> GetDocumentDownload(
         Guid tenderId,
         Guid docId,
         CancellationToken cancellationToken = default)
     {
-        var query = new GetDocumentDownloadQuery(tenderId, docId);
-        var result = await _mediator.Send(query, cancellationToken);
+        var document = await _context.Documents
+            .FirstOrDefaultAsync(d =>
+                d.Id == docId &&
+                d.TenderId == tenderId,
+                cancellationToken);
 
-        if (result == null)
+        if (document == null)
         {
             return NotFound(ApiResponse<object>.FailureResponse("Document not found."));
         }
 
-        return Ok(ApiResponse<DocumentDownloadDto>.SuccessResponse(result));
+        try
+        {
+            var stream = await _fileStorage.DownloadFileAsync(document.FilePath, cancellationToken);
+            return File(stream, document.ContentType, document.FileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to download document {DocumentId} from storage", docId);
+            return StatusCode(500, ApiResponse<object>.FailureResponse("Failed to download file from storage."));
+        }
     }
 
     /// <summary>

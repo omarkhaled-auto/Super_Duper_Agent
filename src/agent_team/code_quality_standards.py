@@ -86,6 +86,22 @@ LLMs produce tutorial-quality frontend code by default. These standards enforce 
 - `z.string().url()` accepts `file://`, `javascript:`, and other dangerous schemes.
 - FIX: `.refine(url => url.startsWith('http'))` or use a custom URL validator that only allows http/https.
 
+**FRONT-019: Mock Data in Services**
+- NEVER use mock/stub/fake data in service files. Never use `of(mockData)`, `delay()` to simulate API calls, or hardcoded arrays as data sources.
+- Every service method MUST make a REAL HTTP call to the backend API.
+- FIX: Use HttpClient.get/post/put/delete with proper URLs. Map response DTOs to frontend models.
+- If the backend endpoint doesn't exist yet, flag it as a blocker — do NOT create fake data.
+
+**FRONT-020: DTO/Enum Mismatch**
+- NEVER assume frontend enum values match backend enum values without verification.
+- Backend may return numeric enums (0, 1, 2) while frontend uses string enums ('admin', 'manager').
+- FIX: Create mapping functions (mapApiRole, mapTenderStatus) in model files. Apply in services.
+
+**FRONT-021: Hardcoded Service Responses**
+- NEVER return hardcoded objects from service methods. Every method must call a real API endpoint.
+- Patterns to AVOID: `return of({...})`, `return new Observable(sub => sub.next({...}))`, `return Promise.resolve({...})`
+- FIX: Return `this.http.get<T>(url)` or equivalent real HTTP call.
+
 ### Quality Rules
 
 **State Management:**
@@ -425,6 +441,57 @@ AI debuggers default to surface-level fixes. These standards enforce root-cause 
 6. **Prevent** — Add regression test. Document root cause for team knowledge.
 """.strip()
 
+E2E_TESTING_STANDARDS = r"""
+## E2E TESTING QUALITY STANDARDS (APPLIED DURING E2E PHASE)
+
+E2E tests verify the application works from the user's perspective. These standards
+prevent common pitfalls that make E2E tests unreliable or meaningless.
+
+### Anti-Patterns (NEVER produce these)
+
+**E2E-001: Hardcoded Timeouts**
+- NEVER use setTimeout, time.sleep, or fixed delays in E2E tests.
+- FIX: Use waitFor, waitForResponse, waitForSelector, or page.waitForLoadState.
+
+**E2E-002: Hardcoded Ports/URLs**
+- NEVER hardcode localhost:3000 or any specific port in test files.
+- FIX: Use configurable base URL via process.env.BASE_URL or test config.
+
+**E2E-003: Mock Data in E2E**
+- NEVER use mock data, stubs, or fake responses in E2E tests.
+- E2E tests must hit the REAL running server with REAL API calls.
+- FIX: Start the actual server, seed test data, make real HTTP calls.
+
+**E2E-004: Empty Test Bodies**
+- NEVER write test functions with no assertions. An empty test proves nothing.
+- FIX: Every test must assert: status codes, response data, visible elements, or navigation state.
+
+**E2E-005: Test Independence**
+- NEVER rely on test execution order. Each test must work in isolation.
+- FIX: Clean state per test (fresh user, reset DB, clear storage). Use beforeEach/afterEach.
+
+**E2E-006: Fragile Selectors**
+- NEVER use CSS class selectors (.btn-primary) or DOM structure (div > span:nth-child(2)).
+- FIX: Use stable selectors: data-testid, getByRole, getByText, getByLabel.
+
+**E2E-007: Happy Path Only**
+- NEVER test only the success scenario for each workflow.
+- FIX: Include both happy path (valid input → success) and error path (invalid input → error message).
+
+**E2E-008: No Server Lifecycle**
+- NEVER assume the server is already running. Tests must manage server startup/shutdown.
+- FIX: Use webServer config (Playwright) or beforeAll/afterAll hooks to start/stop server.
+
+**E2E-009: Weak API Assertions**
+- NEVER assert only response status (200 OK) without checking the body.
+- FIX: Verify response status + body structure + data integrity (correct values, not just shape).
+
+**E2E-010: Missing Visual Verification**
+- NEVER skip verifying that UI elements are actually visible after actions.
+- FIX: After navigation, verify element visible. After form submit, verify success state.
+  Use toBeVisible(), toHaveText(), toHaveURL() assertions.
+""".strip()
+
 ARCHITECTURE_QUALITY_STANDARDS = r"""
 ## ARCHITECTURE QUALITY STANDARDS (ALWAYS APPLIED)
 
@@ -467,12 +534,67 @@ AI architects reproduce tutorial-level architecture. These standards enforce pro
 - Shared module created in first coding wave; consumers import from it.
 """.strip()
 
+DATABASE_INTEGRITY_STANDARDS = r"""## DATABASE INTEGRITY QUALITY STANDARDS
+
+### Anti-Patterns (NEVER produce these)
+
+**DB-001: Enum Type Mismatch (ORM vs Raw SQL)**
+- NEVER compare an enum column as an integer in raw SQL when the ORM stores it as a string (or vice versa).
+- The ORM model type and raw query comparison type MUST match exactly.
+- FIX: Use the same type representation in both ORM and raw queries. If ORM uses string enum, raw SQL must compare to strings.
+
+**DB-002: Boolean Type Mismatch (ORM vs Raw SQL)**
+- NEVER compare a boolean column as 0/1 in raw SQL when the ORM stores it as true/false (or vice versa).
+- FIX: Match the database engine's boolean representation consistently. Use parameterized queries.
+
+**DB-003: DateTime Format Mismatch**
+- NEVER hardcode date format strings in raw SQL that differ from the ORM's serialization format.
+- FIX: Use parameterized queries for dates. Let the ORM/driver handle serialization.
+
+**DB-004: Missing Default Value**
+- NEVER leave boolean or enum properties without an explicit default in entity/model definitions.
+- Every boolean MUST have `= false` or `= true`. Every enum MUST have a default member.
+- FIX: Add explicit defaults to all boolean and enum properties.
+
+**DB-005: Nullable Property Without Null Check**
+- NEVER access a nullable property without a null guard.
+- `entity.NullableField.Method()` without `?.` or null check = NullReferenceException.
+- FIX: Use null-conditional access (`?.`) or explicit null checks before property access.
+
+**DB-006: FK Without Navigation Property**
+- NEVER leave a FK column (`TenderId`, `UserId`) without a corresponding navigation property.
+- Without navigation, eager loading (`Include()`) silently returns null.
+- FIX: Add navigation property matching the FK name (minus the `Id` suffix).
+
+**DB-007: Navigation Property Without Inverse**
+- ALWAYS define the inverse navigation when using navigation properties.
+- Without inverse, the ORM cannot properly track changes in both directions.
+- FIX: Add `ICollection<Child>` on the parent and parent reference on the child.
+
+**DB-008: FK With No Relationship Configuration**
+- NEVER rely on convention-only FK detection for complex relationships.
+- Without explicit `.HasMany().WithOne()` or `@relation`, the ORM may not generate correct cascade behavior.
+- FIX: Add explicit relationship configuration in entity configuration classes.
+
+### Quality Rules
+
+**Seed Data Completeness:**
+- ALL seeded records MUST satisfy the application's standard query filters.
+- If the user listing filters on `isActive=true`, seeded users MUST have `isActive=true`.
+- Every role defined in the system MUST have at least one seeded account.
+
+**Enum/Status Registry:**
+- Every entity with a status/enum field MUST have a complete registry of valid values.
+- The DB representation, API representation, and frontend representation MUST be documented.
+- State transitions MUST be explicitly defined (which transitions are valid, which are not).
+""".strip()
+
 _AGENT_STANDARDS_MAP: dict[str, list[str]] = {
-    "code-writer": [FRONTEND_STANDARDS, BACKEND_STANDARDS],
-    "code-reviewer": [CODE_REVIEW_STANDARDS],
-    "test-runner": [TESTING_STANDARDS],
+    "code-writer": [FRONTEND_STANDARDS, BACKEND_STANDARDS, DATABASE_INTEGRITY_STANDARDS],
+    "code-reviewer": [CODE_REVIEW_STANDARDS, DATABASE_INTEGRITY_STANDARDS],
+    "test-runner": [TESTING_STANDARDS, E2E_TESTING_STANDARDS],
     "debugger": [DEBUGGING_STANDARDS],
-    "architect": [ARCHITECTURE_QUALITY_STANDARDS],
+    "architect": [ARCHITECTURE_QUALITY_STANDARDS, DATABASE_INTEGRITY_STANDARDS],
 }
 
 

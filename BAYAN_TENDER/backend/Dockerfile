@@ -5,7 +5,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Build
 # -----------------------------------------------------------------------------
-FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
 # Copy solution and project files for layer caching
@@ -15,14 +15,14 @@ COPY Bayan.Application/*.csproj ./Bayan.Application/
 COPY Bayan.Infrastructure/*.csproj ./Bayan.Infrastructure/
 COPY Bayan.API/*.csproj ./Bayan.API/
 
-# Restore dependencies
-RUN dotnet restore
+# Restore dependencies (API project only, skipping Tests which is excluded by .dockerignore)
+RUN dotnet restore Bayan.API/Bayan.API.csproj
 
 # Copy source code
 COPY . .
 
 # Build the application
-RUN dotnet build -c Release --no-restore
+RUN dotnet build Bayan.API/Bayan.API.csproj -c Release --no-restore
 
 # Publish the application
 RUN dotnet publish Bayan.API/Bayan.API.csproj -c Release -o /app/publish --no-build
@@ -30,11 +30,11 @@ RUN dotnet publish Bayan.API/Bayan.API.csproj -c Release -o /app/publish --no-bu
 # -----------------------------------------------------------------------------
 # Stage 2: Runtime
 # -----------------------------------------------------------------------------
-FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 
-# Install curl for health checks
-RUN apk add --no-cache curl icu-libs
+# Install curl for health checks and libfontconfig1 for SkiaSharp/QuestPDF
+RUN apt-get update && apt-get install -y --no-install-recommends curl libfontconfig1 && rm -rf /var/lib/apt/lists/*
 
 # Set environment variables
 ENV ASPNETCORE_URLS=http://+:80
@@ -43,7 +43,7 @@ ENV DOTNET_RUNNING_IN_CONTAINER=true
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
 
 # Create non-root user for security
-RUN addgroup -S bayangroup && adduser -S bayanuser -G bayangroup
+RUN groupadd -r bayangroup && useradd -r -g bayangroup bayanuser
 USER bayanuser
 
 # Copy published application

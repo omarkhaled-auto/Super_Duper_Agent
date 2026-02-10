@@ -1,12 +1,12 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, tap, catchError, throwError } from 'rxjs';
+import { Observable, tap, catchError, throwError, map } from 'rxjs';
 import { ApiService } from './api.service';
 import { User, UserRole } from '../models/user.model';
 import { PaginatedResponse, QueryParams } from '../models';
 
 export interface CreateUserDto {
   email: string;
-  password: string;
+  password?: string;
   firstName: string;
   lastName: string;
   role: UserRole;
@@ -25,6 +25,18 @@ export interface UpdateUserDto {
   isActive?: boolean;
 }
 
+/** Maps frontend UserRole enum values to backend integer role IDs */
+const ROLE_TO_BACKEND: Record<string, number> = {
+  [UserRole.ADMIN]: 0,
+  [UserRole.TENDER_MANAGER]: 1,
+  [UserRole.COMMERCIAL_ANALYST]: 2,
+  [UserRole.TECHNICAL_PANELIST]: 3,
+  [UserRole.APPROVER]: 4,
+  [UserRole.AUDITOR]: 5,
+  [UserRole.BIDDER]: 6,
+  [UserRole.VIEWER]: 5, // Viewer doesn't exist in backend, map to Auditor (5)
+};
+
 export interface UserQueryParams extends QueryParams {
   role?: UserRole;
   isActive?: boolean;
@@ -36,7 +48,7 @@ export interface UserQueryParams extends QueryParams {
 })
 export class UserService {
   private readonly api = inject(ApiService);
-  private readonly endpoint = '/users';
+  private readonly endpoint = '/admin/users';
 
   private readonly _isLoading = signal<boolean>(false);
   private readonly _error = signal<string | null>(null);
@@ -76,7 +88,29 @@ export class UserService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return this.api.post<User>(this.endpoint, data).pipe(
+    // Transform frontend DTO to match backend CreateUserRequest
+    const backendPayload = {
+      firstName: data.firstName,
+      lastName: data.lastName,
+      email: data.email,
+      role: ROLE_TO_BACKEND[data.role] ?? 5,
+      phone: data.phone || null,
+      companyName: data.company || null,
+      sendInvitationEmail: false
+    };
+
+    return this.api.post<any>(this.endpoint, backendPayload).pipe(
+      map(result => ({
+        id: 0,
+        email: data.email,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        role: data.role,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...result
+      } as User)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);

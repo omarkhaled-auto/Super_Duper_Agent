@@ -6,7 +6,7 @@ import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { DropdownModule } from 'primeng/dropdown';
-import { CalendarModule } from 'primeng/calendar';
+import { DatePickerModule } from 'primeng/datepicker';
 import { ToastModule } from 'primeng/toast';
 import { DialogModule } from 'primeng/dialog';
 import { TooltipModule } from 'primeng/tooltip';
@@ -49,7 +49,7 @@ interface UserOption {
     ButtonModule,
     InputTextModule,
     DropdownModule,
-    CalendarModule,
+    DatePickerModule,
     ToastModule,
     DialogModule,
     TooltipModule,
@@ -59,7 +59,7 @@ interface UserOption {
   providers: [MessageService],
   template: `
     <p-toast></p-toast>
-    <div class="audit-logs-container">
+    <div class="audit-logs-container" data-testid="audit-logs">
       <div class="page-header">
         <div>
           <h1>Audit Logs</h1>
@@ -109,7 +109,7 @@ interface UserOption {
             </div>
             <div class="filter-item">
               <label>Date Range</label>
-              <p-calendar
+              <p-datepicker
                 [(ngModel)]="filters.dateRange"
                 selectionMode="range"
                 [readonlyInput]="true"
@@ -119,7 +119,7 @@ interface UserOption {
                 styleClass="w-full"
                 (onSelect)="onFilterChange()"
                 (onClearClick)="onFilterChange()"
-              ></p-calendar>
+              ></p-datepicker>
             </div>
           </div>
           <div class="filter-row">
@@ -134,6 +134,7 @@ interface UserOption {
                   placeholder="Search by email, action..."
                   class="w-full"
                   (keyup.enter)="onFilterChange()"
+                  data-testid="audit-logs-search"
                 />
               </span>
             </div>
@@ -146,6 +147,7 @@ interface UserOption {
 
         <!-- Table -->
         <p-table
+          data-testid="audit-logs-table"
           [value]="auditLogs()"
           [lazy]="true"
           [paginator]="true"
@@ -255,18 +257,18 @@ interface UserOption {
     .page-header h1 {
       margin: 0;
       font-size: 1.75rem;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
     }
 
     .page-header p {
       margin: 0.25rem 0 0;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .filters-section {
       margin-bottom: 1.5rem;
       padding-bottom: 1.5rem;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
     }
 
     .filter-row {
@@ -290,7 +292,7 @@ interface UserOption {
 
     .filter-item label {
       font-weight: 500;
-      color: #333;
+      color: var(--bayan-foreground, #09090b);
       font-size: 0.875rem;
     }
 
@@ -316,7 +318,7 @@ interface UserOption {
 
     .user-email {
       font-size: 0.75rem;
-      color: #666;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .entity-id-cell {
@@ -329,7 +331,7 @@ interface UserOption {
     }
 
     .text-muted {
-      color: #999;
+      color: var(--bayan-muted-foreground, #71717a);
     }
 
     .diff-container {
@@ -350,9 +352,9 @@ interface UserOption {
     }
 
     .json-display {
-      background: #f8f9fa;
-      border: 1px solid #e0e0e0;
-      border-radius: 4px;
+      background: var(--bayan-accent, #f4f4f5);
+      border: 1px solid var(--bayan-border, #e4e4e7);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
       padding: 1rem;
       font-size: 0.8rem;
       overflow-x: auto;
@@ -379,7 +381,7 @@ interface UserOption {
         padding: 0;
       }
 
-      .p-calendar {
+      .p-datepicker {
         width: 100%;
       }
 

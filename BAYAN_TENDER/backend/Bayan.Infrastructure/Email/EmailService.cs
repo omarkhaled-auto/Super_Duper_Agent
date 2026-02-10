@@ -143,15 +143,43 @@ public class EmailService : IEmailService
         string tenderTitle,
         string tenderReference,
         DateTime submissionDeadline,
+        string? activationToken = null,
         CancellationToken cancellationToken = default)
     {
+        // Build activation section HTML when token is present (new bidder needs to activate)
+        var activationSection = string.Empty;
+        if (!string.IsNullOrEmpty(activationToken))
+        {
+            var activationUrl = $"{_settings.PortalBaseUrl}/activate?token={Uri.EscapeDataString(activationToken)}&email={Uri.EscapeDataString(email)}";
+            activationSection = $@"
+                            <table role=""presentation"" cellspacing=""0"" cellpadding=""0"" border=""0"" width=""100%"" style=""background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; margin: 0 0 20px;"">
+                                <tr>
+                                    <td style=""padding: 16px 20px;"">
+                                        <p style=""margin: 0 0 12px; color: #92400e; font-weight: 600;"">Account Activation Required</p>
+                                        <p style=""margin: 0 0 12px; color: #78350f; font-size: 14px;"">Before you can access the tender portal, you need to activate your account and set a password.</p>
+                                        <table role=""presentation"" cellspacing=""0"" cellpadding=""0"" border=""0"">
+                                            <tr>
+                                                <td style=""background-color: #f59e0b; border-radius: 6px;"">
+                                                    <a href=""{activationUrl}"" style=""display: inline-block; padding: 12px 24px; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 14px;"">
+                                                        Activate Your Account
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                        <p style=""margin: 12px 0 0; color: #92400e; font-size: 12px;"">This activation link expires in 48 hours.</p>
+                                    </td>
+                                </tr>
+                            </table>";
+        }
+
         var mergeFields = new Dictionary<string, string>
         {
             { "BidderName", contactPerson },
             { "TenderTitle", tenderTitle },
             { "TenderReference", tenderReference },
             { "DeadlineDate", submissionDeadline.ToString("dddd, MMMM dd, yyyy 'at' HH:mm 'UTC'") },
-            { "PortalLink", _settings.PortalBaseUrl }
+            { "PortalLink", _settings.PortalBaseUrl },
+            { "ActivationSection", activationSection }
         };
 
         await SendTemplatedEmailAsync(email, "TenderInvitation", mergeFields, cancellationToken);
