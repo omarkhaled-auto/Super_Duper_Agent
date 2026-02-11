@@ -954,7 +954,8 @@ class TestBareIdentifierParsing:
     def test_mixed_bare_and_typed(self):
         result = _parse_field_schema("{items: [{id, name}], totalCount: number}")
         assert "items" in result
-        assert "totalCount" not in result  # nested in items, depth > 0 skips comma
+        assert "totalCount" in result  # top-level field correctly parsed with balanced braces
+        assert result["totalCount"] == "number"
 
     def test_empty_type_skipped_in_type_compat(self):
         """Fields with empty type (bare identifiers) should not trigger API-003."""

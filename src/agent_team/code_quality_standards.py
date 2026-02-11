@@ -611,12 +611,46 @@ Common issues: using `string` for numeric IDs, missing enum mappers, raw Date vs
 """.strip()
 
 
+SILENT_DATA_LOSS_STANDARDS = r"""
+## Silent Data Loss Prevention Standards
+
+### SDL-001: CQRS Command Handler Missing Persistence
+**Severity:** error
+A command handler modifies data but never calls SaveChangesAsync() or equivalent.
+Data appears saved but is lost. Every command handler that writes data MUST persist.
+
+### ENUM-004: Enum Serialization Format
+**Severity:** error
+A .NET project does not configure JsonStringEnumConverter globally.
+Enums serialize as integers (0, 1, 2) instead of strings ("submitted", "approved"),
+causing silent display failures and TypeError crashes in the frontend.
+""".strip()
+
+
+ENDPOINT_XREF_STANDARDS = r"""
+## Endpoint Cross-Reference Standards
+
+### XREF-001: Missing Backend Endpoint
+Frontend code calls an API endpoint that has no matching backend controller action or route handler.
+The endpoint must be created in the backend before the frontend can function correctly.
+
+### XREF-002: HTTP Method Mismatch
+Frontend calls an endpoint with a different HTTP method than what the backend defines.
+Verify the frontend uses the correct method (GET vs POST vs PUT vs DELETE).
+
+### API-004: Write-Side Field Dropped
+Frontend sends a field in a POST/PUT request body that the backend Command/DTO class does not
+have as a property. The field is silently ignored. Either add the property to the backend
+or remove the field from the frontend form.
+""".strip()
+
+
 _AGENT_STANDARDS_MAP: dict[str, list[str]] = {
-    "code-writer": [FRONTEND_STANDARDS, BACKEND_STANDARDS, DATABASE_INTEGRITY_STANDARDS, API_CONTRACT_STANDARDS],
-    "code-reviewer": [CODE_REVIEW_STANDARDS, DATABASE_INTEGRITY_STANDARDS, API_CONTRACT_STANDARDS],
+    "code-writer": [FRONTEND_STANDARDS, BACKEND_STANDARDS, DATABASE_INTEGRITY_STANDARDS, API_CONTRACT_STANDARDS, SILENT_DATA_LOSS_STANDARDS, ENDPOINT_XREF_STANDARDS],
+    "code-reviewer": [CODE_REVIEW_STANDARDS, DATABASE_INTEGRITY_STANDARDS, API_CONTRACT_STANDARDS, SILENT_DATA_LOSS_STANDARDS],
     "test-runner": [TESTING_STANDARDS, E2E_TESTING_STANDARDS],
     "debugger": [DEBUGGING_STANDARDS],
-    "architect": [ARCHITECTURE_QUALITY_STANDARDS, DATABASE_INTEGRITY_STANDARDS],
+    "architect": [ARCHITECTURE_QUALITY_STANDARDS, DATABASE_INTEGRITY_STANDARDS, ENDPOINT_XREF_STANDARDS],
 }
 
 

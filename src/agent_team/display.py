@@ -632,6 +632,7 @@ def print_recovery_report(
         "database_default_value_fix": "Missing default values or unsafe nullable access",
         "database_relationship_fix": "Incomplete ORM relationship definitions",
         "api_contract_fix": "API field name mismatches between backend and frontend",
+        "silent_data_loss_fix": "Command handlers missing persistence calls (SDL-001)",
         "e2e_backend_fix": "Backend E2E test failures requiring code fixes",
         "e2e_frontend_fix": "Frontend Playwright test failures requiring code fixes",
         "e2e_coverage_incomplete": "E2E test coverage below completeness threshold",
@@ -639,6 +640,7 @@ def print_recovery_report(
         "browser_testing_partial": "Some browser workflows failed verification",
         "artifact_recovery": "Missing REQUIREMENTS.md recovered from source code analysis",
         "gate5_enforcement": "GATE 5 triggered — zero review cycles detected despite requirements",
+        "endpoint_xref_fix": "Fixing missing backend endpoints (XREF-001)",
     }
 
     content = Text()

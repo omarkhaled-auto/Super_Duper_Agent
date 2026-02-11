@@ -20,6 +20,7 @@ Typical usage::
 
 from __future__ import annotations
 
+import collections
 import json
 import os
 import re
@@ -2639,7 +2640,28 @@ def run_relationship_scan(project_root: Path, scope: ScanScope | None = None) ->
 
 _RE_SVC_ROW_START = re.compile(r'^\|\s*SVC-\d+\s*\|', re.MULTILINE)
 
-_RE_FIELD_SCHEMA = re.compile(r'\{[^}]+\}')
+_RE_FIELD_SCHEMA = re.compile(r'\{[^}]+\}')  # kept for backward compat
+
+
+def _find_balanced_braces(text: str, start: int = 0) -> str | None:
+    """Find the first balanced {...} block in *text* starting from *start*.
+
+    Tracks brace depth so nested objects like ``{a, b: {x, y}, c}`` are
+    captured in full.  Returns the matched substring **including** the outer
+    braces, or ``None`` if no balanced block is found.
+    """
+    open_pos = text.find('{', start)
+    if open_pos == -1:
+        return None
+    depth = 0
+    for i in range(open_pos, len(text)):
+        if text[i] == '{':
+            depth += 1
+        elif text[i] == '}':
+            depth -= 1
+            if depth == 0:
+                return text[open_pos:i + 1]
+    return None  # unbalanced
 
 
 @dataclass
@@ -2661,10 +2683,10 @@ def _parse_field_schema(schema_text: str) -> dict[str, str]:
     Returns field_name -> type_hint mapping. Returns empty dict if the text
     is just a class name (no braces) or unparseable.
     """
-    match = _RE_FIELD_SCHEMA.search(schema_text)
-    if not match:
+    balanced = _find_balanced_braces(schema_text)
+    if not balanced:
         return {}
-    inner = match.group(0)[1:-1].strip()  # strip braces
+    inner = balanced[1:-1].strip()  # strip outer braces
     if not inner:
         return {}
 
@@ -2964,6 +2986,299 @@ def _check_type_compatibility(
             ))
 
 
+def _check_enum_serialization(project_root: Path, scope: ScanScope | None = None) -> list[Violation]:
+    """ENUM-004: Check .NET projects for global JsonStringEnumConverter.
+
+    ASP.NET serializes enums as integers by default. Without a global
+    JsonStringEnumConverter, every enum field sent to the frontend will
+    be an integer while the frontend expects a string.
+    """
+    # 1. Detect .NET — check for .csproj files
+    csproj_files = list(project_root.rglob("*.csproj"))
+    if not csproj_files:
+        return []  # Not a .NET project — skip entirely
+
+    # 2. Check for global JsonStringEnumConverter in startup files
+    for startup_name in ("Program.cs", "Startup.cs"):
+        for startup_file in project_root.rglob(startup_name):
+            try:
+                content = startup_file.read_text(errors="ignore")
+                if "JsonStringEnumConverter" in content:
+                    return []  # Globally configured — all enums serialize as strings
+            except OSError:
+                continue
+
+    # 3. No global converter found — flag it
+    return [Violation(
+        check="ENUM-004",
+        message=(
+            "No global JsonStringEnumConverter configured. All C# enums will serialize "
+            "as integers (0, 1, 2) but frontend code expects strings ('submitted', 'approved'). "
+            "Add to Program.cs: builder.Services.AddControllers().AddJsonOptions(o => "
+            "o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));"
+        ),
+        file_path="Program.cs",
+        line=0,
+        severity="error",
+    )]
+
+
+def _check_cqrs_persistence(project_root: Path, scope: ScanScope | None = None) -> list[Violation]:
+    """SDL-001: CQRS command handlers missing persistence calls.
+
+    Checks if command handler files contain at least one persistence keyword.
+    File-level check (not method-body parsing) for simplicity and reliability.
+    """
+    violations: list[Violation] = []
+
+    # Persistence keywords — if a command handler contains NONE of these, flag it
+    _PERSISTENCE_KEYWORDS = (
+        "SaveChangesAsync", "SaveChanges", "CommitAsync", "Commit(",
+        "_repository.Add", "_repository.Update", "_repository.Delete",
+        "_repository.Remove", "_repository.Insert",
+        "_context.Add", "_context.Update", "_dbContext.Add", "_dbContext.Update",
+        "_unitOfWork.Complete", "_unitOfWork.SaveChanges", "_unitOfWork.Commit",
+        "session.flush", "db.commit", "await session.commit",
+        "db.session.add", "db.session.commit",
+    )
+
+    # Skip keywords — handlers that only dispatch events legitimately don't persist
+    _SKIP_KEYWORDS = (
+        "INotificationHandler", "_mediator.Publish", "_eventBus",
+        "_messageQueue", "IEventHandler", "EventHandler",
+    )
+
+    for root, dirs, files in os.walk(project_root):
+        dirs[:] = [d for d in dirs if d not in _SKIP_DIRS]
+        for fname in files:
+            # Match command handler files, exclude query handlers
+            if not any(p.lower() in fname.lower() for p in ("commandhandler", "command_handler")):
+                continue
+            if any(skip.lower() in fname.lower() for skip in ("queryhandler", "query_handler", "test", "spec")):
+                continue
+
+            fpath = Path(root) / fname
+            if scope and scope.changed_files:
+                if fpath.resolve() not in set(scope.changed_files):
+                    continue
+
+            try:
+                content = fpath.read_text(errors="ignore")
+            except OSError:
+                continue
+
+            # Skip event-only handlers
+            if any(sk in content for sk in _SKIP_KEYWORDS):
+                continue
+
+            # Check for persistence
+            if not any(pk in content for pk in _PERSISTENCE_KEYWORDS):
+                rel = fpath.relative_to(project_root).as_posix()
+                violations.append(Violation(
+                    check="SDL-001",
+                    message=(
+                        f"Command handler '{fname}' contains no persistence call "
+                        f"(SaveChangesAsync, SaveChanges, Commit, etc.). "
+                        f"Data modifications will be lost. Add a persistence call."
+                    ),
+                    file_path=rel,
+                    line=0,
+                    severity="error",
+                ))
+
+            if len(violations) >= _MAX_VIOLATIONS:
+                break
+
+    return sorted(violations, key=lambda v: (_SEVERITY_ORDER.get(v.severity, 99), v.file_path, v.line))
+
+
+# Regex to parse TypeScript interface field declarations
+# Matches both multi-line (field at line start) and single-line (field after ; or {)
+_RE_TS_INTERFACE_FIELD = re.compile(r'(?:^|[;{])\s*(\w+)\s*(\?)?\s*:', re.MULTILINE)
+
+# Regex to match the START of a TypeScript interface/type declaration (up to the opening brace).
+# The body is then extracted using _find_balanced_braces() to handle nested type literals.
+_RE_TS_INTERFACE_START = re.compile(
+    r'(?:export\s+)?(?:interface|type)\s+(\w+)\s*(?:extends\s+[^{]+)?\s*(?:=\s*)?\{',
+    re.DOTALL,
+)
+
+# Kept for backward compat / other call-sites
+_RE_TS_INTERFACE_BLOCK = re.compile(
+    r'(?:export\s+)?(?:interface|type)\s+(\w+)\s*(?:extends\s+[^{]+)?\s*(?:=\s*)?\{([^}]*)\}',
+    re.DOTALL,
+)
+
+
+def _strip_nested_braces(body: str) -> str:
+    """Remove content inside nested ``{...}`` blocks, keeping only top-level tokens.
+
+    Example::
+
+        "id: string; assignee: { id: string; fullName: string } | null; title: string"
+        →  "id: string; assignee:  | null; title: string"
+
+    This prevents ``_RE_TS_INTERFACE_FIELD`` from matching fields that live
+    inside nested type literals (e.g. ``fullName`` inside ``assignee``).
+    """
+    result: list[str] = []
+    depth = 0
+    for char in body:
+        if char == '{':
+            depth += 1
+        elif char == '}':
+            depth -= 1
+        elif depth == 0:
+            result.append(char)
+    return ''.join(result)
+
+
+# Request / command interface name suffixes — these model the *request body*
+# sent TO the backend, not the response coming back. They should be excluded
+# from the bidirectional response-field check.
+_REQUEST_SUFFIXES: tuple[str, ...] = (
+    'Request', 'Payload', 'Input', 'Args', 'Params', 'Command',
+    'CreateRequest', 'UpdateRequest', 'DeleteRequest',
+)
+
+# Universal fields to skip in bidirectional check
+_UNIVERSAL_FIELDS: frozenset[str] = frozenset({
+    "id", "createdAt", "updatedAt", "createdBy", "updatedBy",
+})
+
+# UI-only fields to skip in bidirectional check
+_UI_ONLY_FIELDS: frozenset[str] = frozenset({
+    "isLoading", "isSelected", "isExpanded", "className",
+    "key", "ref", "children", "style",
+})
+
+
+def _check_frontend_extra_fields(
+    contract: SvcContract,
+    project_root: Path,
+    violations: list[Violation],
+) -> None:
+    """API-002 bidirectional: Check frontend interface for fields NOT in SVC response schema.
+
+    For each SVC entry with response_fields, find matching frontend TypeScript interfaces
+    and flag extra fields that the backend won't provide.
+    """
+    if not contract.response_fields:
+        return
+
+    svc_field_names = set(contract.response_fields.keys())
+    svc_field_names_lower = {f.lower() for f in svc_field_names}
+
+    # Find frontend type/interface files
+    type_def_patterns = [r'(?:models?|interfaces?|types?|dto)']
+    type_def_files: list[Path] = []
+    for pat in type_def_patterns:
+        type_def_files.extend(_find_files_by_pattern(project_root, pat))
+
+    # Only check TypeScript files — exclude backend-only paths (Fix 3)
+    ts_files = [
+        f for f in type_def_files
+        if f.suffix in ('.ts', '.tsx')
+        and 'backend' not in f.relative_to(project_root).parts
+    ]
+    if not ts_files:
+        return
+
+    for ts_file in ts_files:
+        try:
+            content = ts_file.read_text(encoding="utf-8", errors="replace")
+            if len(content) > _MAX_FILE_SIZE:
+                continue
+        except OSError:
+            continue
+
+        # Find all interface/type blocks using start-pattern + balanced braces
+        for match in _RE_TS_INTERFACE_START.finditer(content):
+            iface_name = match.group(1)
+
+            # Fix 4: Skip request/command interfaces — they model the request
+            # body, not the response shape.
+            if iface_name.endswith(_REQUEST_SUFFIXES):
+                continue
+
+            # Extract balanced body (handles nested type literals)
+            brace_start = match.end() - 1  # position of the opening {
+            balanced = _find_balanced_braces(content, brace_start)
+            if not balanced:
+                continue
+            interface_body = balanced[1:-1]  # strip outer braces
+
+            # Strip nested braces to avoid matching fields inside nested
+            # type literals (e.g. assignee: { id, fullName })
+            flat_body = _strip_nested_braces(interface_body)
+
+            # Parse field declarations from the flattened body
+            interface_fields: dict[str, bool] = {}  # field_name -> is_optional
+            for field_match in _RE_TS_INTERFACE_FIELD.finditer(flat_body):
+                field_name = field_match.group(1)
+                is_optional = field_match.group(2) == '?'
+                interface_fields[field_name] = is_optional
+
+            if not interface_fields:
+                continue
+
+            # Check overlap — interface must have >=50% of SVC *domain-specific*
+            # fields to be a match.  Exclude universal fields (id, createdAt, …)
+            # from both sets so that common timestamp/ID fields don't inflate the
+            # overlap score and cause false matches (Fix 5).
+            universal_lower = {f.lower() for f in _UNIVERSAL_FIELDS}
+            interface_field_names_lower = {f.lower() for f in interface_fields}
+            svc_domain_lower = svc_field_names_lower - universal_lower
+            iface_domain_lower = interface_field_names_lower - universal_lower
+            if not svc_domain_lower:
+                continue  # SVC entry has only universal fields — skip
+            domain_overlap = svc_domain_lower & iface_domain_lower
+            if len(domain_overlap) < len(svc_domain_lower) * 0.5:
+                continue  # Not enough domain-specific overlap — different type
+
+            # Found a matching interface — check for extra fields
+            rel = ts_file.relative_to(project_root).as_posix()
+            for iface_field, is_optional in interface_fields.items():
+                # Skip universal and UI-only fields
+                if iface_field in _UNIVERSAL_FIELDS or iface_field in _UI_ONLY_FIELDS:
+                    continue
+
+                # Check if field exists in SVC response (case-insensitive)
+                if iface_field.lower() not in svc_field_names_lower:
+                    severity = "warning" if is_optional else "error"
+                    violations.append(Violation(
+                        check="API-002",
+                        message=(
+                            f"{contract.svc_id}: Frontend interface expects field "
+                            f"'{iface_field}' but response schema does not include it. "
+                            f"Backend must either add this field to the response DTO or "
+                            f"frontend must remove it from the interface."
+                        ),
+                        file_path=rel,
+                        line=0,
+                        severity=severity,
+                    ))
+
+
+def run_silent_data_loss_scan(
+    project_root: Path,
+    scope: ScanScope | None = None,
+) -> list[Violation]:
+    """Scan project for silent data loss patterns (SDL-001).
+
+    Wraps _check_cqrs_persistence() following the standard scan function signature.
+
+    Returns:
+        List of Violation objects (SDL-001).
+    """
+    violations = _check_cqrs_persistence(project_root, scope)
+    violations = violations[:_MAX_VIOLATIONS]
+    violations.sort(
+        key=lambda v: (_SEVERITY_ORDER.get(v.severity, 99), v.file_path, v.line)
+    )
+    return violations
+
+
 def run_api_contract_scan(
     project_root: Path,
     scope: ScanScope | None = None,
@@ -2976,7 +3291,7 @@ def run_api_contract_scan(
     (rows with just class names are skipped — backward compatible).
 
     Returns:
-        List of Violation objects (API-001, API-002, API-003).
+        List of Violation objects (API-001, API-002, API-003, API-004, ENUM-004).
     """
     violations: list[Violation] = []
 
@@ -3003,11 +3318,23 @@ def run_api_contract_scan(
                 continue
 
     if not requirements_text:
+        # ENUM-004 check runs regardless of SVC table presence
+        violations.extend(_check_enum_serialization(project_root, scope))
+        violations = violations[:_MAX_VIOLATIONS]
+        violations.sort(
+            key=lambda v: (_SEVERITY_ORDER.get(v.severity, 99), v.file_path, v.line)
+        )
         return violations
 
     # Parse SVC-xxx table
     contracts = _parse_svc_table(requirements_text)
     if not contracts:
+        # ENUM-004 check runs regardless of SVC table presence
+        violations.extend(_check_enum_serialization(project_root, scope))
+        violations = violations[:_MAX_VIOLATIONS]
+        violations.sort(
+            key=lambda v: (_SEVERITY_ORDER.get(v.severity, 99), v.file_path, v.line)
+        )
         return violations
 
     # Only check contracts that have field schemas (backward compat)
@@ -3017,18 +3344,952 @@ def run_api_contract_scan(
     ]
 
     if not contracts_with_schemas:
+        # ENUM-004 check runs regardless of SVC table presence
+        violations.extend(_check_enum_serialization(project_root, scope))
+        violations = violations[:_MAX_VIOLATIONS]
+        violations.sort(
+            key=lambda v: (_SEVERITY_ORDER.get(v.severity, 99), v.file_path, v.line)
+        )
         return violations
 
-    # Run all 3 checks
+    # Run all checks (API-001, API-002 forward, API-003, API-002 bidirectional)
     for contract in contracts_with_schemas:
         if len(violations) >= _MAX_VIOLATIONS:
             break
         _check_backend_fields(contract, project_root, violations)
         _check_frontend_fields(contract, project_root, violations)
         _check_type_compatibility(contract, project_root, violations)
+        _check_frontend_extra_fields(contract, project_root, violations)
+
+    # API-004: Check request field passthrough (frontend sends → backend accepts)
+    violations.extend(_check_request_field_passthrough(contracts_with_schemas, project_root, scope))
+
+    # ENUM-004: Check .NET enum serialization (runs as part of API contract scan)
+    violations.extend(_check_enum_serialization(project_root, scope))
 
     violations = violations[:_MAX_VIOLATIONS]
     violations.sort(
         key=lambda v: (_SEVERITY_ORDER.get(v.severity, 99), v.file_path, v.line)
     )
+    return violations
+
+
+# ---------------------------------------------------------------------------
+# XREF-001: Frontend-backend endpoint cross-reference scan
+# ---------------------------------------------------------------------------
+
+# Angular HttpClient pattern: this.http.get/post/put/delete/patch(...)
+# Uses nested-generic-aware pattern to handle <Outer<Inner>> type params
+_RE_ANGULAR_HTTP = re.compile(
+    r"""(?:this\.)?(?:http|httpClient)\s*\.\s*"""
+    r"""(get|post|put|delete|patch)\s*(?:<(?:[^<>]|<[^>]*>)*>)?\s*\(\s*"""
+    r"""[`'"](.*?)[`'"]""",
+    re.IGNORECASE,
+)
+
+# Axios pattern: axios.get/post/put/delete/patch(...) or api.get/post(...)
+# Uses nested-generic-aware pattern to handle <Outer<Inner>> type params
+_RE_AXIOS = re.compile(
+    r"""(?:axios|api|apiClient|axiosInstance|client|http)\s*\.\s*"""
+    r"""(get|post|put|delete|patch)\s*(?:<(?:[^<>]|<[^>]*>)*>)?\s*\(\s*"""
+    r"""[`'"](.*?)[`'"]""",
+    re.IGNORECASE,
+)
+
+# fetch() pattern: fetch('url') or fetch(`url`, { method: ... })
+_RE_FETCH = re.compile(
+    r"""fetch\s*\(\s*[`'"](.*?)[`'"]""",
+    re.IGNORECASE,
+)
+
+# fetch() method extraction: { method: 'POST' } or { method: "PUT" }
+_RE_FETCH_METHOD = re.compile(
+    r"""method\s*:\s*['"](\w+)['"]""",
+    re.IGNORECASE,
+)
+
+# .NET class-level [Route("api/...")] or [Route("[controller]")]
+_RE_DOTNET_ROUTE = re.compile(
+    r"""\[Route\(\s*["'](.*?)["']\s*\)\]""",
+    re.IGNORECASE,
+)
+
+# .NET controller class name
+_RE_DOTNET_CONTROLLER = re.compile(
+    r"""class\s+(\w+Controller)\s*""",
+    re.IGNORECASE,
+)
+
+# .NET HTTP method attribute [HttpGet("path")], [HttpPost], etc.
+_RE_DOTNET_HTTP_METHOD = re.compile(
+    r"""\[(Http(?:Get|Post|Put|Delete|Patch))\s*(?:\(\s*["'](.*?)["']\s*\))?\]""",
+    re.IGNORECASE,
+)
+
+# Express router pattern: router.get('/path', ...) or app.get('/path', ...)
+_RE_EXPRESS_ROUTE = re.compile(
+    r"""(?:router|app)\s*\.\s*(get|post|put|delete|patch|all)\s*\(\s*"""
+    r"""['"`](.*?)['"`]""",
+    re.IGNORECASE,
+)
+
+# Express app.use() mount: app.use('/api/v1', someRouter)
+_RE_EXPRESS_MOUNT = re.compile(
+    r"""app\s*\.\s*use\s*\(\s*['"`](.*?)['"`]""",
+    re.IGNORECASE,
+)
+
+# Flask route decorator: @app.route('/path', methods=['GET', 'POST'])
+# or @blueprint.route('/path')
+_RE_FLASK_ROUTE = re.compile(
+    r"""@\s*(?:\w+\.)?route\s*\(\s*['"`](.*?)['"`]"""
+    r"""(?:\s*,\s*methods\s*=\s*\[(.*?)\])?""",
+    re.IGNORECASE,
+)
+
+# FastAPI route decorator: @app.get('/path'), @router.post('/path')
+_RE_FASTAPI_ROUTE = re.compile(
+    r"""@\s*(?:\w+\.)\s*(get|post|put|delete|patch)\s*\(\s*"""
+    r"""['"`](.*?)['"`]""",
+    re.IGNORECASE,
+)
+
+# Django path() in urls.py: path('api/items/', views.item_list)
+_RE_DJANGO_PATH = re.compile(
+    r"""path\s*\(\s*['"`](.*?)['"`]""",
+    re.IGNORECASE,
+)
+
+
+_FrontendCall = collections.namedtuple("_FrontendCall", ["method", "path", "file_path", "line"])
+_BackendRoute = collections.namedtuple("_BackendRoute", ["method", "path", "file_path", "line"])
+
+
+# Directories to skip when scanning for XREF
+_XREF_SKIP_PARTS: frozenset[str] = frozenset({
+    "node_modules", "dist", "build", ".next", ".git", "__pycache__",
+    "venv", ".venv", "env", ".env", "coverage", ".angular",
+})
+
+# File suffixes to skip (test files, specs, etc.)
+_XREF_SKIP_SUFFIXES: tuple[str, ...] = (
+    ".spec.ts", ".spec.js", ".test.ts", ".test.js",
+    ".spec.tsx", ".test.tsx", ".spec.jsx", ".test.jsx",
+    ".d.ts",
+)
+
+
+def _normalize_api_path(path: str) -> str:
+    """Normalize an API path for matching.
+
+    - Strips protocol + host
+    - Replaces path parameter patterns with ``{param}``
+    - Lowercases
+    - Strips trailing slashes and leading double-slashes
+    - Removes ``/api/v1`` or ``/api`` prefix for matching flexibility
+
+    Examples::
+
+        '/api/v1/tenders/${id}' → 'tenders/{param}'
+        'https://localhost:5000/api/items' → 'items'
+        '/Tenders/GetAll' → 'tenders/getall'
+    """
+    p = path.strip()
+
+    # Strip protocol + host
+    if "://" in p:
+        idx = p.index("://") + 3
+        slash_idx = p.find("/", idx)
+        if slash_idx >= 0:
+            p = p[slash_idx:]
+        else:
+            return ""
+
+    # Strip leading base URL variable interpolations (contain `.`, indicating
+    # object property access like ${this.apiUrl} or ${environment.apiUrl}).
+    # These are NOT path parameters — they're base URL prefixes.
+    # Mid-path params like /tenders/${tenderId}/approval are unaffected.
+    p = re.sub(r'^\$\{[^}]*\.[^}]*\}\s*/?', '/', p)
+
+    # Replace remaining template literal interpolations: ${...} → {param}
+    p = re.sub(r'\$\{[^}]*\}', '{param}', p)
+    # Replace :param → {param}
+    p = re.sub(r'/:([^/]+)', '/{param}', p)
+    # Replace [controller] placeholder
+    p = re.sub(r'\[controller\]', '{controller}', p, flags=re.IGNORECASE)
+    # Replace <type:param> (Flask style) → {param}
+    p = re.sub(r'<[^>]*>', '{param}', p)
+    # Replace {id}, {id:int}, {tenantId} etc. → {param}
+    p = re.sub(r'\{[^}]*\}', '{param}', p)
+
+    # Lowercase
+    p = p.lower()
+
+    # Ensure leading slash before prefix check
+    if not p.startswith("/"):
+        p = "/" + p
+
+    # Remove common API prefixes for matching flexibility
+    for prefix in ("/api/v1/", "/api/v2/", "/api/"):
+        if p.startswith(prefix):
+            p = "/" + p[len(prefix):]
+            break
+
+    # Normalize slashes
+    p = p.rstrip("/")
+    if not p.startswith("/"):
+        p = "/" + p
+
+    return p
+
+
+def _is_external_url(path: str) -> bool:
+    """Return True if the path points to an external (non-localhost) URL."""
+    lower = path.lower().strip()
+    if "://" in lower:
+        # Allow localhost URLs
+        for local in ("localhost", "127.0.0.1", "0.0.0.0"):
+            if local in lower:
+                return False
+        return True
+    return False
+
+
+def _should_skip_xref_file(file_path: Path, project_root: Path) -> bool:
+    """Return True if the file should be skipped for XREF scanning."""
+    try:
+        parts = file_path.relative_to(project_root).parts
+    except ValueError:
+        return True
+
+    # Skip directories
+    for part in parts:
+        if part in _XREF_SKIP_PARTS:
+            return True
+
+    # Skip test files
+    name = file_path.name
+    for suffix in _XREF_SKIP_SUFFIXES:
+        if name.endswith(suffix):
+            return True
+
+    # Skip e2e directories
+    for part in parts:
+        if part in ("e2e", "__tests__", "tests", "test"):
+            return True
+
+    return False
+
+
+def _extract_frontend_http_calls(
+    project_root: Path,
+    scope: ScanScope | None,
+) -> list["_FrontendCall"]:
+    """Extract all HTTP calls from frontend source files.
+
+    Scans TypeScript/JavaScript files for Angular HttpClient, Axios, and
+    fetch() patterns.  Skips external URLs (unless localhost), test files,
+    and build artifacts.
+
+    When ``scope`` is provided, collects ALL calls from ALL files (needed for
+    complete matching), but the caller should only report violations for
+    scoped files (same v6 pattern as other scans).
+    """
+    calls: list[_FrontendCall] = []
+    frontend_extensions = (".ts", ".tsx", ".js", ".jsx")
+
+    # BUG-1 fix: regex for Angular variable-URL refs (no quotes around URL)
+    # e.g., this.http.get<Task>(this.apiUrl, ...) or this.http.post(this.apiUrl, data)
+    # Uses nested-generic-aware pattern: <Outer<Inner>> instead of simple <[^>]*>
+    re_angular_var = re.compile(
+        r"""(?:this\.)?(?:http|httpClient)\s*\.\s*"""
+        r"""(get|post|put|delete|patch)\s*(?:<(?:[^<>]|<[^>]*>)*>)?\s*\(\s*"""
+        r"""(this\.\w+)""",
+        re.IGNORECASE,
+    )
+    # Regex to resolve class field values like: private apiUrl = '/api/tasks'
+    # or: private apiUrl = `${environment.apiUrl}/tasks`
+    re_field_value = re.compile(
+        r"""(?:private|readonly|public|protected|\s)\s*(\w+)\s*[:=]\s*[`'"](.*?)[`'"]""",
+    )
+
+    for dirpath, dirnames, filenames in os.walk(project_root):
+        dirnames[:] = [d for d in dirnames if d not in _XREF_SKIP_PARTS]
+
+        for fname in filenames:
+            fpath = Path(dirpath) / fname
+            if fpath.suffix not in frontend_extensions:
+                continue
+            if _should_skip_xref_file(fpath, project_root):
+                continue
+
+            # Skip backend directories
+            try:
+                rel_parts = fpath.relative_to(project_root).parts
+            except ValueError:
+                continue
+            if any(p in ("backend", "server", "api", "Controllers", "Handlers") for p in rel_parts):
+                continue
+
+            try:
+                content = fpath.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            if len(content) > _MAX_FILE_SIZE:
+                continue
+
+            rel = fpath.relative_to(project_root).as_posix()
+
+            # Build field value lookup for this file (used by BUG-1 variable
+            # resolution AND BUG-3 base URL variable resolution in template literals)
+            field_values: dict[str, str] = {}
+            for fm in re_field_value.finditer(content):
+                field_values[fm.group(1)] = fm.group(2)
+
+            # BUG-2 fix: deduplicate by line number (not match position, since
+            # Angular and Axios regexes can overlap at different char offsets
+            # on the same source line, e.g. "this.http.post" matches both)
+            seen_lines: set[int] = set()
+
+            # Regex to detect leading ${this.xxx} or ${self.xxx} base URL variable
+            re_base_var = re.compile(r'^\$\{(?:this|self)\.(\w+)\}')
+
+            def _resolve_base_url_var(url_path: str) -> str:
+                """Resolve leading ${this.xxx} in template literals to field value.
+
+                If the field value is known, substitute it. Otherwise return as-is.
+                """
+                m_var = re_base_var.match(url_path)
+                if not m_var:
+                    return url_path
+                var_name = m_var.group(1)
+                field_val = field_values.get(var_name, "")
+                if field_val:
+                    # Replace ${this.xxx} with the resolved value
+                    return field_val + url_path[m_var.end():]
+                return url_path
+
+            def _add_call(method: str, url_path: str, match_start: int) -> None:
+                """Add a frontend call, deduplicating by line number."""
+                line_no = content[:match_start].count("\n") + 1
+                if line_no in seen_lines:
+                    return
+                # Resolve base URL variables in template literals
+                url_path = _resolve_base_url_var(url_path)
+                if _is_external_url(url_path):
+                    return
+                # Skip complex template literals with multiple interpolations
+                if "${" in url_path and url_path.count("${") > 1:
+                    return
+                seen_lines.add(line_no)
+                calls.append(_FrontendCall(method=method.upper(), path=url_path, file_path=rel, line=line_no))
+
+            # Angular HttpClient (quoted URLs)
+            for m in _RE_ANGULAR_HTTP.finditer(content):
+                _add_call(m.group(1), m.group(2), m.start())
+
+            # Axios (quoted URLs)
+            for m in _RE_AXIOS.finditer(content):
+                _add_call(m.group(1), m.group(2), m.start())
+
+            # fetch() (quoted URLs)
+            for m in _RE_FETCH.finditer(content):
+                url_path = m.group(1)
+                url_path = _resolve_base_url_var(url_path)
+                if _is_external_url(url_path):
+                    continue
+                if "${" in url_path and url_path.count("${") > 1:
+                    continue
+                after = content[m.end():m.end() + 200]
+                method_match = _RE_FETCH_METHOD.search(after)
+                method = method_match.group(1).upper() if method_match else "GET"
+                line_no = content[:m.start()].count("\n") + 1
+                if line_no not in seen_lines:
+                    seen_lines.add(line_no)
+                    calls.append(_FrontendCall(method=method, path=url_path, file_path=rel, line=line_no))
+
+            for m in re_angular_var.finditer(content):
+                line_no = content[:m.start()].count("\n") + 1
+                if line_no in seen_lines:
+                    continue  # Already captured by quoted-URL regex
+                method = m.group(1).upper()
+                var_ref = m.group(2)  # e.g., "this.apiUrl"
+                var_name = var_ref.split(".")[-1]  # e.g., "apiUrl"
+
+                # Try to resolve the variable to a URL path
+                resolved = field_values.get(var_name, "")
+                if resolved:
+                    # Field has a string value — use it as the path
+                    _add_call(method, resolved, m.start())
+                else:
+                    # Can't resolve statically — skip (no false positive)
+                    pass
+
+    return calls
+
+
+def _extract_backend_routes_dotnet(
+    project_root: Path,
+    scope: ScanScope | None,
+) -> list["_BackendRoute"]:
+    """Extract all API routes from .NET controller files."""
+    routes: list[_BackendRoute] = []
+    cs_extensions = (".cs",)
+
+    for dirpath, dirnames, filenames in os.walk(project_root):
+        dirnames[:] = [d for d in dirnames if d not in _XREF_SKIP_PARTS]
+
+        for fname in filenames:
+            fpath = Path(dirpath) / fname
+            if fpath.suffix not in cs_extensions:
+                continue
+            if "Controller" not in fname:
+                continue
+
+            try:
+                content = fpath.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            if len(content) > _MAX_FILE_SIZE:
+                continue
+
+            rel = fpath.relative_to(project_root).as_posix()
+
+            # Extract class-level route prefix
+            route_prefix = ""
+            route_match = _RE_DOTNET_ROUTE.search(content)
+            if route_match:
+                route_prefix = route_match.group(1)
+
+            # Replace [controller] with the controller name (minus "Controller" suffix)
+            ctrl_match = _RE_DOTNET_CONTROLLER.search(content)
+            ctrl_name = ""
+            if ctrl_match:
+                ctrl_name = ctrl_match.group(1).replace("Controller", "")
+            if "[controller]" in route_prefix.lower():
+                route_prefix = re.sub(r'\[controller\]', ctrl_name, route_prefix, flags=re.IGNORECASE)
+
+            # Extract individual HTTP method attributes
+            for m in _RE_DOTNET_HTTP_METHOD.finditer(content):
+                attr = m.group(1)  # HttpGet, HttpPost, etc.
+                action_path = m.group(2) or ""
+
+                # Map attribute to HTTP method
+                method_map = {
+                    "httpget": "GET", "httppost": "POST", "httpput": "PUT",
+                    "httpdelete": "DELETE", "httppatch": "PATCH",
+                }
+                method = method_map.get(attr.lower(), "GET")
+
+                # Handle ~ route override (absolute path, ignore controller prefix)
+                if action_path.startswith("~"):
+                    full_path = action_path[1:]  # Strip ~ and use as absolute
+                else:
+                    # Combine prefix + action path
+                    full_path = route_prefix.rstrip("/")
+                    if action_path:
+                        full_path = full_path + "/" + action_path.lstrip("/")
+                if not full_path.startswith("/"):
+                    full_path = "/" + full_path
+
+                line_no = content[:m.start()].count("\n") + 1
+                routes.append(_BackendRoute(method=method, path=full_path, file_path=rel, line=line_no))
+
+    return routes
+
+
+def _resolve_import_path(
+    import_rel: str,
+    mount_file: Path,
+    project_root: Path,
+    js_extensions: tuple[str, ...] = (".ts", ".js", ".mjs"),
+) -> str | None:
+    """Resolve a relative import path to a project-relative posix path.
+
+    Tries ``import_rel`` with various extensions and ``/index`` fallbacks.
+    Returns the project-relative posix path if the file exists, else ``None``.
+    """
+    base_dir = mount_file.parent
+    # Strip leading ./ and normalize
+    rel = import_rel.lstrip("./")
+    candidate = base_dir / rel
+
+    # Try as-is, then with extensions appended (NOT with_suffix, which
+    # replaces multi-dot names like auth.routes → auth.ts instead of auth.routes.ts)
+    candidates: list[Path] = [candidate]
+    for ext in js_extensions:
+        candidates.append(Path(str(candidate) + ext))
+        candidates.append(candidate / ("index" + ext))
+
+    for c in candidates:
+        if c.is_file():
+            try:
+                return c.relative_to(project_root).as_posix()
+            except ValueError:
+                return c.as_posix()
+    return None
+
+
+def _extract_backend_routes_express(
+    project_root: Path,
+    scope: ScanScope | None,
+) -> list["_BackendRoute"]:
+    """Extract all API routes from Express/Node.js router files."""
+    routes: list[_BackendRoute] = []
+    js_extensions = (".ts", ".js", ".mjs")
+
+    # BUG-4 fix: Resolve mount prefixes to ROUTE FILE paths, not mount file paths.
+    # Parse app.use('/prefix', routerVar) AND import/require statements to build
+    # a mapping from route_file_posix → mount_prefix.
+
+    # Regex: app.use('/prefix', someRouter) — captures prefix AND variable name
+    re_mount_full = re.compile(
+        r"""app\s*\.\s*use\s*\(\s*['"`](.*?)['"`]\s*,\s*(\w+)""",
+        re.IGNORECASE,
+    )
+    # Import patterns: import varName from './path' OR import { varName } from './path'
+    re_import = re.compile(
+        r"""import\s+(?:\{\s*)?(\w+)(?:\s*\})?\s+from\s+['"`](.*?)['"`]""",
+    )
+    # Require patterns: const varName = require('./path')
+    re_require = re.compile(
+        r"""(?:const|let|var)\s+(\w+)\s*=\s*require\s*\(\s*['"`](.*?)['"`]\s*\)""",
+    )
+
+    mount_prefixes: dict[str, str] = {}  # route_file_posix → prefix
+
+    # First pass: parse mount files to resolve router → prefix mappings
+    for dirpath, dirnames, filenames in os.walk(project_root):
+        dirnames[:] = [d for d in dirnames if d not in _XREF_SKIP_PARTS]
+        for fname in filenames:
+            fpath = Path(dirpath) / fname
+            if fpath.suffix not in js_extensions:
+                continue
+            if _should_skip_xref_file(fpath, project_root):
+                continue
+            try:
+                content = fpath.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+
+            # Collect import/require mappings: variable_name → import_path
+            imports: dict[str, str] = {}
+            for m in re_import.finditer(content):
+                imports[m.group(1)] = m.group(2)
+            for m in re_require.finditer(content):
+                imports[m.group(1)] = m.group(2)
+
+            # Collect mount points: app.use('/prefix', routerVar)
+            for m in re_mount_full.finditer(content):
+                prefix = m.group(1).rstrip("/")
+                router_var = m.group(2)
+
+                # Resolve the router variable to a file path
+                import_path = imports.get(router_var, "")
+                if import_path:
+                    resolved = _resolve_import_path(import_path, fpath, project_root, js_extensions)
+                    if resolved:
+                        mount_prefixes[resolved] = prefix
+
+    # Second pass: collect route definitions and apply mount prefixes
+    for dirpath, dirnames, filenames in os.walk(project_root):
+        dirnames[:] = [d for d in dirnames if d not in _XREF_SKIP_PARTS]
+
+        for fname in filenames:
+            fpath = Path(dirpath) / fname
+            if fpath.suffix not in js_extensions:
+                continue
+            if _should_skip_xref_file(fpath, project_root):
+                continue
+
+            # Only look at files likely to be route files
+            name_lower = fname.lower()
+            is_route_file = any(
+                kw in name_lower
+                for kw in ("route", "router", "controller", "handler", "api", "endpoint", "app", "server", "index")
+            )
+            if not is_route_file:
+                continue
+
+            try:
+                content = fpath.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            if len(content) > _MAX_FILE_SIZE:
+                continue
+
+            rel = fpath.relative_to(project_root).as_posix()
+
+            # Look up mount prefix for this route file
+            prefix = mount_prefixes.get(rel, "")
+
+            for m in _RE_EXPRESS_ROUTE.finditer(content):
+                method = m.group(1).upper()
+                if method == "ALL":
+                    method = "GET"  # Treat app.all() as GET for matching
+                route_path = m.group(2)
+
+                # Apply mount prefix if available
+                if prefix:
+                    full_path = prefix.rstrip("/") + "/" + route_path.lstrip("/")
+                else:
+                    full_path = route_path
+
+                line_no = content[:m.start()].count("\n") + 1
+                routes.append(_BackendRoute(method=method, path=full_path, file_path=rel, line=line_no))
+
+    return routes
+
+
+def _extract_backend_routes_python(
+    project_root: Path,
+    scope: ScanScope | None,
+) -> list["_BackendRoute"]:
+    """Extract all API routes from Flask/FastAPI/Django files."""
+    routes: list[_BackendRoute] = []
+
+    for dirpath, dirnames, filenames in os.walk(project_root):
+        dirnames[:] = [d for d in dirnames if d not in _XREF_SKIP_PARTS]
+
+        for fname in filenames:
+            fpath = Path(dirpath) / fname
+            if fpath.suffix != ".py":
+                continue
+            if _should_skip_xref_file(fpath, project_root):
+                continue
+
+            try:
+                content = fpath.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            if len(content) > _MAX_FILE_SIZE:
+                continue
+
+            rel = fpath.relative_to(project_root).as_posix()
+
+            # Flask @app.route / @blueprint.route
+            for m in _RE_FLASK_ROUTE.finditer(content):
+                path_str = m.group(1)
+                methods_str = m.group(2)
+                if methods_str:
+                    # Parse methods=['GET', 'POST']
+                    methods = re.findall(r"['\"](\w+)['\"]", methods_str)
+                    for method in methods:
+                        line_no = content[:m.start()].count("\n") + 1
+                        routes.append(_BackendRoute(method=method.upper(), path=path_str, file_path=rel, line=line_no))
+                else:
+                    line_no = content[:m.start()].count("\n") + 1
+                    routes.append(_BackendRoute(method="GET", path=path_str, file_path=rel, line=line_no))
+
+            # FastAPI @app.get / @router.post
+            for m in _RE_FASTAPI_ROUTE.finditer(content):
+                method = m.group(1).upper()
+                path_str = m.group(2)
+                line_no = content[:m.start()].count("\n") + 1
+                routes.append(_BackendRoute(method=method, path=path_str, file_path=rel, line=line_no))
+
+            # Django path() — only in urls.py files
+            if "urls" in fname.lower():
+                for m in _RE_DJANGO_PATH.finditer(content):
+                    path_str = m.group(1)
+                    # Django doesn't have method in path(), default to ALL methods
+                    line_no = content[:m.start()].count("\n") + 1
+                    routes.append(_BackendRoute(method="ANY", path=path_str, file_path=rel, line=line_no))
+
+    return routes
+
+
+# Regex detecting unresolvable function-call URLs like ${this.func(...)}/path
+_RE_FUNCTION_CALL_URL = re.compile(
+    r'\$\{(?:this|self)\.\w+\([^)]*\)\}'
+)
+
+
+def _has_function_call_url(raw_path: str) -> bool:
+    """Return True if *raw_path* contains an unresolvable function-call interpolation.
+
+    Example patterns that match:
+      ``${this.importUrl(tenderId, bidId)}/parse``
+      ``${self.getEndpoint(id)}/action``
+
+    These can't be resolved statically so violations for them are
+    demoted to ``info`` severity.
+    """
+    return bool(_RE_FUNCTION_CALL_URL.search(raw_path))
+
+
+def _check_endpoint_xref(
+    frontend_calls: list["_FrontendCall"],
+    backend_routes: list["_BackendRoute"],
+) -> list[Violation]:
+    """Cross-reference frontend HTTP calls against backend routes.
+
+    Uses 3-level matching:
+      1. Exact match (normalized path + method)
+      2. Method-agnostic match (normalized path only) → XREF-002
+      3. No match at all → XREF-001
+
+    Violations for URLs containing unresolvable function calls
+    (``${this.func(...)}/...``) are demoted to ``info`` severity
+    since the scanner cannot resolve them statically.
+    """
+    violations: list[Violation] = []
+
+    # Normalize backend routes into lookup structures
+    backend_exact: set[tuple[str, str]] = set()  # (method, normalized_path)
+    backend_paths: set[str] = set()  # normalized_path only
+
+    for route in backend_routes:
+        norm = _normalize_api_path(route.path)
+        if not norm:
+            continue
+        backend_exact.add((route.method.upper(), norm))
+        backend_paths.add(norm)
+        # Django "ANY" matches all methods
+        if route.method == "ANY":
+            for m in ("GET", "POST", "PUT", "DELETE", "PATCH"):
+                backend_exact.add((m, norm))
+
+    # Track already-reported paths to avoid duplicates
+    reported: set[tuple[str, str, str]] = set()  # (method, normalized_path, file_path)
+
+    for call in frontend_calls:
+        norm = _normalize_api_path(call.path)
+        if not norm:
+            continue
+
+        key = (call.method, norm, call.file_path)
+        if key in reported:
+            continue
+        reported.add(key)
+
+        # Detect function-call URLs — demote to info if present
+        is_func_call = _has_function_call_url(call.path)
+
+        # Level 1: exact match
+        if (call.method, norm) in backend_exact:
+            continue  # Perfect match
+
+        # Level 2: method-agnostic match → method mismatch
+        if norm in backend_paths:
+            violations.append(Violation(
+                check="XREF-002",
+                message=(
+                    f"Frontend calls {call.method} {call.path} but backend defines "
+                    f"a different HTTP method for this path. Verify the correct "
+                    f"method is used."
+                ),
+                file_path=call.file_path,
+                line=call.line,
+                severity="info" if is_func_call else "warning",
+            ))
+            continue
+
+        # Level 3: no match at all → missing endpoint
+        violations.append(Violation(
+            check="XREF-001",
+            message=(
+                f"Frontend calls {call.method} {call.path} but no matching "
+                f"backend endpoint was found. The backend controller/router "
+                f"must define this endpoint."
+                + (" (unresolvable function-call URL)" if is_func_call else "")
+            ),
+            file_path=call.file_path,
+            line=call.line,
+            severity="info" if is_func_call else "error",
+        ))
+
+        if len(violations) >= _MAX_VIOLATIONS:
+            break
+
+    return violations
+
+
+def run_endpoint_xref_scan(
+    project_root: Path,
+    scope: ScanScope | None = None,
+) -> list[Violation]:
+    """Scan project for frontend-backend endpoint cross-reference mismatches.
+
+    Auto-detects the backend framework (.NET, Express, Flask/FastAPI/Django)
+    and extracts both frontend HTTP calls and backend route definitions.
+    Cross-references them to find missing endpoints (XREF-001) and HTTP
+    method mismatches (XREF-002).
+
+    Returns an empty list if no frontend calls or no backend routes are found
+    (project may not be full-stack).
+
+    Returns:
+        List of Violation objects (XREF-001, XREF-002).
+    """
+    # Extract frontend calls
+    frontend_calls = _extract_frontend_http_calls(project_root, scope)
+    if not frontend_calls:
+        return []
+
+    # Auto-detect backend framework and extract routes
+    backend_routes: list[_BackendRoute] = []
+
+    # Try .NET
+    dotnet_routes = _extract_backend_routes_dotnet(project_root, scope)
+    backend_routes.extend(dotnet_routes)
+
+    # Try Express/Node.js
+    express_routes = _extract_backend_routes_express(project_root, scope)
+    backend_routes.extend(express_routes)
+
+    # Try Python (Flask/FastAPI/Django)
+    python_routes = _extract_backend_routes_python(project_root, scope)
+    backend_routes.extend(python_routes)
+
+    if not backend_routes:
+        return []
+
+    # Cross-reference
+    violations = _check_endpoint_xref(frontend_calls, backend_routes)
+
+    # Apply scope filter: only report violations for scoped files
+    if scope and scope.changed_files:
+        scope_posix: set[str] = set()
+        for cf in scope.changed_files:
+            try:
+                scope_posix.add(cf.relative_to(project_root).as_posix())
+            except ValueError:
+                scope_posix.add(cf.as_posix())
+        violations = [v for v in violations if v.file_path in scope_posix]
+
+    violations = violations[:_MAX_VIOLATIONS]
+    violations.sort(
+        key=lambda v: (_SEVERITY_ORDER.get(v.severity, 99), v.file_path, v.line)
+    )
+    return violations
+
+
+# ---------------------------------------------------------------------------
+# API-004: Request field passthrough (write-side field dropped)
+# ---------------------------------------------------------------------------
+
+
+def _extract_csharp_class_properties(file_content: str, class_name: str) -> set[str]:
+    """Extract public property names from a C# class definition.
+
+    Finds the class by name and extracts properties defined with
+    ``public Type PropertyName { get; set; }`` pattern.  Returns
+    property names in their original casing.
+    """
+    # Find the class definition
+    class_pattern = re.compile(
+        rf'class\s+{re.escape(class_name)}\b[^{{]*\{{',
+        re.DOTALL,
+    )
+    class_match = class_pattern.search(file_content)
+    if not class_match:
+        return set()
+
+    # Extract balanced braces for the class body
+    brace_start = class_match.end() - 1
+    body = _find_balanced_braces(file_content, brace_start)
+    if not body:
+        return set()
+
+    # Extract property names
+    prop_pattern = re.compile(
+        r'public\s+\w[\w<>\[\]?,\s]*\s+(\w+)\s*\{',
+    )
+    return {m.group(1) for m in prop_pattern.finditer(body)}
+
+
+def _check_request_field_passthrough(
+    contracts: list[SvcContract],
+    project_root: Path,
+    scope: ScanScope | None,
+) -> list[Violation]:
+    """API-004: Check that fields the frontend sends are accepted by the backend.
+
+    For each SVC-xxx row with request_fields, extracts the backend Command/DTO
+    class properties and verifies that every field the frontend sends has a
+    matching property in the backend class.  Fields sent by the frontend but
+    missing from the backend DTO are silently dropped.
+
+    Only checks contracts with explicit request field schemas.
+    """
+    violations: list[Violation] = []
+
+    # Collect contracts with request fields
+    contracts_with_req = [c for c in contracts if c.request_fields]
+    if not contracts_with_req:
+        return violations
+
+    # Find backend files (commands, DTOs, models)
+    backend_patterns = [
+        r'(?:commands?|handlers?|dtos?|requests?)',
+        r'(?:controllers?|models?|viewmodels?)',
+    ]
+    backend_files: list[Path] = []
+    for pat in backend_patterns:
+        backend_files.extend(_find_files_by_pattern(project_root, pat))
+
+    if not backend_files:
+        return violations
+
+    # Cache file contents
+    file_contents: dict[Path, str] = {}
+    for bf in backend_files:
+        try:
+            content = bf.read_text(encoding="utf-8", errors="replace")
+            if len(content) <= _MAX_FILE_SIZE:
+                file_contents[bf] = content
+        except OSError:
+            continue
+
+    for contract in contracts_with_req:
+        if len(violations) >= _MAX_VIOLATIONS:
+            break
+
+        # Extract class name from request_dto text: "CreateFooCommand { name: string }" → "CreateFooCommand"
+        dto_text = contract.request_dto.strip()
+        brace_idx = dto_text.find("{")
+        if brace_idx > 0:
+            class_name = dto_text[:brace_idx].strip()
+        else:
+            class_name = dto_text.strip()
+
+        # Clean up class name — remove any backtick or quote artifacts
+        class_name = re.sub(r'[`\'\"<>\[\]]', '', class_name).strip()
+        if not class_name or not re.match(r'^[A-Za-z_]\w*$', class_name):
+            continue
+
+        # Search backend files for this class
+        backend_props: set[str] = set()
+        backend_ids: set[str] = set()
+        for bf, content in file_contents.items():
+            if class_name in content:
+                props = _extract_csharp_class_properties(content, class_name)
+                backend_props.update(props)
+                # Also collect raw identifiers as fallback
+                backend_ids.update(_extract_identifiers_from_file(content))
+
+        # If we found explicit properties, use those; otherwise fall back to identifiers
+        check_set = backend_props if backend_props else backend_ids
+        if not check_set:
+            continue
+
+        for field_name in contract.request_fields:
+            pascal_name = _to_pascal_case(field_name)
+            # Accept either camelCase or PascalCase
+            if field_name not in check_set and pascal_name not in check_set:
+                violations.append(Violation(
+                    check="API-004",
+                    message=(
+                        f"{contract.svc_id}: Frontend sends field '{field_name}' in "
+                        f"{contract.http_method} request but backend class '{class_name}' "
+                        f"has no matching property. The field is silently dropped. "
+                        f"Add '{pascal_name}' property to '{class_name}' or remove "
+                        f"the field from the frontend form."
+                    ),
+                    file_path="REQUIREMENTS.md",
+                    line=0,
+                    severity="error",
+                ))
+
     return violations

@@ -977,6 +977,13 @@ VIOLATION IDs:
 Every architect MUST produce this registry. Every code-writer MUST consult it.
 Every code-reviewer MUST verify code matches it.
 
+### .NET Serialization Configuration
+When designing a .NET backend, ALWAYS include in the startup/Program.cs boilerplate:
+  builder.Services.AddControllers().AddJsonOptions(o =>
+    o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+This prevents all enum serialization mismatches between backend integers and frontend strings.
+Without this, EVERY enum field breaks — enums serialize as integers (0, 1, 2) instead of strings.
+
 ## Milestone Handoff Preparation
 When designing the architecture for a milestone that creates API endpoints:
 - Document EVERY endpoint in a format suitable for MILESTONE_HANDOFF.md:
@@ -985,6 +992,14 @@ When designing the architecture for a milestone that creates API endpoints:
 - This documentation will be used by subsequent milestones to wire frontend services
 - Vague documentation ("returns tender object") is NOT acceptable
 - Specify: `{ id: string, title: string, status: "draft"|"active"|"closed", createdAt: ISO8601 }`
+
+### ENDPOINT COMPLETENESS VERIFICATION (MANDATORY)
+For EVERY SVC-xxx row in the wiring table:
+  - The backend controller MUST have an action method for the specified HTTP method + route
+  - The frontend service MUST have a method that calls this endpoint
+  - If either side is missing, flag it as INCOMPLETE in the architecture review
+  - Cross-reference: count of frontend service methods calling APIs should MATCH count of backend endpoints
+  - Any frontend service method calling an API path that has no backend controller action = ARCHITECTURE BUG
 """.strip()
 
 CODE_WRITER_PROMPT = r"""You are a CODE WRITER agent in the Agent Team system.
@@ -1278,6 +1293,15 @@ For each SVC-xxx row that has an explicit field schema (not just a class name) i
 If an SVC-xxx row has only a class name (no field schema), SKIP field verification for that row — it's a legacy entry.
 Each violation is a HARD FAILURE for that SVC-xxx item. The code-writer must fix field names to match the contract.
 
+## Endpoint Cross-Reference Verification
+After verifying field-level contracts, verify ENDPOINT-LEVEL completeness:
+  - XREF-001: For each frontend HTTP call, verify a matching backend endpoint EXISTS
+  - XREF-002: Verify the HTTP METHOD matches (GET vs POST vs PUT)
+  - API-004: For each field the frontend SENDS in POST/PUT requests, verify the backend
+    Command/DTO class has a matching property. Fields sent by frontend but missing from
+    backend = silently dropped data.
+Flag any frontend→backend call where the backend endpoint or field does not exist.
+
 ## UI Compliance Verification (MANDATORY when UI_REQUIREMENTS.md exists)
 UI COMPLIANCE IS THE #2 ENFORCEMENT PRIORITY (after mock data).
 For EVERY file that produces UI output (.tsx, .jsx, .vue, .svelte, .css, .scss):
@@ -1318,6 +1342,29 @@ For every entity with a status, state, type, or enum field:
    - Find all places where status is updated
    - Verify the FROM→TO transition is marked YES in the registry
 If violations found: Review Log entry with "ENUM-NNN", FAIL verdict, list specific mismatches.
+
+### Enum Serialization (ENUM-004)
+For .NET backends: VERIFY that Program.cs / Startup.cs configures JsonStringEnumConverter globally:
+  builder.Services.AddControllers().AddJsonOptions(o =>
+    o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+If NOT configured globally, EVERY DTO enum property sent to the frontend MUST have:
+  [JsonConverter(typeof(JsonStringEnumConverter))]
+Without this, enums serialize as integers (0, 1, 2) but frontend code compares strings ("submitted", "approved"). This causes silent display failures and TypeError crashes on .toLowerCase().
+FLAG any enum property in a response DTO without string serialization configured.
+
+### Silent Data Loss Prevention (SDL-001/002/003)
+These are CRITICAL bugs that appear to succeed but lose data silently. REJECT the review if found:
+
+SDL-001 — CQRS PERSISTENCE: Every CommandHandler that modifies data MUST call SaveChangesAsync() or equivalent. A handler that returns a DTO without persisting is a data-loss bug — AUTOMATIC REVIEW FAILURE.
+
+SDL-002 — RESPONSE CONSUMPTION: When chaining API calls, ALWAYS use the response from the previous call:
+  WRONG: switchMap(() => this.service.nextCall(staleData))
+  RIGHT: switchMap((result) => this.service.nextCall(result.items))
+Ignoring a response means the next operation uses stale or empty data.
+
+SDL-003 — SILENT GUARDS: If a user-initiated method (click handler, submit, save) has a guard clause that returns early, it MUST provide user feedback (toast, console.warn, or error message). A button that silently does nothing is a UX bug.
+
+These bugs pass all tests and only surface during manual E2E testing.
 
 ## Orphan Detection (MANDATORY)
 After reviewing all items, perform a sweep for orphaned code.

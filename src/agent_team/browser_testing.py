@@ -1142,6 +1142,27 @@ in the screenshots directory
 - Document exactly what happened, what was expected, and what was observed
 - Include the screenshot and console errors
 
+## DEEP VERIFICATION RULES
+
+### State Persistence Check
+After completing any step that creates or modifies data (form submission, button click that
+should save), navigate away from the current page and navigate back. Take a screenshot BEFORE
+and AFTER to prove the data persisted. If data disappears after navigation = FAILURE.
+
+### Revisit Check
+After completing a multi-step workflow, go back to the starting page. Verify the entity/record
+created during the workflow is visible and shows the correct final state. If the entity is
+missing or shows wrong state = FAILURE.
+
+### Dropdown Check
+When a workflow step involves a dropdown/select, verify it has populated options before selecting.
+If the dropdown is empty when it should have data = FAILURE. Screenshot the dropdown in open state.
+
+### Button Outcome Check
+When clicking any action button, verify the result goes BEYOND a toast notification. After the
+toast disappears, check: did data actually change? Did navigation occur? Did a dialog open with
+real content? A button that only produces a toast with no other observable effect = FAILURE.
+
 ## ANTI-CHEAT RULES (NON-NEGOTIABLE)
 
 - You MUST call browser_snapshot() BEFORE every step action
@@ -1246,6 +1267,14 @@ For EACH URL in the list above:
 3. Call `browser_take_screenshot` to capture proof
 4. Verify: page loads (not blank, not error page, not 404, not "Cannot GET")
 5. Move to the next URL -- do NOT interact further
+
+## Content Verification
+For each page, verify it is not just loading but has MEANINGFUL content:
+  - Tables should have at least one data row (not just headers)
+  - Lists should have at least one item
+  - Forms should have populated fields or labels
+  - Dashboards should have at least one card/widget with data
+A page that loads but shows only empty containers or "No data" when data should exist = REGRESSED.
 
 ## Output
 

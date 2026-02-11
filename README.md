@@ -1177,7 +1177,7 @@ tests/
 
 **Total: 5037+ tests** — 5032+ unit/integration (always run) + 5 E2E (require `--run-e2e`).
 
-### Upgrade Test Files (v2.0-v10.3)
+### Upgrade Test Files (v2.0-v12.3)
 
 ```
 tests/
@@ -1208,7 +1208,11 @@ tests/
 ├── test_v10_1_runtime_guarantees.py  # v10.0-10.1: Production runtime fixes, effective_task, normalizer, GATE 5, task parser (121 tests)
 ├── test_database_fix_verification.py # v5.0: Database fix verification (64 tests)
 ├── test_v10_2_bugfixes.py            # v10.2: P0 re-run bugfixes — seed credentials, API contract parser, Violation attributes (87 tests)
-└── test_cross_mode_matrix.py         # v10.3: Cross-mode verification — 5-layer harness across 20 mode combinations (319 tests)
+├── test_cross_mode_matrix.py         # v10.3: Cross-mode verification — 5-layer harness across 20 mode combinations (319 tests)
+├── test_v11_gap_closure.py           # v11.0: E2E gap closure — enum serialization, silent data loss, DTO field presence (105 tests)
+├── test_v12_hard_ceiling.py          # v12.0-12.1: Endpoint XREF scan, write-side passthrough, cross-mode audit (72 tests)
+├── test_xref_bug_fixes.py            # v12.2: 5 XREF extraction bugs — variable URLs, dedup, base URL, mount prefix, tilde (53 tests)
+└── test_xref_function_call_filter.py # v12.3: Function-call FP filter — severity demotion, CLI severity gate (26 tests)
 ```
 
 ### Live E2E Verification
@@ -1387,15 +1391,16 @@ The following security properties are maintained:
 
 ---
 
-## Post-Orchestration Pipeline (v2.0-v8.0)
+## Post-Orchestration Pipeline (v2.0-v12.3)
 
-After the convergence loop completes, a 13-step post-orchestration pipeline runs quality scans, integrity checks, E2E verification, and browser testing. All steps are depth-gated, crash-isolated, and independently configurable.
+After the convergence loop completes, a 15-step post-orchestration pipeline runs quality scans, integrity checks, E2E verification, and browser testing. All steps are depth-gated, crash-isolated, and independently configurable.
 
 ```
 Scope Computation → Mock Data Scan → UI Compliance Scan → Deployment Scan
 → Asset Scan → PRD Reconciliation → DB Dual ORM Scan → DB Default Value Scan
-→ DB Relationship Scan → API Contract Verification → E2E Backend Tests
-→ E2E Frontend Tests → Browser MCP Testing → Recovery Report
+→ DB Relationship Scan → API Contract Verification → Silent Data Loss Scan
+→ Endpoint XREF Scan → E2E Backend Tests → E2E Frontend Tests
+→ Browser MCP Testing → Recovery Report
 ```
 
 ### Depth Gating
@@ -1409,6 +1414,8 @@ Scope Computation → Mock Data Scan → UI Compliance Scan → Deployment Scan
 | PRD reconciliation | SKIP | SKIP | CONDITIONAL | FULL |
 | DB scans (3) | SKIP | SCOPED | FULL | FULL |
 | API contract scan | SKIP | FULL | FULL | FULL |
+| Silent data loss scan | SKIP | FULL | FULL | FULL |
+| Endpoint XREF scan | SKIP | FULL | FULL | FULL |
 | E2E testing | SKIP | OPT-IN | AUTO-ENABLED | AUTO-ENABLED |
 | Browser MCP testing | SKIP | SKIP | AUTO-ENABLED (PRD) | AUTO-ENABLED (PRD) |
 
@@ -1427,7 +1434,19 @@ Scope Computation → Mock Data Scan → UI Compliance Scan → Deployment Scan
 | Deployment | DEPLOY-001..004 | Port mismatches, undefined env vars, CORS origin, service name mismatches |
 | Asset | ASSET-001..003 | Broken image/font/media, CSS url(), require/import references |
 | Database | DB-001..008 | Dual ORM type mismatch, missing defaults, nullable access, FK/nav gaps |
-| API Contract | API-001..003 | Backend DTO missing field, frontend model field mismatch, type incompatibility |
+| API Contract | API-001..004 | Backend DTO missing field, frontend model field mismatch, type incompatibility, write-side field passthrough |
+| Silent Data Loss | SDL-001 | CQRS command handler doesn't persist all fields to database |
+| Endpoint XREF | XREF-001..002 | Frontend calls missing backend endpoint, HTTP method mismatch |
+
+### Endpoint Cross-Reference (v12.0)
+
+Auto-detects backend framework (.NET, Express, Flask/FastAPI/Django) and cross-references every frontend HTTP call against backend route definitions.
+
+1. **Extract frontend calls** — Angular HttpClient, Axios, raw `fetch()`, variable-URL resolution
+2. **Extract backend routes** — ASP.NET `[HttpGet]`, Express `router.get()`, Python decorators, mount prefix resolution
+3. **3-level matching** — Exact (path+method) → method-agnostic (XREF-002 warning) → no match (XREF-001 error)
+4. **Function-call URL filter** — URLs like `${this.func(...)}/path` demoted to `info` severity (unresolvable statically)
+5. **Fix loop** — Sub-orchestrator creates missing backend endpoints; severity filter skips info-only violations
 
 ### API Contract Verification
 
@@ -1497,22 +1516,27 @@ For detailed upgrade documentation with all fixes, hardening passes, review roun
 | **v10.1** | Runtime Guarantees | Hardened effective_task, normalize_milestone_dirs, GATE 5 enforcement, TASKS.md bullet format parser, design direction inference, review cycle counter, E2E report parsing. 49 tests updated. |
 | **v10.2** | P0 Re-Run Bugfix Sweep | 8 bugs fixed (2 CRITICAL + 3 HIGH + 2 MEDIUM + 1 LOW): Violation.code AttributeError, Windows path colon in filenames, review cycle counter, frontend E2E 0/0 parser, TASKS.md bullet format, seed credential Prisma extraction, API contract SVC table 5-col parser. 87 new tests + 25 API contract tests. 4718 total tests passing. |
 | **v10.3** | Cross-Mode Verification | 5-layer harness verifying all 42 v10.0-v10.2 checkpoints across 20 mode combinations (4 depths x 5 input modes). Config state, prompt content, pipeline guards, behavioral, and guard-to-config mapping layers. 1 bug fixed (display.py gate5_enforcement label). 319 new tests. 5037 total tests passing. |
+| **v11.0** | E2E Gap Closure | 3 failure pattern categories: ASP.NET enum serialization (SDL-001), silent data loss (CQRS persistence), DTO field presence (API-002 bidirectional). 4 prompt injections, `silent_data_loss_scan` config. Retroactive validation + API-002 hardening (5 surgical fixes). 105 tests. 5192 total. |
+| **v12.0** | Hard Ceiling: Endpoint XREF | XREF-001/002 frontend-backend endpoint cross-reference scan. API-004 write-side field passthrough. Auto-detects .NET/Express/Python backends. 3-level matching (exact → method-agnostic → no match). 12 prompt directives. `endpoint_xref_scan` config. 72 tests. 5192 total. |
+| **v12.1** | Cross-Mode Coverage Audit | Read-only audit of v11/v12 across all modes/depths. GAP-4 fix: interactive mode `depth` variable undefined at main() scope. 5245 total tests passing. |
+| **v12.2** | XREF Extraction Bug Fixes | 5 bugs fixed: variable-URL resolution (BUG-1), line-based dedup (BUG-2), base URL variable resolution chain (BUG-3), Express mount prefix import tracing (BUG-4), ASP.NET `~` route override (BUG-5). Validated against TaskFlow Pro (0 violations) and Bayan (29 real). 53 tests. 5217 total. |
+| **v12.3** | Function-Call FP Filter | Function-call URLs (`${this.func(...)}/path`) demoted to `info` severity. CLI severity filter: fix loop only triggers on error/warning. Full 15-stage pipeline audit. Bayan: 29→9 actionable violations. 26 tests. 5243 total. |
 
 ### Production Readiness
 
 ```
 =============================================================
-   100% PRODUCTION READY (v10.3 — 2026-02-11)
+   100% PRODUCTION READY (v12.3 — 2026-02-11)
 =============================================================
 ```
 
-- **0 CRITICAL bugs** across all versions (2 found in v10.2 — both fixed)
-- **5037 tests passing** (2 pre-existing failures in test_mcp_servers.py)
+- **0 CRITICAL bugs** across all versions (5 found in v12.2 — all fixed)
+- **5243 tests passing** (2 pre-existing failures in test_mcp_servers.py)
 - **15/15 post-orchestration blocks** independently crash-isolated
 - **20/20 prompt policies** correctly mapped across 6 agent roles
 - **All 60+ config fields** consumed at correct gate locations
 - **Full backward compatibility** — old configs, no configs, partial configs all work
-- **7/7 isolation tests passed** against live TaskFlow Pro v10.2 project
+- **7/7 isolation tests passed** against live TaskFlow Pro v10.2 project (0 XREF violations)
 
 ---
 

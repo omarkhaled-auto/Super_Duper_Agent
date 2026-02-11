@@ -1595,6 +1595,168 @@ async def _run_api_contract_fix(
     return cost
 
 
+async def _run_silent_data_loss_fix(
+    cwd: str | None,
+    config: AgentTeamConfig,
+    sdl_violations: list,
+    task_text: str | None = None,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    depth: str = "standard",
+) -> float:
+    """Run a recovery pass to fix silent data loss violations (SDL-001).
+
+    Creates a focused prompt listing each violation and instructing
+    the orchestrator to deploy code-writers to add persistence calls.
+    """
+    if not sdl_violations:
+        return 0.0
+
+    print_info(f"Running SDL fix pass ({len(sdl_violations)} violations)")
+
+    violation_text = "\n".join(
+        f"  - [{v.check}] {v.file_path}:{v.line} — {v.message}"
+        for v in sdl_violations[:20]
+    )
+
+    fix_prompt = (
+        f"[PHASE: SILENT DATA LOSS FIX]\n\n"
+        f"The following silent data loss violations were detected — command handlers\n"
+        f"that modify data but never persist changes.\n\n"
+        f"Violations found:\n{violation_text}\n\n"
+        f"INSTRUCTIONS:\n"
+        f"1. For SDL-001 (CQRS handler missing persistence):\n"
+        f"   - Add SaveChangesAsync() call before the handler returns\n"
+        f"   - Ensure _context / _dbContext is injected via constructor\n"
+        f"   - If using Unit of Work pattern, call _unitOfWork.SaveChangesAsync()\n"
+        f"   - The handler MUST persist its changes — returning a DTO without saving is a data loss bug\n"
+        f"2. For ENUM-004 (missing JsonStringEnumConverter):\n"
+        f"   - Add to Program.cs: builder.Services.AddControllers().AddJsonOptions(o =>\n"
+        f"       o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));\n"
+        f"   - Add 'using System.Text.Json.Serialization;' if not present\n"
+        f"3. Fix ONLY the listed violations. Do not refactor or change anything else.\n"
+        f"\n[ORIGINAL USER REQUEST]\n{task_text or ''}"
+    )
+
+    # Inject fix cycle log instructions (if enabled)
+    fix_log_section = ""
+    if config.tracking_documents.fix_cycle_log:
+        try:
+            from .tracking_documents import initialize_fix_cycle_log, build_fix_cycle_entry, FIX_CYCLE_LOG_INSTRUCTIONS
+            req_dir_str = str(Path(cwd or ".") / config.convergence.requirements_dir)
+            initialize_fix_cycle_log(req_dir_str)
+            cycle_entry = build_fix_cycle_entry(
+                phase="Silent Data Loss",
+                cycle_number=1,
+                failures=[f"[{v.check}] {v.file_path}:{v.line} — {v.message}" for v in sdl_violations[:20]],
+            )
+            fix_log_section = (
+                f"\n\n{FIX_CYCLE_LOG_INSTRUCTIONS.format(requirements_dir=req_dir_str)}\n\n"
+                f"Current fix cycle entry (append your results to this):\n{cycle_entry}\n"
+            )
+        except Exception:
+            pass  # Non-critical — don't block fix if log fails
+
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text, depth=depth, backend=_backend)
+    phase_costs: dict[str, float] = {}
+    cost = 0.0
+
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(fix_prompt + fix_log_section)
+            cost = await _process_response(client, config, phase_costs, current_phase="silent_data_loss_fix")
+            if intervention:
+                cost += await _drain_interventions(client, intervention, config, phase_costs)
+    except Exception as exc:
+        print_warning(f"SDL fix pass failed: {exc}")
+
+    return cost
+
+
+async def _run_endpoint_xref_fix(
+    cwd: str | None,
+    config: AgentTeamConfig,
+    xref_violations: list,
+    task_text: str | None = None,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    depth: str = "standard",
+) -> float:
+    """Run a recovery pass to fix endpoint cross-reference violations (XREF-001, XREF-002, API-004).
+
+    Creates a focused prompt listing each violation and instructing
+    the orchestrator to deploy code-writers to add missing backend
+    endpoints, fix HTTP method mismatches, and add missing request
+    DTO properties.
+    """
+    if not xref_violations:
+        return 0.0
+
+    print_info(f"Running endpoint XREF fix pass ({len(xref_violations)} violations)")
+
+    violation_text = "\n".join(
+        f"  - [{v.check}] {v.file_path}:{v.line} — {v.message}"
+        for v in xref_violations[:20]
+    )
+
+    fix_prompt = (
+        f"[PHASE: ENDPOINT CROSS-REFERENCE FIX]\n\n"
+        f"The following endpoint cross-reference violations were detected — frontend\n"
+        f"code calls backend endpoints that are missing or mismatched.\n\n"
+        f"Violations found:\n{violation_text}\n\n"
+        f"INSTRUCTIONS:\n"
+        f"1. For XREF-001 (missing backend endpoint):\n"
+        f"   - Add the missing controller action or route handler in the backend\n"
+        f"   - Use the HTTP method and path shown in the violation\n"
+        f"   - Implement the endpoint with proper request/response DTOs\n"
+        f"   - Do NOT change the frontend call — add the backend endpoint to match it\n"
+        f"2. For XREF-002 (HTTP method mismatch):\n"
+        f"   - Verify which method is correct (frontend or backend)\n"
+        f"   - Fix the side that is wrong — usually the frontend should match the backend convention\n"
+        f"   - GET for reads, POST for creates, PUT for updates, DELETE for deletes\n"
+        f"3. For API-004 (write-side field dropped):\n"
+        f"   - Add the missing property to the backend Command/DTO class\n"
+        f"   - Ensure the handler maps the new property to the entity\n"
+        f"   - Verify the field is persisted to the database\n"
+        f"4. Fix ONLY the listed violations. Do not refactor or change anything else.\n"
+        f"\n[ORIGINAL USER REQUEST]\n{task_text or ''}"
+    )
+
+    # Inject fix cycle log instructions (if enabled)
+    fix_log_section = ""
+    if config.tracking_documents.fix_cycle_log:
+        try:
+            from .tracking_documents import initialize_fix_cycle_log, build_fix_cycle_entry, FIX_CYCLE_LOG_INSTRUCTIONS
+            req_dir_str = str(Path(cwd or ".") / config.convergence.requirements_dir)
+            initialize_fix_cycle_log(req_dir_str)
+            cycle_entry = build_fix_cycle_entry(
+                phase="Endpoint XREF",
+                cycle_number=1,
+                failures=[f"[{v.check}] {v.file_path}:{v.line} — {v.message}" for v in xref_violations[:20]],
+            )
+            fix_log_section = (
+                f"\n\n{FIX_CYCLE_LOG_INSTRUCTIONS.format(requirements_dir=req_dir_str)}\n\n"
+                f"Current fix cycle entry (append your results to this):\n{cycle_entry}\n"
+            )
+        except Exception:
+            pass  # Non-critical — don't block fix if log fails
+
+    options = _build_options(config, cwd, constraints=constraints, task_text=task_text, depth=depth, backend=_backend)
+    phase_costs: dict[str, float] = {}
+    cost = 0.0
+
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(fix_prompt + fix_log_section)
+            cost = await _process_response(client, config, phase_costs, current_phase="endpoint_xref_fix")
+            if intervention:
+                cost += await _drain_interventions(client, intervention, config, phase_costs)
+    except Exception as exc:
+        print_warning(f"Endpoint XREF fix pass failed: {exc}")
+
+    return cost
+
+
 async def _run_ui_compliance_fix(
     cwd: str | None,
     config: AgentTeamConfig,
@@ -3954,6 +4116,7 @@ def main() -> None:
         run_cost = 0.0
         _use_milestones = False
         milestone_convergence_report: ConvergenceReport | None = None
+        depth = depth_override or "standard"
         try:
             if interactive:
                 run_cost = asyncio.run(_run_interactive(
@@ -4928,6 +5091,110 @@ def main() -> None:
                 print_info("API contract scan: skipped (not a full-stack app).")
         except Exception as exc:
             print_warning(f"API contract scan failed: {exc}")
+
+    # -------------------------------------------------------------------
+    # Post-orchestration: Silent Data Loss scan (SDL-001)
+    # -------------------------------------------------------------------
+    if config.post_orchestration_scans.silent_data_loss_scan:
+        try:
+            from .quality_checks import _check_cqrs_persistence
+            _max_passes = config.post_orchestration_scans.max_scan_fix_passes
+            for _fix_pass in range(max(1, _max_passes) if _max_passes > 0 else 1):
+                sdl_violations = _check_cqrs_persistence(Path(cwd), scope=scan_scope)
+                if sdl_violations:
+                    if _fix_pass > 0:
+                        print_info(f"SDL scan pass {_fix_pass + 1}: {len(sdl_violations)} residual violation(s)")
+                    else:
+                        for v in sdl_violations[:5]:
+                            print_contract_violation(f"[{v.check}] {v.message}")
+                        print_warning(
+                            f"Silent data loss scan: {len(sdl_violations)} "
+                            f"violation(s) found."
+                        )
+                    if _fix_pass == 0:
+                        recovery_types.append("silent_data_loss_fix")
+                    if _max_passes > 0:
+                        try:
+                            sdl_fix_cost = asyncio.run(_run_silent_data_loss_fix(
+                                cwd=cwd,
+                                config=config,
+                                sdl_violations=sdl_violations,
+                                task_text=effective_task,
+                                constraints=constraints,
+                                intervention=intervention,
+                                depth=depth if not _use_milestones else "standard",
+                            ))
+                            if _current_state:
+                                _current_state.total_cost += sdl_fix_cost
+                        except Exception as exc:
+                            print_warning(f"SDL fix recovery failed: {exc}")
+                            break
+                    else:
+                        break  # scan-only mode
+                else:
+                    if _fix_pass == 0:
+                        print_info("Silent data loss scan: 0 violations (clean)")
+                    else:
+                        print_info(f"SDL scan pass {_fix_pass + 1}: all violations resolved")
+                    break
+        except Exception as exc:
+            print_warning(f"Silent data loss scan failed: {exc}")
+
+    # -------------------------------------------------------------------
+    # Post-orchestration: Endpoint Cross-Reference scan (XREF-001)
+    # -------------------------------------------------------------------
+    if config.post_orchestration_scans.endpoint_xref_scan:
+        try:
+            from .quality_checks import run_endpoint_xref_scan
+            _max_passes = config.post_orchestration_scans.max_scan_fix_passes
+            for _fix_pass in range(max(1, _max_passes) if _max_passes > 0 else 1):
+                xref_violations = run_endpoint_xref_scan(Path(cwd), scope=scan_scope)
+                # Only actionable (error/warning) violations should trigger fix passes;
+                # "info" violations are unresolvable function-call URLs demoted by the scanner.
+                _xref_actionable = [v for v in xref_violations if v.severity != "info"]
+                _xref_info_only = len(xref_violations) - len(_xref_actionable)
+                if _xref_actionable:
+                    if _fix_pass > 0:
+                        print_info(f"Endpoint XREF scan pass {_fix_pass + 1}: {len(_xref_actionable)} residual violation(s)")
+                    else:
+                        for v in _xref_actionable[:5]:
+                            print_contract_violation(f"[{v.check}] {v.message}")
+                        print_warning(
+                            f"Endpoint XREF scan: {len(_xref_actionable)} "
+                            f"violation(s) found."
+                            + (f" ({_xref_info_only} info-only skipped)" if _xref_info_only else "")
+                        )
+                    if _fix_pass == 0:
+                        recovery_types.append("endpoint_xref_fix")
+                    if _max_passes > 0:
+                        try:
+                            xref_fix_cost = asyncio.run(_run_endpoint_xref_fix(
+                                cwd=cwd,
+                                config=config,
+                                xref_violations=_xref_actionable,
+                                task_text=effective_task,
+                                constraints=constraints,
+                                intervention=intervention,
+                                depth=depth if not _use_milestones else "standard",
+                            ))
+                            if _current_state:
+                                _current_state.total_cost += xref_fix_cost
+                        except Exception as exc:
+                            print_warning(f"Endpoint XREF fix recovery failed: {exc}")
+                            break
+                    else:
+                        break  # scan-only mode
+                else:
+                    if _fix_pass == 0:
+                        if _xref_info_only:
+                            print_info(f"Endpoint XREF scan: 0 actionable violations ({_xref_info_only} info-only)")
+                        else:
+                            print_info("Endpoint XREF scan: 0 violations (clean)")
+                    else:
+                        print_info(f"Endpoint XREF scan pass {_fix_pass + 1}: all violations resolved")
+                    break
+        except Exception as exc:
+            print_warning(f"Endpoint XREF scan failed: {exc}")
 
     # -------------------------------------------------------------------
     # Post-orchestration: E2E Testing Phase (after all other scans)

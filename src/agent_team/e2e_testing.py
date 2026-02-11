@@ -699,6 +699,33 @@ NEVER do this:
 If the app doesn't expose IDs in URLs or responses, use a unique identifier
 like a title or timestamp-based reference number, and search/filter for it.
 
+### Mutation Verification Rule
+Every test that performs a mutation (POST, PUT, PATCH, DELETE) MUST verify the effect with a subsequent GET request. Do NOT trust the mutation response alone.
+
+Example:
+  // Create a task
+  const created = await POST('/api/tasks', payload);
+  expect(created.status).toBe(201);
+  // VERIFY it actually persisted
+  const fetched = await GET(`/api/tasks/${{created.body.id}}`);
+  expect(fetched.body.title).toBe(payload.title);
+
+This catches handlers that return success but don't persist data (SDL-001).
+
+### Endpoint Exhaustiveness Rule
+Before writing tests, list ALL controller/router endpoints in the project (method + route path).
+For EACH endpoint, generate at least ONE test case. At the end of the test file, add a comment
+block listing all endpoints and their test coverage status (TESTED / UNTESTED / SKIPPED with reason).
+An endpoint with zero tests = coverage gap that MUST be justified.
+
+### Role Authorization Rule
+For endpoints with authorization decorators ([Authorize], @auth_required, middleware guards),
+test with BOTH an authorized role AND an unauthorized/wrong role:
+  - Correct role → expect 200/201/204
+  - Wrong role → expect 403 Forbidden (NOT 500)
+  - No token → expect 401 Unauthorized (NOT 500)
+If the system has 2+ roles, test at least 2 distinct roles across the test suite.
+
 [ORIGINAL USER REQUEST]
 {task_text}"""
 
@@ -812,6 +839,44 @@ F. MULTI-ROLE NAVIGATION (MANDATORY if app has authentication):
    - Test restricted pages are NOT accessible by wrong roles → verify redirect (not crash)
    - If app has separate portals (e.g., bidder vs admin), test BOTH as
      separate Playwright suites with their own login flows
+
+### Mutation Verification Rule
+Every test that performs a mutation (POST, PUT, PATCH, DELETE) MUST verify the effect with a subsequent GET request. Do NOT trust the mutation response alone.
+
+Example:
+  // Create a task
+  const created = await POST('/api/tasks', payload);
+  expect(created.status).toBe(201);
+  // VERIFY it actually persisted
+  const fetched = await GET(`/api/tasks/${{created.body.id}}`);
+  expect(fetched.body.title).toBe(payload.title);
+
+This catches handlers that return success but don't persist data (SDL-001).
+
+### State Persistence Rule
+After every write operation (form submission, entity creation, status change), REFRESH the page
+(navigate away and navigate back, or call page.reload()). Verify the data persists correctly
+after refresh. Data that appears in UI but vanishes on refresh = BUG (the backend didn't save it).
+
+### Revisit Testing Rule
+After creating or submitting an entity, navigate to a DIFFERENT page (e.g., dashboard or list),
+then navigate BACK to the entity's detail/edit page. Verify it shows the CORRECT state:
+  - Data is populated (not an empty form)
+  - Status reflects the latest action (not "Draft" after submission)
+  - Related data is loaded (comments, attachments, sub-items)
+
+### Dropdown Verification Rule
+For every dropdown/select element encountered during testing, verify it has REAL populated options
+(not empty, not just a single placeholder like "Select..."). Click the dropdown and check the
+option count. A dropdown that should show data but is empty = BUG (API not called or returns empty).
+
+### Button Outcome Verification Rule
+Every button click MUST produce a verifiable outcome BEYOND a toast/snackbar message:
+  - Create button → verify new item appears in list/table
+  - Save button → refresh page and verify data persists
+  - Delete button → verify item removed from list
+  - Submit button → verify status changes
+A button that shows a toast but creates NO data change and NO navigation = potential STUB.
 
 [ORIGINAL USER REQUEST]
 {task_text}"""
