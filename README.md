@@ -1175,9 +1175,9 @@ tests/
                           #   SDK client lifecycle, Firecrawl config (5 tests)
 ```
 
-**Total: 4718+ tests** — 4713+ unit/integration (always run) + 5 E2E (require `--run-e2e`).
+**Total: 5037+ tests** — 5032+ unit/integration (always run) + 5 E2E (require `--run-e2e`).
 
-### Upgrade Test Files (v2.0-v10.2)
+### Upgrade Test Files (v2.0-v10.3)
 
 ```
 tests/
@@ -1207,7 +1207,8 @@ tests/
 ├── test_api_contract.py              # v9.0: API contract scan parsing, field matching, config, CLI wiring, backward compat (106 tests)
 ├── test_v10_1_runtime_guarantees.py  # v10.0-10.1: Production runtime fixes, effective_task, normalizer, GATE 5, task parser (121 tests)
 ├── test_database_fix_verification.py # v5.0: Database fix verification (64 tests)
-└── test_v10_2_bugfixes.py            # v10.2: P0 re-run bugfixes — seed credentials, API contract parser, Violation attributes (87 tests)
+├── test_v10_2_bugfixes.py            # v10.2: P0 re-run bugfixes — seed credentials, API contract parser, Violation attributes (87 tests)
+└── test_cross_mode_matrix.py         # v10.3: Cross-mode verification — 5-layer harness across 20 mode combinations (319 tests)
 ```
 
 ### Live E2E Verification
@@ -1495,17 +1496,18 @@ For detailed upgrade documentation with all fixes, hardening passes, review roun
 | **v10.0** | Production Runtime Fixes | 9 deliverables fixing all 42 production test checkpoints. PRD root-level artifacts, subdirectory app detection, silent scan logging, recovery labels, DB-005 Prisma exclusion, multi-pass fix cycles, convergence loop enforcement, marking policy, UI fallback. `max_scan_fix_passes` config. 121 tests. 4510 total. |
 | **v10.1** | Runtime Guarantees | Hardened effective_task, normalize_milestone_dirs, GATE 5 enforcement, TASKS.md bullet format parser, design direction inference, review cycle counter, E2E report parsing. 49 tests updated. |
 | **v10.2** | P0 Re-Run Bugfix Sweep | 8 bugs fixed (2 CRITICAL + 3 HIGH + 2 MEDIUM + 1 LOW): Violation.code AttributeError, Windows path colon in filenames, review cycle counter, frontend E2E 0/0 parser, TASKS.md bullet format, seed credential Prisma extraction, API contract SVC table 5-col parser. 87 new tests + 25 API contract tests. 4718 total tests passing. |
+| **v10.3** | Cross-Mode Verification | 5-layer harness verifying all 42 v10.0-v10.2 checkpoints across 20 mode combinations (4 depths x 5 input modes). Config state, prompt content, pipeline guards, behavioral, and guard-to-config mapping layers. 1 bug fixed (display.py gate5_enforcement label). 319 new tests. 5037 total tests passing. |
 
 ### Production Readiness
 
 ```
 =============================================================
-   100% PRODUCTION READY (v10.2 — 2026-02-11)
+   100% PRODUCTION READY (v10.3 — 2026-02-11)
 =============================================================
 ```
 
 - **0 CRITICAL bugs** across all versions (2 found in v10.2 — both fixed)
-- **4718 tests passing** (2 pre-existing failures in test_mcp_servers.py)
+- **5037 tests passing** (2 pre-existing failures in test_mcp_servers.py)
 - **15/15 post-orchestration blocks** independently crash-isolated
 - **20/20 prompt policies** correctly mapped across 6 agent roles
 - **All 60+ config fields** consumed at correct gate locations

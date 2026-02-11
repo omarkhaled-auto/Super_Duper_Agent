@@ -2083,6 +2083,71 @@ Full P0 re-run against TaskFlow Pro v10.2 uncovered 8 bugs across the post-orche
 
 **Total: 4718 tests passing, 2 pre-existing failures, 0 new regressions.**
 
+---
+
+## v10.3 — Cross-Mode Verification Matrix
+
+### Problem
+
+All 42 v10.0-v10.2 production checkpoints were validated in a single mode (exhaustive + PRD on TaskFlow Pro). No verification existed that these checkpoints work correctly across all 20 operating mode combinations (4 depths x 5 input modes).
+
+### Solution: 5-Layer Verification Harness
+
+**319 tests** in `test_cross_mode_matrix.py` across 5 layers:
+
+| Layer | Tests | What It Proves |
+|-------|-------|----------------|
+| 1. Config State Matrix | 23 | `apply_depth_quality_gating()` correct for all 8 (depth x prd) combos |
+| 2. Prompt Content Matrix | ~180 | Correct blocks present/absent across all 20 (depth x input) combos |
+| 3. Pipeline Guard Consistency | ~30 | cli.py guards match config fields, crash isolation verified |
+| 4. Cross-Mode Behavioral | ~50 | effective_task, GATE 5, parsers, normalize_dirs work in isolation |
+| 5. Guard-to-Config Mapping | ~36 | All recovery types labeled, scaling correct, coverage complete |
+
+### Config State Matrix (Layer 1)
+
+| Depth | PRD | Scans | E2E | Browser | Review Retries | Fix Passes |
+|-------|-----|-------|-----|---------|----------------|------------|
+| quick | N/Y | ALL OFF | OFF | OFF | 0 | 0 |
+| standard | N/Y | ON (except PRD recon) | OFF | OFF | 1 | 1 |
+| thorough | N | ON | ON (2 retries) | OFF | 2 | 1 |
+| thorough | Y | ON | ON (2 retries) | ON (3 retries) | 2 | 1 |
+| exhaustive | N | ON | ON (3 retries) | OFF | 3 | 2 |
+| exhaustive | Y | ON | ON (3 retries) | ON (5 retries) | 3 | 2 |
+
+### Prompt Content Matrix (Layer 2)
+
+9 checks x 20 mode combinations:
+
+| Check | Present When |
+|-------|-------------|
+| CONVERGENCE LOOP | Always (all 20 combos) |
+| MARKING POLICY | Always (all 20 combos) |
+| ZERO cycles prohibition | Always (all 20 combos) |
+| ROOT ARTIFACTS | PRD modes only (prd, interview_complex, chunked_prd) |
+| Segregation-of-duties | Always (all 20 combos) |
+| Rubber-stamp prohibition | Always (all 20 combos) |
+| SVC-xxx table | PRD modes only |
+| STATUS_REGISTRY | PRD modes only |
+| Depth marker | 1 per depth |
+
+### Bug Found and Fixed
+
+| Bug | File | Severity | Fix |
+|-----|------|----------|-----|
+| Missing `gate5_enforcement` label | display.py:641 | LOW | Added to `type_hints` dict in `print_recovery_report()` |
+
+### Test Results
+
+| Metric | Value |
+|--------|-------|
+| New tests | 319 |
+| Full suite | 5037 passed, 2 failed (pre-existing), 5 skipped |
+| New regressions | 0 |
+| Execution time | 0.28s (cross-mode), 138.87s (full suite) |
+| Checkpoint coverage | 42/42 mapped to at least one layer |
+
+**Total: 5037 tests passing, 2 pre-existing failures, 0 new regressions.**
+
 ### Isolation Test Results (TaskFlow Pro v10.2)
 
 All 7 isolation tests passed against the live TaskFlow Pro project:
