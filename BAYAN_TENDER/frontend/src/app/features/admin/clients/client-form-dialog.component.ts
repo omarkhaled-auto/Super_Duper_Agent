@@ -13,7 +13,7 @@ import { ClientService } from '../../../core/services/client.service';
 
 export interface ClientFormDialogData {
   client?: Client;
-  mode: 'create' | 'edit';
+  mode: 'create' | 'edit' | 'view';
 }
 
 @Component({
@@ -216,21 +216,38 @@ export interface ClientFormDialogData {
         </div>
 
         <div class="dialog-actions">
-          <button
-            pButton
-            type="button"
-            label="Cancel"
-            class="p-button-text"
-            (click)="onCancel()"
-          ></button>
-          <button
-            pButton
-            type="submit"
-            [label]="isCreateMode() ? 'Create Client' : 'Update Client'"
-            [loading]="isLoading()"
-            [disabled]="clientForm.invalid || isLoading()"
-            data-testid="client-form-save"
-          ></button>
+          @if (isViewMode()) {
+            <button
+              pButton
+              type="button"
+              label="Close"
+              class="p-button-text"
+              (click)="onCancel()"
+            ></button>
+            <button
+              pButton
+              type="button"
+              label="Edit"
+              icon="pi pi-pencil"
+              (click)="switchToEdit()"
+            ></button>
+          } @else {
+            <button
+              pButton
+              type="button"
+              label="Cancel"
+              class="p-button-text"
+              (click)="onCancel()"
+            ></button>
+            <button
+              pButton
+              type="submit"
+              [label]="isCreateMode() ? 'Create Client' : 'Update Client'"
+              [loading]="isLoading()"
+              [disabled]="clientForm.invalid || isLoading()"
+              data-testid="client-form-save"
+            ></button>
+          }
         </div>
       </form>
     </div>
@@ -321,6 +338,7 @@ export class ClientFormDialogComponent implements OnInit {
   errorMessage = signal<string | null>(null);
 
   isCreateMode = computed(() => this.dialogConfig.data?.mode === 'create');
+  isViewMode = signal(false);
 
   ngOnInit(): void {
     this.initForm();
@@ -345,6 +363,16 @@ export class ClientFormDialogComponent implements OnInit {
       contactPhone: [client?.contactPhone || ''],
       isActive: [client?.isActive ?? true]
     });
+
+    if (data?.mode === 'view') {
+      this.isViewMode.set(true);
+      this.clientForm.disable();
+    }
+  }
+
+  switchToEdit(): void {
+    this.isViewMode.set(false);
+    this.clientForm.enable();
   }
 
   isFieldInvalid(field: string): boolean {
@@ -353,6 +381,7 @@ export class ClientFormDialogComponent implements OnInit {
   }
 
   onSubmit(): void {
+    if (this.isViewMode()) return;
     if (this.clientForm.invalid) {
       this.clientForm.markAllAsTouched();
       return;

@@ -28,12 +28,6 @@ public class ClientsController : ControllerBase
     /// <summary>
     /// Gets a paginated list of clients with optional search and filtering.
     /// </summary>
-    /// <param name="page">Page number (1-based).</param>
-    /// <param name="pageSize">Number of items per page.</param>
-    /// <param name="search">Optional search term for filtering by name, contact person, or email.</param>
-    /// <param name="isActive">Optional filter for active status.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A paginated list of clients.</returns>
     [HttpGet]
     [ProducesResponseType(typeof(PaginatedList<ClientDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<PaginatedList<ClientDto>>> GetClients(
@@ -58,9 +52,6 @@ public class ClientsController : ControllerBase
     /// <summary>
     /// Gets a client by ID.
     /// </summary>
-    /// <param name="id">The client's unique identifier.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The client if found.</returns>
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(ClientDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -82,9 +73,6 @@ public class ClientsController : ControllerBase
     /// <summary>
     /// Creates a new client.
     /// </summary>
-    /// <param name="dto">The client data.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The created client.</returns>
     [HttpPost]
     [ProducesResponseType(typeof(ClientDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -98,7 +86,13 @@ public class ClientsController : ControllerBase
             ContactPerson = dto.ContactPerson,
             Email = dto.Email,
             Phone = dto.Phone,
-            Address = dto.Address
+            Address = dto.Address,
+            City = dto.City,
+            Country = dto.Country,
+            CRNumber = dto.CRNumber,
+            VatNumber = dto.VatNumber,
+            ContactEmail = dto.ContactEmail,
+            ContactPhone = dto.ContactPhone
         };
 
         var result = await _mediator.Send(command, cancellationToken);
@@ -108,10 +102,6 @@ public class ClientsController : ControllerBase
     /// <summary>
     /// Updates an existing client.
     /// </summary>
-    /// <param name="id">The client's unique identifier.</param>
-    /// <param name="dto">The updated client data.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The updated client if found.</returns>
     [HttpPut("{id:guid}")]
     [ProducesResponseType(typeof(ClientDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -129,6 +119,12 @@ public class ClientsController : ControllerBase
             Email = dto.Email,
             Phone = dto.Phone,
             Address = dto.Address,
+            City = dto.City,
+            Country = dto.Country,
+            CRNumber = dto.CRNumber,
+            VatNumber = dto.VatNumber,
+            ContactEmail = dto.ContactEmail,
+            ContactPhone = dto.ContactPhone,
             IsActive = dto.IsActive
         };
 

@@ -29,9 +29,9 @@ public class GetPublishedBulletinsQueryHandler : IRequestHandler<GetPublishedBul
             throw new UnauthorizedAccessException("You do not have access to this tender.");
         }
 
-        if (tenderBidder.QualificationStatus != QualificationStatus.Qualified)
+        if (tenderBidder.QualificationStatus == QualificationStatus.Removed)
         {
-            throw new UnauthorizedAccessException($"You are not qualified for this tender. Current status: {tenderBidder.QualificationStatus}");
+            throw new UnauthorizedAccessException("You have been removed from this tender.");
         }
 
         // Get bulletins with their published Q&A items
@@ -57,7 +57,17 @@ public class GetPublishedBulletinsQueryHandler : IRequestHandler<GetPublishedBul
                         Question = c.Question,
                         Answer = c.Answer ?? string.Empty,
                         RelatedBoqSection = c.RelatedBoqSection,
-                        AnsweredAt = c.AnsweredAt
+                        AnsweredAt = c.AnsweredAt,
+                        Attachments = c.Attachments
+                            .OrderBy(a => a.CreatedAt)
+                            .Select(a => new PortalAttachmentDto
+                            {
+                                Id = a.Id,
+                                FileName = a.FileName,
+                                FileSize = a.FileSizeBytes,
+                                ContentType = a.ContentType
+                            })
+                            .ToList()
                     })
                     .ToList()
             })

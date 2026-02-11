@@ -63,4 +63,20 @@ public class PortalBulletinClarificationDto
     public string Answer { get; set; } = string.Empty;
     public string? RelatedBoqSection { get; set; }
     public DateTime? AnsweredAt { get; set; }
+
+    /// <summary>
+    /// File attachments associated with this clarification.
+    /// </summary>
+    public List<PortalAttachmentDto> Attachments { get; set; } = new();
+}
+
+/// <summary>
+/// Lightweight attachment info for portal display (no internal file paths).
+/// </summary>
+public class PortalAttachmentDto
+{
+    public Guid Id { get; set; }
+    public string FileName { get; set; } = string.Empty;
+    public long FileSize { get; set; }
+    public string ContentType { get; set; } = string.Empty;
 }

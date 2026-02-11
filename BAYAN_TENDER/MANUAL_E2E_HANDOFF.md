@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-10 (updated)
 **Session scope:** Manual walkthrough of the full tender lifecycle (admin + bidder portal)
-**Status:** FULL LIFECYCLE COMPLETE — all steps verified end-to-end (30 bugs fixed)
+**Status:** PHASE 1 COMPLETE, PHASE 2 STARTING — 38 bugs fixed so far
 
 ---
 
@@ -36,6 +36,11 @@
 | Approval — Start Approval | Working — 3-level sequential workflow created |
 | Approval — Level 1/2/3 Approve | Working — all 3 levels approved, tender status → Awarded |
 | Approval — Approver login + decision UI | Working — decision form with Approve/Reject/Return for Revision |
+| User Management — CRUD, password, toggle status | Working — Fixes 31-33 |
+| Bidder Management — CRUD, view mode, prequalification | Working — Fixes 34, 37 |
+| Client Management — CRUD, view mode, all fields saving, tender count | Working — Fixes 35-36 |
+| System Settings — all 4 tabs (General, Tender, Notification, Security) | Working — Fix 38, 38 settings wired to DB |
+| Audit Logs — list with filters, entries verified | Working — confirmed PUT settings logged correctly |
 
 ### Bidder Portal (this session + previous)
 | Feature | Status |
@@ -60,7 +65,7 @@
 
 ---
 
-## 2. Bugs Found & Fixed (30 total)
+## 2. Bugs Found & Fixed (33 total)
 
 ### Fix 1: Bidders not qualified — documents invisible
 - **Symptom:** Portal documents page showed empty list
@@ -272,6 +277,92 @@
 - **Root cause:** `combined-scorecard.component.ts` called `startApproval(this.tenderId)` with no approver IDs. Backend requires exactly 3 approver user IDs.
 - **Files:**
   - `frontend/src/app/features/tenders/tender-details/evaluation/combined-scorecard.component.ts` — added `ApprovalService` injection, `startApproval()` now auto-fetches approvers from `GET /api/approvers` and passes first 3 IDs
+
+### Fix 31: Created user can't log in — admin password ignored by backend
+- **Symptom:** Admin creates user via UI, enters a password, but logging in with that password gives "Invalid email or password"
+- **Root cause:** Backend `CreateUserCommandHandler` ignored any password from the request — always generated a random temp password via `_passwordHasher.GenerateTemporaryPassword()`. The frontend sent a `password` field but the backend `CreateUserCommand` had no such property.
+- **Fix:** Backend now accepts optional `Password` field. If admin provides a password, it's used directly. If blank, falls back to temp password generation. Frontend also extracts and displays temp password in a sticky toast as fallback.
+- **Files:**
+  - `backend/.../CreateUser/CreateUserCommand.cs` — added `Password` property
+  - `backend/.../CreateUser/CreateUserCommandHandler.cs` — uses admin-provided password when set, otherwise generates temp
+  - `backend/Bayan.API/Controllers/AdminController.cs` — added `Password` to `CreateUserRequest` DTO, passes to command
+  - `frontend/src/app/core/services/user.service.ts` — sends `password` field to backend, extracts `temporaryPassword` from response
+  - `frontend/src/app/features/admin/users/user-list.component.ts` — shows sticky toast with temp password when no admin password was set
+
+### Fix 38: All 4 Settings tabs broken — "Setting with key 'general' not found"
+- **Symptom:** Saving any settings tab (General, Tender, Notification, Security) fails with "Setting with key 'general' not found" (or tender/notification/security). Settings page loads with defaults but can't persist changes.
+- **Root cause:** Complete frontend-backend integration mismatch:
+  1. Backend stores settings as **individual key-value rows** (e.g., `site_name` = `"Bayan Tender"`, `session_timeout_minutes` = `"60"`) with `PUT /admin/settings/{key}` expecting `{ "value": "string" }`
+  2. Frontend was sending **grouped objects** to category endpoints (e.g., `PUT /admin/settings/general` with `{ siteName, siteNameAr, ... }`) — no such key "general" exists
+  3. GET response returned flat array of `{ key, value, dataType }` rows, but frontend expected pre-grouped `{ general: {...}, tender: {...} }` objects
+  4. Only 9 of 34 needed settings were seeded in the database
+- **Fix:**
+  1. **Database**: Inserted 29 missing settings (38 total), organized by category (General, Tender, Notifications, Security) with proper data types
+  2. **settings.service.ts** — Complete rewrite:
+     - `getSettings()` maps flat `SettingRow[]` array → grouped `SystemSettings` object using key→field lookup with type coercion (str/num/bool helpers)
+     - Each `updateXxxSettings()` now builds a `Record<string, string>` of individual key-value pairs (e.g., `{ 'site_name': 'Bayan', 'support_email': 'x@y.z' }`) and fires parallel PUT requests via `forkJoin`
+     - All keys use snake_case to match DB keys (e.g., `site_name`, `default_bid_validity_days`, `email_notifications`, `session_timeout_minutes`)
+- **Files:**
+  - `frontend/src/app/core/services/settings.service.ts` — full rewrite (flat→grouped mapping, individual PUT per key)
+  - Database: 29 new rows in `system_settings` table via SQL INSERT
+
+### Fix 37: Bidder "View Details" button identical to Edit — no read-only view
+- **Symptom:** Clicking the eye icon on a bidder row opens the exact same edit dialog as the pencil icon — `viewBidder()` just called `editBidder()`.
+- **Root cause:** Stub implementation — `viewBidder()` was literally `this.editBidder(bidder)`.
+- **Fix:** Same pattern as client Fix 36 — added `'view'` mode to `BidderFormDialogData`, `isViewMode` signal, `switchToEdit()`, form disable in view mode, submit guard. `viewBidder()` now opens dialog with `mode: 'view'` and header "Bidder: {name}".
+- **Files:**
+  - `frontend/src/app/features/admin/bidders/bidder-list.component.ts` — `viewBidder()` opens dialog with `mode: 'view'`
+  - `frontend/src/app/features/admin/bidders/bidder-form-dialog.component.ts` — added view mode support
+
+### Fix 36: Client "View Details" button only shows toast, doesn't open detail view
+- **Symptom:** Clicking the eye icon (View Details) on a client row just shows a toast message "Viewing details for [name]" — no detail dialog opens.
+- **Root cause:** `viewClient()` was a stub — only called `messageService.add()` with an info toast. No detail view existed.
+- **Fix:** Added `view` mode to `ClientFormDialogData`. `viewClient()` now opens the same form dialog in read-only mode (all fields disabled). Dialog shows "Close" and "Edit" buttons — clicking "Edit" switches to edit mode (enables fields, shows save button). Form submission is blocked while in view mode.
+- **Files:**
+  - `frontend/src/app/features/admin/clients/client-list.component.ts` — `viewClient()` opens dialog with `mode: 'view'`
+  - `frontend/src/app/features/admin/clients/client-form-dialog.component.ts` — added `'view'` to mode type, `isViewMode` signal, `switchToEdit()` method, form disable in view mode, submit guard
+
+### Fix 35: Client fields not saving (CR number, VAT, city, etc.) + tender count always 0
+- **Symptom:** Creating/editing a client loses CR number, VAT number, city, country, contact email, contact phone fields. Also tender count always shows 0 even for clients with tenders.
+- **Root cause:** The `Client` entity only had `Name`, `ContactPerson`, `Email`, `Phone`, `Address`. Fields like `CRNumber`, `VatNumber`, `City`, `Country`, `ContactEmail`, `ContactPhone` didn't exist in the backend at all — entity, DTOs, commands, handlers, and controller all lacked them. `ClientDto` also had no `TenderCount` field.
+- **Fix:** Added 6 new fields to the full backend chain: Entity → ClientConfiguration (EF column mapping) → CreateClientDto/UpdateClientDto → CreateClientCommand/UpdateClientCommand → Handlers → Controller. Added `TenderCount` to `ClientDto` with AutoMapper `ForMember` from `Tenders.Count`. Created DB migration (applied via SQL since EF migration system had conflicts). Frontend service now uses `mapClientToBackend()` + `switchMap` GET after create/update.
+- **Files:**
+  - `backend/Bayan.Domain/Entities/Client.cs` — added City, Country, CRNumber, VatNumber, ContactEmail, ContactPhone
+  - `backend/Bayan.Application/Features/Clients/DTOs/ClientDto.cs` — added same + TenderCount
+  - `backend/Bayan.Application/Features/Clients/DTOs/CreateClientDto.cs` — added 6 fields
+  - `backend/Bayan.Application/Features/Clients/DTOs/UpdateClientDto.cs` — added 6 fields
+  - `backend/Bayan.Application/Features/Clients/Commands/CreateClient/CreateClientCommand.cs` — added 6 fields
+  - `backend/Bayan.Application/Features/Clients/Commands/CreateClient/CreateClientCommandHandler.cs` — maps new fields
+  - `backend/Bayan.Application/Features/Clients/Commands/UpdateClient/UpdateClientCommand.cs` — added 6 fields
+  - `backend/Bayan.Application/Features/Clients/Commands/UpdateClient/UpdateClientCommandHandler.cs` — maps new fields
+  - `backend/Bayan.API/Controllers/ClientsController.cs` — passes all new fields from DTO to command
+  - `backend/Bayan.Infrastructure/Data/Configurations/ClientConfiguration.cs` — column mappings for new fields
+  - `backend/Bayan.Application/Features/Clients/Mappings/ClientMappingProfile.cs` — TenderCount via Tenders.Count
+  - `frontend/src/app/core/services/client.service.ts` — mapClientToBackend(), switchMap GET after create/update, tenderCount mapping
+
+### Fix 34: Bidder NDA status not persisting + prequalification wrong on creation
+- **Symptom:** (1) NDA status dropdown on bidder form never persisted — always reverted to "Not Sent". (2) Prequalification status showed wrong value after creating a bidder (correct after editing).
+- **Root cause:** (1) The `Bidder` entity has NO `ndaStatus` column — NDA status only exists on `TenderBidder` (per-tender relationship). The form dropdown was writing to a field that doesn't exist in the backend. (2) `createBidder()` merged the partial POST response over the payload, causing integer prequalification values to overwrite the mapped string.
+- **Fix:** (1) Removed NDA status dropdown from bidder create/edit form and NDA column from bidder list table — NDA is per-tender, managed when bidders are invited to specific tenders. (2) `createBidder()` now uses `switchMap` to GET fresh data after POST. `updateBidder()` also uses `switchMap` GET after PUT.
+- **Files:**
+  - `frontend/src/app/features/admin/bidders/bidder-form-dialog.component.ts` — removed NDA dropdown, `ndaStatus` form control, `ndaOptions` array, NDA from DTOs
+  - `frontend/src/app/features/admin/bidders/bidder-list.component.ts` — removed NDA column header, NDA cell, `getNdaLabel`/`getNdaSeverity` methods
+  - `frontend/src/app/core/services/bidder.service.ts` — removed `ndaStatus` from `mapBidderToBackend()`, `createBidder` uses switchMap GET, `updateBidder` uses switchMap GET
+
+### Fix 33: Update user — shows error despite saving successfully
+- **Symptom:** Editing a user saves correctly (visible on refresh), but shows an error toast immediately after save
+- **Root cause:** Three issues: (1) Backend PUT returns `204 No Content` (empty body), but `ApiService.put()` did `response.data` on null — threw TypeError. (2) `role` sent as `undefined` when mapping failed. (3) After PUT, frontend returned a fake local object instead of re-fetching actual data.
+- **Fix:** `ApiService.put()` now handles null response body (`response?.data ?? null`). `updateUser()` always maps role to int, then does a GET after PUT to fetch real data.
+- **Files:**
+  - `frontend/src/app/core/services/api.service.ts` — `put()` handles 204 empty body with `response?.data ?? null`
+  - `frontend/src/app/core/services/user.service.ts` — `updateUser()` rewritten: role always mapped to int, `switchMap` to GET after PUT
+
+### Fix 32: Delete user button returns 404/405 — no backend endpoint
+- **Symptom:** Clicking delete on a user in admin UI fails silently or shows error
+- **Root cause:** Frontend called `DELETE /api/admin/users/{id}` but no such endpoint existed in `AdminController`
+- **Fix:** Added `DeleteUser` endpoint with self-deletion guard (can't delete your own account)
+- **Files:**
+  - `backend/Bayan.API/Controllers/AdminController.cs` — added `IApplicationDbContext` injection, `DELETE users/{id:guid}` endpoint with self-deletion check
 
 ### Bid Import — Verified Working
 - Full 5-step wizard: Parse (48 items) → Map Columns → Match (48 exact matches) → Normalize → Validate & Import
@@ -535,41 +626,45 @@ Tender: Draft → Published → (Bidder submits bid) → Evaluation → Awarded
 | Bidder creation (POST /api/bidders) | YES (201) | NO | Returns bidder with id, CR#, license. |
 | User listing (GET /api/admin/users) | YES (200) | NO | 9 users returned with roles. |
 
-### Untested Admin Features
+### ~~Untested~~ Admin Features — PHASE 1 COMPLETE
 
-#### A. User Management (AdminController)
-| Feature | Endpoint | Risk Level |
-|---------|----------|------------|
-| User creation **via UI** (user-form-dialog) | POST /api/admin/users | **HIGH** — first step of real E2E |
-| User editing via UI | PUT /api/admin/users/{id} | MEDIUM |
-| Toggle user active/inactive via UI | POST /api/admin/users/{id}/toggle-active | LOW |
-| User list pagination, search, role filter | GET /api/admin/users?search=... | LOW |
-| Password reset flow (forgot → email → reset) | POST /api/auth/forgot-password + reset-password | **HIGH** — critical auth flow |
+#### A. User Management (AdminController) — TESTED ✅
+| Feature | Endpoint | Status |
+|---------|----------|--------|
+| User creation **via UI** (user-form-dialog) | POST /api/admin/users | ✅ Fix 31 (password field) |
+| User editing via UI | PUT /api/admin/users/{id} | ✅ Fix 33 (204 handling) |
+| User deletion via UI | DELETE /api/admin/users/{id} | ✅ Fix 32 |
+| Toggle user active/inactive via UI | POST /api/admin/users/{id}/toggle-active | ✅ Verified |
+| User list pagination, search, role filter | GET /api/admin/users?search=... | ✅ Verified |
+| Password reset flow (forgot → email → reset) | POST /api/auth/forgot-password + reset-password | ⚠️ NOT TESTED — deferred |
 
-#### B. Bidder Management (BiddersController)
-| Feature | Endpoint | Risk Level |
-|---------|----------|------------|
-| Bidder creation **via UI** (bidder-form-dialog) | POST /api/bidders | **HIGH** — required before invitations |
-| Bidder editing (prequalification, deactivation) | PUT /api/bidders/{id} | MEDIUM |
-| Bidder search & filtering | GET /api/bidders?search=... | LOW |
+#### B. Bidder Management (BiddersController) — TESTED ✅
+| Feature | Endpoint | Status |
+|---------|----------|--------|
+| Bidder creation **via UI** (bidder-form-dialog) | POST /api/bidders | ✅ Verified |
+| Bidder editing (prequalification, deactivation) | PUT /api/bidders/{id} | ✅ Fix 34 (NDA removed) |
+| Bidder view mode | — | ✅ Fix 37 |
+| Bidder search & filtering | GET /api/bidders?search=... | ✅ Verified |
 
-#### C. Client Management (ClientsController)
-| Feature | Endpoint | Risk Level |
-|---------|----------|------------|
-| Client creation via UI (client-form-dialog) | POST /api/clients | MEDIUM |
-| Client listing, search | GET /api/clients | LOW |
-| Client editing | PUT /api/clients/{id} | LOW |
+#### C. Client Management (ClientsController) — TESTED ✅
+| Feature | Endpoint | Status |
+|---------|----------|--------|
+| Client creation via UI (client-form-dialog) | POST /api/clients | ✅ Fix 35 (fields wired) |
+| Client listing, search | GET /api/clients | ✅ Verified |
+| Client editing | PUT /api/clients/{id} | ✅ Fix 35 (all fields saving) |
+| Client view mode | — | ✅ Fix 36 |
+| Client tender count | GET /api/clients | ✅ Fix 35 (TenderCount mapped) |
 
-#### D. System Settings
-| Feature | Endpoint | Risk Level |
-|---------|----------|------------|
-| View system settings | GET /api/admin/settings | LOW |
-| Update settings | PUT /api/admin/settings/{key} | MEDIUM |
+#### D. System Settings — TESTED ✅
+| Feature | Endpoint | Status |
+|---------|----------|--------|
+| View system settings (all 4 tabs) | GET /api/admin/settings | ✅ Fix 38 (flat→grouped mapping) |
+| Update settings (all 4 tabs) | PUT /api/admin/settings/{key} | ✅ Fix 38 (individual key PUTs) |
 
-#### E. Audit Logs
-| Feature | Endpoint | Risk Level |
-|---------|----------|------------|
-| View audit log list with filters | GET /api/admin/audit-logs | LOW |
+#### E. Audit Logs — TESTED ✅
+| Feature | Endpoint | Status |
+|---------|----------|--------|
+| View audit log list with filters | GET /api/admin/audit-logs | ✅ Verified — settings PUT logged correctly |
 
 ### Untested Tender Lifecycle Features
 

@@ -32,6 +32,12 @@ public class CreateClientCommandHandler : IRequestHandler<CreateClientCommand, C
             Email = request.Email,
             Phone = request.Phone,
             Address = request.Address,
+            City = request.City,
+            Country = request.Country,
+            CRNumber = request.CRNumber,
+            VatNumber = request.VatNumber,
+            ContactEmail = request.ContactEmail,
+            ContactPhone = request.ContactPhone,
             IsActive = true,
             CreatedAt = DateTime.UtcNow
         };

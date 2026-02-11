@@ -33,6 +33,7 @@ public class GetClarificationByIdQueryHandler : IRequestHandler<GetClarification
             .Include(c => c.RelatedDocument)
             .Include(c => c.DuplicateOf)
             .Include(c => c.PublishedInBulletin)
+            .Include(c => c.Attachments)
             .Where(c => c.TenderId == request.TenderId && c.Id == request.ClarificationId)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -85,8 +86,21 @@ public class GetClarificationByIdQueryHandler : IRequestHandler<GetClarification
             dto.PublishedInBulletinNumber = clarification.PublishedInBulletin.BulletinNumber;
         }
 
-        // Note: Attachments and History would be populated from related tables
-        // if those tables exist in the domain model
+        // Populate attachments from the loaded navigation property
+        if (clarification.Attachments != null && clarification.Attachments.Count > 0)
+        {
+            dto.Attachments = clarification.Attachments
+                .OrderBy(a => a.CreatedAt)
+                .Select(a => new DTOs.ClarificationAttachmentDto
+                {
+                    Id = a.Id,
+                    FileName = a.FileName,
+                    FileSize = a.FileSizeBytes,
+                    ContentType = a.ContentType,
+                    UploadedAt = a.CreatedAt
+                })
+                .ToList();
+        }
 
         return dto;
     }

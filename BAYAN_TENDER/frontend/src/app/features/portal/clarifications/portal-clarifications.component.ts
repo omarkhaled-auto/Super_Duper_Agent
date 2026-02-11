@@ -16,7 +16,7 @@ import { DialogService, DynamicDialog } from 'primeng/dynamicdialog';
 import { MessageService } from 'primeng/api';
 import { forkJoin } from 'rxjs';
 import { PortalService } from '../../../core/services/portal.service';
-import { PortalClarification, PortalBulletin, PortalBulletinClarification } from '../../../core/models/portal.model';
+import { PortalClarification, PortalBulletin, PortalBulletinClarification, PortalBulletinAttachment } from '../../../core/models/portal.model';
 import { SubmitQuestionDialogComponent } from './submit-question-dialog.component';
 
 @Component({
@@ -152,6 +152,24 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
                               <span class="answer-label">Answer:</span>
                               <p>{{ qa.answer }}</p>
                             </div>
+                            @if (qa.attachments && qa.attachments.length > 0) {
+                              <div class="qa-attachments">
+                                <span class="attachments-label">
+                                  <i class="pi pi-paperclip"></i> Attachments
+                                </span>
+                                <div class="attachment-list">
+                                  @for (attachment of qa.attachments; track attachment.id) {
+                                    <button
+                                      pButton
+                                      class="p-button-sm p-button-outlined attachment-btn"
+                                      [label]="attachment.fileName"
+                                      icon="pi pi-download"
+                                      (click)="downloadAttachment(attachment)"
+                                    ></button>
+                                  }
+                                </div>
+                              </div>
+                            }
                           </div>
                         </div>
                       }
@@ -498,6 +516,35 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       color: var(--bayan-foreground, #09090b);
     }
 
+    /* Attachments */
+    .qa-attachments {
+      margin-top: 0.75rem;
+      padding: 0.75rem;
+      background: var(--bayan-card, #ffffff);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
+      border: 1px solid var(--bayan-border, #e4e4e7);
+    }
+
+    .attachments-label {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      font-weight: 600;
+      font-size: 0.8rem;
+      color: var(--bayan-muted-foreground, #71717a);
+      margin-bottom: 0.5rem;
+    }
+
+    .attachment-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .attachment-btn {
+      font-size: 0.8rem !important;
+    }
+
     /* My Questions Table */
     .reference-code {
       font-family: monospace;
@@ -693,6 +740,7 @@ export class PortalClarificationsComponent implements OnInit {
     this.isLoading.set(true);
     this.error.set(null);
 
+    // Fetch bulletins + bidder's own questions in parallel
     forkJoin({
       bulletins: this.portalService.getBulletins(this.tenderId),
       myQuestions: this.portalService.getMyQuestions(this.tenderId)
@@ -780,6 +828,26 @@ export class PortalClarificationsComponent implements OnInit {
       rejected: 'Rejected'
     };
     return labels[status] || status || 'Unknown';
+  }
+
+  downloadAttachment(attachment: PortalBulletinAttachment): void {
+    this.portalService.downloadClarificationAttachment(this.tenderId, attachment.id).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = attachment.fileName;
+        link.click();
+        window.URL.revokeObjectURL(url);
+      },
+      error: () => {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Download Failed',
+          detail: `Failed to download ${attachment.fileName}. Please try again.`
+        });
+      }
+    });
   }
 
   getStatusSeverity(status: string): 'secondary' | 'success' | 'info' | 'warn' | 'danger' | 'contrast' {

@@ -48,14 +48,14 @@ public class CreateTenderCommandValidator : AbstractValidator<CreateTenderComman
         RuleFor(x => x.ClarificationDeadline)
             .NotEmpty()
             .WithMessage("Clarification deadline is required.")
-            .GreaterThan(x => x.IssueDate)
-            .WithMessage("Clarification deadline must be after the issue date.");
+            .GreaterThanOrEqualTo(x => x.IssueDate)
+            .WithMessage("Clarification deadline must be on or after the issue date.");
 
         RuleFor(x => x.SubmissionDeadline)
             .NotEmpty()
             .WithMessage("Submission deadline is required.")
             .Must((command, submissionDeadline) =>
-                submissionDeadline > command.ClarificationDeadline.AddDays(3))
+                submissionDeadline >= command.ClarificationDeadline.AddDays(3))
             .WithMessage("Submission deadline must be at least 3 days after the clarification deadline.");
 
         RuleFor(x => x.OpeningDate)

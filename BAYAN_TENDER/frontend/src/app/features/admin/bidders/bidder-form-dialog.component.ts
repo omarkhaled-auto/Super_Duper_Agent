@@ -15,14 +15,13 @@ import {
   CreateBidderDto,
   UpdateBidderDto,
   PrequalificationStatus,
-  TradeSpecialization,
-  NdaStatus
+  TradeSpecialization
 } from '../../../core/models/bidder.model';
 import { BidderService } from '../../../core/services/bidder.service';
 
 export interface BidderFormDialogData {
   bidder?: Bidder;
-  mode: 'create' | 'edit';
+  mode: 'create' | 'edit' | 'view';
 }
 
 @Component({
@@ -176,16 +175,6 @@ export interface BidderFormDialogData {
                 }
               </div>
 
-              <div class="form-field">
-                <label for="ndaStatus">NDA Status</label>
-                <p-dropdown
-                  id="ndaStatus"
-                  [options]="ndaOptions"
-                  formControlName="ndaStatus"
-                  placeholder="Select NDA status"
-                  styleClass="w-full"
-                ></p-dropdown>
-              </div>
             </div>
           </p-tabPanel>
 
@@ -236,21 +225,38 @@ export interface BidderFormDialogData {
         <p-divider></p-divider>
 
         <div class="dialog-actions">
-          <button
-            pButton
-            type="button"
-            label="Cancel"
-            class="p-button-text"
-            (click)="onCancel()"
-          ></button>
-          <button
-            pButton
-            type="submit"
-            [label]="isCreateMode() ? 'Create Bidder' : 'Update Bidder'"
-            [loading]="isLoading()"
-            [disabled]="bidderForm.invalid || isLoading()"
-            data-testid="bidder-form-save"
-          ></button>
+          @if (isViewMode()) {
+            <button
+              pButton
+              type="button"
+              label="Close"
+              class="p-button-text"
+              (click)="onCancel()"
+            ></button>
+            <button
+              pButton
+              type="button"
+              label="Edit"
+              icon="pi pi-pencil"
+              (click)="switchToEdit()"
+            ></button>
+          } @else {
+            <button
+              pButton
+              type="button"
+              label="Cancel"
+              class="p-button-text"
+              (click)="onCancel()"
+            ></button>
+            <button
+              pButton
+              type="submit"
+              [label]="isCreateMode() ? 'Create Bidder' : 'Update Bidder'"
+              [loading]="isLoading()"
+              [disabled]="bidderForm.invalid || isLoading()"
+              data-testid="bidder-form-save"
+            ></button>
+          }
         </div>
       </form>
     </div>
@@ -327,6 +333,7 @@ export class BidderFormDialogComponent implements OnInit {
   errorMessage = signal<string | null>(null);
 
   isCreateMode = computed(() => this.dialogConfig.data?.mode === 'create');
+  isViewMode = signal(false);
 
   tradeOptions = [
     { label: 'IT Services', value: TradeSpecialization.IT_SERVICES },
@@ -350,12 +357,6 @@ export class BidderFormDialogComponent implements OnInit {
     { label: 'Rejected', value: PrequalificationStatus.REJECTED }
   ];
 
-  ndaOptions = [
-    { label: 'Not Sent', value: NdaStatus.NOT_SENT },
-    { label: 'Sent', value: NdaStatus.SENT },
-    { label: 'Signed', value: NdaStatus.SIGNED },
-    { label: 'Expired', value: NdaStatus.EXPIRED }
-  ];
 
   ngOnInit(): void {
     this.initForm();
@@ -374,11 +375,20 @@ export class BidderFormDialogComponent implements OnInit {
       address: [bidder?.address || ''],
       tradeSpecializations: [bidder?.tradeSpecializations || [], Validators.required],
       prequalificationStatus: [bidder?.prequalificationStatus || PrequalificationStatus.PENDING, Validators.required],
-      ndaStatus: [bidder?.ndaStatus || NdaStatus.NOT_SENT],
       contactPersonName: [bidder?.contactPersonName || ''],
       contactPersonEmail: [bidder?.contactPersonEmail || '', Validators.email],
       contactPersonPhone: [bidder?.contactPersonPhone || '']
     });
+
+    if (data?.mode === 'view') {
+      this.isViewMode.set(true);
+      this.bidderForm.disable();
+    }
+  }
+
+  switchToEdit(): void {
+    this.isViewMode.set(false);
+    this.bidderForm.enable();
   }
 
   isFieldInvalid(field: string): boolean {
@@ -387,6 +397,7 @@ export class BidderFormDialogComponent implements OnInit {
   }
 
   onSubmit(): void {
+    if (this.isViewMode()) return;
     if (this.bidderForm.invalid) {
       this.bidderForm.markAllAsTouched();
       return;
@@ -406,7 +417,6 @@ export class BidderFormDialogComponent implements OnInit {
         address: formValue.address || undefined,
         tradeSpecializations: formValue.tradeSpecializations,
         prequalificationStatus: formValue.prequalificationStatus,
-        ndaStatus: formValue.ndaStatus,
         contactPersonName: formValue.contactPersonName || undefined,
         contactPersonEmail: formValue.contactPersonEmail || undefined,
         contactPersonPhone: formValue.contactPersonPhone || undefined
@@ -430,7 +440,6 @@ export class BidderFormDialogComponent implements OnInit {
         address: formValue.address || undefined,
         tradeSpecializations: formValue.tradeSpecializations,
         prequalificationStatus: formValue.prequalificationStatus,
-        ndaStatus: formValue.ndaStatus,
         contactPersonName: formValue.contactPersonName || undefined,
         contactPersonEmail: formValue.contactPersonEmail || undefined,
         contactPersonPhone: formValue.contactPersonPhone || undefined

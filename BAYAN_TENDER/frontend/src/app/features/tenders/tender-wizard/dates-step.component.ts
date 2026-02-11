@@ -49,7 +49,7 @@ import { TooltipModule } from 'primeng/tooltip';
             <span class="date-icon" style="background-color: #fef3c7;">
               <i class="pi pi-question-circle"></i>
             </span>
-            Clarification Deadline
+            Clarification Deadline *
           </label>
           <p-datepicker
             id="clarificationDeadline"
@@ -63,6 +63,9 @@ import { TooltipModule } from 'primeng/tooltip';
             (onSelect)="onDateChange()"
           ></p-datepicker>
           <small class="date-hint">Last date for bidders to submit questions</small>
+          @if (datesGroup.get('clarificationDeadline')?.invalid && datesGroup.get('clarificationDeadline')?.touched) {
+            <small class="p-error">Clarification deadline is required</small>
+          }
         </div>
 
         <!-- Submission Deadline -->
@@ -107,7 +110,7 @@ import { TooltipModule } from 'primeng/tooltip';
             <span class="date-icon" style="background-color: #ffe4e6;">
               <i class="pi pi-folder-open"></i>
             </span>
-            Opening Date
+            Opening Date *
           </label>
           <p-datepicker
             id="openingDate"
@@ -121,6 +124,9 @@ import { TooltipModule } from 'primeng/tooltip';
             (onSelect)="onDateChange()"
           ></p-datepicker>
           <small class="date-hint">When bids will be officially opened</small>
+          @if (datesGroup.get('openingDate')?.invalid && datesGroup.get('openingDate')?.touched) {
+            <small class="p-error">Opening date is required</small>
+          }
         </div>
       </div>
 

@@ -610,6 +610,46 @@ export class ClarificationService {
     return this.api.download(`${this.basePath(tenderId)}/bulletins/${id}/download`);
   }
 
+  // ========== Attachment Methods ==========
+
+  /**
+   * Upload an attachment to a clarification.
+   * Backend endpoint: POST /api/tenders/{tenderId}/clarifications/{id}/attachments
+   */
+  uploadAttachment(tenderId: number, clarificationId: string, file: File): Observable<any> {
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+
+    return this.api.upload<any>(
+      `${this.basePath(tenderId)}/${clarificationId}/attachments`,
+      formData
+    ).pipe(
+      catchError(error => {
+        return throwError(() => error);
+      })
+    );
+  }
+
+  /**
+   * Get attachments for a clarification.
+   * Backend endpoint: GET /api/tenders/{tenderId}/clarifications/{id}/attachments
+   */
+  getAttachments(tenderId: number, clarificationId: string): Observable<any[]> {
+    return this.api.get<any[]>(
+      `${this.basePath(tenderId)}/${clarificationId}/attachments`
+    );
+  }
+
+  /**
+   * Get attachment download URL (admin).
+   * Backend endpoint: GET /api/tenders/{tenderId}/clarifications/{id}/attachments/{attachmentId}/download
+   */
+  downloadAttachment(tenderId: number, clarificationId: string, attachmentId: string): Observable<Blob> {
+    return this.api.download(
+      `${this.basePath(tenderId)}/${clarificationId}/attachments/${attachmentId}/download`
+    );
+  }
+
   clearError(): void {
     this._error.set(null);
   }

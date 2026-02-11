@@ -14,7 +14,8 @@ public class ClientMappingProfile : Profile
     public ClientMappingProfile()
     {
         // Entity to DTO
-        CreateMap<Client, ClientDto>();
+        CreateMap<Client, ClientDto>()
+            .ForMember(dest => dest.TenderCount, opt => opt.MapFrom(src => src.Tenders.Count));
 
         // CreateClientDto to Command
         CreateMap<CreateClientDto, CreateClientCommand>();

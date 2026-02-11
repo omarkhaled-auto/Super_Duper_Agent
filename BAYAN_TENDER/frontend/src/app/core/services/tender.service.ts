@@ -330,20 +330,27 @@ export class TenderService {
     };
   }
 
+  /** Normalize a Date/string to an ISO date string at noon UTC to avoid timezone issues */
+  private toNoonUtc(date: Date | string): string {
+    const d = typeof date === 'string' ? new Date(date) : new Date(date.getTime());
+    // Set to noon UTC to avoid any timezone boundary issues
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T12:00:00Z`;
+  }
+
   private mapCreateDtoToCommand(data: CreateTenderDto): any {
     const issueDate = data.dates.issueDate || new Date();
     const submissionDeadline = data.dates.submissionDeadline || new Date();
     // Backend requires non-nullable DateTime — clarification must be AFTER issue date
-    let clarificationDeadline = data.dates.clarificationDeadline;
-    if (!clarificationDeadline) {
-      const d = new Date(typeof issueDate === 'string' ? issueDate : issueDate.getTime());
+    let clarificationDeadline: Date | string = data.dates.clarificationDeadline || issueDate;
+    if (!data.dates.clarificationDeadline) {
+      const d = typeof issueDate === 'string' ? new Date(issueDate) : new Date(issueDate.getTime());
       d.setDate(d.getDate() + 7);
       clarificationDeadline = d;
     }
     // Opening date must be AFTER submission deadline
-    let openingDate = data.dates.openingDate;
-    if (!openingDate) {
-      const d = new Date(typeof submissionDeadline === 'string' ? submissionDeadline : submissionDeadline.getTime());
+    let openingDate: Date | string = data.dates.openingDate || submissionDeadline;
+    if (!data.dates.openingDate) {
+      const d = typeof submissionDeadline === 'string' ? new Date(submissionDeadline) : new Date(submissionDeadline.getTime());
       d.setDate(d.getDate() + 1);
       openingDate = d;
     }
@@ -356,10 +363,10 @@ export class TenderService {
       baseCurrency: data.currency || 'AED',
       estimatedValue: data.estimatedValue || null,
       bidValidityDays: data.bidValidityPeriod ?? 90,
-      issueDate,
-      clarificationDeadline,
-      submissionDeadline,
-      openingDate,
+      issueDate: this.toNoonUtc(issueDate),
+      clarificationDeadline: this.toNoonUtc(clarificationDeadline),
+      submissionDeadline: this.toNoonUtc(submissionDeadline),
+      openingDate: this.toNoonUtc(openingDate),
       technicalWeight: data.technicalWeight,
       commercialWeight: data.commercialWeight,
       evaluationCriteria: (data.evaluationCriteria || []).map((c, i) => ({

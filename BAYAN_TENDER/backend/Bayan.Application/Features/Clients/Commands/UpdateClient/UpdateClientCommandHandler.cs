@@ -37,6 +37,12 @@ public class UpdateClientCommandHandler : IRequestHandler<UpdateClientCommand, C
         client.Email = request.Email;
         client.Phone = request.Phone;
         client.Address = request.Address;
+        client.City = request.City;
+        client.Country = request.Country;
+        client.CRNumber = request.CRNumber;
+        client.VatNumber = request.VatNumber;
+        client.ContactEmail = request.ContactEmail;
+        client.ContactPhone = request.ContactPhone;
         client.IsActive = request.IsActive;
         client.UpdatedAt = DateTime.UtcNow;
         client.LastModifiedAt = DateTime.UtcNow;

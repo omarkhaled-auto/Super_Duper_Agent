@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, tap, catchError, throwError, map } from 'rxjs';
+import { Observable, tap, catchError, throwError, map, switchMap } from 'rxjs';
 import { ApiService } from './api.service';
 import { User, UserRole, mapApiRole } from '../models/user.model';
 import { PaginatedResponse, QueryParams } from '../models';
@@ -119,20 +119,26 @@ export class UserService {
       role: ROLE_TO_BACKEND[data.role] ?? 5,
       phone: data.phone || null,
       companyName: data.company || null,
+      password: data.password || null,
       sendInvitationEmail: false
     };
 
     return this.api.post<any>(this.endpoint, backendPayload).pipe(
-      map(result => mapApiUser({
-        email: data.email,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        role: data.role,
-        isActive: true,
-        phone: data.phone,
-        companyName: data.company,
-        ...result
-      })),
+      map(result => {
+        const user = mapApiUser({
+          id: result.userId ?? result.UserId,
+          email: data.email,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          role: data.role,
+          isActive: true,
+          phone: data.phone,
+          companyName: data.company,
+        });
+        // Attach temporaryPassword so the caller can display it
+        (user as any).temporaryPassword = result.temporaryPassword ?? result.TemporaryPassword ?? null;
+        return user;
+      }),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -147,21 +153,22 @@ export class UserService {
     this._error.set(null);
 
     // Transform frontend DTO to match backend UpdateUserRequest
-    const backendPayload = {
+    const backendPayload: Record<string, any> = {
       firstName: data.firstName,
       lastName: data.lastName,
       email: data.email,
-      role: data.role ? (ROLE_TO_BACKEND[data.role] ?? undefined) : undefined,
       phone: data.phone || null,
       companyName: data.company || null
     };
 
+    // Always send role as integer
+    if (data.role) {
+      backendPayload['role'] = ROLE_TO_BACKEND[data.role] ?? 5;
+    }
+
     return this.api.put<any>(`${this.endpoint}/${id}`, backendPayload).pipe(
-      map(() => ({
-        id: typeof id === 'string' ? id : id,
-        ...data,
-        updatedAt: new Date()
-      } as unknown as User)),
+      switchMap(() => this.api.get<any>(`${this.endpoint}/${id}`)),
+      map(raw => mapApiUser(raw)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);

@@ -153,4 +153,9 @@ public class Clarification : BaseEntity
     /// Bulletin this was published in.
     /// </summary>
     public virtual ClarificationBulletin? PublishedInBulletin { get; set; }
+
+    /// <summary>
+    /// File attachments associated with this clarification.
+    /// </summary>
+    public virtual ICollection<ClarificationAttachment> Attachments { get; set; } = new List<ClarificationAttachment>();
 }

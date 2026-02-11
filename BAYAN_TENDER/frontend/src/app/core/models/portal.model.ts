@@ -134,6 +134,13 @@ export interface PortalClarification {
   isAnonymous?: boolean;
 }
 
+export interface PortalBulletinAttachment {
+  id: string;
+  fileName: string;
+  fileSize: number;
+  contentType: string;
+}
+
 export interface PortalBulletinClarification {
   id: string;
   referenceNumber: string;
@@ -142,6 +149,7 @@ export interface PortalBulletinClarification {
   answer: string;
   relatedBoqSection?: string;
   answeredAt?: Date | string;
+  attachments?: PortalBulletinAttachment[];
 }
 
 export interface PortalBulletin {

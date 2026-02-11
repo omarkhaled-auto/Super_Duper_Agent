@@ -35,6 +35,30 @@ public class ClientConfiguration : IEntityTypeConfiguration<Client>
         builder.Property(e => e.Address)
             .HasColumnName("address");
 
+        builder.Property(e => e.City)
+            .HasColumnName("city")
+            .HasMaxLength(100);
+
+        builder.Property(e => e.Country)
+            .HasColumnName("country")
+            .HasMaxLength(100);
+
+        builder.Property(e => e.CRNumber)
+            .HasColumnName("cr_number")
+            .HasMaxLength(100);
+
+        builder.Property(e => e.VatNumber)
+            .HasColumnName("vat_number")
+            .HasMaxLength(100);
+
+        builder.Property(e => e.ContactEmail)
+            .HasColumnName("contact_email")
+            .HasMaxLength(255);
+
+        builder.Property(e => e.ContactPhone)
+            .HasColumnName("contact_phone")
+            .HasMaxLength(50);
+
         builder.Property(e => e.IsActive)
             .HasColumnName("is_active")
             .HasDefaultValue(true);

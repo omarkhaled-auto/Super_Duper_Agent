@@ -150,7 +150,7 @@ public class EmailService : IEmailService
         var activationSection = string.Empty;
         if (!string.IsNullOrEmpty(activationToken))
         {
-            var activationUrl = $"{_settings.PortalBaseUrl}/activate?token={Uri.EscapeDataString(activationToken)}&email={Uri.EscapeDataString(email)}";
+            var activationUrl = $"{_settings.PortalBaseUrl}/portal/activate?token={Uri.EscapeDataString(activationToken)}&email={Uri.EscapeDataString(email)}";
             activationSection = $@"
                             <table role=""presentation"" cellspacing=""0"" cellpadding=""0"" border=""0"" width=""100%"" style=""background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; margin: 0 0 20px;"">
                                 <tr>

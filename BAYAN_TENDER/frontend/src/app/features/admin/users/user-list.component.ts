@@ -381,11 +381,22 @@ export class UserListComponent implements OnInit {
         } else {
           // Add new user to list
           this.users.update(users => [...users, result]);
-          this.messageService.add({
-            severity: 'success',
-            summary: 'Success',
-            detail: 'User created successfully'
-          });
+          const tempPassword = (result as any).temporaryPassword;
+          if (tempPassword) {
+            this.messageService.add({
+              severity: 'info',
+              summary: 'Temporary Password',
+              detail: `User created. Temporary password: ${tempPassword}`,
+              sticky: true,
+              closable: true
+            });
+          } else {
+            this.messageService.add({
+              severity: 'success',
+              summary: 'Success',
+              detail: 'User created successfully'
+            });
+          }
         }
         this.applyFilters();
       }

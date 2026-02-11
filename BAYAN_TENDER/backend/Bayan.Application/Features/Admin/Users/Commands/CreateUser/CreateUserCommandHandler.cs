@@ -29,9 +29,12 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Creat
 
     public async Task<CreateUserResult> Handle(CreateUserCommand request, CancellationToken cancellationToken)
     {
-        // Generate temporary password
-        var temporaryPassword = _passwordHasher.GenerateTemporaryPassword();
-        var passwordHash = _passwordHasher.HashPassword(temporaryPassword);
+        // Use admin-provided password if set, otherwise generate temporary password
+        var temporaryPassword = string.IsNullOrWhiteSpace(request.Password)
+            ? _passwordHasher.GenerateTemporaryPassword()
+            : null;
+        var actualPassword = temporaryPassword ?? request.Password!;
+        var passwordHash = _passwordHasher.HashPassword(actualPassword);
 
         // Create user entity
         var user = new User
@@ -56,9 +59,9 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Creat
 
         _logger.LogInformation("Created new user with ID {UserId} and email {Email}", user.Id, user.Email);
 
-        // Optionally send invitation email
+        // Optionally send invitation email (only if temp password was generated)
         var emailSent = false;
-        if (request.SendInvitationEmail)
+        if (request.SendInvitationEmail && temporaryPassword != null)
         {
             try
             {
@@ -79,7 +82,7 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Creat
         return new CreateUserResult
         {
             UserId = user.Id,
-            // Only return the temporary password if email wasn't sent (for manual sharing)
+            // Only return the temporary password if one was generated and email wasn't sent
             TemporaryPassword = emailSent ? null : temporaryPassword,
             InvitationEmailSent = emailSent
         };

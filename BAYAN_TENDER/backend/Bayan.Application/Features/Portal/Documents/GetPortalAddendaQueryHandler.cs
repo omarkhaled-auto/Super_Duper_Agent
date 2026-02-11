@@ -29,9 +29,9 @@ public class GetPortalAddendaQueryHandler : IRequestHandler<GetPortalAddendaQuer
             throw new UnauthorizedAccessException("You do not have access to this tender.");
         }
 
-        if (tenderBidder.QualificationStatus != QualificationStatus.Qualified)
+        if (tenderBidder.QualificationStatus == QualificationStatus.Removed)
         {
-            throw new UnauthorizedAccessException($"You are not qualified for this tender. Current status: {tenderBidder.QualificationStatus}");
+            throw new UnauthorizedAccessException("You have been removed from this tender.");
         }
 
         // Get issued addenda with acknowledgment status

@@ -45,6 +45,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     // Clarifications
     public DbSet<Clarification> Clarifications => Set<Clarification>();
     public DbSet<ClarificationBulletin> ClarificationBulletins => Set<ClarificationBulletin>();
+    public DbSet<ClarificationAttachment> ClarificationAttachments => Set<ClarificationAttachment>();
 
     // BOQ
     public DbSet<BoqSection> BoqSections => Set<BoqSection>();

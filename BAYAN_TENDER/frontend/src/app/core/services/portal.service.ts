@@ -404,6 +404,14 @@ export class PortalService {
     );
   }
 
+  downloadClarificationAttachment(tenderId: string | number, attachmentId: string | number): Observable<Blob> {
+    return this.http.get(`${this.apiUrl}/tenders/${tenderId}/clarification-attachments/${attachmentId}/download`, {
+      responseType: 'blob'
+    }).pipe(
+      catchError(error => throwError(() => error))
+    );
+  }
+
   downloadBulletinPdf(tenderId: string | number, bulletinId: string | number): Observable<Blob> {
     return this.http.get(`${this.apiUrl}/tenders/${tenderId}/bulletins/${bulletinId}/download`, {
       responseType: 'blob'

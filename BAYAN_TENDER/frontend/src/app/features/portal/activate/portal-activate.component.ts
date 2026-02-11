@@ -106,6 +106,9 @@ import { PortalService } from '../../../core/services/portal.service';
                     styleClass="w-full"
                     inputStyleClass="w-full"
                   ></p-password>
+                  <small class="password-requirements">
+                    Min 8 characters, uppercase, lowercase, number, and special character (!&#64;#$%)
+                  </small>
                   @if (isFieldInvalid('password')) {
                     <small class="p-error">
                       @if (activateForm.get('password')?.errors?.['required']) {
@@ -316,6 +319,13 @@ import { PortalService } from '../../../core/services/portal.service';
     .p-error {
       display: block;
       margin-top: 0.25rem;
+    }
+
+    .password-requirements {
+      display: block;
+      margin-top: 0.25rem;
+      color: var(--bayan-muted-foreground, #71717a);
+      font-size: 0.75rem;
     }
 
     :host ::ng-deep {

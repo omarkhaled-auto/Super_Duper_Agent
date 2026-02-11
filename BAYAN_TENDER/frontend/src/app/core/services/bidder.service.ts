@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, tap, catchError, throwError, map } from 'rxjs';
+import { Observable, tap, catchError, throwError, map, switchMap } from 'rxjs';
 import { ApiService } from './api.service';
 import {
   Bidder,
@@ -144,7 +144,15 @@ export class BidderService {
     const backendPayload = mapBidderToBackend(data);
 
     return this.api.post<any>(this.endpoint, backendPayload).pipe(
-      map(raw => mapApiBidder({ ...backendPayload, ...raw })),
+      switchMap(raw => {
+        const id = raw?.id ?? raw?.Id;
+        if (id) {
+          return this.api.get<any>(`${this.endpoint}/${id}`).pipe(
+            map(fresh => mapApiBidder(fresh))
+          );
+        }
+        return [mapApiBidder({ ...backendPayload, ...raw })];
+      }),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -164,7 +172,8 @@ export class BidderService {
     const backendPayload = mapBidderToBackend(data);
 
     return this.api.put<any>(`${this.endpoint}/${id}`, backendPayload).pipe(
-      map(raw => mapApiBidder({ id, ...backendPayload, ...raw })),
+      switchMap(() => this.api.get<any>(`${this.endpoint}/${id}`)),
+      map(raw => mapApiBidder(raw)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);

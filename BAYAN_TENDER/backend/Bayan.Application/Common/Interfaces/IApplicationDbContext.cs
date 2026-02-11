@@ -74,6 +74,11 @@ public interface IApplicationDbContext
     DbSet<ClarificationBulletin> ClarificationBulletins { get; }
 
     /// <summary>
+    /// Gets the ClarificationAttachments DbSet.
+    /// </summary>
+    DbSet<ClarificationAttachment> ClarificationAttachments { get; }
+
+    /// <summary>
     /// Gets the Addenda DbSet.
     /// </summary>
     DbSet<Addendum> Addenda { get; }

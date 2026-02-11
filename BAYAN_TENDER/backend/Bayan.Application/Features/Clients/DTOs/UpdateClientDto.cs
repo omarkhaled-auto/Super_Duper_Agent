@@ -31,6 +31,36 @@ public class UpdateClientDto
     public string? Address { get; set; }
 
     /// <summary>
+    /// City where the client is located.
+    /// </summary>
+    public string? City { get; set; }
+
+    /// <summary>
+    /// Country where the client is located.
+    /// </summary>
+    public string? Country { get; set; }
+
+    /// <summary>
+    /// Commercial Registration Number.
+    /// </summary>
+    public string? CRNumber { get; set; }
+
+    /// <summary>
+    /// VAT registration number.
+    /// </summary>
+    public string? VatNumber { get; set; }
+
+    /// <summary>
+    /// Contact person's email address.
+    /// </summary>
+    public string? ContactEmail { get; set; }
+
+    /// <summary>
+    /// Contact person's phone number.
+    /// </summary>
+    public string? ContactPhone { get; set; }
+
+    /// <summary>
     /// Indicates whether the client is currently active.
     /// </summary>
     public bool IsActive { get; set; } = true;

@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, tap, catchError, throwError, map } from 'rxjs';
+import { Observable, tap, catchError, throwError, map, switchMap } from 'rxjs';
 import { ApiService } from './api.service';
 import { Client, CreateClientDto, UpdateClientDto } from '../models/client.model';
 import { PaginatedResponse, QueryParams } from '../models';
@@ -26,13 +26,33 @@ function mapApiClient(raw: any): Client {
     vatNumber: raw.vatNumber ?? raw.VatNumber ?? undefined,
     contactPerson: raw.contactPerson ?? raw.ContactPerson ?? undefined,
     contactEmail: raw.contactEmail ?? raw.ContactEmail ?? undefined,
-    contactPhone: raw.contactPhone ?? raw.ContactPhone ?? raw.phone ?? raw.Phone ?? undefined,
+    contactPhone: raw.contactPhone ?? raw.ContactPhone ?? undefined,
     isActive: raw.isActive ?? raw.IsActive ?? true,
     createdAt: raw.createdAt ?? raw.CreatedAt,
     updatedAt: raw.updatedAt ?? raw.UpdatedAt,
-    tendersCount: raw.tendersCount ?? raw.tenderCount ?? raw.TenderCount ?? 0,
+    tendersCount: raw.tenderCount ?? raw.TenderCount ?? raw.tendersCount ?? 0,
     totalContractValue: raw.totalContractValue ?? raw.TotalContractValue ?? 0
   };
+}
+
+/** Converts frontend create/update DTO to backend payload shape */
+function mapClientToBackend(data: CreateClientDto | UpdateClientDto): any {
+  const payload: any = {};
+  if ('name' in data && data.name !== undefined) payload.name = data.name;
+  if ('email' in data && data.email !== undefined) payload.email = data.email;
+  if ('phone' in data && data.phone !== undefined) payload.phone = data.phone || null;
+  if ('address' in data && data.address !== undefined) payload.address = data.address || null;
+  if ('city' in data && data.city !== undefined) payload.city = data.city || null;
+  if ('country' in data && data.country !== undefined) payload.country = data.country || null;
+  if ('crNumber' in data && data.crNumber !== undefined) payload.crNumber = data.crNumber || null;
+  if ('vatNumber' in data && data.vatNumber !== undefined) payload.vatNumber = data.vatNumber || null;
+  if ('contactPerson' in data && data.contactPerson !== undefined) payload.contactPerson = data.contactPerson || null;
+  if ('contactEmail' in data && data.contactEmail !== undefined) payload.contactEmail = data.contactEmail || null;
+  if ('contactPhone' in data && data.contactPhone !== undefined) payload.contactPhone = data.contactPhone || null;
+  if ('isActive' in data && (data as UpdateClientDto).isActive !== undefined) {
+    payload.isActive = (data as UpdateClientDto).isActive;
+  }
+  return payload;
 }
 
 @Injectable({
@@ -85,8 +105,18 @@ export class ClientService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return this.api.post<any>(this.endpoint, data).pipe(
-      map(raw => mapApiClient({ ...data, ...raw })),
+    const backendPayload = mapClientToBackend(data);
+
+    return this.api.post<any>(this.endpoint, backendPayload).pipe(
+      switchMap(raw => {
+        const id = raw?.id ?? raw?.Id;
+        if (id) {
+          return this.api.get<any>(`${this.endpoint}/${id}`).pipe(
+            map(fresh => mapApiClient(fresh))
+          );
+        }
+        return [mapApiClient({ ...backendPayload, ...raw })];
+      }),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -100,8 +130,11 @@ export class ClientService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return this.api.put<any>(`${this.endpoint}/${id}`, data).pipe(
-      map(raw => mapApiClient({ id, ...data, ...raw })),
+    const backendPayload = mapClientToBackend(data);
+
+    return this.api.put<any>(`${this.endpoint}/${id}`, backendPayload).pipe(
+      switchMap(() => this.api.get<any>(`${this.endpoint}/${id}`)),
+      map(raw => mapApiClient(raw)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);

@@ -284,7 +284,7 @@ public class PortalController : ControllerBase
             var tenderBidder = await _context.TenderBidders
                 .FirstOrDefaultAsync(tb => tb.TenderId == tenderId && tb.BidderId == bidderId, cancellationToken);
 
-            if (tenderBidder == null || tenderBidder.QualificationStatus != QualificationStatus.Qualified)
+            if (tenderBidder == null || tenderBidder.QualificationStatus == QualificationStatus.Removed)
             {
                 return Unauthorized(ApiResponse<object>.FailureResponse("You do not have access to this tender."));
             }
@@ -594,7 +594,7 @@ public class PortalController : ControllerBase
             var tenderBidder = await _context.TenderBidders
                 .FirstOrDefaultAsync(tb => tb.TenderId == tenderId && tb.BidderId == bidderId, cancellationToken);
 
-            if (tenderBidder == null || tenderBidder.QualificationStatus != QualificationStatus.Qualified)
+            if (tenderBidder == null || tenderBidder.QualificationStatus == QualificationStatus.Removed)
             {
                 return Unauthorized(ApiResponse<object>.FailureResponse("You do not have access to this tender."));
             }
@@ -615,6 +615,60 @@ public class PortalController : ControllerBase
 
             var stream = await _fileStorage.DownloadFileAsync(bulletin.PdfPath, cancellationToken);
             return File(stream, "application/pdf", $"Bulletin-{bulletin.BulletinNumber}.pdf");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(ApiResponse<object>.FailureResponse(ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Downloads an attachment file from a published clarification.
+    /// </summary>
+    /// <param name="tenderId">The tender ID.</param>
+    /// <param name="attachmentId">The attachment ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The file stream.</returns>
+    [HttpGet("tenders/{tenderId:guid}/clarification-attachments/{attachmentId:guid}/download")]
+    [Authorize(Roles = "Bidder")]
+    [ProducesResponseType(typeof(FileStreamResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DownloadClarificationAttachment(
+        Guid tenderId,
+        Guid attachmentId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var bidderId = GetBidderId();
+
+            // Validate bidder access
+            var tenderBidder = await _context.TenderBidders
+                .FirstOrDefaultAsync(tb => tb.TenderId == tenderId && tb.BidderId == bidderId, cancellationToken);
+
+            if (tenderBidder == null || tenderBidder.QualificationStatus == QualificationStatus.Removed)
+            {
+                return Unauthorized(ApiResponse<object>.FailureResponse("You do not have access to this tender."));
+            }
+
+            // Get attachment — only allow if the clarification belongs to this tender
+            // and is published (has a bulletin) or was submitted by this bidder
+            var attachment = await _context.ClarificationAttachments
+                .Include(a => a.Clarification)
+                .FirstOrDefaultAsync(a => a.Id == attachmentId
+                    && a.Clarification.TenderId == tenderId
+                    && (a.Clarification.PublishedInBulletinId != null
+                        || a.Clarification.SubmittedByBidderId == bidderId),
+                    cancellationToken);
+
+            if (attachment == null)
+            {
+                return NotFound(ApiResponse<object>.FailureResponse("Attachment not found."));
+            }
+
+            var stream = await _fileStorage.DownloadFileAsync(attachment.FilePath, cancellationToken);
+            return File(stream, attachment.ContentType, attachment.FileName);
         }
         catch (UnauthorizedAccessException ex)
         {

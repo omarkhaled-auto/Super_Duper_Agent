@@ -100,7 +100,7 @@ export class ApiService {
 
   put<T>(endpoint: string, data: unknown): Observable<T> {
     return this.http.put<ApiResponse<T>>(`${this.baseUrl}${endpoint}`, data).pipe(
-      map(response => response.data),
+      map(response => response?.data ?? (null as unknown as T)),
       catchError(this.handleError)
     );
   }

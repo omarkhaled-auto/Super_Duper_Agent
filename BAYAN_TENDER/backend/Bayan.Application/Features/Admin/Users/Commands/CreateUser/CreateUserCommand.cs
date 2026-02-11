@@ -52,6 +52,11 @@ public record CreateUserCommand : IRequest<CreateUserResult>
     /// Whether to send an invitation email with the temporary password.
     /// </summary>
     public bool SendInvitationEmail { get; init; } = true;
+
+    /// <summary>
+    /// Optional admin-provided password. If set, uses this instead of generating a temporary password.
+    /// </summary>
+    public string? Password { get; init; }
 }
 
 /// <summary>

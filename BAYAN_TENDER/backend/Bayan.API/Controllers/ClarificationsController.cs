@@ -1,3 +1,4 @@
+using Bayan.Application.Common.Interfaces;
 using Bayan.Application.Common.Models;
 using Bayan.Application.Features.Clarifications.Commands.ApproveAnswer;
 using Bayan.Application.Features.Clarifications.Commands.AssignClarification;
@@ -13,10 +14,12 @@ using Bayan.Application.Features.Clarifications.Queries.GetClarificationById;
 using Bayan.Application.Features.Clarifications.Queries.GetClarificationBulletins;
 using Bayan.Application.Features.Clarifications.Queries.GetClarifications;
 using Bayan.Application.Features.Clarifications.Queries.GetNextClarificationRef;
+using Bayan.Domain.Entities;
 using Bayan.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace Bayan.API.Controllers;
@@ -30,10 +33,17 @@ namespace Bayan.API.Controllers;
 public class ClarificationsController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly IApplicationDbContext _context;
+    private readonly IFileStorageService _fileStorage;
 
-    public ClarificationsController(IMediator mediator)
+    public ClarificationsController(
+        IMediator mediator,
+        IApplicationDbContext context,
+        IFileStorageService fileStorage)
     {
         _mediator = mediator;
+        _context = context;
+        _fileStorage = fileStorage;
     }
 
     /// <summary>
@@ -435,5 +445,144 @@ public class ClarificationsController : ControllerBase
 
         var result = await _mediator.Send(command, cancellationToken);
         return Ok(ApiResponse<ClarificationDto>.SuccessResponse(result));
+    }
+
+    /// <summary>
+    /// Uploads an attachment file for a clarification.
+    /// </summary>
+    /// <param name="tenderId">The tender's unique identifier.</param>
+    /// <param name="id">The clarification's unique identifier.</param>
+    /// <param name="file">The file to upload.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The attachment metadata.</returns>
+    [HttpPost("{id:guid}/attachments")]
+    [ProducesResponseType(typeof(ClarificationAttachmentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [RequestSizeLimit(25 * 1024 * 1024)] // 25 MB limit
+    public async Task<ActionResult<ClarificationAttachmentDto>> UploadAttachment(
+        Guid tenderId,
+        Guid id,
+        IFormFile file,
+        CancellationToken cancellationToken = default)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(ApiResponse<object>.FailureResponse("No file provided."));
+        }
+
+        // Verify clarification exists and belongs to this tender
+        var clarification = await _context.Clarifications
+            .FirstOrDefaultAsync(c => c.Id == id && c.TenderId == tenderId, cancellationToken);
+
+        if (clarification == null)
+        {
+            return NotFound(ApiResponse<object>.FailureResponse("Clarification not found."));
+        }
+
+        var userId = GetCurrentUserId();
+
+        // Upload to MinIO
+        var storagePath = $"tender-documents/{tenderId}/clarifications/{id}";
+        using var stream = file.OpenReadStream();
+        var filePath = await _fileStorage.UploadFileAsync(
+            stream, file.FileName, file.ContentType, storagePath, cancellationToken);
+
+        // Create attachment record
+        var attachment = new ClarificationAttachment
+        {
+            Id = Guid.NewGuid(),
+            ClarificationId = id,
+            FileName = file.FileName,
+            FilePath = filePath,
+            FileSizeBytes = file.Length,
+            ContentType = file.ContentType,
+            UploadedByUserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.ClarificationAttachments.Add(attachment);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        var dto = new ClarificationAttachmentDto
+        {
+            Id = attachment.Id,
+            FileName = attachment.FileName,
+            FileSize = attachment.FileSizeBytes,
+            ContentType = attachment.ContentType,
+            UploadedAt = attachment.CreatedAt
+        };
+
+        return Ok(ApiResponse<ClarificationAttachmentDto>.SuccessResponse(dto));
+    }
+
+    /// <summary>
+    /// Downloads an attachment file for a clarification.
+    /// </summary>
+    /// <param name="tenderId">The tender's unique identifier.</param>
+    /// <param name="id">The clarification's unique identifier.</param>
+    /// <param name="attachmentId">The attachment's unique identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The file stream.</returns>
+    [HttpGet("{id:guid}/attachments/{attachmentId:guid}/download")]
+    [ProducesResponseType(typeof(FileStreamResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DownloadAttachment(
+        Guid tenderId,
+        Guid id,
+        Guid attachmentId,
+        CancellationToken cancellationToken = default)
+    {
+        var attachment = await _context.ClarificationAttachments
+            .FirstOrDefaultAsync(a => a.Id == attachmentId
+                && a.ClarificationId == id
+                && a.Clarification.TenderId == tenderId, cancellationToken);
+
+        if (attachment == null)
+        {
+            return NotFound(ApiResponse<object>.FailureResponse("Attachment not found."));
+        }
+
+        var stream = await _fileStorage.DownloadFileAsync(attachment.FilePath, cancellationToken);
+        return File(stream, attachment.ContentType, attachment.FileName);
+    }
+
+    /// <summary>
+    /// Gets attachments for a clarification.
+    /// </summary>
+    /// <param name="tenderId">The tender's unique identifier.</param>
+    /// <param name="id">The clarification's unique identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of attachments.</returns>
+    [HttpGet("{id:guid}/attachments")]
+    [ProducesResponseType(typeof(List<ClarificationAttachmentDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<List<ClarificationAttachmentDto>>> GetAttachments(
+        Guid tenderId,
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        var exists = await _context.Clarifications
+            .AnyAsync(c => c.Id == id && c.TenderId == tenderId, cancellationToken);
+
+        if (!exists)
+        {
+            return NotFound(ApiResponse<object>.FailureResponse("Clarification not found."));
+        }
+
+        var attachments = await _context.ClarificationAttachments
+            .Where(a => a.ClarificationId == id)
+            .OrderBy(a => a.CreatedAt)
+            .Select(a => new ClarificationAttachmentDto
+            {
+                Id = a.Id,
+                FileName = a.FileName,
+                FileSize = a.FileSizeBytes,
+                ContentType = a.ContentType,
+                UploadedAt = a.CreatedAt
+            })
+            .ToListAsync(cancellationToken);
+
+        return Ok(ApiResponse<List<ClarificationAttachmentDto>>.SuccessResponse(attachments));
     }
 }

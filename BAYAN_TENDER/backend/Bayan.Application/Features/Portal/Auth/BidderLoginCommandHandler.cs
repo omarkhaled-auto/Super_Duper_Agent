@@ -68,9 +68,9 @@ public class BidderLoginCommandHandler : IRequestHandler<BidderLoginCommand, Bid
                 throw new UnauthorizedAccessException("You do not have access to this tender.");
             }
 
-            if (tenderBidder.QualificationStatus != QualificationStatus.Qualified)
+            if (tenderBidder.QualificationStatus == QualificationStatus.Removed)
             {
-                throw new UnauthorizedAccessException($"You are not qualified for this tender. Current status: {tenderBidder.QualificationStatus}");
+                throw new UnauthorizedAccessException("You have been removed from this tender.");
             }
         }
 
@@ -101,16 +101,19 @@ public class BidderLoginCommandHandler : IRequestHandler<BidderLoginCommand, Bid
         _context.BidderRefreshTokens.Add(refreshToken);
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Build tender access list
-        var qualifiedTenderIds = bidder.TenderBidders
-            .Where(tb => tb.QualificationStatus == QualificationStatus.Qualified)
+        // Build tender access list — include all non-removed tenders (Pending, Qualified, Rejected)
+        var accessibleTenders = bidder.TenderBidders
+            .Where(tb => tb.QualificationStatus != QualificationStatus.Removed)
+            .ToList();
+
+        var accessibleTenderIds = accessibleTenders
             .Select(tb => tb.TenderId)
             .ToList();
 
         // Check which tenders have submitted bids
         var submittedTenderIds = await _context.BidSubmissions
             .Where(b => b.BidderId == bidder.Id
-                     && qualifiedTenderIds.Contains(b.TenderId)
+                     && accessibleTenderIds.Contains(b.TenderId)
                      && b.ReceiptNumber != null
                      && b.ReceiptNumber != string.Empty)
             .Select(b => b.TenderId)
@@ -118,8 +121,7 @@ public class BidderLoginCommandHandler : IRequestHandler<BidderLoginCommand, Bid
 
         var submittedSet = new HashSet<Guid>(submittedTenderIds);
 
-        var tenderAccess = bidder.TenderBidders
-            .Where(tb => tb.QualificationStatus == QualificationStatus.Qualified)
+        var tenderAccess = accessibleTenders
             .Select(tb => new BidderTenderAccessDto
             {
                 TenderId = tb.TenderId,

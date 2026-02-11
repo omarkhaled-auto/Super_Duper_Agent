@@ -138,26 +138,26 @@ import {
                   ></p-inputNumber>
                 </div>
                 <div class="setting-item">
-                  <label for="minBidAmount">Minimum Bid Amount (SAR)</label>
+                  <label for="minBidAmount">Minimum Bid Amount (AED)</label>
                   <p-inputNumber
                     id="minBidAmount"
                     [(ngModel)]="tenderSettings.minBidAmount"
                     [min]="0"
                     mode="currency"
-                    currency="SAR"
-                    locale="en-SA"
+                    currency="AED"
+                    locale="en-AE"
                     styleClass="w-full"
                   ></p-inputNumber>
                 </div>
                 <div class="setting-item">
-                  <label for="maxBidAmount">Maximum Bid Amount (SAR)</label>
+                  <label for="maxBidAmount">Maximum Bid Amount (AED)</label>
                   <p-inputNumber
                     id="maxBidAmount"
                     [(ngModel)]="tenderSettings.maxBidAmount"
                     [min]="0"
                     mode="currency"
-                    currency="SAR"
-                    locale="en-SA"
+                    currency="AED"
+                    locale="en-AE"
                     styleClass="w-full"
                   ></p-inputNumber>
                 </div>
@@ -570,10 +570,10 @@ export class SettingsComponent implements OnInit {
   ];
 
   currencyOptions = [
+    { label: 'AED - UAE Dirham', value: 'AED' },
     { label: 'SAR - Saudi Riyal', value: 'SAR' },
     { label: 'USD - US Dollar', value: 'USD' },
-    { label: 'EUR - Euro', value: 'EUR' },
-    { label: 'AED - UAE Dirham', value: 'AED' }
+    { label: 'EUR - Euro', value: 'EUR' }
   ];
 
   ngOnInit(): void {

@@ -11,6 +11,7 @@ using Bayan.Application.Features.Admin.Users.Commands.UpdateUser;
 using Bayan.Application.Features.Admin.Users.Queries.GetUserById;
 using Bayan.Application.Features.Admin.Users.Queries.GetUsers;
 using Bayan.Domain.Enums;
+using Bayan.Application.Common.Interfaces;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -26,10 +27,12 @@ namespace Bayan.API.Controllers;
 public class AdminController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly IApplicationDbContext _context;
 
-    public AdminController(IMediator mediator)
+    public AdminController(IMediator mediator, IApplicationDbContext context)
     {
         _mediator = mediator;
+        _context = context;
     }
 
     #region User Management
@@ -114,7 +117,8 @@ public class AdminController : ControllerBase
             CompanyName = request.CompanyName,
             Department = request.Department,
             JobTitle = request.JobTitle,
-            SendInvitationEmail = request.SendInvitationEmail
+            SendInvitationEmail = request.SendInvitationEmail,
+            Password = request.Password
         };
 
         var result = await _mediator.Send(command, cancellationToken);
@@ -184,6 +188,36 @@ public class AdminController : ControllerBase
         }
 
         return Ok(ApiResponse<ToggleUserActiveResult>.SuccessResponse(result));
+    }
+
+    /// <summary>
+    /// Deletes a user by ID. Cannot delete yourself.
+    /// </summary>
+    [HttpDelete("users/{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> DeleteUser(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        // Prevent self-deletion
+        var currentUserIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (Guid.TryParse(currentUserIdClaim, out var currentUserId) && currentUserId == id)
+        {
+            return BadRequest(ApiResponse<object>.FailureResponse("You cannot delete your own account."));
+        }
+
+        var user = await _context.Users.FindAsync(new object[] { id }, cancellationToken);
+        if (user == null)
+        {
+            return NotFound(ApiResponse<object>.FailureResponse("User not found."));
+        }
+
+        _context.Users.Remove(user);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return NoContent();
     }
 
     #endregion
@@ -347,6 +381,11 @@ public record CreateUserRequest
     /// Whether to send an invitation email with the temporary password. Default is true.
     /// </summary>
     public bool SendInvitationEmail { get; init; } = true;
+
+    /// <summary>
+    /// Optional admin-provided password. If set, uses this instead of generating a temporary password.
+    /// </summary>
+    public string? Password { get; init; }
 }
 
 /// <summary>

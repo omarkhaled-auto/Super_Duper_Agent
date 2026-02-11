@@ -447,11 +447,25 @@ export class ClientListComponent implements OnInit {
   }
 
   viewClient(client: Client): void {
-    // In production, navigate to client detail page
-    this.messageService.add({
-      severity: 'info',
-      summary: 'View Client',
-      detail: `Viewing details for ${client.name}`
+    const dialogData: ClientFormDialogData = {
+      client,
+      mode: 'view'
+    };
+
+    const ref = this.dialogService.open(ClientFormDialogComponent, {
+      header: `Client: ${client.name}`,
+      width: '700px',
+      contentStyle: { overflow: 'auto' },
+      data: dialogData
+    });
+
+    ref.onClose.subscribe((result: Client | undefined) => {
+      if (result) {
+        this.clients.update(clients =>
+          clients.map(c => c.id === result.id ? result : c)
+        );
+        this.applyFilters();
+      }
     });
   }
 

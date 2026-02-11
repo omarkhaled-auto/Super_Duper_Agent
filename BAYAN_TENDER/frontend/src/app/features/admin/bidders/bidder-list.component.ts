@@ -18,8 +18,7 @@ import { MultiSelectModule } from 'primeng/multiselect';
 import {
   Bidder,
   PrequalificationStatus,
-  TradeSpecialization,
-  NdaStatus
+  TradeSpecialization
 } from '../../../core/models/bidder.model';
 import { BidderService } from '../../../core/services/bidder.service';
 import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-dialog.component';
@@ -116,7 +115,6 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
               <th pSortableColumn="email">Email <p-sortIcon field="email"></p-sortIcon></th>
               <th>Trade Specialization</th>
               <th pSortableColumn="prequalificationStatus">Prequalification <p-sortIcon field="prequalificationStatus"></p-sortIcon></th>
-              <th pSortableColumn="ndaStatus">NDA Status <p-sortIcon field="ndaStatus"></p-sortIcon></th>
               <th>Actions</th>
             </tr>
           </ng-template>
@@ -163,12 +161,6 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
                 ></p-tag>
               </td>
               <td>
-                <p-tag
-                  [value]="getNdaLabel(bidder.ndaStatus)"
-                  [severity]="getNdaSeverity(bidder.ndaStatus)"
-                ></p-tag>
-              </td>
-              <td>
                 <div class="action-buttons">
                   <button
                     pButton
@@ -210,7 +202,7 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
           </ng-template>
           <ng-template pTemplate="emptymessage">
             <tr>
-              <td colspan="6" class="text-center p-4">
+              <td colspan="5" class="text-center p-4">
                 <div class="empty-state">
                   <i class="pi pi-building" style="font-size: 3rem; color: var(--bayan-muted-foreground, #71717a);"></i>
                   <p>No bidders found.</p>
@@ -513,8 +505,26 @@ export class BidderListComponent implements OnInit {
   }
 
   viewBidder(bidder: Bidder): void {
-    // For now, open edit dialog in view mode - could be a separate detail view
-    this.editBidder(bidder);
+    const dialogData: BidderFormDialogData = {
+      bidder,
+      mode: 'view'
+    };
+
+    const ref = this.dialogService.open(BidderFormDialogComponent, {
+      header: `Bidder: ${bidder.companyNameEn}`,
+      width: '700px',
+      contentStyle: { overflow: 'auto' },
+      data: dialogData
+    });
+
+    ref.onClose.subscribe((result: Bidder | undefined) => {
+      if (result) {
+        this.bidders.update(bidders =>
+          bidders.map(b => b.id === result.id ? result : b)
+        );
+        this.applyFilters();
+      }
+    });
   }
 
   editBidder(bidder: Bidder): void {
@@ -618,23 +628,4 @@ export class BidderListComponent implements OnInit {
     return severities[status];
   }
 
-  getNdaLabel(status: NdaStatus): string {
-    const labels: Record<NdaStatus, string> = {
-      [NdaStatus.NOT_SENT]: 'Not Sent',
-      [NdaStatus.SENT]: 'Sent',
-      [NdaStatus.SIGNED]: 'Signed',
-      [NdaStatus.EXPIRED]: 'Expired'
-    };
-    return labels[status];
-  }
-
-  getNdaSeverity(status: NdaStatus): 'success' | 'secondary' | 'info' | 'warn' | 'danger' | 'contrast' | undefined {
-    const severities: Record<NdaStatus, 'success' | 'secondary' | 'info' | 'warn' | 'danger'> = {
-      [NdaStatus.NOT_SENT]: 'secondary',
-      [NdaStatus.SENT]: 'info',
-      [NdaStatus.SIGNED]: 'success',
-      [NdaStatus.EXPIRED]: 'danger'
-    };
-    return severities[status];
-  }
 }

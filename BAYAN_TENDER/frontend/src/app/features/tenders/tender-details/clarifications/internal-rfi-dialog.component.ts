@@ -15,6 +15,7 @@ import {
   Validators,
   ReactiveFormsModule
 } from '@angular/forms';
+import { forkJoin, of } from 'rxjs';
 import { DialogModule } from 'primeng/dialog';
 import { InputTextModule } from 'primeng/inputtext';
 import { InputTextarea } from 'primeng/inputtextarea';
@@ -396,8 +397,26 @@ export class InternalRfiDialogComponent implements OnInit, OnChanges {
 
       this.clarificationService.createClarification(createDto).subscribe({
         next: (clarification) => {
-          this.isLoading = false;
-          this.saved.emit(clarification);
+          // Upload attachments if any
+          if (this.selectedFiles.length > 0) {
+            const uploads$ = this.selectedFiles.map(file =>
+              this.clarificationService.uploadAttachment(this.tenderId, clarification.id as any, file)
+            );
+            forkJoin(uploads$).subscribe({
+              next: () => {
+                this.isLoading = false;
+                this.saved.emit(clarification);
+              },
+              error: () => {
+                // RFI created successfully, but some attachments failed — still emit success
+                this.isLoading = false;
+                this.saved.emit(clarification);
+              }
+            });
+          } else {
+            this.isLoading = false;
+            this.saved.emit(clarification);
+          }
         },
         error: (error) => {
           this.isLoading = false;

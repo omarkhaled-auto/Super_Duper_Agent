@@ -296,9 +296,9 @@ export class TenderWizardComponent implements OnInit, OnDestroy {
       bidValidityPeriod: [90],
       dates: this.fb.group({
         issueDate: [new Date(), Validators.required],
-        clarificationDeadline: [null],
+        clarificationDeadline: [null, Validators.required],
         submissionDeadline: [null, Validators.required],
-        openingDate: [null]
+        openingDate: [null, Validators.required]
       }),
       technicalWeight: [70, [Validators.required, Validators.min(0), Validators.max(100)]],
       commercialWeight: [30, [Validators.required, Validators.min(0), Validators.max(100)]],
@@ -448,7 +448,9 @@ export class TenderWizardComponent implements OnInit, OnDestroy {
         const datesGroup = this.tenderForm.get('dates') as FormGroup;
         return (
           datesGroup.get('issueDate')?.valid &&
-          datesGroup.get('submissionDeadline')?.valid
+          datesGroup.get('clarificationDeadline')?.valid &&
+          datesGroup.get('submissionDeadline')?.valid &&
+          datesGroup.get('openingDate')?.valid
         ) ?? false;
 
       case 2: // Criteria
@@ -475,9 +477,11 @@ export class TenderWizardComponent implements OnInit, OnDestroy {
         break;
 
       case 1:
-        const datesGroup = this.tenderForm.get('dates') as FormGroup;
-        datesGroup.get('issueDate')?.markAsTouched();
-        datesGroup.get('submissionDeadline')?.markAsTouched();
+        const datesGroup2 = this.tenderForm.get('dates') as FormGroup;
+        datesGroup2.get('issueDate')?.markAsTouched();
+        datesGroup2.get('clarificationDeadline')?.markAsTouched();
+        datesGroup2.get('submissionDeadline')?.markAsTouched();
+        datesGroup2.get('openingDate')?.markAsTouched();
         break;
 
       case 2:

@@ -364,7 +364,9 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
 
   private loadTenderInfo(): void {
     if (this.tenderId && !this.tender()) {
-      this.portalService.getTenderInfo(this.tenderId).subscribe();
+      this.portalService.getTenderInfo(this.tenderId).subscribe({
+        next: () => this.updateCountdown()
+      });
     }
   }
 
