@@ -638,6 +638,7 @@ def print_recovery_report(
         "browser_testing_failed": "Browser workflow verification failures",
         "browser_testing_partial": "Some browser workflows failed verification",
         "artifact_recovery": "Missing REQUIREMENTS.md recovered from source code analysis",
+        "gate5_enforcement": "GATE 5 triggered — zero review cycles detected despite requirements",
     }
 
     content = Text()
