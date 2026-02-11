@@ -482,12 +482,14 @@ _DIRECTION_TABLE: dict[str, dict[str, str]] = {
 }
 
 
-def _infer_design_direction(task: str) -> str:
+def _infer_design_direction(task: str | None) -> str:
     """Infer design direction from task keywords.
 
     Returns the direction name that best matches the task text.
-    Falls back to 'minimal_modern' if no keywords match.
+    Falls back to 'minimal_modern' if no keywords match or task is None.
     """
+    if not task:
+        return "minimal_modern"
     task_lower = task.lower()
     best_match = "minimal_modern"
     best_score = 0
@@ -506,7 +508,7 @@ def _infer_design_direction(task: str) -> str:
 
 
 def generate_fallback_ui_requirements(
-    task: str,
+    task: str | None,
     config: AgentTeamConfig,
     cwd: str,
 ) -> str:
@@ -518,8 +520,8 @@ def generate_fallback_ui_requirements(
 
     Parameters
     ----------
-    task : str
-        The user's task description (used for direction inference).
+    task : str | None
+        The user's task description (used for direction inference). Can be None in PRD mode.
     config : AgentTeamConfig
         Config with requirements_dir and ui_requirements_file.
     cwd : str

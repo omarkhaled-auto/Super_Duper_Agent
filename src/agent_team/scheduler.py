@@ -122,6 +122,20 @@ RE_MILESTONE = re.compile(r"-\s*(?:milestone):\s*(.+)", re.IGNORECASE)
 _TASK_ID_PATTERN = re.compile(r"TASK-\d+")
 _CROSS_MILESTONE_DEP = re.compile(r"(\w[\w-]*)@(TASK-\d+)")
 
+# Table format fallback: | TASK-NNN | description | depends | requirements |
+_RE_TABLE_TASK_ROW = re.compile(
+    r"\|\s*(TASK-\d+)\s*\|"   # Task ID
+    r"\s*(.+?)\s*\|"           # Description
+    r"\s*(.*?)\s*\|"           # Depends On
+    r"\s*(.*?)\s*\|",          # Requirements (or any 4th column)
+)
+
+# Bullet format: - TASK-NNN: description → dep1, dep2 (or → No deps)
+_RE_BULLET_TASK = re.compile(
+    r"^-\s+(TASK-\d+):\s*(.+?)(?:\s*(?:→|->|—>)\s*(.+))?$",
+    re.MULTILINE,
+)
+
 
 # ---------------------------------------------------------------------------
 # Path normalization
@@ -208,19 +222,11 @@ def _extract_description(block: str, field_lines: set[int]) -> str:
     return " ".join(remaining)
 
 
-def parse_tasks_md(content: str) -> list[TaskNode]:
-    """Parse a TASKS.md document into a list of :class:`TaskNode` objects.
-
-    The parser uses a block-splitting state machine: it splits the document
-    at ``### TASK-`` headers via :func:`re.split`, then extracts structured
-    fields from each block using compiled regexes.
-    """
-    # Split at task headers, keeping the header in each block
-    blocks = re.split(r"(?=^###\s+TASK-)", content, flags=re.MULTILINE)
-
+def _parse_block_format_tasks(task_blocks: list[str]) -> list[TaskNode]:
+    """Parse tasks from ### TASK-xxx block format."""
     tasks: list[TaskNode] = []
 
-    for block in blocks:
+    for block in task_blocks:
         block = block.strip()
         if not block:
             continue
@@ -228,7 +234,7 @@ def parse_tasks_md(content: str) -> list[TaskNode]:
         # Extract task ID and optional title from the header line
         id_match = RE_TASK_ID.search(block)
         if not id_match:
-            continue  # not a task block (e.g. preamble)
+            continue
 
         task_id = id_match.group(1)
         title = (id_match.group(2) or "").strip()
@@ -290,6 +296,128 @@ def parse_tasks_md(content: str) -> list[TaskNode]:
         )
 
     return tasks
+
+
+def _parse_table_format_tasks(content: str) -> list[TaskNode]:
+    """Parse tasks from markdown table format (fallback).
+
+    Handles tables with columns: Task ID | Description | Depends On | Requirements
+    """
+    tasks: list[TaskNode] = []
+    seen_ids: set[str] = set()
+
+    for match in _RE_TABLE_TASK_ROW.finditer(content):
+        task_id = match.group(1).strip()
+        if task_id in seen_ids:
+            continue  # Skip duplicate rows (e.g., header separator)
+        seen_ids.add(task_id)
+
+        title = match.group(2).strip()
+        depends_raw = match.group(3).strip()
+
+        # Parse dependencies
+        depends_on: list[str] = []
+        if depends_raw and depends_raw not in ("\u2014", "-", "None", "none", "N/A"):
+            depends_on = [
+                d.strip() for d in re.split(r"[,;]", depends_raw)
+                if d.strip().startswith("TASK-")
+            ]
+
+        tasks.append(TaskNode(
+            id=task_id,
+            title=title,
+            description=title,  # Use title as description for table format
+            status="PENDING",
+            depends_on=depends_on,
+            files=[],  # Tables typically don't include file lists
+            milestone_id=None,
+        ))
+
+    return tasks
+
+
+def _parse_bullet_format_tasks(content: str) -> list[TaskNode]:
+    """Parse tasks from bullet-list format (fallback).
+
+    Handles lines like::
+
+        - TASK-001: Initialize project → No deps
+        - TASK-002: Create Prisma schema → TASK-001
+        - TASK-003: Generate migration → TASK-001, TASK-002
+
+    Also detects ``## Milestone N`` headers and assigns ``milestone_id``.
+    """
+    tasks: list[TaskNode] = []
+    seen_ids: set[str] = set()
+    current_milestone: str | None = None
+
+    _milestone_header = re.compile(r"^##\s+Milestone\s+(\d+)", re.IGNORECASE)
+
+    for line in content.splitlines():
+        # Track milestone section headers
+        mh = _milestone_header.match(line.strip())
+        if mh:
+            current_milestone = f"milestone-{mh.group(1)}"
+            continue
+
+        m = _RE_BULLET_TASK.match(line.strip())
+        if not m:
+            continue
+
+        task_id = m.group(1)
+        if task_id in seen_ids:
+            continue
+        seen_ids.add(task_id)
+
+        title = m.group(2).strip()
+        deps_raw = (m.group(3) or "").strip()
+
+        depends_on: list[str] = []
+        if deps_raw.lower() not in ("no deps", "no dependencies", "none", "\u2014", "-", ""):
+            depends_on = [
+                d.strip() for d in re.split(r"[,;]", deps_raw)
+                if d.strip().startswith("TASK-")
+            ]
+
+        tasks.append(TaskNode(
+            id=task_id,
+            title=title,
+            description=title,
+            status="PENDING",
+            depends_on=depends_on,
+            files=[],
+            milestone_id=current_milestone,
+        ))
+
+    return tasks
+
+
+def parse_tasks_md(content: str) -> list[TaskNode]:
+    """Parse a TASKS.md document into a list of :class:`TaskNode` objects.
+
+    The parser uses a block-splitting state machine: it splits the document
+    at ``### TASK-`` headers via :func:`re.split`, then extracts structured
+    fields from each block using compiled regexes.
+
+    Falls back to table-format or bullet-format parsing if no block-format
+    tasks are found.
+    """
+    # Try block format first (### TASK-xxx headers)
+    blocks = re.split(r"(?=^###\s+TASK-)", content, flags=re.MULTILINE)
+
+    # Filter out preamble blocks (no TASK- header)
+    task_blocks = [b for b in blocks if RE_TASK_ID.search(b)]
+
+    if task_blocks:
+        return _parse_block_format_tasks(task_blocks)
+
+    # Fallback: try table-format parsing
+    table_tasks = _parse_table_format_tasks(content)
+    if table_tasks:
+        return table_tasks
+
+    # Fallback: try bullet-format parsing
+    return _parse_bullet_format_tasks(content)
 
 
 # ---------------------------------------------------------------------------

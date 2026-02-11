@@ -890,10 +890,10 @@ class TestFixFunctionParameters:
         assert "violations=db_rel_violations" in call
 
     def test_all_fix_calls_pass_task_text(self, cli_source: str) -> None:
-        """All fix calls include task_text=args.task."""
+        """All fix calls include task_text parameter."""
         for scan_type in ["database_dual_orm", "database_defaults", "database_relationships"]:
             call = self._get_fix_call(cli_source, scan_type)
-            assert "task_text=args.task" in call, (
+            assert "task_text=effective_task" in call or "task_text=args.task" in call, (
                 f"Fix call for {scan_type} missing task_text parameter"
             )
 

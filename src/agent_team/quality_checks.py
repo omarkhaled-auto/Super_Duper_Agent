@@ -2637,15 +2637,7 @@ def run_relationship_scan(project_root: Path, scope: ScanScope | None = None) ->
 # API Contract Verification — run_api_contract_scan()
 # ---------------------------------------------------------------------------
 
-_RE_SVC_TABLE_ROW = re.compile(
-    r'^\|\s*(SVC-\d+)\s*\|'       # SVC-ID
-    r'\s*([^|]+?)\s*\|'           # Frontend Service.Method
-    r'\s*([^|]+?)\s*\|'           # Backend Endpoint
-    r'\s*([^|]+?)\s*\|'           # HTTP Method
-    r'\s*([^|]+?)\s*\|'           # Request DTO
-    r'\s*([^|]+?)\s*\|',          # Response DTO
-    re.MULTILINE,
-)
+_RE_SVC_ROW_START = re.compile(r'^\|\s*SVC-\d+\s*\|', re.MULTILINE)
 
 _RE_FIELD_SCHEMA = re.compile(r'\{[^}]+\}')
 
@@ -2699,26 +2691,57 @@ def _parse_field_schema(schema_text: str) -> dict[str, str]:
 
 
 def _parse_single_field(field_text: str, fields: dict[str, str]) -> None:
-    """Parse 'fieldName: type' into the fields dict."""
-    if ':' not in field_text:
+    """Parse 'fieldName: type' or bare 'fieldName' into the fields dict."""
+    if ':' in field_text:
+        parts = field_text.split(':', 1)
+        name = parts[0].strip().strip('"').strip("'").rstrip('?')
+        type_hint = parts[1].strip()
+        if name and type_hint:
+            fields[name] = type_hint
         return
-    parts = field_text.split(':', 1)
-    name = parts[0].strip().strip('"').strip("'")
-    type_hint = parts[1].strip()
-    if name and type_hint:
-        fields[name] = type_hint
+    # Bare identifier without type (e.g. shorthand "{id, email, fullName}")
+    bare = field_text.strip().strip('"').strip("'").rstrip('?')
+    if bare and re.match(r'^[a-zA-Z_]\w*$', bare):
+        fields[bare] = ""
 
 
 def _parse_svc_table(requirements_text: str) -> list[SvcContract]:
-    """Parse all SVC-xxx table rows from REQUIREMENTS.md content."""
+    """Parse all SVC-xxx table rows from REQUIREMENTS.md content.
+
+    Supports both 5-column tables (``| ID | Endpoint | Method | Request | Response |``)
+    and 6-column tables (``| ID | Frontend Svc | Endpoint | Method | Request | Response |``).
+    """
     contracts: list[SvcContract] = []
-    for match in _RE_SVC_TABLE_ROW.finditer(requirements_text):
-        svc_id = match.group(1).strip()
-        frontend_sm = match.group(2).strip()
-        backend_ep = match.group(3).strip()
-        http_method = match.group(4).strip()
-        request_dto = match.group(5).strip()
-        response_dto = match.group(6).strip()
+    for line in requirements_text.splitlines():
+        stripped = line.strip()
+        if not _RE_SVC_ROW_START.match(stripped):
+            continue
+
+        # Split on pipe, trim whitespace, drop empty outer cells
+        cells = [c.strip() for c in stripped.split('|')]
+        cells = [c for c in cells if c]  # remove "" from leading/trailing |
+
+        if len(cells) < 5:
+            continue  # malformed row
+
+        svc_id = cells[0].strip()
+        if not svc_id.startswith("SVC-"):
+            continue
+
+        if len(cells) >= 6:
+            # 6-column: ID | Frontend Svc | Endpoint | Method | Request | Response
+            frontend_sm = cells[1]
+            backend_ep = cells[2]
+            http_method = cells[3]
+            request_dto = cells[4]
+            response_dto = cells[5]
+        else:
+            # 5-column: ID | Endpoint | Method | Request | Response
+            frontend_sm = ""
+            backend_ep = cells[1]
+            http_method = cells[2]
+            request_dto = cells[3]
+            response_dto = cells[4]
 
         request_fields = _parse_field_schema(request_dto)
         response_fields = _parse_field_schema(response_dto)
@@ -2831,39 +2854,59 @@ def _check_frontend_fields(
     project_root: Path,
     violations: list[Violation],
 ) -> None:
-    """Check that frontend model/service files use exact field names from the contract."""
+    """Check that frontend model/service files use exact field names from the contract.
+
+    Prioritises type-definition files (models, interfaces, types, dto) over
+    general usage files (services, clients).  When type-def files exist, a
+    field must appear in at least one of them; its presence only in a service
+    or component file is not enough.  This catches interface definition
+    mismatches even when services still reference the old name.
+    """
     if not contract.response_fields:
         return
 
-    # Find frontend files (services, models, interfaces, components)
-    frontend_patterns = [
-        r'(?:services?|clients?|api)',
-        r'(?:models?|interfaces?|types?|dto)',
-    ]
-    frontend_files: list[Path] = []
-    for pat in frontend_patterns:
-        frontend_files.extend(_find_files_by_pattern(project_root, pat))
+    # --- Phase 1: type-definition files (models, interfaces, types, dto) ---
+    type_def_patterns = [r'(?:models?|interfaces?|types?|dto)']
+    type_def_files: list[Path] = []
+    for pat in type_def_patterns:
+        type_def_files.extend(_find_files_by_pattern(project_root, pat))
 
-    if not frontend_files:
-        return
-
-    # Collect all identifiers from frontend files
-    all_frontend_ids: set[str] = set()
-    for ff in frontend_files:
+    type_def_ids: set[str] = set()
+    for ff in type_def_files:
         try:
             content = ff.read_text(encoding="utf-8", errors="replace")
             if len(content) > _MAX_FILE_SIZE:
                 continue
-            all_frontend_ids.update(_extract_identifiers_from_file(content))
+            type_def_ids.update(_extract_identifiers_from_file(content))
         except OSError:
             continue
 
-    if not all_frontend_ids:
-        return
+    # --- Phase 2: fallback to all frontend files if no type-defs found ---
+    check_ids: set[str]
+    if type_def_ids:
+        check_ids = type_def_ids
+    else:
+        usage_patterns = [r'(?:services?|clients?|api)']
+        usage_files: list[Path] = []
+        for pat in usage_patterns:
+            usage_files.extend(_find_files_by_pattern(project_root, pat))
+        if not usage_files:
+            return
+        check_ids = set()
+        for ff in usage_files:
+            try:
+                content = ff.read_text(encoding="utf-8", errors="replace")
+                if len(content) > _MAX_FILE_SIZE:
+                    continue
+                check_ids.update(_extract_identifiers_from_file(content))
+            except OSError:
+                continue
+        if not check_ids:
+            return
 
     for field_name, type_hint in contract.response_fields.items():
         # Frontend must use the exact camelCase name from the schema
-        if field_name not in all_frontend_ids:
+        if field_name not in check_ids:
             violations.append(Violation(
                 check="API-002",
                 message=(
@@ -2895,7 +2938,9 @@ def _check_type_compatibility(
 
     for field_name, type_hint in contract.response_fields.items():
         normalized = type_hint.lower().strip().strip('"').strip("'")
-        # Skip complex types (objects, arrays, unions with |)
+        # Skip bare identifiers (no type provided) and complex types
+        if not normalized:
+            continue
         if any(c in normalized for c in ('{', '<', '[', '|', 'array', 'list')):
             continue
 

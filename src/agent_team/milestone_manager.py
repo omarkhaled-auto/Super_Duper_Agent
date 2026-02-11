@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -482,6 +483,77 @@ class WiringGap:
     target_milestone: str
     missing_export: str
     expected_in_file: str
+
+
+def normalize_milestone_dirs(
+    project_root: Path,
+    requirements_dir: str = ".agent-team",
+) -> int:
+    """Normalize milestone directory structure.
+
+    The orchestrator may create ``milestone-N/`` directories directly under
+    the requirements directory instead of under the ``milestones/`` sub-directory.
+    This function detects such "orphan" directories and copies their contents
+    into the canonical ``milestones/milestone-N/`` location.
+
+    Parameters
+    ----------
+    project_root:
+        Root directory of the project.
+    requirements_dir:
+        Name of the requirements directory (default ``.agent-team``).
+
+    Returns
+    -------
+    int
+        Number of directories normalized (copied to canonical location).
+    """
+    req_dir = project_root / requirements_dir
+    if not req_dir.is_dir():
+        return 0
+
+    milestones_dir = req_dir / "milestones"
+    normalized = 0
+
+    _milestone_pattern = re.compile(r"^milestone-\w+$")
+
+    try:
+        entries = list(req_dir.iterdir())
+    except OSError:
+        return 0
+
+    for entry in entries:
+        if not entry.is_dir():
+            continue
+        if not _milestone_pattern.match(entry.name):
+            continue
+        # Skip the "milestones" directory itself
+        if entry.name == "milestones":
+            continue
+
+        target = milestones_dir / entry.name
+        if not target.exists():
+            milestones_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                shutil.copytree(str(entry), str(target))
+                normalized += 1
+            except (OSError, shutil.Error):
+                pass  # Best-effort copy
+        else:
+            # Merge: copy files that don't already exist in target
+            try:
+                for src_file in entry.rglob("*"):
+                    if src_file.is_file():
+                        rel = src_file.relative_to(entry)
+                        dest_file = target / rel
+                        if not dest_file.exists():
+                            dest_file.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copy2(str(src_file), str(dest_file))
+                            normalized += 1
+            except (OSError, shutil.Error):
+                pass  # Best-effort merge
+
+    return normalized
 
 
 # ---------------------------------------------------------------------------

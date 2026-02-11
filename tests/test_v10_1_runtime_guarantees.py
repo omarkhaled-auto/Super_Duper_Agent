@@ -30,6 +30,23 @@ DISPLAY_SOURCE = (_SRC / "display.py").read_text(encoding="utf-8")
 # ============================================================
 
 
+def _extract_prompt_block(name: str) -> str:
+    """Extract the body of a triple-quoted prompt constant from CLI_SOURCE.
+
+    Finds ``NAME = \"\"\"\\`` and returns everything between the opening
+    triple-quote and the closing triple-quote.
+    """
+    marker = f'{name} = """'
+    start = CLI_SOURCE.find(marker)
+    assert start != -1, f"{name} not found in cli.py"
+    # Skip past the opening triple-quote
+    body_start = start + len(marker)
+    # Find the closing triple-quote
+    close = CLI_SOURCE.find('"""', body_start)
+    assert close != -1, f"Closing triple-quote not found for {name}"
+    return CLI_SOURCE[body_start:close]
+
+
 class TestArtifactRecoveryPrompt:
     """Verify ARTIFACT_RECOVERY_PROMPT exists with required content."""
 
@@ -37,33 +54,27 @@ class TestArtifactRecoveryPrompt:
         assert "ARTIFACT_RECOVERY_PROMPT" in CLI_SOURCE
 
     def test_prompt_contains_requirements_md(self):
-        # Prompt must reference the file it is recovering
-        assert "REQUIREMENTS.md" in CLI_SOURCE[CLI_SOURCE.index("ARTIFACT_RECOVERY_PROMPT"):]
+        block = _extract_prompt_block("ARTIFACT_RECOVERY_PROMPT")
+        assert "REQUIREMENTS.md" in block
 
     def test_prompt_contains_svc_xxx(self):
-        # The prompt must instruct the agent to generate the SVC-xxx table
-        block = CLI_SOURCE[CLI_SOURCE.index("ARTIFACT_RECOVERY_PROMPT"):]
-        block = block[: block.index('"""') if '"""' in block else len(block)]
+        block = _extract_prompt_block("ARTIFACT_RECOVERY_PROMPT")
         assert "SVC-" in block, "ARTIFACT_RECOVERY_PROMPT must reference SVC-xxx service wiring"
 
     def test_prompt_contains_status_registry(self):
-        block = CLI_SOURCE[CLI_SOURCE.index("ARTIFACT_RECOVERY_PROMPT"):]
-        block = block[: block.index('"""') if '"""' in block else len(block)]
+        block = _extract_prompt_block("ARTIFACT_RECOVERY_PROMPT")
         assert "STATUS_REGISTRY" in block
 
     def test_prompt_contains_tasks_md(self):
-        block = CLI_SOURCE[CLI_SOURCE.index("ARTIFACT_RECOVERY_PROMPT"):]
-        block = block[: block.index('"""') if '"""' in block else len(block)]
+        block = _extract_prompt_block("ARTIFACT_RECOVERY_PROMPT")
         assert "TASKS.md" in block
 
     def test_prompt_has_requirements_dir_placeholder(self):
-        block = CLI_SOURCE[CLI_SOURCE.index("ARTIFACT_RECOVERY_PROMPT"):]
-        block = block[: block.index('"""') if '"""' in block else len(block)]
+        block = _extract_prompt_block("ARTIFACT_RECOVERY_PROMPT")
         assert "{requirements_dir}" in block
 
     def test_prompt_has_task_text_placeholder(self):
-        block = CLI_SOURCE[CLI_SOURCE.index("ARTIFACT_RECOVERY_PROMPT"):]
-        block = block[: block.index('"""') if '"""' in block else len(block)]
+        block = _extract_prompt_block("ARTIFACT_RECOVERY_PROMPT")
         assert "{task_text}" in block
 
     def test_prompt_is_multiline_string(self):
@@ -71,15 +82,11 @@ class TestArtifactRecoveryPrompt:
         assert re.search(r'ARTIFACT_RECOVERY_PROMPT\s*=\s*"""', CLI_SOURCE)
 
     def test_prompt_mentions_artifact_recovery(self):
-        # The prompt text must identify itself
-        block = CLI_SOURCE[CLI_SOURCE.index("ARTIFACT_RECOVERY_PROMPT"):]
-        block = block[: block.index('"""') if '"""' in block else len(block)]
+        block = _extract_prompt_block("ARTIFACT_RECOVERY_PROMPT")
         assert "ARTIFACT RECOVERY" in block
 
     def test_prompt_mentions_req_xxx(self):
-        # Should instruct to generate REQ-xxx requirements
-        block = CLI_SOURCE[CLI_SOURCE.index("ARTIFACT_RECOVERY_PROMPT"):]
-        block = block[: block.index('"""') if '"""' in block else len(block)]
+        block = _extract_prompt_block("ARTIFACT_RECOVERY_PROMPT")
         assert "REQ-" in block
 
 
@@ -262,7 +269,7 @@ class TestArtifactVerificationGate:
 
     def test_gate_has_else_branch_no_recovery_needed(self):
         pos = CLI_SOURCE.find("v10.1: Post-orchestration Artifact Verification Gate")
-        block = CLI_SOURCE[pos:pos + 2000]
+        block = CLI_SOURCE[pos:pos + 3000]
         assert "no recovery needed" in block
 
     def test_gate_appears_before_contract_health_check(self):
@@ -324,7 +331,7 @@ class TestMandatoryConvergenceRecovery:
         # Within the _is_prd_mode branch, needs_recovery = True must be set
         prd_pos = unknown_block.find("_is_prd_mode")
         assert prd_pos != -1
-        prd_block = unknown_block[prd_pos:prd_pos + 500]
+        prd_block = unknown_block[prd_pos:prd_pos + 800]
         assert "needs_recovery = True" in prd_block
 
     def test_non_prd_else_still_warns(self):

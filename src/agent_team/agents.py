@@ -175,7 +175,7 @@ GATE 3 — CYCLE TRACKING & REPORTING: After EVERY review cycle, (a) reviewers M
 
 GATE 4 — DEPTH ≠ THOROUGHNESS: The depth level (quick/standard/thorough/exhaustive) controls FLEET SIZE, not review quality. Even at QUICK depth, reviews must be thorough.
 
-GATE 5 — PYTHON ENFORCEMENT: After you complete orchestration, the system will automatically verify that you deployed the review fleet. If convergence_cycles == 0, the system WILL force a review-only recovery pass. You cannot skip the review fleet — the system enforces it. This is not a suggestion. The Python runtime checks your work. If the system detects 0 review cycles and >0 requirements, it will REJECT the run and automatically trigger a recovery pass that deploys the review fleet.
+GATE 5 — PYTHON ENFORCEMENT: After you complete orchestration, the system will automatically verify that you deployed the review fleet. If review_cycles == 0 after orchestration completes, the system WILL force a mandatory review-only recovery pass, regardless of apparent convergence health. This ensures the review fleet always deploys at least once to verify the orchestrator's claims. You cannot skip the review fleet — the system enforces it. This is not a suggestion. The Python runtime checks your work. If the system detects 0 review cycles and >0 requirements, it will REJECT the run and automatically trigger a recovery pass that deploys the review fleet.
 
 After creating REQUIREMENTS.md and completing planning/research/architecture:
 
@@ -1214,6 +1214,26 @@ Always increment the review_cycles counter.
 - If code works but violates the architecture decision, it FAILS
 - If code works but doesn't match project conventions, it FAILS
 
+## Review Cycle Tracking
+
+After you verify each requirement line in REQUIREMENTS.md, you MUST append a review cycle marker inline:
+
+BEFORE your review:
+- [x] REQ-001: Initialize Node.js project with package.json
+
+AFTER your review (first pass):
+- [x] REQ-001: Initialize Node.js project with package.json (review_cycles: 1)
+
+If a requirement already has a review_cycles marker from a previous pass, INCREMENT the number:
+- [x] REQ-001: Initialize Node.js project with package.json (review_cycles: 2)
+
+RULES:
+- The marker format MUST be exactly: (review_cycles: N) — with the parentheses, colon, and space
+- Place the marker at the END of the line, after all other content
+- Only mark items you have ACTUALLY verified against the codebase
+- If you check an item and it's NOT implemented, change [x] to [ ] AND add the marker
+- Do NOT skip this step. The system uses these markers to verify review fleet deployment.
+
 ## Integration Verification (MANDATORY for WIRE-xxx items)
 For each WIRE-xxx item in the Requirements Checklist:
 1. Find the wiring mechanism in code (import statement, route registration, component render, etc.)
@@ -2183,6 +2203,24 @@ def build_milestone_execution_prompt(
     else:
         parts.append("4. Deploy TASK ASSIGNER to create TASKS.md in THIS milestone's directory")
     parts.append("   Each task MUST have: ID, description, parent requirement, files, dependencies, status")
+    parts.append("")
+    parts.append("   CRITICAL: Use EXACTLY this block format for each task (NOT markdown tables):")
+    parts.append("")
+    parts.append("   ### TASK-001: {Brief title}")
+    parts.append("   Status: PENDING")
+    parts.append("   Depends-On: TASK-002, TASK-003")
+    parts.append("   Files: path/to/file1.ts, path/to/file2.ts")
+    parts.append("   Requirements: REQ-001, REQ-002")
+    parts.append("")
+    parts.append("   {One-line description of what this task accomplishes.}")
+    parts.append("")
+    parts.append("   RULES:")
+    parts.append("   - Each task MUST start with ### TASK-NNN: header (triple hash)")
+    parts.append("   - Status MUST be 'PENDING' for new tasks")
+    parts.append("   - Depends-On lists prerequisite TASK IDs (use — for none)")
+    parts.append("   - Files lists the files this task will create or modify")
+    parts.append("   - Requirements maps to the REQ-xxx items this task fulfills")
+    parts.append("   - Do NOT use markdown tables. The parser requires this exact block format.")
     parts.append("   Frontend service tasks MUST depend on their backend controller tasks (prevents mock data)")
     parts.append("5. Deploy CODING FLEET — assign tasks FROM TASKS.md (by dependency graph)")
     parts.append("   Writers READ their task in TASKS.md + REQUIREMENTS.md before coding")

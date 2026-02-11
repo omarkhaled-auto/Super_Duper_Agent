@@ -476,9 +476,24 @@ def parse_e2e_results(results_path: Path) -> E2ETestReport:
     sections = re.split(r"^##\s+", text, flags=re.MULTILINE)
 
     for section in sections:
-        section_lower = section.lower()
-        is_backend = section_lower.startswith("backend")
-        is_frontend = section_lower.startswith("frontend")
+        first_line = section.split("\n")[0].lower()
+        is_backend = (
+            first_line.startswith("backend")
+            or ("backend" in first_line and "frontend" not in first_line)
+            or ("api test" in first_line and "frontend" not in first_line)
+        )
+        is_frontend = (
+            first_line.startswith("frontend")
+            or first_line.startswith("playwright")
+            or ("frontend" in first_line)
+            or ("playwright" in first_line and "backend" not in first_line)
+            or ("browser test" in first_line and "backend" not in first_line)
+            or ("ui test" in first_line and "backend" not in first_line)
+        )
+        # Mutual exclusivity: if both match, prefer backend for "backend" keyword
+        if is_backend and is_frontend:
+            is_backend = "backend" in first_line
+            is_frontend = not is_backend
 
         if not is_backend and not is_frontend:
             continue
@@ -729,7 +744,10 @@ INSTRUCTIONS:
    - Run in headless mode
    - Take screenshot on failure: use test.afterEach for screenshot capture
 10. Run: npx playwright test --reporter=list
-11. Append results to {requirements_dir}/E2E_RESULTS.md:
+11. Append results to {requirements_dir}/E2E_RESULTS.md.
+   CRITICAL: The section header MUST be EXACTLY "## Frontend Playwright Tests".
+   Do NOT use any other header (not "## Results", not "## Playwright Tests", not "## E2E").
+   Format:
    ## Frontend Playwright Tests
    Total: N | Passed: P | Failed: F
 

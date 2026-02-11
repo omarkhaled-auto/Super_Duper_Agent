@@ -714,6 +714,8 @@ database_scans:
 post_orchestration_scans:
   mock_data_scan: true        # Scan for mock data in service files
   ui_compliance_scan: true    # Scan for UI compliance violations
+  api_contract_scan: true     # Cross-reference SVC-xxx field schemas against code
+  max_scan_fix_passes: 1      # Fix-scan loop iterations per scan type (0=no fixes, quick=0, exhaustive=2)
 
 mcp_servers:
   firecrawl:
@@ -1173,9 +1175,9 @@ tests/
                           #   SDK client lifecycle, Firecrawl config (5 tests)
 ```
 
-**Total: 4308+ tests** — 4303+ unit/integration (always run) + 5 E2E (require `--run-e2e`).
+**Total: 4718+ tests** — 4713+ unit/integration (always run) + 5 E2E (require `--run-e2e`).
 
-### Upgrade Test Files (v2.0-v7.0)
+### Upgrade Test Files (v2.0-v10.2)
 
 ```
 tests/
@@ -1202,7 +1204,10 @@ tests/
 ├── test_fix_completeness.py           # v7.0: All fix function branches, signatures (30 tests)
 ├── test_browser_testing.py            # v8.0: Browser MCP workflow parsing, startup, screenshots, edge cases (~190 tests)
 ├── test_browser_wiring.py             # v8.0: Browser CLI wiring, depth gating, signatures, crash isolation (~93 tests)
-└── test_api_contract.py              # v9.0: API contract scan parsing, field matching, config, CLI wiring, backward compat (81 tests)
+├── test_api_contract.py              # v9.0: API contract scan parsing, field matching, config, CLI wiring, backward compat (106 tests)
+├── test_v10_1_runtime_guarantees.py  # v10.0-10.1: Production runtime fixes, effective_task, normalizer, GATE 5, task parser (121 tests)
+├── test_database_fix_verification.py # v5.0: Database fix verification (64 tests)
+└── test_v10_2_bugfixes.py            # v10.2: P0 re-run bugfixes — seed credentials, API contract parser, Violation attributes (87 tests)
 ```
 
 ### Live E2E Verification
@@ -1487,21 +1492,25 @@ For detailed upgrade documentation with all fixes, hardening passes, review roun
 | **v7.0** | Production Audit #2 | 6-agent audit, 3 bugs fixed, 239 new tests, **100% PRODUCTION READY** certification. 4019 total tests passing. |
 | **v8.0** | Browser MCP Testing | Playwright-based visual browser testing — workflow execution, screenshot verification, regression sweeps, fix loops. 3-agent review cycle, 5 bugs fixed, 283 new tests. 4308 total tests passing. |
 | **v9.0** | API Contract Verification | 3-layer system (prevention + detection + guarantee) — catches DTO field name mismatches between backend and frontend. API-001..003 violation codes. SVC-xxx field schema enforcement. 81 tests. 4361 total tests passing. |
+| **v10.0** | Production Runtime Fixes | 9 deliverables fixing all 42 production test checkpoints. PRD root-level artifacts, subdirectory app detection, silent scan logging, recovery labels, DB-005 Prisma exclusion, multi-pass fix cycles, convergence loop enforcement, marking policy, UI fallback. `max_scan_fix_passes` config. 121 tests. 4510 total. |
+| **v10.1** | Runtime Guarantees | Hardened effective_task, normalize_milestone_dirs, GATE 5 enforcement, TASKS.md bullet format parser, design direction inference, review cycle counter, E2E report parsing. 49 tests updated. |
+| **v10.2** | P0 Re-Run Bugfix Sweep | 8 bugs fixed (2 CRITICAL + 3 HIGH + 2 MEDIUM + 1 LOW): Violation.code AttributeError, Windows path colon in filenames, review cycle counter, frontend E2E 0/0 parser, TASKS.md bullet format, seed credential Prisma extraction, API contract SVC table 5-col parser. 87 new tests + 25 API contract tests. 4718 total tests passing. |
 
 ### Production Readiness
 
 ```
 =============================================================
-   100% PRODUCTION READY (v9.0 — 2026-02-10)
+   100% PRODUCTION READY (v10.2 — 2026-02-11)
 =============================================================
 ```
 
-- **0 CRITICAL bugs** across all versions
-- **4361 tests passing** (1 pre-existing failure in test_mcp_servers.py)
-- **14/14 post-orchestration blocks** independently crash-isolated (12 original + browser testing + API contract)
+- **0 CRITICAL bugs** across all versions (2 found in v10.2 — both fixed)
+- **4718 tests passing** (2 pre-existing failures in test_mcp_servers.py)
+- **15/15 post-orchestration blocks** independently crash-isolated
 - **20/20 prompt policies** correctly mapped across 6 agent roles
 - **All 60+ config fields** consumed at correct gate locations
 - **Full backward compatibility** — old configs, no configs, partial configs all work
+- **7/7 isolation tests passed** against live TaskFlow Pro v10.2 project
 
 ---
 

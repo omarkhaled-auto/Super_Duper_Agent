@@ -16,6 +16,22 @@ from typing import Any
 
 
 # ---------------------------------------------------------------------------
+# Filename sanitization
+# ---------------------------------------------------------------------------
+
+def _sanitize_filename(name: str) -> str:
+    """Convert a workflow name into a safe filename component.
+
+    Replaces all non-alphanumeric characters (except hyphens/underscores)
+    with underscores, collapses runs of underscores, and strips edges.
+    Handles Windows-illegal characters (``< > : " / \\ | ? *``).
+    """
+    safe = re.sub(r"[^a-z0-9_-]", "_", name.lower())
+    safe = re.sub(r"_+", "_", safe).strip("_")
+    return safe[:100] or "unnamed"
+
+
+# ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
 
@@ -85,6 +101,21 @@ _RE_ROLE = re.compile(
     re.IGNORECASE,
 )
 
+# Extended patterns for Prisma / ORM seed files where values are variable refs or enums
+_RE_PASSWORD_VAR_REF = re.compile(
+    r"""(?:password|passwd)\s*:\s*([a-zA-Z_]\w*)""",
+    re.IGNORECASE,
+)
+_RE_PASSWORD_VAR_ASSIGN = re.compile(
+    r"""(?:const|let|var)\s+(\w+)\s*=\s*(?:await\s+)?"""
+    r"""(?:bcrypt\.hash|argon2\.hash|hashSync|hash)\s*\(\s*["']([^"']+)["']""",
+    re.IGNORECASE,
+)
+_RE_ROLE_ENUM = re.compile(
+    r"""(?:role|type|user_?type)\s*:\s*(?:\w+\.)?(\w+)\s*[,\n}]""",
+    re.IGNORECASE,
+)
+
 _SEED_PATTERNS = [
     "**/seed*.ts", "**/seed*.js", "**/seed*.py", "**/seed*.cs",
     "**/Seed*.cs", "**/fixture*.*", "prisma/seed.ts",
@@ -97,7 +128,10 @@ def _extract_seed_credentials(project_root: Path) -> dict[str, dict[str, str]]:
     """Best-effort extraction of test account credentials from seed files.
 
     Scans common seed/fixture file locations for email+password pairs
-    and associates them with role names found nearby.
+    and associates them with role names found nearby.  Supports both
+    direct literal values (``password: 'secret'``) and ORM patterns
+    like Prisma where passwords are hashed via ``bcrypt.hash('secret', 10)``
+    and roles use TypeScript enums (``UserRole.admin``).
 
     Returns dict like: ``{"admin": {"email": "admin@example.com", "password": "Admin123!"}}``
     Returns empty dict if nothing found.
@@ -116,7 +150,14 @@ def _extract_seed_credentials(project_root: Path) -> dict[str, dict[str, str]]:
             except (OSError, UnicodeDecodeError):
                 continue
 
-            # Find all email and password occurrences with line numbers
+            # --- Pass 1: build variable→plaintext map for hashed passwords ---
+            password_vars: dict[str, str] = {}
+            for line in lines:
+                m = _RE_PASSWORD_VAR_ASSIGN.search(line)
+                if m:
+                    password_vars[m.group(1)] = m.group(2)
+
+            # --- Pass 2: find emails, passwords, and roles ---
             emails: list[tuple[int, str]] = []
             passwords: list[tuple[int, str]] = []
             roles: list[tuple[int, str]] = []
@@ -124,10 +165,26 @@ def _extract_seed_credentials(project_root: Path) -> dict[str, dict[str, str]]:
             for i, line in enumerate(lines):
                 for m in _RE_EMAIL.finditer(line):
                     emails.append((i, m.group(1)))
+
+                # Direct literal passwords
                 for m in _RE_PASSWORD.finditer(line):
                     passwords.append((i, m.group(1)))
+
+                # Variable-reference passwords (resolve via password_vars)
+                if not _RE_PASSWORD.search(line):
+                    for m in _RE_PASSWORD_VAR_REF.finditer(line):
+                        var_name = m.group(1)
+                        if var_name in password_vars:
+                            passwords.append((i, password_vars[var_name]))
+
+                # Direct quoted roles
                 for m in _RE_ROLE.finditer(line):
                     roles.append((i, m.group(1)))
+
+                # Enum roles (e.g. UserRole.admin → "admin")
+                if not _RE_ROLE.search(line):
+                    for m in _RE_ROLE_ENUM.finditer(line):
+                        roles.append((i, m.group(1)))
 
             # Group by proximity -- email+password within 10 lines belong together
             for e_line, email in emails:
@@ -291,7 +348,7 @@ def generate_browser_workflows(
         wf = WorkflowDefinition(
             id=workflow_id,
             name=name,
-            path=str(workflows_dir / f"workflow_{workflow_id:02d}_{name.lower().replace(' ', '_')}.md"),
+            path=str(workflows_dir / f"workflow_{workflow_id:02d}_{_sanitize_filename(name)}.md"),
             priority=priority,
             total_steps=len(steps),
             first_page_route=route,
