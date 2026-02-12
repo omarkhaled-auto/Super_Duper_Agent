@@ -1,10 +1,11 @@
-"""Tests for the 4 Drawspace critical fixes.
+"""Tests for the Drawspace critical fixes.
 
 Covers:
 - Fix 1: MASTER_PLAN.md header format resilience (h2-h4 parsing, auto-fix, prompt spec)
 - Fix 2: Infinite milestone re-verification loop (safety limit, state guard, re-assertion)
 - Fix 3: Recovery prompt de-escalation (no alarm language, system note, all steps)
 - Fix 4: Hardcoded UI count mock data detection (MOCK-008 pattern, component scope)
+- Fix 5 (FINDING-029): Handoff completeness validation + predecessor data injection
 """
 
 from __future__ import annotations
@@ -748,3 +749,348 @@ class TestStateGuardWithEmptyMilestones:
         state_completed: set[str] = set()
         should_exit = bool(all_plan_ids) and all_plan_ids <= state_completed
         assert not should_exit
+
+
+# =====================================================================
+# Fix 5 (FINDING-029): Handoff Completeness Validation + Prompt Injection
+# =====================================================================
+
+from agent_team.tracking_documents import (
+    validate_handoff_completeness,
+    extract_predecessor_handoff_content,
+)
+
+
+_HANDOFF_TEMPLATE = """\
+# Milestone Handoff Registry
+
+This document tracks interfaces exposed by each milestone.
+Subsequent milestones MUST read this before coding.
+
+---
+
+## milestone-1: Infrastructure — COMPLETE
+
+### Exposed Interfaces
+| Endpoint | Method | Auth Required | Request Body | Response Shape |
+|----------|--------|:------------:|-------------|---------------|
+<!-- Agent: Fill this table with EVERY endpoint this milestone created or modified -->
+
+### Database State After This Milestone
+<!-- Agent: List all tables/collections created or modified, with column names and types -->
+
+### Enum/Status Values
+| Entity | Field | Valid Values | DB Type | API String |
+|--------|-------|-------------|---------|------------|
+<!-- Agent: For EVERY entity with a status/type/enum field, list ALL valid values -->
+
+### Environment Variables
+<!-- Agent: List all env vars this milestone requires or introduces -->
+
+### Files Created/Modified
+<!-- Agent: List key files with brief descriptions -->
+
+### Known Limitations
+<!-- Agent: Note anything NOT yet implemented that later milestones should know about -->
+"""
+
+_HANDOFF_FILLED = """\
+# Milestone Handoff Registry
+
+This document tracks interfaces exposed by each milestone.
+Subsequent milestones MUST read this before coding.
+
+---
+
+## milestone-1: Infrastructure — COMPLETE
+
+### Exposed Interfaces
+| Endpoint | Method | Auth Required | Request Body | Response Shape |
+|----------|--------|:------------:|-------------|---------------|
+| /api/health | GET | No | - | { status: string, version: string } |
+| /api/auth/login | POST | No | { email: string, password: string } | { token: string } |
+
+### Database State After This Milestone
+- Users table: id (uuid), email (varchar), password_hash (varchar), role (varchar)
+- Organizations table: id (uuid), name (varchar), created_at (timestamp)
+
+### Enum/Status Values
+| Entity | Field | Valid Values | DB Type | API String |
+|--------|-------|-------------|---------|------------|
+| User | Role | Admin, Engineer, Viewer | string | "admin", "engineer", "viewer" |
+
+### Environment Variables
+- JWT_SECRET: Secret key for JWT signing
+- DATABASE_URL: PostgreSQL connection string
+
+### Files Created/Modified
+- Program.cs, Startup.cs, docker-compose.yml
+
+### Known Limitations
+- No rate limiting yet — planned for milestone-4
+
+---
+
+## milestone-2: Database Schema — COMPLETE
+
+### Exposed Interfaces
+| Endpoint | Method | Auth Required | Request Body | Response Shape |
+|----------|--------|:------------:|-------------|---------------|
+| /api/projects | GET | Yes | - | { items: Project[], total: number } |
+| /api/projects | POST | Yes | { title: string } | { id: string, title: string } |
+
+### Database State After This Milestone
+- Projects table: id, title, org_id, status, created_at
+
+### Enum/Status Values
+| Entity | Field | Valid Values | DB Type | API String |
+|--------|-------|-------------|---------|------------|
+| Project | Status | Draft, Active, Archived | string | "draft", "active", "archived" |
+
+### Environment Variables
+<!-- No new env vars -->
+
+### Files Created/Modified
+- Entities/Project.cs, Data/Configurations/ProjectConfiguration.cs
+
+### Known Limitations
+- Soft delete not yet implemented
+"""
+
+
+class TestValidateHandoffCompleteness:
+    """Tests for validate_handoff_completeness()."""
+
+    def test_template_only_is_incomplete(self):
+        ok, unfilled = validate_handoff_completeness(_HANDOFF_TEMPLATE, "milestone-1")
+        assert not ok
+        assert "Exposed Interfaces" in unfilled
+        assert "Database State" in unfilled
+
+    def test_filled_handoff_is_complete(self):
+        ok, unfilled = validate_handoff_completeness(_HANDOFF_FILLED, "milestone-1")
+        assert ok
+        assert len(unfilled) == 0
+
+    def test_milestone_not_found(self):
+        ok, unfilled = validate_handoff_completeness(_HANDOFF_FILLED, "milestone-99")
+        assert not ok
+        assert len(unfilled) == 2
+
+    def test_empty_content(self):
+        ok, unfilled = validate_handoff_completeness("", "milestone-1")
+        assert not ok
+
+    def test_partial_fill_interfaces_only(self):
+        """If only Exposed Interfaces is filled, that's enough (is_complete=True)."""
+        content = """\
+## milestone-1: Infra — COMPLETE
+
+### Exposed Interfaces
+| Endpoint | Method | Auth Required | Request Body | Response Shape |
+|----------|--------|:------------:|-------------|---------------|
+| /api/health | GET | No | - | { status: string } |
+
+### Database State After This Milestone
+<!-- Agent: List all tables/collections -->
+"""
+        ok, unfilled = validate_handoff_completeness(content, "milestone-1")
+        assert ok
+        assert "Database State" in unfilled
+        assert "Exposed Interfaces" not in unfilled
+
+    def test_partial_fill_database_only(self):
+        """If only Database State is filled, that's enough."""
+        content = """\
+## milestone-1: Infra — COMPLETE
+
+### Exposed Interfaces
+| Endpoint | Method | Auth Required | Request Body | Response Shape |
+|----------|--------|:------------:|-------------|---------------|
+<!-- Agent: Fill this table -->
+
+### Database State After This Milestone
+- Users table: id (uuid), email (varchar)
+"""
+        ok, unfilled = validate_handoff_completeness(content, "milestone-1")
+        assert ok
+        assert "Exposed Interfaces" in unfilled
+        assert "Database State" not in unfilled
+
+    def test_prose_na_counts_as_filled(self):
+        """'No endpoints' or 'N/A' counts as filled (not a comment)."""
+        content = """\
+## milestone-9: Deployment — COMPLETE
+
+### Exposed Interfaces
+No new endpoints created. This milestone only configured Docker and Nginx.
+
+### Database State After This Milestone
+No database changes.
+"""
+        ok, unfilled = validate_handoff_completeness(content, "milestone-9")
+        assert ok
+        assert len(unfilled) == 0
+
+    def test_second_milestone_validated_independently(self):
+        ok, unfilled = validate_handoff_completeness(_HANDOFF_FILLED, "milestone-2")
+        assert ok
+        assert len(unfilled) == 0
+
+
+class TestExtractPredecessorHandoffContent:
+    """Tests for extract_predecessor_handoff_content()."""
+
+    def test_extracts_interfaces_and_enums(self):
+        result = extract_predecessor_handoff_content(_HANDOFF_FILLED, ["milestone-1"])
+        assert "/api/health" in result
+        assert "/api/auth/login" in result
+        assert "Admin, Engineer, Viewer" in result
+
+    def test_extracts_multiple_predecessors(self):
+        result = extract_predecessor_handoff_content(
+            _HANDOFF_FILLED, ["milestone-1", "milestone-2"],
+        )
+        assert "/api/health" in result
+        assert "/api/projects" in result
+        assert "Draft, Active, Archived" in result
+
+    def test_skips_missing_milestone(self):
+        result = extract_predecessor_handoff_content(
+            _HANDOFF_FILLED, ["milestone-99"],
+        )
+        assert result == ""
+
+    def test_empty_predecessors(self):
+        result = extract_predecessor_handoff_content(_HANDOFF_FILLED, [])
+        assert result == ""
+
+    def test_empty_content(self):
+        result = extract_predecessor_handoff_content("", ["milestone-1"])
+        assert result == ""
+
+    def test_max_chars_truncation(self):
+        result = extract_predecessor_handoff_content(
+            _HANDOFF_FILLED, ["milestone-1", "milestone-2"], max_chars=200,
+        )
+        assert len(result) <= 250  # 200 + small overhead from truncation marker
+        assert "truncated" in result or len(result) <= 200
+
+    def test_template_only_not_extracted(self):
+        """Template-only sections (just comments) should not be extracted."""
+        result = extract_predecessor_handoff_content(_HANDOFF_TEMPLATE, ["milestone-1"])
+        assert result == ""
+
+    def test_mixed_template_and_filled(self):
+        """If one predecessor is filled and another is template-only, extract only filled."""
+        mixed = _HANDOFF_TEMPLATE + "\n\n---\n\n" + """\
+## milestone-2: Schema — COMPLETE
+
+### Exposed Interfaces
+| Endpoint | Method | Auth Required | Request Body | Response Shape |
+|----------|--------|:------------:|-------------|---------------|
+| /api/data | GET | Yes | - | { items: [] } |
+
+### Enum/Status Values
+| Entity | Field | Valid Values | DB Type | API String |
+|--------|-------|-------------|---------|------------|
+<!-- No enums -->
+"""
+        result = extract_predecessor_handoff_content(mixed, ["milestone-1", "milestone-2"])
+        assert "/api/data" in result
+        # milestone-1 had template only — should not contribute
+        assert "<!-- Agent:" not in result
+
+
+class TestMilestonePromptHandoffInjection:
+    """Tests that build_milestone_execution_prompt injects predecessor handoff data."""
+
+    def test_prompt_contains_handoff_instructions(self):
+        """The MILESTONE_HANDOFF_INSTRUCTIONS should be in every milestone prompt."""
+        from agent_team.agents import build_milestone_execution_prompt
+        from agent_team.milestone_manager import MilestoneContext
+
+        config = AgentTeamConfig()
+        config.tracking_documents.milestone_handoff = True
+        ctx = MilestoneContext(
+            milestone_id="milestone-2",
+            title="Database Schema",
+            requirements_path=".agent-team/milestones/milestone-2/REQUIREMENTS.md",
+            predecessor_summaries=[],
+        )
+        prompt = build_milestone_execution_prompt(
+            task="Build DrawSpace",
+            depth="exhaustive",
+            config=config,
+            milestone_context=ctx,
+            cwd=None,
+        )
+        assert "MILESTONE HANDOFF" in prompt
+        assert "Read" in prompt
+        assert "Exposed Interfaces" in prompt
+
+    def test_prompt_injection_block_present_when_handoff_file_exists(self, tmp_path):
+        """When MILESTONE_HANDOFF.md exists with data, it should be injected."""
+        from agent_team.agents import build_milestone_execution_prompt
+        from agent_team.milestone_manager import MilestoneContext, MilestoneCompletionSummary
+
+        # Create the handoff file
+        req_dir = tmp_path / ".agent-team"
+        req_dir.mkdir()
+        handoff_path = req_dir / "MILESTONE_HANDOFF.md"
+        handoff_path.write_text(_HANDOFF_FILLED, encoding="utf-8")
+
+        config = AgentTeamConfig()
+        config.tracking_documents.milestone_handoff = True
+
+        pred_summary = MilestoneCompletionSummary(
+            milestone_id="milestone-1",
+            title="Infrastructure",
+            exported_files=[],
+            exported_symbols=[],
+            summary_line="Infra done",
+        )
+        ctx = MilestoneContext(
+            milestone_id="milestone-2",
+            title="Database Schema",
+            requirements_path=str(req_dir / "milestones" / "milestone-2" / "REQUIREMENTS.md"),
+            predecessor_summaries=[pred_summary],
+        )
+        prompt = build_milestone_execution_prompt(
+            task="Build DrawSpace",
+            depth="exhaustive",
+            config=config,
+            milestone_context=ctx,
+            cwd=str(tmp_path),
+        )
+        assert "PREDECESSOR HANDOFF" in prompt
+        assert "/api/health" in prompt
+        assert "EXACT endpoint paths" in prompt
+
+    def test_no_injection_without_predecessors(self, tmp_path):
+        """First milestone (no predecessors) should NOT have injection block."""
+        from agent_team.agents import build_milestone_execution_prompt
+        from agent_team.milestone_manager import MilestoneContext
+
+        req_dir = tmp_path / ".agent-team"
+        req_dir.mkdir()
+        handoff_path = req_dir / "MILESTONE_HANDOFF.md"
+        handoff_path.write_text(_HANDOFF_FILLED, encoding="utf-8")
+
+        config = AgentTeamConfig()
+        config.tracking_documents.milestone_handoff = True
+
+        ctx = MilestoneContext(
+            milestone_id="milestone-1",
+            title="Infrastructure",
+            requirements_path=str(req_dir / "milestones" / "milestone-1" / "REQUIREMENTS.md"),
+            predecessor_summaries=[],  # No predecessors
+        )
+        prompt = build_milestone_execution_prompt(
+            task="Build DrawSpace",
+            depth="exhaustive",
+            config=config,
+            milestone_context=ctx,
+            cwd=str(tmp_path),
+        )
+        assert "PREDECESSOR HANDOFF — INJECTED DATA" not in prompt

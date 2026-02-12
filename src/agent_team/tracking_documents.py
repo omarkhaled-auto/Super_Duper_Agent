@@ -994,3 +994,167 @@ def compute_wiring_completeness(content: str, milestone_id: str) -> tuple[int, i
         (wired_count, total_count).
     """
     return _count_wiring_in_section(content, milestone_id)
+
+
+# ---------------------------------------------------------------------------
+# Handoff Completeness Validation (v13.1 — FINDING-029)
+# ---------------------------------------------------------------------------
+
+_HANDOFF_KEY_SECTIONS = ("Exposed Interfaces", "Database State")
+
+_HANDOFF_SKIP_PATTERNS = frozenset({
+    "<!--", "|-", "| Endpoint", "| Method", "| Entity", "| Field",
+    "### ", "| Source", "Agent:",
+})
+
+
+def _is_content_line(line: str) -> bool:
+    """Return True if *line* carries actual data (not a template placeholder)."""
+    stripped = line.strip()
+    if not stripped:
+        return False
+    for pat in _HANDOFF_SKIP_PATTERNS:
+        if pat in stripped:
+            return False
+    # Table separator rows (|---|---|)
+    if stripped.startswith("|") and set(stripped.replace("|", "").replace("-", "").replace(":", "").strip()) == set():
+        return False
+    return True
+
+
+def validate_handoff_completeness(
+    content: str,
+    milestone_id: str,
+) -> tuple[bool, list[str]]:
+    """Check whether a milestone's handoff section has been filled beyond the template.
+
+    Parameters
+    ----------
+    content : str
+        Full text of MILESTONE_HANDOFF.md.
+    milestone_id : str
+        The milestone to validate.
+
+    Returns
+    -------
+    tuple[bool, list[str]]
+        ``(is_complete, unfilled_section_names)``.
+        *is_complete* is True when at least one key section
+        (Exposed Interfaces **or** Database State) contains real data.
+    """
+    if not content or not milestone_id:
+        return False, list(_HANDOFF_KEY_SECTIONS)
+
+    # Locate the milestone section
+    header_re = re.compile(
+        rf"^##\s+{re.escape(milestone_id)}:\s+.+",
+        re.MULTILINE,
+    )
+    match = header_re.search(content)
+    if not match:
+        return False, list(_HANDOFF_KEY_SECTIONS)
+
+    start = match.end()
+    next_h2 = content.find("\n## ", start)
+    section = content[start:] if next_h2 == -1 else content[start:next_h2]
+
+    # Split into subsections by ### headers
+    subsection_re = re.compile(r"^###\s+(.+)", re.MULTILINE)
+    subsections: dict[str, str] = {}
+    matches = list(subsection_re.finditer(section))
+    for i, m in enumerate(matches):
+        title = m.group(1).strip()
+        sub_start = m.end()
+        sub_end = matches[i + 1].start() if i + 1 < len(matches) else len(section)
+        subsections[title] = section[sub_start:sub_end]
+
+    unfilled: list[str] = []
+    key_filled = 0
+    for key in _HANDOFF_KEY_SECTIONS:
+        # Find matching subsection (partial match — "Exposed Interfaces" may have suffix)
+        found_text = ""
+        for sub_title, sub_body in subsections.items():
+            if key in sub_title:
+                found_text = sub_body
+                break
+        content_lines = [ln for ln in found_text.split("\n") if _is_content_line(ln)]
+        if content_lines:
+            key_filled += 1
+        else:
+            unfilled.append(key)
+
+    return key_filled > 0, unfilled
+
+
+def extract_predecessor_handoff_content(
+    content: str,
+    predecessor_ids: list[str],
+    max_chars: int = 8000,
+) -> str:
+    """Extract Exposed Interfaces and Enum/Status tables for predecessor milestones.
+
+    Returns a compact Markdown string suitable for injection into a milestone
+    execution prompt.  Truncates at *max_chars* to stay within token budget.
+
+    Parameters
+    ----------
+    content : str
+        Full text of MILESTONE_HANDOFF.md.
+    predecessor_ids : list[str]
+        Milestone IDs whose handoff sections to extract.
+    max_chars : int
+        Maximum total characters for the output.
+
+    Returns
+    -------
+    str
+        Markdown with predecessor interface and enum data, or empty string.
+    """
+    if not content or not predecessor_ids:
+        return ""
+
+    _EXTRACT_SECTIONS = ("Exposed Interfaces", "Enum/Status Values")
+    parts: list[str] = []
+    total_len = 0
+
+    for mid in predecessor_ids:
+        header_re = re.compile(
+            rf"^##\s+{re.escape(mid)}:\s+(.+)",
+            re.MULTILINE,
+        )
+        match = header_re.search(content)
+        if not match:
+            continue
+
+        start = match.end()
+        next_h2 = content.find("\n## ", start)
+        section = content[start:] if next_h2 == -1 else content[start:next_h2]
+
+        # Extract target subsections
+        subsection_re = re.compile(r"^(###\s+.+)", re.MULTILINE)
+        sub_matches = list(subsection_re.finditer(section))
+
+        extracted: list[str] = []
+        for i, sm in enumerate(sub_matches):
+            title_line = sm.group(1).strip()
+            if not any(s in title_line for s in _EXTRACT_SECTIONS):
+                continue
+            sub_start = sm.start()
+            sub_end = sub_matches[i + 1].start() if i + 1 < len(sub_matches) else len(section)
+            sub_text = section[sub_start:sub_end].strip()
+            # Only include if it has actual data (not just template comments)
+            if any(_is_content_line(ln) for ln in sub_text.split("\n") if not ln.strip().startswith("###")):
+                extracted.append(sub_text)
+
+        if extracted:
+            header_line = match.group(0).strip()
+            block = f"**{header_line}**\n\n" + "\n\n".join(extracted)
+            if total_len + len(block) > max_chars:
+                remaining = max_chars - total_len
+                if remaining > 200:  # Only add if meaningful space left
+                    parts.append(block[:remaining] + "\n...(truncated)")
+                break
+            parts.append(block)
+            total_len += len(block)
+
+    return "\n\n---\n\n".join(parts)

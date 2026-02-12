@@ -1235,6 +1235,42 @@ async def _run_prd_milestones(
                         depth=depth,
                     )
                     total_cost += handoff_cost
+
+                    # Validate handoff completeness — retry once if still a template
+                    from .tracking_documents import validate_handoff_completeness
+                    _ho_content = handoff_path.read_text(encoding="utf-8")
+                    _ho_ok, _ho_unfilled = validate_handoff_completeness(_ho_content, milestone.id)
+
+                    if not _ho_ok:
+                        print_warning(
+                            f"Handoff for {milestone.id} incomplete "
+                            f"(unfilled: {', '.join(_ho_unfilled)}). Retrying..."
+                        )
+                        retry_cost = await _generate_handoff_details(
+                            cwd=cwd,
+                            config=config,
+                            milestone_id=milestone.id,
+                            milestone_title=milestone.title,
+                            requirements_path=ms_req_path_for_handoff,
+                            task_text=task,
+                            constraints=constraints,
+                            intervention=intervention,
+                            depth=depth,
+                        )
+                        total_cost += retry_cost
+                        _ho_content = handoff_path.read_text(encoding="utf-8")
+                        _ho_ok, _ho_unfilled = validate_handoff_completeness(
+                            _ho_content, milestone.id,
+                        )
+                        if _ho_ok:
+                            print_info(f"Handoff for {milestone.id} filled on retry.")
+                        else:
+                            print_warning(
+                                f"Handoff for {milestone.id} still incomplete after retry. "
+                                f"Unfilled: {', '.join(_ho_unfilled)}. Continuing."
+                            )
+                    else:
+                        print_info(f"Handoff for {milestone.id} validated — key sections filled.")
                 except Exception as exc:
                     print_warning(f"Failed to update MILESTONE_HANDOFF.md: {exc}")
 

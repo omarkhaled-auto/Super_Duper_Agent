@@ -2211,6 +2211,32 @@ def build_milestone_execution_prompt(
         except (ImportError, AttributeError):
             pass  # tracking_documents module not available yet — skip silently
 
+    # Inject actual predecessor handoff data directly into prompt (FINDING-029)
+    if (
+        config.tracking_documents.milestone_handoff
+        and milestone_context
+        and milestone_context.predecessor_summaries
+        and cwd
+    ):
+        try:
+            from pathlib import Path as _P
+            from .tracking_documents import extract_predecessor_handoff_content
+            _ho_path = _P(cwd) / req_dir / "MILESTONE_HANDOFF.md"
+            if _ho_path.is_file():
+                _ho_content = _ho_path.read_text(encoding="utf-8")
+                _pred_ids = [s.milestone_id for s in milestone_context.predecessor_summaries]
+                _extracted = extract_predecessor_handoff_content(_ho_content, _pred_ids)
+                if _extracted.strip():
+                    parts.append("\n[PREDECESSOR HANDOFF — INJECTED DATA]")
+                    parts.append(
+                        "The following data was extracted from MILESTONE_HANDOFF.md.\n"
+                        "Use these EXACT endpoint paths, field names, and enum values.\n"
+                        "Do NOT guess or invent API contracts — they are documented below.\n"
+                    )
+                    parts.append(_extracted)
+        except Exception:
+            pass  # Non-critical — agent can still read the file directly
+
     # Design reference injection for milestone execution
     if ui_requirements_content:
         from .design_reference import format_ui_requirements_block
