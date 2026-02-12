@@ -782,12 +782,12 @@ class TestFinding6IsZeroCycle:
         assert not _re.search(r"is_zero_cycle\s*=\s*checked\s*==\s*0", CLI_SOURCE)
 
     def test_gate5_message_mentions_zero_review_cycles(self) -> None:
-        """The zero-cycle situation message mentions 'ZERO review cycles'."""
-        assert "ZERO review cycles" in CLI_SOURCE
+        """The zero-cycle situation message references the review fleet not running."""
+        assert "without running the review fleet" in CLI_SOURCE
 
     def test_gate5_message_includes_checked_count(self) -> None:
         """The zero-cycle message includes context about checked requirements."""
-        assert "NONE verified by review fleet" in CLI_SOURCE
+        assert "none verified by reviewers" in CLI_SOURCE
 
 
 # --- FINDING-2: Review cycle counter adjustment ---

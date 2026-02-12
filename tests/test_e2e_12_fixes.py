@@ -647,11 +647,11 @@ class TestIssue10CycleCounterVerification:
     """Verify recovery prompt includes increment instruction and CLI verifies."""
 
     def test_review_only_prompt_has_increment(self):
-        """The review-only prompt tells reviewers to ALWAYS increment."""
+        """The review-only prompt tells reviewers to increment cycle counter."""
         import inspect
         from agent_team.cli import _run_review_only
         source = inspect.getsource(_run_review_only)
-        assert "ALWAYS update (review_cycles: N) to (review_cycles: N+1)" in source
+        assert "review_cycles: N) to (review_cycles: N+1)" in source
 
     def test_cycle_counter_verification_logic(self):
         """Simulate: pre_recovery_cycles == post_recovery_cycles → warning."""

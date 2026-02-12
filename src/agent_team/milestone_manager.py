@@ -99,7 +99,7 @@ class MilestoneCompletionSummary:
 # ---------------------------------------------------------------------------
 
 _RE_MILESTONE_HEADER = re.compile(
-    r"^##\s+(?:Milestone\s+)?(\d+)[.:]?\s*(.*)", re.MULTILINE
+    r"^#{2,4}\s+(?:Milestone\s+)?(\d+)[.:]?\s*(.*)", re.MULTILINE
 )
 _RE_FIELD = re.compile(r"^-\s*(\w[\w\s]*):\s*(.+)", re.MULTILINE)
 _RE_PLAN_TITLE = re.compile(r"^#\s+(?:MASTER\s+PLAN:\s*)?(.+)", re.MULTILINE)
@@ -193,14 +193,18 @@ def update_master_plan_status(
     if not id_match:
         return content
 
-    # Search backward from the ID field to find the milestone header
-    block_start = content.rfind("## ", 0, id_match.start())
-    if block_start == -1:
-        block_start = 0
+    # Search for milestone header boundaries using the milestone regex
+    # (not raw "## " prefixes) to avoid non-milestone h3/h4 subsections
+    _all_headers = list(_RE_MILESTONE_HEADER.finditer(content))
 
-    # Search forward to find the next milestone header or end
-    next_header = content.find("\n## ", id_match.end())
-    block_end = next_header if next_header != -1 else len(content)
+    block_start = 0
+    block_end = len(content)
+    for i, hdr_match in enumerate(_all_headers):
+        if hdr_match.start() <= id_match.start():
+            block_start = hdr_match.start()
+        elif hdr_match.start() > id_match.start():
+            block_end = hdr_match.start()
+            break
 
     block = content[block_start:block_end]
     status_re = re.compile(r"(-\s*Status:\s*)(\w+)", re.IGNORECASE)

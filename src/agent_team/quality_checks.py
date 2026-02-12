@@ -206,6 +206,17 @@ _RE_OBSERVABLE_MOCK = re.compile(
     r'new\s+Observable\s*[<(]\s*(?:\(\s*\w+\s*\)\s*=>|function)',
 )
 
+# MOCK-008: Hardcoded count/badge values in component files
+_RE_HARDCODED_UI_COUNT = re.compile(
+    r'(?:count|badge|notification|unread|pending|total(?:Count|Items|Results))\s*[:=]\s*[\'"]?\d+[\'"]?',
+    re.IGNORECASE,
+)
+
+_RE_COMPONENT_PATH = re.compile(
+    r'(?:component|page|view|screen|widget|panel|sidebar|topbar|navbar|header|footer|layout)',
+    re.IGNORECASE,
+)
+
 # ---------------------------------------------------------------------------
 # UI Compliance patterns (UI-001..004)
 # ---------------------------------------------------------------------------
@@ -843,6 +854,44 @@ def _check_mock_data_patterns(
     return violations
 
 
+def _check_hardcoded_ui_counts(
+    content: str,
+    rel_path: str,
+    extension: str,
+) -> list[Violation]:
+    """MOCK-008: Detect hardcoded count/badge values in component files.
+
+    Scans component, page, view, and layout files for patterns like
+    ``notificationCount = '3'`` or ``badgeCount = 5`` that indicate
+    hardcoded display data instead of API-driven values.
+
+    Only applies to JS/TS/Vue/Svelte component files. Test files are excluded.
+    """
+    _ui_extensions = _EXT_JS_ALL | {".vue", ".svelte"}
+    if extension not in _ui_extensions:
+        return []
+
+    # Skip test files
+    if _RE_TEST_FILE.search(rel_path):
+        return []
+
+    # Only scan component-related files
+    if not _RE_COMPONENT_PATH.search(rel_path):
+        return []
+
+    violations: list[Violation] = []
+    for lineno, line in enumerate(content.splitlines(), start=1):
+        if _RE_HARDCODED_UI_COUNT.search(line):
+            violations.append(Violation(
+                check="MOCK-008",
+                message="Hardcoded count/badge value in component — display counts must come from API or reactive state",
+                file_path=rel_path,
+                line=lineno,
+                severity="warning",
+            ))
+    return violations
+
+
 def _check_ui_compliance(
     content: str,
     rel_path: str,
@@ -1132,6 +1181,7 @@ _ALL_CHECKS = [
     _check_param_validation,
     _check_validation_data_flow,
     _check_mock_data_patterns,
+    _check_hardcoded_ui_counts,
     _check_ui_compliance,
     _check_e2e_quality,
 ]
@@ -1261,7 +1311,7 @@ def run_mock_data_scan(project_root: Path, scope: ScanScope | None = None) -> li
     """Scan project for mock data patterns in service/client files.
 
     Unlike :func:`run_spot_checks` which runs ALL checks, this function runs
-    ONLY mock data detection checks (MOCK-001..007).  Designed for targeted
+    ONLY mock data detection checks (MOCK-001..008).  Designed for targeted
     post-milestone scanning in ``cli.py``.
 
     Returns violations sorted by severity, capped at ``_MAX_VIOLATIONS``.
@@ -1284,6 +1334,7 @@ def run_mock_data_scan(project_root: Path, scope: ScanScope | None = None) -> li
         extension = file_path.suffix
 
         file_violations = _check_mock_data_patterns(content, rel_path, extension)
+        file_violations.extend(_check_hardcoded_ui_counts(content, rel_path, extension))
         violations.extend(file_violations)
 
     violations = violations[:_MAX_VIOLATIONS]

@@ -1212,7 +1212,8 @@ tests/
 ├── test_v11_gap_closure.py           # v11.0: E2E gap closure — enum serialization, silent data loss, DTO field presence (105 tests)
 ├── test_v12_hard_ceiling.py          # v12.0-12.1: Endpoint XREF scan, write-side passthrough, cross-mode audit (72 tests)
 ├── test_xref_bug_fixes.py            # v12.2: 5 XREF extraction bugs — variable URLs, dedup, base URL, mount prefix, tilde (53 tests)
-└── test_xref_function_call_filter.py # v12.3: Function-call FP filter — severity demotion, CLI severity gate (26 tests)
+├── test_xref_function_call_filter.py # v12.3: Function-call FP filter — severity demotion, CLI severity gate (26 tests)
+└── test_drawspace_critical_fixes.py  # v13.0: 4 Drawspace critical fixes — header resilience, loop guard, prompt de-escalation, MOCK-008 (57 tests)
 ```
 
 ### Live E2E Verification
@@ -1497,7 +1498,7 @@ Three documents give agents structured memory between phases:
 
 ## Version History
 
-For detailed upgrade documentation with all fixes, hardening passes, review rounds, and test coverage, see [Agent-team_New_Upgrades.md](Agent-team_New_Upgrades.md).
+For detailed upgrade documentation with all fixes, hardening passes, review rounds, and test coverage, see [Agent-team_New_Upgrades.md](Agent-team_New_Upgrades.md) (v2.0-v12.3) and [Agent-team_New_Upgrades_V2.md](Agent-team_New_Upgrades_V2.md) (v13.0+).
 
 | Version | Feature | Key Changes |
 |---------|---------|------------|
@@ -1521,6 +1522,7 @@ For detailed upgrade documentation with all fixes, hardening passes, review roun
 | **v12.1** | Cross-Mode Coverage Audit | Read-only audit of v11/v12 across all modes/depths. GAP-4 fix: interactive mode `depth` variable undefined at main() scope. 5245 total tests passing. |
 | **v12.2** | XREF Extraction Bug Fixes | 5 bugs fixed: variable-URL resolution (BUG-1), line-based dedup (BUG-2), base URL variable resolution chain (BUG-3), Express mount prefix import tracing (BUG-4), ASP.NET `~` route override (BUG-5). Validated against TaskFlow Pro (0 violations) and Bayan (29 real). 53 tests. 5217 total. |
 | **v12.3** | Function-Call FP Filter | Function-call URLs (`${this.func(...)}/path`) demoted to `info` severity. CLI severity filter: fix loop only triggers on error/warning. Full 15-stage pipeline audit. Bayan: 29→9 actionable violations. 26 tests. 5243 total. |
+| **v13.0** | Drawspace Critical Fixes | 4 post-mortem fixes: h2-h4 header resilience + auto-fix, infinite loop guard (state + re-assertion), recovery prompt de-escalation (`[SYSTEM:]` tag), MOCK-008 component-level count detection. Sequential thinking verified. 57 tests. 5301 total. |
 
 ### Production Readiness
 

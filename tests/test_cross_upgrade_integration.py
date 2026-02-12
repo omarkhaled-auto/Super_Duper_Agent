@@ -67,6 +67,7 @@ from agent_team.quality_checks import (
     _check_param_validation,
     _check_validation_data_flow,
     _check_mock_data_patterns,
+    _check_hardcoded_ui_counts,
     _check_ui_compliance,
     _check_e2e_quality,
     run_spot_checks,
@@ -132,6 +133,7 @@ class TestAllChecksRegistry:
             _check_param_validation,
             _check_validation_data_flow,
             _check_mock_data_patterns,
+            _check_hardcoded_ui_counts,
             _check_ui_compliance,
             _check_e2e_quality,
         }

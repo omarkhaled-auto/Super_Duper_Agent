@@ -1042,6 +1042,9 @@ Your job is to implement requirements from the Requirements Document, guided by 
   - Vue/Nuxt: `$fetch('/api/endpoint')` or `useFetch('/api/endpoint')` or `axios.get()`
   - Python: `requests.get('/api/endpoint')` or `httpx.get('/api/endpoint')`
   - `new BehaviorSubject(hardcodedData)` is mock data — use BehaviorSubject(null) + HTTP populate
+  - Hardcoded counts for badges, notifications, or summaries (e.g., `notificationCount = '3'`,
+    `badgeCount = 5`, `unreadMessages = 12`) — display counts MUST come from API responses
+    or reactive state, NEVER hardcoded numeric values in components
   - Use proper DTO mapping between backend response shape and frontend model.
 
   ## API CONTRACT COMPLIANCE (MANDATORY for SVC-xxx items)
@@ -2123,6 +2126,14 @@ def build_decomposition_prompt(
         parts.append(f"   - Create {master_plan} with ordered milestones")
         parts.append("   - Create CONTRACTS.json with interface definitions")
         parts.append("")
+        parts.append("CRITICAL FORMAT REQUIREMENT: Each milestone MUST use ## (h2) headers:")
+        parts.append("  ## Milestone 1: Title Here")
+        parts.append("  - ID: milestone-1")
+        parts.append("  - Status: PENDING")
+        parts.append("  - Dependencies: none")
+        parts.append("  - Description: ...")
+        parts.append("Do NOT use ### (h3) or # (h1). The milestone parser requires ## headers.")
+        parts.append("")
         parts.append("6. STOP after creating the plan. Do NOT write implementation code.")
         parts.append("")
         parts.append("CRITICAL: This chunked approach prevents context overflow.")
@@ -2132,6 +2143,15 @@ def build_decomposition_prompt(
         parts.append("1. Deploy the PRD ANALYZER FLEET (10+ planners in parallel).")
         parts.append(f"2. Synthesize outputs into {master_plan} with ordered milestones.")
         parts.append(f"3. Create per-milestone REQUIREMENTS.md files in {req_dir}/milestones/milestone-N/")
+        parts.append("")
+        parts.append("CRITICAL FORMAT REQUIREMENT: Each milestone MUST use ## (h2) headers:")
+        parts.append("  ## Milestone 1: Title Here")
+        parts.append("  - ID: milestone-1")
+        parts.append("  - Status: PENDING")
+        parts.append("  - Dependencies: none")
+        parts.append("  - Description: ...")
+        parts.append("Do NOT use ### (h3) or # (h1). The milestone parser requires ## headers.")
+        parts.append("")
         parts.append("4. STOP after creating the plan. Do NOT write implementation code.")
 
     return "\n".join(parts)
