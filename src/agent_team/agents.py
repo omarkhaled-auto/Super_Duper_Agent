@@ -2167,6 +2167,7 @@ def build_milestone_execution_prompt(
     predecessor_context: str = "",
     design_reference_urls: list[str] | None = None,
     ui_requirements_content: str | None = None,
+    tech_research_content: str = "",
 ) -> str:
     """Build a prompt for executing a single milestone.
 
@@ -2236,6 +2237,15 @@ def build_milestone_execution_prompt(
                     parts.append(_extracted)
         except Exception:
             pass  # Non-critical — agent can still read the file directly
+
+    # Tech stack research injection (Phase 1.5)
+    if tech_research_content:
+        parts.append("\n[TECH STACK BEST PRACTICES -- FROM DOCUMENTATION]")
+        parts.append(
+            "The following best practices were researched from official documentation\n"
+            "via Context7. Follow these patterns and avoid the listed pitfalls."
+        )
+        parts.append(tech_research_content)
 
     # Design reference injection for milestone execution
     if ui_requirements_content:
@@ -2399,6 +2409,7 @@ def build_orchestrator_prompt(
     prd_chunks: list | None = None,
     prd_index: dict | None = None,
     ui_requirements_content: str | None = None,
+    tech_research_content: str = "",
 ) -> str:
     """Build the full orchestrator prompt with task-specific context injected."""
     depth_str = str(depth) if not isinstance(depth, str) else depth
@@ -2442,6 +2453,15 @@ def build_orchestrator_prompt(
                 "the generic tokens above, but the structural principles, anti-patterns, "
                 "and quality standards STILL APPLY as the baseline framework.]"
             )
+
+    # Tech stack research injection (Phase 1.5)
+    if tech_research_content:
+        parts.append("\n[TECH STACK BEST PRACTICES -- FROM DOCUMENTATION]")
+        parts.append(
+            "The following best practices were researched from official documentation\n"
+            "via Context7. Follow these patterns and avoid the listed pitfalls."
+        )
+        parts.append(tech_research_content)
 
     # Interview document injection
     if interview_doc:

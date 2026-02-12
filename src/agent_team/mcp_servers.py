@@ -120,6 +120,21 @@ def get_firecrawl_only_servers(config: AgentTeamConfig) -> dict[str, Any]:
     return servers
 
 
+def get_context7_only_servers(config: AgentTeamConfig) -> dict[str, Any]:
+    """Return MCP servers dict with ONLY Context7 (for tech research sessions).
+
+    Used by Phase 1.5 tech stack research to create a minimal Claude session
+    that can only query library documentation — no Firecrawl, no ST, no Playwright.
+
+    Returns empty dict if Context7 is disabled in config.
+    """
+    servers: dict[str, Any] = {}
+    context7_cfg = config.mcp_servers.get("context7")
+    if context7_cfg and context7_cfg.enabled:
+        servers["context7"] = _context7_server()
+    return servers
+
+
 def _playwright_mcp_server(headless: bool = True) -> dict[str, Any]:
     """Build Playwright MCP server config for browser testing.
 

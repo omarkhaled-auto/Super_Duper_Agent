@@ -568,6 +568,7 @@ async def _run_single(
     task_text: str | None = None,
     schedule_info: str | None = None,
     ui_requirements_content: str | None = None,
+    tech_research_content: str = "",
 ) -> float:
     """Run a single task to completion. Returns total cost."""
     options = _build_options(config, cwd, constraints=constraints, task_text=task_text or task, depth=depth, backend=_backend)
@@ -620,6 +621,7 @@ async def _run_single(
         prd_chunks=prd_chunks,
         prd_index=prd_index,
         ui_requirements_content=ui_requirements_content,
+        tech_research_content=tech_research_content,
     )
 
     print_task_start(task, depth, agent_count)
@@ -721,6 +723,165 @@ def _build_completed_milestones_context(
             )
             summaries.append(summary)
     return summaries
+
+
+async def _run_tech_research(
+    cwd: str | None,
+    config: AgentTeamConfig,
+    prd_text: str,
+    master_plan_text: str,
+    depth: str,
+) -> tuple[float, "TechResearchResult | None"]:
+    """Run Phase 1.5: Tech Stack Research via Context7.
+
+    Detects the tech stack, builds research queries, runs a sub-orchestrator
+    with Context7 MCP, parses the result, and validates coverage.
+
+    Returns ``(cost, result)`` where *result* is ``None`` on failure.
+    """
+    from .tech_research import (
+        TechResearchResult,
+        build_research_queries,
+        detect_tech_stack,
+        extract_research_summary,
+        parse_tech_research_file,
+        validate_tech_research,
+        TECH_RESEARCH_PROMPT,
+    )
+    from .mcp_servers import get_context7_only_servers
+
+    project_root = Path(cwd or ".")
+    req_dir = project_root / config.convergence.requirements_dir
+
+    # 1. Detect tech stack
+    stack = detect_tech_stack(
+        cwd=project_root,
+        prd_text=prd_text,
+        master_plan_text=master_plan_text,
+        max_techs=config.tech_research.max_techs,
+    )
+
+    if not stack:
+        print_info("Phase 1.5: No technologies detected — skipping research")
+        return 0.0, None
+
+    tech_names = [f"{e.name} (v{e.version})" if e.version else e.name for e in stack]
+    print_info(f"Phase 1.5: Tech Stack Research — {len(stack)} technologies: {', '.join(tech_names)}")
+
+    # 2. Build queries
+    queries = build_research_queries(stack, max_per_tech=config.tech_research.max_queries_per_tech)
+
+    # 3. Format prompt
+    tech_list = "\n".join(
+        f"- **{e.name}** {('v' + e.version) if e.version else '(version unknown)'} [{e.category}]"
+        for e in stack
+    )
+
+    queries_by_tech: dict[str, list[str]] = {}
+    for lib_name, query in queries:
+        queries_by_tech.setdefault(lib_name, []).append(query)
+
+    queries_block_parts: list[str] = []
+    for tech_name, tech_queries in queries_by_tech.items():
+        queries_block_parts.append(f"\n### {tech_name}")
+        for i, q in enumerate(tech_queries, 1):
+            queries_block_parts.append(f"{i}. {q}")
+    queries_block = "\n".join(queries_block_parts)
+
+    output_path = str(req_dir / "TECH_RESEARCH.md")
+    research_prompt = TECH_RESEARCH_PROMPT.format(
+        tech_list=tech_list,
+        queries_block=queries_block,
+        output_path=output_path,
+    )
+
+    # 4. Run sub-orchestrator with Context7 MCP
+    context7_servers = get_context7_only_servers(config)
+    if not context7_servers:
+        print_warning("Phase 1.5: Context7 MCP not available — skipping research")
+        return 0.0, None
+
+    research_options = ClaudeAgentOptions(
+        model=config.orchestrator.model,
+        max_turns=50,
+        permission_mode="bypassPermissions",
+        mcp_servers=context7_servers,
+    )
+    if cwd:
+        research_options.cwd = cwd
+
+    total_cost = 0.0
+    phase_costs: dict[str, float] = {}
+
+    try:
+        async with ClaudeSDKClient(options=research_options) as client:
+            await client.query(research_prompt)
+            total_cost = await _process_response(client, config, phase_costs)
+    except Exception as exc:
+        print_warning(f"Phase 1.5: Research sub-orchestrator failed: {exc}")
+        return total_cost, None
+
+    # 5. Parse results
+    output_file = Path(output_path)
+    if not output_file.is_file():
+        print_warning("Phase 1.5: TECH_RESEARCH.md not created — research incomplete")
+        return total_cost, None
+
+    try:
+        file_content = output_file.read_text(encoding="utf-8")
+    except OSError:
+        print_warning("Phase 1.5: Could not read TECH_RESEARCH.md")
+        return total_cost, None
+
+    result = parse_tech_research_file(file_content)
+    result.stack = stack
+    result.techs_total = len(stack)
+    result.queries_made = len(queries)
+    result.output_path = output_path
+
+    # 6. Validate coverage
+    is_valid, missing = validate_tech_research(result)
+
+    if not is_valid and config.tech_research.retry_on_incomplete:
+        print_warning(
+            f"Phase 1.5: Research coverage below threshold — "
+            f"missing: {', '.join(missing)}. Retrying..."
+        )
+        # Retry once with just the missing techs
+        try:
+            async with ClaudeSDKClient(options=research_options) as client:
+                retry_prompt = (
+                    f"FIRST read the existing file at {output_path} to see what's already there.\n"
+                    f"Then ADD sections for these missing technologies:\n"
+                    f"{', '.join(missing)}\n\n"
+                    f"Write the COMPLETE file back to {output_path} — keep ALL existing sections "
+                    f"and add the new ones using the same ## TechName (vVersion) format.\n"
+                    f"Do NOT remove or overwrite existing sections."
+                )
+                await client.query(retry_prompt)
+                retry_cost = await _process_response(client, config, phase_costs)
+                total_cost += retry_cost
+        except Exception:
+            pass  # Best-effort retry
+
+        # Re-parse after retry
+        try:
+            file_content = output_file.read_text(encoding="utf-8")
+            result = parse_tech_research_file(file_content)
+            result.stack = stack
+            result.techs_total = len(stack)
+            result.queries_made = len(queries)
+            result.output_path = output_path
+            validate_tech_research(result)
+        except OSError:
+            pass
+
+    print_info(
+        f"Phase 1.5: Research complete — "
+        f"{result.techs_covered}/{result.techs_total} technologies covered"
+    )
+
+    return total_cost, result
 
 
 async def _run_prd_milestones(
@@ -912,6 +1073,39 @@ async def _run_prd_milestones(
     if _current_state:
         _current_state.milestone_order = [m.id for m in plan.milestones]
 
+    # ------------------------------------------------------------------
+    # Phase 1.5: TECH STACK RESEARCH
+    # ------------------------------------------------------------------
+    tech_research_content = ""
+    if config.tech_research.enabled:
+        try:
+            prd_text_for_research = ""
+            if prd_path:
+                try:
+                    prd_text_for_research = Path(prd_path).read_text(encoding="utf-8")
+                except OSError:
+                    prd_text_for_research = task
+            else:
+                prd_text_for_research = task
+
+            research_cost, tech_result = await _run_tech_research(
+                cwd=cwd,
+                config=config,
+                prd_text=prd_text_for_research,
+                master_plan_text=plan_content,
+                depth=depth,
+            )
+            total_cost += research_cost
+
+            if tech_result:
+                from .tech_research import extract_research_summary
+                tech_research_content = extract_research_summary(
+                    tech_result,
+                    max_chars=config.tech_research.injection_max_chars,
+                )
+        except Exception:
+            print_warning("Phase 1.5: Tech research failed (non-blocking)")
+
     mm = MilestoneManager(project_root)
     milestones_dir = req_dir / "milestones"
 
@@ -1051,6 +1245,7 @@ async def _run_prd_milestones(
                 predecessor_context=predecessor_str,
                 design_reference_urls=design_reference_urls,
                 ui_requirements_content=ui_requirements_content,
+                tech_research_content=tech_research_content,
             )
 
             # Fresh session for this milestone
@@ -4255,6 +4450,28 @@ def main() -> None:
                             _schedule_str = format_schedule_for_prompt(schedule_info)
                         except (ImportError, Exception):
                             pass
+
+                    # Standard mode: lightweight tech research from task text
+                    _std_tech_research = ""
+                    _std_research_cost = 0.0
+                    if config.tech_research.enabled:
+                        try:
+                            _std_research_cost, _std_result = asyncio.run(_run_tech_research(
+                                cwd=cwd,
+                                config=config,
+                                prd_text=task,
+                                master_plan_text="",
+                                depth=depth,
+                            ))
+                            if _std_result:
+                                from .tech_research import extract_research_summary
+                                _std_tech_research = extract_research_summary(
+                                    _std_result,
+                                    max_chars=config.tech_research.injection_max_chars,
+                                )
+                        except Exception:
+                            print_warning("Tech research failed (non-blocking)")
+
                     run_cost = asyncio.run(_run_single(
                         task=task,
                         config=config,
@@ -4272,7 +4489,11 @@ def main() -> None:
                         task_text=effective_task,
                         schedule_info=_schedule_str,
                         ui_requirements_content=ui_requirements_content,
+                        tech_research_content=_std_tech_research,
                     ))
+                    # Add tech research cost AFTER _run_single to avoid overwrite
+                    if _std_research_cost > 0:
+                        run_cost = (run_cost or 0.0) + _std_research_cost
         except Exception as exc:
             # Root Cause #1: ProcessError (or any exception) during orchestration
             # must NOT prevent post-orchestration (verification, state cleanup)

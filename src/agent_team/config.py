@@ -404,6 +404,22 @@ class DatabaseScanConfig:
 
 
 @dataclass
+class TechResearchConfig:
+    """Configuration for the mandatory tech stack research phase (Phase 1.5).
+
+    When ``enabled`` is True, the pipeline detects the project tech stack
+    (with versions) and queries Context7 for documentation-backed best
+    practices before milestone execution begins.
+    """
+
+    enabled: bool = True
+    max_techs: int = 8               # Cap on technologies to research
+    max_queries_per_tech: int = 4    # Context7 queries per technology
+    retry_on_incomplete: bool = True  # Retry research if coverage < min
+    injection_max_chars: int = 6000  # Max chars for prompt injection summary
+
+
+@dataclass
 class AgentTeamConfig:
     orchestrator: OrchestratorConfig = field(default_factory=OrchestratorConfig)
     depth: DepthConfig = field(default_factory=DepthConfig)
@@ -424,6 +440,7 @@ class AgentTeamConfig:
     tracking_documents: TrackingDocumentsConfig = field(default_factory=TrackingDocumentsConfig)
     database_scans: DatabaseScanConfig = field(default_factory=DatabaseScanConfig)
     post_orchestration_scans: PostOrchestrationScanConfig = field(default_factory=PostOrchestrationScanConfig)
+    tech_research: TechResearchConfig = field(default_factory=TechResearchConfig)
     # Agent keys use underscores (Python convention) in config files.
     # The SDK uses hyphens (e.g., "code-writer"). See agents.py for the mapping.
     agents: dict[str, AgentConfig] = field(default_factory=lambda: {
@@ -512,6 +529,8 @@ def apply_depth_quality_gating(
             setattr(target, attr, value)
 
     if depth == "quick":
+        # Tech research
+        _gate("tech_research.enabled", False, config.tech_research, "enabled")
         # Quality
         _gate("quality.production_defaults", False, config.quality, "production_defaults")
         _gate("quality.craft_review", False, config.quality, "craft_review")
@@ -542,6 +561,8 @@ def apply_depth_quality_gating(
         _gate("post_orchestration_scans.max_scan_fix_passes", 0, config.post_orchestration_scans, "max_scan_fix_passes")
 
     elif depth == "standard":
+        # Standard: tech research enabled with reduced queries
+        _gate("tech_research.max_queries_per_tech", 2, config.tech_research, "max_queries_per_tech")
         # Standard disables PRD reconciliation (expensive LLM call)
         _gate("integrity_scans.prd_reconciliation", False, config.integrity_scans, "prd_reconciliation")
 
@@ -556,6 +577,8 @@ def apply_depth_quality_gating(
             _gate("browser_testing.max_fix_retries", 3, config.browser_testing, "max_fix_retries")
 
     elif depth == "exhaustive":
+        # Exhaustive: max tech research queries
+        _gate("tech_research.max_queries_per_tech", 6, config.tech_research, "max_queries_per_tech")
         # Exhaustive: full E2E + highest retries
         _gate("e2e_testing.enabled", True, config.e2e_testing, "enabled")
         _gate("e2e_testing.max_fix_retries", 3, config.e2e_testing, "max_fix_retries")
@@ -1192,6 +1215,30 @@ def _dict_to_config(data: dict[str, Any]) -> tuple[AgentTeamConfig, set[str]]:
             cfg.post_orchestration_scans.mock_data_scan = ms["mock_data_scan"]
         if "ui_compliance_scan" in ms:
             cfg.post_orchestration_scans.ui_compliance_scan = ms["ui_compliance_scan"]
+
+    if "tech_research" in data and isinstance(data["tech_research"], dict):
+        tr = data["tech_research"]
+        for key in ("enabled", "max_queries_per_tech"):
+            if key in tr:
+                user_overrides.add(f"tech_research.{key}")
+        cfg.tech_research = TechResearchConfig(
+            enabled=tr.get("enabled", cfg.tech_research.enabled),
+            max_techs=tr.get("max_techs", cfg.tech_research.max_techs),
+            max_queries_per_tech=tr.get("max_queries_per_tech", cfg.tech_research.max_queries_per_tech),
+            retry_on_incomplete=tr.get("retry_on_incomplete", cfg.tech_research.retry_on_incomplete),
+            injection_max_chars=tr.get("injection_max_chars", cfg.tech_research.injection_max_chars),
+        )
+        # Validate: max_techs >= 1
+        if cfg.tech_research.max_techs < 1:
+            raise ValueError(
+                f"Invalid tech_research.max_techs: {cfg.tech_research.max_techs}. Must be >= 1"
+            )
+        # Validate: max_queries_per_tech >= 1
+        if cfg.tech_research.max_queries_per_tech < 1:
+            raise ValueError(
+                f"Invalid tech_research.max_queries_per_tech: "
+                f"{cfg.tech_research.max_queries_per_tech}. Must be >= 1"
+            )
 
     if "agents" in data:
         for name, agent_data in data["agents"].items():

@@ -179,3 +179,181 @@ All 4 fixes underwent 14-step sequential thinking analysis:
 | `tests/test_cross_upgrade_integration.py` | Add `_check_hardcoded_ui_counts` to registry test |
 | `tests/test_e2e_12_fixes.py` | Update cycle counter assertion for de-escalated wording |
 | `tests/test_v10_2_bugfixes.py` | Update zero-cycle message assertions |
+
+---
+
+## v14.0 — Mandatory Tech Stack Research Phase (Context7 Integration) (2026-02-12)
+
+During the Drawspace proof-of-power build, excellent code quality was achieved but edge cases and framework-specific best practices were missed that could have been caught earlier with documentation-backed research. The pipeline had Context7 available to the orchestrator but never enforced its use. This upgrade adds a **mandatory Phase 1.5** between MASTER_PLAN.md parsing and milestone execution that detects the project tech stack (with versions), queries Context7 for best practices, and injects findings into every milestone prompt.
+
+### New File: `src/agent_team/tech_research.py` (~530 lines)
+
+**Dataclasses:**
+
+```python
+@dataclasses.dataclass
+class TechStackEntry:
+    name: str               # e.g. "Next.js"
+    version: str | None     # e.g. "14.2.3" or None
+    category: str           # frontend_framework | backend_framework | database | orm | ui_library | language | testing | other
+    source: str             # package.json | requirements.txt | prd_text | master_plan
+    context7_id: str = ""   # resolved library ID from Context7
+
+@dataclasses.dataclass
+class TechResearchResult:
+    stack: list[TechStackEntry]
+    findings: dict[str, str]      # tech_name -> research content
+    queries_made: int
+    techs_covered: int
+    techs_total: int
+    is_complete: bool
+    output_path: str = ""
+```
+
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `detect_tech_stack(cwd, prd_text, master_plan_text)` | 6 file detectors (package.json, requirements.txt, pyproject.toml, go.mod, *.csproj, Cargo.toml) + free-text regex. Deduplicates, sorts by category priority, caps at `max_techs`. |
+| `build_research_queries(stack, max_per_tech)` | Category-specific query templates (frontend: routing/state; backend: API/security; db: schema/indexing). Version-aware. |
+| `validate_tech_research(result, min_coverage)` | At least 60% of techs must have non-empty findings. Returns `(is_valid, missing_names)`. |
+| `extract_research_summary(result, max_chars)` | Compact Markdown for prompt injection, truncated on line boundary. |
+| `parse_tech_research_file(content)` | Parses `## TechName (vVersion)` sections from TECH_RESEARCH.md. |
+
+**Prompt Constant:** `TECH_RESEARCH_PROMPT` — instructs sub-orchestrator to call `resolve-library-id` then `query-docs` for each technology, writing findings to `.agent-team/TECH_RESEARCH.md`.
+
+---
+
+### Config: `TechResearchConfig`
+
+```python
+@dataclasses.dataclass
+class TechResearchConfig:
+    enabled: bool = True
+    max_techs: int = 8
+    max_queries_per_tech: int = 4
+    retry_on_incomplete: bool = True
+    injection_max_chars: int = 6000
+```
+
+**Depth gating:**
+
+| Depth | enabled | max_queries_per_tech |
+|-------|---------|---------------------|
+| quick | False | — |
+| standard | True | 2 |
+| thorough | True | 4 (default) |
+| exhaustive | True | 6 |
+
+User overrides tracked for `enabled` and `max_queries_per_tech`.
+
+---
+
+### MCP: `get_context7_only_servers()`
+
+New function in `mcp_servers.py` returns MCP servers dict with **only** Context7 — no Firecrawl, no Sequential Thinking, no Playwright. Used by the tech research sub-orchestrator for minimal tool scope.
+
+---
+
+### CLI Wiring
+
+**New async function:** `_run_tech_research(cwd, config, prd_text, master_plan_text, depth)`
+
+Flow: `detect_tech_stack()` → `build_research_queries()` → sub-orchestrator with Context7 MCP → `parse_tech_research_file()` → `validate_tech_research()` → retry if incomplete and `retry_on_incomplete=True`.
+
+**Phase 1.5 in `_run_prd_milestones()`** — after MASTER_PLAN.md parsed, before milestone loop:
+```python
+tech_research_result = None
+if config.tech_research.enabled:
+    try:
+        research_cost, tech_research_result = await _run_tech_research(...)
+        total_cost += research_cost
+    except Exception:
+        print_warning("Tech research failed (non-blocking)")
+```
+
+**Standard mode support in `main()`** — lighter version for non-PRD runs, detects from task text only, injects into orchestrator prompt. Cost tracked via `_std_research_cost` added AFTER `_run_single` returns (avoids overwrite).
+
+---
+
+### Prompt Injection in `agents.py`
+
+New optional parameter `tech_research_content: str = ""` on both `build_milestone_execution_prompt()` and `build_orchestrator_prompt()`.
+
+Injection block:
+```
+[TECH STACK BEST PRACTICES -- FROM DOCUMENTATION]
+The following best practices were researched from official documentation
+via Context7. Follow these patterns and avoid the listed pitfalls.
+{tech_research_content}
+```
+
+Only injected when `tech_research_content` is non-empty. All existing callers unaffected (default `""`).
+
+---
+
+### Production Hardening (8 bugs fixed across 2 review rounds)
+
+**Round 1** — 7 bugs found via 13-step Sequential Thinking analysis:
+
+| Bug | Severity | Issue | Fix |
+|-----|----------|-------|-----|
+| #1 | **CRITICAL** | `run_cost` in standard mode overwritten by `_run_single` return, losing research cost | Track as `_std_research_cost`, add AFTER `_run_single` |
+| #5 | MEDIUM | `_detect_from_csproj` scanned node_modules/.git/bin/obj via unrestricted glob | `_CSPROJ_SKIP_DIRS` frozenset + `rglob` filter |
+| #7 | MEDIUM | `\bGo(?:lang)?\b` matched English "Go" verb in PRD text | Changed to `\bGolang\b` OR `\bGo\s+v?\d+\.\d+` (requires version) |
+| #8 | MEDIUM | csproj duplicate glob (`*.csproj` + `**/*.csproj`) | Single `rglob("*.csproj")` with skip dirs |
+| #4 | MEDIUM | Retry prompt didn't instruct reading existing file — overwrote previous findings | "FIRST read", "keep ALL existing sections", "Do NOT overwrite" |
+| #11 | LOW | `detect_tech_stack` called twice in standard mode (once for gating, once inside) | Removed outer redundant call |
+| — | — | Multi-group regex: `_detect_from_text` only checked `match.group(1)` but Go has 2 groups | Iterate `range(1, match.lastindex + 1)` for first non-None |
+
+**Round 2** — 1 bug found via exhaustive 20-thought deep audit (line-by-line review of all 730+ lines):
+
+| Bug | Severity | Issue | Fix |
+|-----|----------|-------|-----|
+| #14 | LOW | `pkg.get("dependencies", {})` returns `None` for `"dependencies": null` in package.json | `pkg.get("dependencies") or {}` (same for devDependencies) |
+
+The 20-thought audit verified: all 7 round-1 fixes correct, Go regex traced with 9 specific inputs, cost tracking traced through 6 scenarios, csproj skip-dir edge cases confirmed, retry prompt changes validated, all code paths through detect/query/validate/extract/parse verified.
+
+---
+
+### Tests
+
+**New file: `tests/test_tech_research.py`** — 152 tests across 30+ test classes:
+
+| Category | Tests | Key Coverage |
+|----------|-------|-------------|
+| Detection | 23 | package.json, requirements.txt, pyproject.toml, go.mod, csproj (nested + obj filter), PRD text, dedup, max cap, priority sort, null deps |
+| Go Regex | 14 | False positive prevention (bare "Go", URLs, case variants), Golang match, Go+version match, 2-digit, 3-digit |
+| Query Building | 11 | Category-specific templates, version-aware queries, cap enforcement, empty stack, language/frontend limits |
+| Validation | 9 | Complete, partial, below threshold, empty, custom threshold, whitespace-only, 100% threshold |
+| Extraction | 10 | Basic, truncation boundary, priority ordering, empty, code snippets, round-trip parse, finding not in stack |
+| Config | 7 | Defaults, all 4 depth gatings, YAML loading, user overrides |
+| Prompt Injection | 6 | Milestone + orchestrator injection, empty skip, header text verification |
+| Cost Preservation | 4 | After _run_single, no overwrite before, initialized, positive guard |
+| Retry Prompt | 3 | Read instruction, overwrite warning, file path |
+| Pipeline Integration | 3 | React+Express, Python, empty project |
+| Wiring | 6 | Phase placement, crash isolation, result threading, disabled skip, retry, MCP servers |
+| Parse Edge Cases | 4 | Empty body, special chars, multi-group version |
+
+**Final suite:** 5472 passed, 0 new regressions (2 pre-existing test_mcp_servers.py failures unchanged)
+
+---
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `src/agent_team/tech_research.py` | **NEW** ~530 lines — dataclasses, 6 detectors, query builder, validator, extractor, parser, prompt constant |
+| `src/agent_team/config.py` | `TechResearchConfig` dataclass + field on `AgentTeamConfig` + depth gating in `apply_depth_quality_gating()` + loader in `_dict_to_config()` |
+| `src/agent_team/mcp_servers.py` | `get_context7_only_servers()` function |
+| `src/agent_team/cli.py` | `_run_tech_research()` async function + Phase 1.5 wiring in `_run_prd_milestones()` + standard mode support with safe cost tracking |
+| `src/agent_team/agents.py` | `tech_research_content` parameter on `build_milestone_execution_prompt()` and `build_orchestrator_prompt()` + injection blocks |
+| `tests/test_tech_research.py` | **NEW** — 152 tests across detection, queries, validation, extraction, config, wiring, hardening |
+
+### Non-Breaking Guarantees
+
+- `tech_research_content=""` default — all existing callers unaffected
+- Entire Phase 1.5 wrapped in try/except — crash-isolated, non-blocking
+- No changes to existing function signatures (only new optional parameters)
+- Standard mode: research only runs if technologies detected in task text
+- All new code is additive — zero changes to existing logic paths
