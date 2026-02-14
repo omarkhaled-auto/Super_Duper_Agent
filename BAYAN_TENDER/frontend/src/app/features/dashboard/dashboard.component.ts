@@ -53,6 +53,15 @@ import { Subject, takeUntil, interval } from 'rxjs';
         </div>
       </div>
 
+      <!-- Error Banner -->
+      @if (loadError()) {
+        <div class="error-banner" data-testid="dashboard-error">
+          <i class="pi pi-exclamation-triangle"></i>
+          <span>{{ loadError() }}</span>
+          <button pButton label="Retry" icon="pi pi-refresh" class="p-button-text p-button-sm" (click)="retryLoad()"></button>
+        </div>
+      }
+
       <!-- KPI Cards -->
       <div class="kpi-grid" data-testid="kpi-grid">
         @if (isLoading()) {
@@ -140,8 +149,8 @@ import { Subject, takeUntil, interval } from 'rxjs';
                 <ng-template pTemplate="emptymessage">
                   <tr>
                     <td colspan="7" class="text-center p-4">
-                      <i class="pi pi-inbox text-4xl text-gray-300 mb-2"></i>
-                      <p class="text-gray-500">No active tenders found</p>
+                      <i class="pi pi-inbox" style="font-size: 2.5rem; color: var(--bayan-slate-300); margin-bottom: 0.5rem; display: block;"></i>
+                      <p style="color: var(--bayan-slate-500); margin: 0;">No active tenders found</p>
                     </td>
                   </tr>
                 </ng-template>
@@ -246,6 +255,26 @@ import { Subject, takeUntil, interval } from 'rxjs';
       gap: 1.5rem;
     }
 
+    .error-banner {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      background: var(--bayan-red-50, #fef2f2);
+      border: 1px solid var(--bayan-red-200, #fecaca);
+      border-radius: 8px;
+      color: var(--bayan-red-700, #b91c1c);
+      font-size: 0.875rem;
+    }
+
+    .error-banner i {
+      font-size: 1.25rem;
+    }
+
+    .error-banner span {
+      flex: 1;
+    }
+
     .dashboard-header {
       display: flex;
       justify-content: space-between;
@@ -257,13 +286,13 @@ import { Subject, takeUntil, interval } from 'rxjs';
     .header-left h1 {
       margin: 0;
       font-size: 1.75rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900);
       font-weight: 600;
     }
 
     .header-left p {
       margin: 0.25rem 0 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500);
     }
 
     .header-actions {
@@ -291,9 +320,38 @@ import { Subject, takeUntil, interval } from 'rxjs';
     }
 
     :host ::ng-deep .kpi-card {
+      .p-card {
+        background: var(--bayan-card);
+        box-shadow: var(--bayan-shadow-sm);
+        border-radius: var(--bayan-radius-lg);
+        border: 1px solid var(--bayan-border);
+        overflow: hidden;
+      }
       .p-card-body {
         padding: 1.25rem;
       }
+    }
+
+    :host ::ng-deep .kpi-blue .p-card {
+      border-left: 4px solid var(--bayan-primary);
+    }
+    :host ::ng-deep .kpi-green .p-card {
+      border-left: 4px solid var(--bayan-success);
+    }
+    :host ::ng-deep .kpi-orange .p-card {
+      border-left: 4px solid var(--bayan-warning);
+    }
+    :host ::ng-deep .kpi-red .p-card {
+      border-left: 4px solid var(--bayan-danger);
+    }
+    :host ::ng-deep .kpi-purple .p-card {
+      border-left: 4px solid var(--bayan-primary);
+    }
+    :host ::ng-deep .kpi-gray .p-card {
+      border-left: 4px solid var(--bayan-slate-400);
+    }
+    :host ::ng-deep .kpi-gold .p-card {
+      border-left: 4px solid var(--bayan-warning);
     }
 
     .kpi-content {
@@ -309,15 +367,17 @@ import { Subject, takeUntil, interval } from 'rxjs';
     }
 
     .kpi-title {
-      font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      font-size: 0.8rem;
+      color: var(--bayan-slate-500);
       font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
 
     .kpi-value {
-      font-size: 2rem;
-      font-weight: 700;
-      color: var(--bayan-foreground, #09090b);
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--bayan-slate-900);
     }
 
     .kpi-change {
@@ -328,41 +388,41 @@ import { Subject, takeUntil, interval } from 'rxjs';
     }
 
     .kpi-change.positive {
-      color: #22c55e;
+      color: var(--bayan-success);
     }
 
     .kpi-change.negative {
-      color: #ef4444;
+      color: var(--bayan-danger);
     }
 
     .kpi-icon {
-      width: 56px;
-      height: 56px;
-      border-radius: var(--bayan-radius, 0.5rem);
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--bayan-accent, #f4f4f5);
     }
 
     .kpi-icon i {
-      font-size: 1.5rem;
+      font-size: 1.25rem;
+      color: var(--bayan-primary-foreground);
     }
 
-    .icon-blue { background: #eff6ff; }
-    .icon-blue i { color: #2563eb; }
-    .icon-green { background: #f0fdf4; }
-    .icon-green i { color: #16a34a; }
-    .icon-orange { background: #fffbeb; }
-    .icon-orange i { color: #d97706; }
-    .icon-red { background: #fef2f2; }
-    .icon-red i { color: #dc2626; }
-    .icon-purple { background: #faf5ff; }
-    .icon-purple i { color: #9333ea; }
-    .icon-gray { background: var(--bayan-accent, #f4f4f5); }
-    .icon-gray i { color: var(--bayan-muted-foreground, #71717a); }
-    .icon-gold { background: #fefce8; }
-    .icon-gold i { color: #ca8a04; }
+    .icon-blue { background: var(--bayan-primary); }
+    .icon-blue i { color: var(--bayan-primary-foreground); }
+    .icon-green { background: var(--bayan-success); }
+    .icon-green i { color: var(--bayan-primary-foreground); }
+    .icon-orange { background: var(--bayan-warning); }
+    .icon-orange i { color: var(--bayan-primary-foreground); }
+    .icon-red { background: var(--bayan-danger); }
+    .icon-red i { color: var(--bayan-primary-foreground); }
+    .icon-purple { background: var(--bayan-primary); }
+    .icon-purple i { color: var(--bayan-primary-foreground); }
+    .icon-gray { background: var(--bayan-slate-400); }
+    .icon-gray i { color: var(--bayan-primary-foreground); }
+    .icon-gold { background: var(--bayan-warning); }
+    .icon-gold i { color: var(--bayan-primary-foreground); }
 
     /* Main Grid */
     .main-grid {
@@ -389,21 +449,21 @@ import { Subject, takeUntil, interval } from 'rxjs';
       justify-content: space-between;
       align-items: center;
       padding: 1rem 1.25rem;
-      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
+      border-bottom: 1px solid var(--bayan-border);
     }
 
     .card-header h3 {
       margin: 0;
       font-size: 1rem;
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900);
     }
 
     .card-header .badge {
-      background: var(--bayan-accent, #f4f4f5);
-      color: var(--bayan-muted-foreground, #71717a);
+      background: var(--bayan-primary-light);
+      color: var(--bayan-primary);
       padding: 0.25rem 0.5rem;
-      border-radius: var(--bayan-radius-sm, 0.375rem);
+      border-radius: var(--bayan-radius-full);
       font-size: 0.75rem;
       font-weight: 500;
     }
@@ -411,6 +471,12 @@ import { Subject, takeUntil, interval } from 'rxjs';
     :host ::ng-deep .table-card,
     :host ::ng-deep .deadlines-card,
     :host ::ng-deep .activity-card {
+      .p-card {
+        background: var(--bayan-card);
+        box-shadow: var(--bayan-shadow-sm);
+        border-radius: var(--bayan-radius-lg);
+        border: 1px solid var(--bayan-border);
+      }
       .p-card-header {
         padding: 0;
       }
@@ -425,35 +491,40 @@ import { Subject, takeUntil, interval } from 'rxjs';
     /* Table Styles */
     :host ::ng-deep .p-datatable {
       .p-datatable-thead > tr > th {
-        background: var(--bayan-accent, #f4f4f5);
+        background: var(--bayan-slate-50);
         font-weight: 600;
-        color: var(--bayan-muted-foreground, #71717a);
+        color: var(--bayan-slate-600);
         font-size: 0.75rem;
         text-transform: uppercase;
+        letter-spacing: 0.05em;
         padding: 0.75rem 1rem;
       }
       .p-datatable-tbody > tr > td {
         padding: 0.75rem 1rem;
         font-size: 0.875rem;
+        color: var(--bayan-slate-700);
+      }
+      .p-datatable-tbody > tr:hover > td {
+        background: var(--bayan-slate-50);
       }
     }
 
     .tender-title {
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900);
     }
 
     .bid-count {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900);
     }
 
     .text-danger {
-      color: #ef4444 !important;
+      color: var(--bayan-danger) !important;
       font-weight: 600;
     }
 
     .text-warning {
-      color: #f97316 !important;
+      color: var(--bayan-warning) !important;
       font-weight: 500;
     }
 
@@ -468,8 +539,8 @@ import { Subject, takeUntil, interval } from 'rxjs';
       align-items: center;
       gap: 1rem;
       padding: 1rem 1.25rem;
-      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
-      transition: background-color 0.2s;
+      border-bottom: 1px solid var(--bayan-border);
+      transition: background-color var(--bayan-transition);
     }
 
     .deadline-item:last-child {
@@ -477,22 +548,22 @@ import { Subject, takeUntil, interval } from 'rxjs';
     }
 
     .deadline-item:hover {
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-slate-50);
     }
 
     .deadline-item.urgent {
-      background-color: #fef9c3;
+      background-color: var(--bayan-warning-bg);
     }
 
     .deadline-item.overdue {
-      background-color: #fee2e2;
+      background-color: var(--bayan-danger-bg);
     }
 
     .deadline-icon {
       width: 40px;
       height: 40px;
-      border-radius: var(--bayan-radius, 0.5rem);
-      background: var(--bayan-accent, #f4f4f5);
+      border-radius: var(--bayan-radius);
+      background: var(--bayan-slate-100);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -501,23 +572,23 @@ import { Subject, takeUntil, interval } from 'rxjs';
 
     .deadline-icon i {
       font-size: 1rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500);
     }
 
     .deadline-item.urgent .deadline-icon {
-      background: #fef08a;
+      background: var(--bayan-warning-bg);
     }
 
     .deadline-item.urgent .deadline-icon i {
-      color: #a16207;
+      color: var(--bayan-warning);
     }
 
     .deadline-item.overdue .deadline-icon {
-      background: #fecaca;
+      background: var(--bayan-danger-bg);
     }
 
     .deadline-item.overdue .deadline-icon i {
-      color: #dc2626;
+      color: var(--bayan-danger);
     }
 
     .deadline-info {
@@ -534,21 +605,21 @@ import { Subject, takeUntil, interval } from 'rxjs';
 
     .deadline-reference {
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900);
       font-size: 0.875rem;
     }
 
     .deadline-type {
       font-size: 0.75rem;
-      color: var(--bayan-muted-foreground, #71717a);
-      background: var(--bayan-accent, #f4f4f5);
+      color: var(--bayan-slate-500);
+      background: var(--bayan-slate-100);
       padding: 0.125rem 0.375rem;
-      border-radius: var(--bayan-radius-sm, 0.375rem);
+      border-radius: var(--bayan-radius-sm);
     }
 
     .deadline-title {
       font-size: 0.8rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -561,34 +632,46 @@ import { Subject, takeUntil, interval } from 'rxjs';
     .countdown {
       font-weight: 600;
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500);
       display: flex;
       align-items: center;
       gap: 0.25rem;
     }
 
     .countdown.urgent {
-      color: #a16207;
+      color: var(--bayan-warning);
     }
 
     .countdown.overdue {
-      color: #dc2626;
+      color: var(--bayan-danger);
     }
 
-    /* Activity Feed */
+    /* Activity Feed — Timeline Pattern */
     .activity-feed {
       display: flex;
       flex-direction: column;
       max-height: 500px;
       overflow-y: auto;
+      position: relative;
+    }
+
+    .activity-feed::before {
+      content: '';
+      position: absolute;
+      left: calc(1.25rem + 18px);
+      top: 1rem;
+      bottom: 1rem;
+      width: 2px;
+      background: var(--bayan-slate-200);
     }
 
     .activity-item {
       display: flex;
       gap: 0.75rem;
       padding: 1rem 1.25rem;
-      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
-      transition: background-color 0.2s;
+      border-bottom: 1px solid var(--bayan-border);
+      transition: background-color var(--bayan-transition);
+      position: relative;
     }
 
     .activity-item:last-child {
@@ -600,7 +683,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
     }
 
     .activity-item.clickable:hover {
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-slate-50);
     }
 
     .activity-icon {
@@ -611,11 +694,12 @@ import { Subject, takeUntil, interval } from 'rxjs';
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
+      z-index: 1;
     }
 
     .activity-icon i {
       font-size: 0.875rem;
-      color: white;
+      color: var(--bayan-primary-foreground);
     }
 
     .activity-content {
@@ -626,8 +710,19 @@ import { Subject, takeUntil, interval } from 'rxjs';
     .activity-description {
       margin: 0 0 0.25rem;
       font-size: 0.875rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-700);
       line-height: 1.4;
+    }
+
+    .activity-description a,
+    .activity-description .entity-link {
+      color: var(--bayan-primary);
+      text-decoration: none;
+    }
+
+    .activity-description a:hover,
+    .activity-description .entity-link:hover {
+      text-decoration: underline;
     }
 
     .activity-meta {
@@ -635,7 +730,7 @@ import { Subject, takeUntil, interval } from 'rxjs';
       align-items: center;
       gap: 0.75rem;
       font-size: 0.75rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-400);
     }
 
     .activity-user {
@@ -648,6 +743,10 @@ import { Subject, takeUntil, interval } from 'rxjs';
       font-size: 0.625rem;
     }
 
+    .activity-time {
+      color: var(--bayan-slate-400);
+    }
+
     /* Empty States */
     .empty-state {
       display: flex;
@@ -655,18 +754,19 @@ import { Subject, takeUntil, interval } from 'rxjs';
       align-items: center;
       justify-content: center;
       padding: 3rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500);
     }
 
     .empty-state i {
       font-size: 2.5rem;
       margin-bottom: 0.75rem;
-      color: var(--bayan-border, #e4e4e7);
+      color: var(--bayan-slate-300);
     }
 
     .empty-state p {
       margin: 0;
       font-size: 0.875rem;
+      color: var(--bayan-slate-500);
     }
 
     /* Responsive */
@@ -695,6 +795,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   isLoading = this.dashboardService.isLoading;
 
   dashboardData = signal<TenderManagerDashboard | null>(null);
+  loadError = signal<string | null>(null);
 
   ngOnInit(): void {
     this.loadDashboardData();
@@ -711,12 +812,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   private loadDashboardData(): void {
+    this.loadError.set(null);
     this.dashboardService.getTenderManagerDashboard()
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (data) => this.dashboardData.set(data),
-        error: (error) => console.error('Failed to load dashboard data:', error)
+        error: (error) => {
+          console.error('Failed to load dashboard data:', error);
+          this.loadError.set(error?.message || 'Failed to load dashboard data. Please try again.');
+        }
       });
+  }
+
+  retryLoad(): void {
+    this.loadDashboardData();
   }
 
   getStatusSeverity(status: string): 'success' | 'secondary' | 'info' | 'warn' | 'danger' | 'contrast' | undefined {

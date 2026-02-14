@@ -311,8 +311,8 @@ import { TENDER_TYPE_OPTIONS, CURRENCY_OPTIONS } from '../../../core/models/tend
 
     .form-field label {
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
-      font-size: 0.9rem;
+      color: var(--bayan-slate-700, #334155);
+      font-size: 0.875rem;
     }
 
     .input-with-counter {
@@ -330,11 +330,11 @@ import { TENDER_TYPE_OPTIONS, CURRENCY_OPTIONS } from '../../../core/models/tend
       top: 50%;
       transform: translateY(-50%);
       font-size: 0.75rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-400, #94A3B8);
     }
 
     .char-counter.warning {
-      color: #f59e0b;
+      color: var(--bayan-warning, #D97706);
     }
 
     .client-input,
@@ -361,7 +361,7 @@ import { TENDER_TYPE_OPTIONS, CURRENCY_OPTIONS } from '../../../core/models/tend
 
     .client-location {
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .tender-type-options {
@@ -375,20 +375,20 @@ import { TENDER_TYPE_OPTIONS, CURRENCY_OPTIONS } from '../../../core/models/tend
       align-items: flex-start;
       gap: 0.75rem;
       padding: 1rem;
-      border: 1px solid var(--bayan-border, #e4e4e7);
+      border: 1px solid var(--bayan-border, #E2E8F0);
       border-radius: var(--bayan-radius, 0.5rem);
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all var(--bayan-transition, 200ms ease);
     }
 
     .type-option:hover {
-      border-color: var(--bayan-primary, #18181b);
-      background-color: var(--bayan-accent, #f4f4f5);
+      border-color: var(--bayan-primary, #4F46E5);
+      background-color: var(--bayan-primary-light, #EEF2FF);
     }
 
     .type-option.selected {
-      border-color: var(--bayan-primary, #18181b);
-      background-color: var(--bayan-accent, #f4f4f5);
+      border-color: var(--bayan-primary, #4F46E5);
+      background-color: var(--bayan-primary-light, #EEF2FF);
     }
 
     .type-label {
@@ -400,17 +400,17 @@ import { TENDER_TYPE_OPTIONS, CURRENCY_OPTIONS } from '../../../core/models/tend
 
     .type-name {
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .type-description {
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .field-hint {
-      color: var(--bayan-muted-foreground, #71717a);
-      font-size: 0.8rem;
+      color: var(--bayan-slate-400, #94A3B8);
+      font-size: 0.75rem;
     }
 
     :host ::ng-deep .w-full {

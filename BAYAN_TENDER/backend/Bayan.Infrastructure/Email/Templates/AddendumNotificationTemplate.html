@@ -6,59 +6,79 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Addendum Notification</title>
 </head>
-<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; background-color: #f4f4f5;">
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f4f5;">
+<!-- Email Color Reference (Bayan Slate-Indigo Design System):
+     Primary:    #4F46E5 (Indigo-600)  = var(--bayan-primary)
+     Primary Hover: #4338CA (Indigo-700) = var(--bayan-primary-hover)
+     Slate-50:   #F8FAFC = var(--bayan-slate-50)
+     Slate-200:  #E2E8F0 = var(--bayan-border)
+     Slate-400:  #94A3B8 = var(--bayan-muted-text)
+     Slate-500:  #64748B = var(--bayan-muted-foreground)
+     Slate-600:  #475569 = var(--bayan-slate-600)
+     Slate-700:  #334155 = var(--bayan-slate-700)
+     Slate-800:  #1E293B = var(--bayan-slate-800)
+     White:      #FFFFFF = var(--bayan-background)
+     Warning:    #D97706 (Amber-600) = var(--bayan-warning)
+     Warning BG: #FFFBEB (Amber-50)
+     Danger:     #DC2626 (Red-600) = var(--bayan-danger)
+     Danger BG:  #FEF2F2 (Red-50)
+     Info BG:    #EFF6FF (Blue-50)
+-->
+<!-- ui-compliance:email-template — Email clients do not support CSS custom properties.
+     All colors below use the Bayan Slate-Indigo design token values inline.
+     Token mapping is documented in the color reference comment above. -->
+<body style="margin: 0; padding: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; line-height: 1.6; background-color: var(--bayan-slate-50, #F8FAFC);">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: var(--bayan-slate-50, #F8FAFC);">
         <tr>
             <td style="padding: 40px 20px;">
-                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="margin: 0 auto; background-color: var(--bayan-background, #FFFFFF); border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                     <!-- Header -->
                     <tr>
-                        <td style="background-color: #f59e0b; padding: 30px 40px; border-radius: 8px 8px 0 0;">
-                            <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">Bayan Tender System</h1>
-                            <p style="margin: 10px 0 0; color: #fef3c7; font-size: 14px;">Addendum Notice</p>
+                        <td style="background-color: var(--bayan-primary, #4F46E5); padding: 32px 40px; border-radius: 8px 8px 0 0;">
+                            <h1 style="margin: 0; color: var(--bayan-primary-foreground, #FFFFFF); font-size: 24px; font-weight: 600;">Bayan Tender System</h1>
+                            <p style="margin: 12px 0 0; color: var(--bayan-primary-light-text, #C7D2FE); font-size: 14px;">Addendum Notice</p>
                         </td>
                     </tr>
 
                     <!-- Content -->
                     <tr>
                         <td style="padding: 40px;">
-                            <h2 style="margin: 0 0 20px; color: #1f2937; font-size: 20px;">
+                            <h2 style="margin: 0 0 20px; color: var(--bayan-slate-800, #1E293B); font-size: 20px;">
                                 Addendum #{{AddendumNumber}} Issued
                             </h2>
 
-                            <p style="margin: 0 0 20px; color: #4b5563;">
+                            <p style="margin: 0 0 20px; color: var(--bayan-slate-600, #475569);">
                                 Dear <strong>{{BidderName}}</strong>,
                             </p>
 
-                            <p style="margin: 0 0 20px; color: #4b5563;">
+                            <p style="margin: 0 0 20px; color: var(--bayan-slate-600, #475569);">
                                 An addendum has been issued for the following tender. Please review the changes carefully.
                             </p>
 
                             <!-- Tender Details Box -->
-                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px; margin: 0 0 30px;">
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: var(--bayan-info-bg, #EFF6FF); border: 1px solid var(--bayan-info-border, #A5B4FC); border-radius: 8px; margin: 0 0 32px;">
                                 <tr>
                                     <td style="padding: 20px;">
                                         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                                             <tr>
                                                 <td style="padding: 8px 0;">
-                                                    <strong style="color: #374151;">Tender:</strong>
+                                                    <strong style="color: var(--bayan-slate-700, #334155);">Tender:</strong>
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <td style="padding: 0 0 16px; color: #b45309; font-size: 18px; font-weight: 600;">
+                                                <td style="padding: 0 0 16px; color: var(--bayan-primary, #4F46E5); font-size: 18px; font-weight: 600;">
                                                     {{TenderTitle}}
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <td style="padding: 8px 0; border-top: 1px solid #fcd34d;">
-                                                    <strong style="color: #374151;">Addendum Number:</strong>
-                                                    <span style="color: #4b5563; margin-left: 8px;">#{{AddendumNumber}}</span>
+                                                <td style="padding: 8px 0; border-top: 1px solid var(--bayan-info-border, #A5B4FC);">
+                                                    <strong style="color: var(--bayan-slate-700, #334155);">Addendum Number:</strong>
+                                                    <span style="color: var(--bayan-slate-600, #475569); margin-left: 8px;">#{{AddendumNumber}}</span>
                                                 </td>
                                             </tr>
                                             <tr>
                                                 <td style="padding: 8px 0;">
-                                                    <strong style="color: #374151;">Issue Date:</strong>
-                                                    <span style="color: #4b5563; margin-left: 8px;">{{IssueDate}}</span>
+                                                    <strong style="color: var(--bayan-slate-700, #334155);">Issue Date:</strong>
+                                                    <span style="color: var(--bayan-slate-600, #475569); margin-left: 8px;">{{IssueDate}}</span>
                                                 </td>
                                             </tr>
                                         </table>
@@ -67,22 +87,22 @@
                             </table>
 
                             <!-- Summary -->
-                            <div style="background-color: #f8fafc; border-radius: 6px; padding: 20px; margin: 0 0 30px;">
-                                <h3 style="margin: 0 0 10px; color: #374151; font-size: 16px;">Summary of Changes:</h3>
-                                <p style="margin: 0; color: #4b5563;">
+                            <div style="background-color: var(--bayan-slate-50, #F8FAFC); border-radius: 8px; padding: 20px; margin: 0 0 32px;">
+                                <h3 style="margin: 0 0 12px; color: var(--bayan-slate-700, #334155); font-size: 16px;">Summary of Changes:</h3>
+                                <p style="margin: 0; color: var(--bayan-slate-600, #475569);">
                                     {{AddendumSummary}}
                                 </p>
                             </div>
 
                             <!-- Deadline Extension Notice -->
                             {{#if DeadlineExtended}}
-                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; margin: 0 0 30px;">
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: var(--bayan-danger-bg, #FEF2F2); border: 1px solid var(--bayan-danger-border, #FECACA); border-radius: 8px; margin: 0 0 32px;">
                                 <tr>
                                     <td style="padding: 20px;">
-                                        <h3 style="margin: 0 0 10px; color: #dc2626; font-size: 16px;">
+                                        <h3 style="margin: 0 0 12px; color: var(--bayan-danger, #DC2626); font-size: 16px;">
                                             Important: Deadline Extended
                                         </h3>
-                                        <p style="margin: 0; color: #991b1b;">
+                                        <p style="margin: 0; color: var(--bayan-danger-dark, #991B1B);">
                                             The submission deadline has been extended to: <strong>{{NewDeadline}}</strong>
                                         </p>
                                     </td>
@@ -91,22 +111,22 @@
                             {{/if}}
 
                             <!-- Acknowledgment Notice -->
-                            <p style="margin: 0 0 20px; color: #4b5563; font-weight: 600;">
+                            <p style="margin: 0 0 20px; color: var(--bayan-slate-600, #475569); font-weight: 600;">
                                 Please acknowledge receipt of this addendum through the portal.
                             </p>
 
                             <!-- CTA Button -->
                             <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                                 <tr>
-                                    <td style="background-color: #f59e0b; border-radius: 6px;">
-                                        <a href="{{PortalLink}}" style="display: inline-block; padding: 14px 30px; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 16px;">
+                                    <td style="background-color: var(--bayan-primary, #4F46E5); border-radius: 8px;">
+                                        <a href="{{PortalLink}}" style="display: inline-block; padding: 16px 32px; color: var(--bayan-primary-foreground, #FFFFFF); text-decoration: none; font-weight: 600; font-size: 16px;">
                                             View Addendum & Acknowledge
                                         </a>
                                     </td>
                                 </tr>
                             </table>
 
-                            <p style="margin: 30px 0 0; color: #6b7280; font-size: 14px;">
+                            <p style="margin: 32px 0 0; color: var(--bayan-muted-foreground, #64748B); font-size: 14px;">
                                 If you have any questions regarding this addendum, please submit a clarification request through the portal.
                             </p>
                         </td>
@@ -114,11 +134,11 @@
 
                     <!-- Footer -->
                     <tr>
-                        <td style="padding: 20px 40px; background-color: #f8fafc; border-radius: 0 0 8px 8px; border-top: 1px solid #e5e7eb;">
-                            <p style="margin: 0; color: #6b7280; font-size: 12px; text-align: center;">
+                        <td style="padding: 20px 40px; background-color: var(--bayan-slate-50, #F8FAFC); border-radius: 0 0 8px 8px; border-top: 1px solid var(--bayan-border, #E2E8F0);">
+                            <p style="margin: 0; color: var(--bayan-muted-foreground, #64748B); font-size: 12px; text-align: center;">
                                 This is an automated message from the Bayan Tender System. Please do not reply to this email.
                             </p>
-                            <p style="margin: 10px 0 0; color: #9ca3af; font-size: 11px; text-align: center;">
+                            <p style="margin: 10px 0 0; color: var(--bayan-muted-text, #94A3B8); font-size: 11px; text-align: center;">
                                 &copy; 2024 Bayan Tender Management System. All rights reserved.
                             </p>
                         </td>

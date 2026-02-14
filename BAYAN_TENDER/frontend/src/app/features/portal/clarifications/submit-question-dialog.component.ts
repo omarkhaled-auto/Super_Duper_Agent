@@ -185,8 +185,8 @@ interface DialogData {
     .form-field label {
       display: block;
       margin-bottom: 0.5rem;
-      font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      font-weight: 600;
+      color: var(--bayan-slate-700, #334155);
     }
 
     .field-footer {
@@ -197,7 +197,7 @@ interface DialogData {
     }
 
     .char-count {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       font-size: 0.75rem;
       margin-left: auto;
     }
@@ -205,7 +205,7 @@ interface DialogData {
     .field-hint {
       display: block;
       margin-top: 0.25rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       font-size: 0.8rem;
     }
 
@@ -224,7 +224,7 @@ interface DialogData {
 
     .hint-text {
       font-weight: 400;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       font-size: 0.8rem;
       margin-top: 0.25rem;
     }
@@ -237,12 +237,12 @@ interface DialogData {
 
     .section-number {
       font-weight: 600;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
       min-width: 60px;
     }
 
     .section-title {
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .dialog-actions {
@@ -251,7 +251,7 @@ interface DialogData {
       gap: 0.75rem;
       margin-top: 2rem;
       padding-top: 1rem;
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     .p-error {

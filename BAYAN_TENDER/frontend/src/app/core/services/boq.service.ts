@@ -176,7 +176,9 @@ export class BoqService {
       description: item.description,
       quantity: item.quantity,
       uom: item.uom,
-      type: ITEM_TYPE_FROM_BACKEND[item.itemType] ?? 'base',
+      type: typeof item.itemType === 'string'
+        ? ({ base: 'base', alternate: 'alternate', provisionalsum: 'provisional_sum', daywork: 'daywork' } as Record<string, BoqItemType>)[item.itemType.toLowerCase()] ?? 'base'
+        : ITEM_TYPE_FROM_BACKEND[item.itemType] ?? 'base',
       notes: item.notes,
       sortOrder: item.sortOrder,
       createdAt: new Date().toISOString(),
@@ -522,8 +524,8 @@ export class BoqService {
     const issues: any[] = validation.issues ?? [];
     const rows: BoqImportRow[] = (preview.previewRows ?? []).map((row: any, i: number) => {
       const rowIssues = issues.filter((issue: any) => issue.rowNumber === i + 1);
-      const errors = rowIssues.filter((issue: any) => issue.severity === 2).map((issue: any) => issue.message);
-      const warnings = rowIssues.filter((issue: any) => issue.severity === 1).map((issue: any) => issue.message);
+      const errors = rowIssues.filter((issue: any) => issue.severity === 2 || (typeof issue.severity === 'string' && issue.severity.toLowerCase() === 'error')).map((issue: any) => issue.message);
+      const warnings = rowIssues.filter((issue: any) => issue.severity === 1 || (typeof issue.severity === 'string' && issue.severity.toLowerCase() === 'warning')).map((issue: any) => issue.message);
       const status: 'valid' | 'warning' | 'error' = errors.length > 0 ? 'error' : warnings.length > 0 ? 'warning' : 'valid';
 
       return {

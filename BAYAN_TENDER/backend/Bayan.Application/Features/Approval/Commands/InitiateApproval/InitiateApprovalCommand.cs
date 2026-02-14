@@ -29,6 +29,11 @@ public record InitiateApprovalCommand : IRequest<InitiateApprovalResult>
     /// If not provided, defaults will be used.
     /// </summary>
     public List<DateTime?>? LevelDeadlines { get; init; }
+
+    /// <summary>
+    /// Optional reason required when re-initiating with changed approvers.
+    /// </summary>
+    public string? ApproverChangeReason { get; init; }
 }
 
 /// <summary>

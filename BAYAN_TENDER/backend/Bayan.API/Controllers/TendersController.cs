@@ -6,6 +6,7 @@ using Bayan.Application.Features.Addenda.DTOs;
 using Bayan.Application.Features.Addenda.Queries.GetAddenda;
 using Bayan.Application.Features.Addenda.Queries.GetAddendumById;
 using Bayan.Application.Features.Tenders.Commands.CancelTender;
+using Bayan.Application.Features.Tenders.Commands.CloseTender;
 using Bayan.Application.Features.Tenders.Commands.CreateTender;
 using Bayan.Application.Features.Tenders.Commands.InviteBidders;
 using Bayan.Application.Features.Tenders.Commands.PublishTender;
@@ -13,11 +14,13 @@ using Bayan.Application.Features.Tenders.Commands.RemoveTenderBidder;
 using Bayan.Application.Features.Tenders.Commands.UpdateBidderQualification;
 using Bayan.Application.Features.Tenders.Commands.UpdateTender;
 using Bayan.Application.Features.Tenders.DTOs;
+using Bayan.Application.Features.Tenders.Queries.ExportTenders;
 using Bayan.Application.Features.Tenders.Queries.GetNextTenderReference;
 using Bayan.Application.Features.Tenders.Queries.GetTenderActivity;
 using Bayan.Application.Features.Tenders.Queries.GetTenderBidders;
 using Bayan.Application.Features.Tenders.Queries.GetTenderById;
 using Bayan.Application.Features.Tenders.Queries.GetTenders;
+using Bayan.API.Authorization;
 using Bayan.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -30,7 +33,7 @@ namespace Bayan.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin,TenderManager,CommercialAnalyst,Approver,Auditor,TechnicalPanelist")]
+[Authorize(Roles = BayanRoles.InternalUsers)]
 public class TendersController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -89,6 +92,20 @@ public class TendersController : ControllerBase
     }
 
     /// <summary>
+    /// Exports all tenders to an Excel file.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An Excel file containing all tenders.</returns>
+    [HttpGet("export")]
+    [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ExportTenders(CancellationToken cancellationToken = default)
+    {
+        var query = new ExportTendersQuery();
+        var result = await _mediator.Send(query, cancellationToken);
+        return File(result.FileContent, result.ContentType, result.FileName);
+    }
+
+    /// <summary>
     /// Gets a tender by ID with full details including bidders and evaluation criteria.
     /// </summary>
     /// <param name="id">The tender's unique identifier.</param>
@@ -119,6 +136,7 @@ public class TendersController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The next tender reference number.</returns>
     [HttpGet("next-reference")]
+    [Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
     [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
     public async Task<ActionResult<string>> GetNextReference(
         CancellationToken cancellationToken = default)
@@ -135,6 +153,7 @@ public class TendersController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The created tender.</returns>
     [HttpPost]
+    [Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
     [ProducesResponseType(typeof(TenderDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<TenderDto>> CreateTender(
@@ -171,6 +190,7 @@ public class TendersController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The updated tender if found.</returns>
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
     [ProducesResponseType(typeof(TenderDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -215,6 +235,7 @@ public class TendersController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The published tender if found.</returns>
     [HttpPost("{id:guid}/publish")]
+    [Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
     [ProducesResponseType(typeof(TenderDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -241,6 +262,7 @@ public class TendersController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The cancelled tender if found.</returns>
     [HttpPost("{id:guid}/cancel")]
+    [Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
     [ProducesResponseType(typeof(TenderDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -253,6 +275,34 @@ public class TendersController : ControllerBase
         {
             Reason = request?.Reason
         };
+
+        var result = await _mediator.Send(command, cancellationToken);
+
+        if (result == null)
+        {
+            return NotFound(ApiResponse<object>.FailureResponse("Tender not found"));
+        }
+
+        return Ok(ApiResponse<TenderDto>.SuccessResponse(result));
+    }
+
+    /// <summary>
+    /// Closes a tender (transitions from Active to Evaluation).
+    /// Stops accepting bids and begins the evaluation phase.
+    /// </summary>
+    /// <param name="id">The tender's unique identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The closed tender if found.</returns>
+    [HttpPost("{id:guid}/close")]
+    [Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
+    [ProducesResponseType(typeof(TenderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<TenderDto>> CloseTender(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        var command = new CloseTenderCommand(id);
 
         var result = await _mediator.Send(command, cancellationToken);
 
@@ -322,6 +372,7 @@ public class TendersController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result of the invitation operation.</returns>
     [HttpPost("{tenderId:guid}/invite")]
+    [Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
     [ProducesResponseType(typeof(InviteBiddersResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -348,6 +399,7 @@ public class TendersController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>No content if successful, NotFound otherwise.</returns>
     [HttpDelete("{tenderId:guid}/bidders/{bidderId:guid}")]
+    [Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveTenderBidder(
@@ -375,7 +427,7 @@ public class TendersController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Success status.</returns>
     [HttpPut("{tenderId:guid}/bidders/{bidderId:guid}/qualification")]
-    [Authorize(Roles = "Admin,TenderManager")]
+    [Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -467,6 +519,7 @@ public class TendersController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The created addendum.</returns>
     [HttpPost("{id:guid}/addenda")]
+    [Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
     [ProducesResponseType(typeof(AddendumDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -495,6 +548,7 @@ public class TendersController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The issued addendum.</returns>
     [HttpPost("{id:guid}/addenda/{addendumId:guid}/issue")]
+    [Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
     [ProducesResponseType(typeof(AddendumDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -517,6 +571,7 @@ public class TendersController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Success status.</returns>
     [HttpPost("{id:guid}/addenda/{addendumId:guid}/acknowledge")]
+    [Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

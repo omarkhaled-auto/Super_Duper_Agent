@@ -34,6 +34,10 @@ public class InitiateApprovalCommandValidator : AbstractValidator<InitiateApprov
             .WithMessage("If deadlines are specified, exactly 3 must be provided (one per level).")
             .Must(DeadlinesInFuture)
             .WithMessage("All deadlines must be in the future.");
+
+        RuleFor(x => x)
+            .MustAsync(ChangeReasonProvidedWhenApproversDiffer)
+            .WithMessage("Reason is required (minimum 10 characters) when changing approvers during re-initiation.");
     }
 
     private async Task<bool> TenderExists(Guid tenderId, CancellationToken cancellationToken)
@@ -92,5 +96,40 @@ public class InitiateApprovalCommandValidator : AbstractValidator<InitiateApprov
 
         var now = DateTime.UtcNow;
         return deadlines.All(d => !d.HasValue || d.Value > now);
+    }
+
+    private async Task<bool> ChangeReasonProvidedWhenApproversDiffer(
+        InitiateApprovalCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (command.ApproverUserIds == null || command.ApproverUserIds.Count != 3)
+            return true;
+
+        var existingWorkflow = await _context.ApprovalWorkflows
+            .Include(w => w.Levels)
+            .FirstOrDefaultAsync(w => w.TenderId == command.TenderId, cancellationToken);
+
+        if (existingWorkflow == null)
+            return true;
+
+        var isReinitiableWorkflow = existingWorkflow.Status == ApprovalWorkflowStatus.Rejected ||
+                                    existingWorkflow.Status == ApprovalWorkflowStatus.RevisionNeeded;
+        if (!isReinitiableWorkflow)
+            return true;
+
+        var previousApproverIds = existingWorkflow.Levels
+            .OrderBy(l => l.LevelNumber)
+            .Select(l => l.ApproverUserId)
+            .ToList();
+
+        if (previousApproverIds.Count != 3)
+            return true;
+
+        var approversChanged = !previousApproverIds.SequenceEqual(command.ApproverUserIds);
+        if (!approversChanged)
+            return true;
+
+        var reason = command.ApproverChangeReason?.Trim();
+        return !string.IsNullOrWhiteSpace(reason) && reason.Length >= 10;
     }
 }

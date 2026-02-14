@@ -337,7 +337,7 @@ import {
     }
 
     .loading-container p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       margin: 0;
     }
 
@@ -356,20 +356,20 @@ import {
 
     .config-item label {
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       font-weight: 500;
     }
 
     .config-item span {
       font-size: 1rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     /* Section Cards */
     :host ::ng-deep .section-card {
       .p-card-title {
         font-size: 1.125rem;
-        color: var(--bayan-foreground, #09090b);
+        color: var(--bayan-foreground, #0F172A);
       }
     }
 
@@ -395,20 +395,20 @@ import {
 
     .member-name {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .member-dept {
       font-size: 0.75rem;
-      color: var(--bayan-muted-foreground, #71717a);
-      background: var(--bayan-accent, #f4f4f5);
+      color: var(--bayan-muted-foreground, #64748B);
+      background: var(--bayan-accent, #EEF2FF);
       padding: 0.125rem 0.5rem;
       border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .member-email {
       font-size: 0.8rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .selection-info {
@@ -416,14 +416,14 @@ import {
       align-items: flex-start;
       gap: 0.5rem;
       padding: 0.75rem;
-      background: var(--bayan-accent, #f4f4f5);
-      border-radius: 6px;
+      background: var(--bayan-accent, #EEF2FF);
+      border-radius: var(--bayan-radius, 0.5rem);
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .selection-info i {
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
       margin-top: 0.125rem;
     }
 
@@ -439,9 +439,9 @@ import {
       align-items: center;
       gap: 0.75rem;
       padding: 0.75rem 1rem;
-      background: var(--bayan-accent, #f4f4f5);
-      border-radius: 6px;
-      border-left: 3px solid var(--bayan-primary, #18181b);
+      background: var(--bayan-accent, #EEF2FF);
+      border-radius: var(--bayan-radius, 0.5rem);
+      border-left: 3px solid var(--bayan-primary, #4F46E5);
     }
 
     .selected-member .member-order {
@@ -450,7 +450,7 @@ import {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--bayan-primary, #18181b);
+      background: var(--bayan-primary, #4F46E5);
       color: white;
       border-radius: 50%;
       font-size: 0.75rem;
@@ -483,7 +483,7 @@ import {
 
     .form-field label {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #334155);
       font-size: 0.9rem;
     }
 
@@ -492,8 +492,8 @@ import {
       align-items: flex-start;
       gap: 0.75rem;
       padding: 1rem;
-      background: var(--bayan-accent, #f4f4f5);
-      border-radius: 6px;
+      background: var(--bayan-accent, #EEF2FF);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .checkbox-label {
@@ -505,12 +505,12 @@ import {
 
     .label-title {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .label-desc {
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .method-option {
@@ -525,7 +525,13 @@ import {
 
     .method-desc {
       font-size: 0.8rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
+    }
+
+    /* Badge icon colors */
+    .weight-badge i,
+    .max-score-badge i {
+      color: var(--bayan-primary, #4F46E5);
     }
 
     /* Action Bar */
@@ -533,11 +539,19 @@ import {
       display: flex;
       justify-content: flex-end;
       padding: 1.5rem 0;
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-slate-200, #E2E8F0);
       margin-top: 1rem;
     }
 
     /* Table styles */
+    :host ::ng-deep .p-datatable .p-datatable-thead > tr > th {
+      color: var(--bayan-slate-600, #475569);
+      font-weight: 600;
+      font-size: 0.8125rem;
+      text-transform: uppercase;
+      padding: 0.75rem 1rem;
+    }
+
     :host ::ng-deep .p-datatable-sm .p-datatable-thead > tr > th {
       padding: 0.75rem 1rem;
     }
@@ -719,7 +733,10 @@ export class EvaluationSetupComponent implements OnInit, OnDestroy {
 
         const dto: CreateEvaluationSetupDto = {
           tenderId: this.tenderId,
-          panelMemberIds: this.selectedPanelMemberIds,
+          panelMemberIds: this.selectedPanelMemberIds.map(id => {
+            const member = this.availablePanelMembers().find(m => m.id === id);
+            return (member?.userId ?? id) as any;
+          }),
           scoringMethod: this.scoringMethod,
           blindMode: this.blindMode,
           deadline: this.deadline!

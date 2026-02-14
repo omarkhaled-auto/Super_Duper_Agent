@@ -119,3 +119,35 @@ export interface TenderManagerDashboardParams {
 export interface ApproverDashboardParams {
   recentDecisionsLimit?: number;
 }
+
+export interface OverviewDashboardParams {
+  monthsBack?: number;
+}
+
+// =============== Overview Dashboard ===============
+
+export interface OverviewDashboard {
+  tenderCounts: TenderCountsByStatus;
+  totalBidders: number;
+  activeBidders: number;
+  pendingApprovals: number;
+  totalContractValue: number;
+  currency: string;
+  monthlyTrend: MonthlyTrendItem[];
+}
+
+export interface TenderCountsByStatus {
+  draft: number;
+  active: number;
+  evaluation: number;
+  awarded: number;
+  cancelled: number;
+  total: number;
+}
+
+export interface MonthlyTrendItem {
+  month: string;
+  tendersCreated: number;
+  bidsReceived: number;
+  contractValue: number;
+}

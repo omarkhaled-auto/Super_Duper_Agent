@@ -9,6 +9,7 @@ using Bayan.Application.Features.TechnicalEvaluation.Queries.GetPanelistAssignme
 using Bayan.Application.Features.TechnicalEvaluation.Queries.GetPanelists;
 using Bayan.Application.Features.TechnicalEvaluation.Queries.GetPanelistScores;
 using Bayan.Application.Features.TechnicalEvaluation.Queries.GetTechnicalScoresSummary;
+using Bayan.API.Authorization;
 using Bayan.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -21,7 +22,7 @@ namespace Bayan.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/tenders/{tenderId:guid}/evaluation")]
-[Authorize]
+[Authorize(Roles = BayanRoles.TechnicalScoresViewers)]
 public class TechnicalEvaluationController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -69,6 +70,7 @@ public class TechnicalEvaluationController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The setup result.</returns>
     [HttpPost("setup")]
+    [Authorize(Roles = BayanRoles.TechnicalEvaluationSetup)]
     [ProducesResponseType(typeof(SetupTechnicalEvaluationResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -127,6 +129,7 @@ public class TechnicalEvaluationController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The panelist's assignment data.</returns>
     [HttpGet("my-assignments")]
+    [Authorize(Roles = BayanRoles.TechnicalScorers)]
     [ProducesResponseType(typeof(PanelistAssignmentDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -155,6 +158,7 @@ public class TechnicalEvaluationController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The bidder's technical documents.</returns>
     [HttpGet("bidders/{bidderId:guid}/documents")]
+    [Authorize(Roles = BayanRoles.TechnicalScorers)]
     [ProducesResponseType(typeof(BidderTechnicalDocumentsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -187,6 +191,7 @@ public class TechnicalEvaluationController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>List of scores for the bidder.</returns>
     [HttpGet("scores/{bidderId:guid}")]
+    [Authorize(Roles = BayanRoles.TechnicalScorers)]
     [ProducesResponseType(typeof(List<TechnicalScoreDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<TechnicalScoreDto>>> GetPanelistScores(
         Guid tenderId,
@@ -214,7 +219,7 @@ public class TechnicalEvaluationController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The save result.</returns>
     [HttpPost("scores")]
-    [Authorize(Roles = "Admin,TenderManager,TechnicalPanelist")]
+    [Authorize(Roles = BayanRoles.TechnicalScorers)]
     [ProducesResponseType(typeof(SaveTechnicalScoresResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<SaveTechnicalScoresResult>> SaveTechnicalScores(
@@ -279,7 +284,7 @@ public class TechnicalEvaluationController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The lock result.</returns>
     [HttpPost("lock-scores")]
-    [Authorize(Roles = "Admin,TenderManager")]
+    [Authorize(Roles = BayanRoles.TechnicalScoresLockers)]
     [ProducesResponseType(typeof(LockTechnicalScoresResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<LockTechnicalScoresResult>> LockTechnicalScores(

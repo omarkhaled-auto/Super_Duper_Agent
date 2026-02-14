@@ -6,6 +6,7 @@ using Bayan.Application.Features.BidAnalysis.Commands.NormalizeBid;
 using Bayan.Application.Features.BidAnalysis.Commands.ParseBidFile;
 using Bayan.Application.Features.BidAnalysis.Commands.ValidateBidImport;
 using Bayan.Application.Features.BidAnalysis.DTOs;
+using Bayan.API.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,7 +18,7 @@ namespace Bayan.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/tenders/{tenderId:guid}/bids/{bidId:guid}/import")]
-[Authorize(Roles = "Admin,TenderManager,CommercialAnalyst")]
+[Authorize(Roles = BayanRoles.BidImporters)]
 public class BidAnalysisController : ControllerBase
 {
     private readonly IMediator _mediator;

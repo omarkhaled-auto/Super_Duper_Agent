@@ -204,7 +204,7 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
             <tr>
               <td colspan="5" class="text-center p-4">
                 <div class="empty-state">
-                  <i class="pi pi-building" style="font-size: 3rem; color: var(--bayan-muted-foreground, #71717a);"></i>
+                  <i class="pi pi-building" style="font-size: 3rem; color: var(--bayan-muted-foreground, #64748B);"></i>
                   <p>No bidders found.</p>
                   <button pButton label="Add First Bidder" icon="pi pi-plus" class="p-button-outlined" (click)="showBidderDialog()"></button>
                 </div>
@@ -233,12 +233,12 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
     .page-header h1 {
       margin: 0;
       font-size: 1.75rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .page-header p {
       margin: 0.25rem 0 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     :host ::ng-deep .filter-card .p-card-body {
@@ -281,7 +281,7 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
       width: 40px;
       height: 40px;
       border-radius: var(--bayan-radius, 0.5rem);
-      background: var(--bayan-primary, #18181b);
+      background: var(--bayan-primary, #4F46E5);
       color: white;
       display: flex;
       align-items: center;
@@ -297,18 +297,18 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
 
     .company-name {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .company-name-ar {
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       direction: rtl;
     }
 
     .cr-number {
       font-size: 0.75rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .contact-info {
@@ -318,7 +318,7 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
 
     .contact-info .phone {
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .trade-tags {
@@ -334,7 +334,7 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
 
     .more-trades {
       font-size: 0.75rem;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
       cursor: pointer;
     }
 
@@ -352,8 +352,16 @@ import { BidderFormDialogComponent, BidderFormDialogData } from './bidder-form-d
     }
 
     .empty-state p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       margin: 0;
+    }
+
+    :host ::ng-deep .p-datatable .p-datatable-tbody > tr:hover {
+      background-color: var(--bayan-accent, #F1F5F9) !important;
+    }
+
+    :host ::ng-deep .action-buttons .p-button-text:hover {
+      background-color: var(--bayan-accent, #F1F5F9);
     }
 
     @media (max-width: 768px) {

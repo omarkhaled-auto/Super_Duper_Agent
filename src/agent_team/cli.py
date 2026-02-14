@@ -3895,19 +3895,36 @@ def main() -> None:
     # -------------------------------------------------------------------
     # C2: Initialize RunState early (before interview) so interrupted
     # interviews also get state saved.
+    # On resume, load the existing state to preserve milestone progress.
     # -------------------------------------------------------------------
     from .state import RunState
-    _current_state = RunState(task=args.task or "", depth=args.depth or "pending")
-    _current_state.current_phase = "init"
-    _current_state.artifacts["cwd"] = cwd
+    if _resume_ctx:
+        # Resume mode: load the existing state from disk to preserve
+        # milestone_progress, completed_milestones, milestone_order, etc.
+        from .state import load_state as _load_state_resume
+        _loaded = _load_state_resume(str(Path(cwd) / ".agent-team"))
+        if _loaded and _loaded.milestone_progress:
+            _current_state = _loaded
+            _current_state.task = args.task or _loaded.task
+            _current_state.depth = args.depth or _loaded.depth
+        else:
+            _current_state = RunState(task=args.task or "", depth=args.depth or "pending")
+            _current_state.current_phase = "init"
+            _current_state.artifacts["cwd"] = cwd
+    else:
+        _current_state = RunState(task=args.task or "", depth=args.depth or "pending")
+        _current_state.current_phase = "init"
+        _current_state.artifacts["cwd"] = cwd
 
     # Persist the original task text early so verification can access it
     # even if the run is interrupted before completion.
-    try:
-        from .state import save_state
-        save_state(_current_state, directory=str(Path(cwd) / ".agent-team"))
-    except Exception:
-        pass  # Non-critical — verification falls back to REQUIREMENTS.md only
+    # Skip on resume to avoid overwriting milestone progress.
+    if not _resume_ctx:
+        try:
+            from .state import save_state
+            save_state(_current_state, directory=str(Path(cwd) / ".agent-team"))
+        except Exception:
+            pass  # Non-critical — verification falls back to REQUIREMENTS.md only
 
     if args.config:
         _current_state.artifacts["config_path"] = args.config

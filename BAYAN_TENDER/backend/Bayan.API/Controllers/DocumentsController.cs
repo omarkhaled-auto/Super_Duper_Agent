@@ -8,6 +8,7 @@ using Bayan.Application.Features.Documents.Queries.GetDocumentDownload;
 using Bayan.Application.Features.Documents.Queries.GetDocuments;
 using Bayan.Application.Features.Documents.Queries.GetDocumentVersions;
 using Bayan.Application.Features.Documents.Queries.GetFolders;
+using Bayan.API.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,7 +21,7 @@ namespace Bayan.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/tenders/{tenderId:guid}/documents")]
-[Authorize(Roles = "Admin,TenderManager")]
+[Authorize(Roles = BayanRoles.InternalUsers)]
 public class DocumentsController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -102,6 +103,7 @@ public class DocumentsController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The uploaded document.</returns>
     [HttpPost("upload")]
+    [Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
     [ProducesResponseType(typeof(DocumentDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -212,6 +214,7 @@ public class DocumentsController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>No content if successful.</returns>
     [HttpDelete("{docId:guid}")]
+    [Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteDocument(
@@ -239,6 +242,7 @@ public class DocumentsController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The created folder information.</returns>
     [HttpPost("folders")]
+    [Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
     [ProducesResponseType(typeof(FolderDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

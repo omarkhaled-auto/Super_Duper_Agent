@@ -60,7 +60,7 @@ import { PortalService } from '../../../core/services/portal.service';
   styles: [`
     .portal-tenders-container {
       min-height: 100vh;
-      background: var(--bayan-muted, #f4f4f5);
+      background: var(--bayan-slate-50, #F8FAFC);
       padding: 2rem;
     }
 
@@ -70,9 +70,9 @@ import { PortalService } from '../../../core/services/portal.service';
       align-items: center;
       background: var(--bayan-card, #ffffff);
       padding: 1.5rem 2rem;
-      border-radius: var(--bayan-radius, 0.5rem);
-      border: 1px solid var(--bayan-border, #e4e4e7);
-      box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+      border-radius: var(--bayan-radius-lg, 0.75rem);
+      border: 1px solid var(--bayan-border, #E2E8F0);
+      box-shadow: var(--bayan-shadow-sm, 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1));
       margin-bottom: 2rem;
     }
 
@@ -84,22 +84,22 @@ import { PortalService } from '../../../core/services/portal.service';
 
     .header-icon {
       font-size: 2rem;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
     }
 
     .portal-header h1 {
       margin: 0;
       font-size: 1.5rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .portal-header p {
       margin: 0.25rem 0 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .section-title {
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
       margin-bottom: 1rem;
     }
 
@@ -111,13 +111,15 @@ import { PortalService } from '../../../core/services/portal.service';
 
     .tender-info h3 {
       margin: 0 0 0.5rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
+      font-weight: 600;
     }
 
     .tender-ref {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-400, #94A3B8);
       margin: 0 0 0.75rem;
       font-family: monospace;
+      font-size: 0.75rem;
     }
 
     .tender-actions {
@@ -130,25 +132,25 @@ import { PortalService } from '../../../core/services/portal.service';
       text-align: center;
       padding: 4rem 2rem;
       background: var(--bayan-card, #ffffff);
-      border-radius: var(--bayan-radius, 0.5rem);
-      border: 1px solid var(--bayan-border, #e4e4e7);
-      box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+      border-radius: var(--bayan-radius-lg, 0.75rem);
+      border: 1px solid var(--bayan-border, #E2E8F0);
+      box-shadow: var(--bayan-shadow-sm, 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1));
       margin-top: 2rem;
     }
 
     .empty-icon {
       font-size: 4rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-border, #E2E8F0);
       margin-bottom: 1rem;
     }
 
     .empty-state h2 {
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
       margin: 0 0 0.75rem;
     }
 
     .empty-state p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       max-width: 480px;
       margin: 0 auto 1rem;
       line-height: 1.6;
@@ -162,7 +164,7 @@ import { PortalService } from '../../../core/services/portal.service';
     }
 
     .contact-info i {
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
     }
   `]
 })

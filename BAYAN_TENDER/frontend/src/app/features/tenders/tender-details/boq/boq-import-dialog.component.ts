@@ -356,12 +356,12 @@ for (const [key, val] of Object.entries(BOQ_FIELD)) {
 
     .upload-instructions h4 {
       margin: 0 0 0.5rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .upload-instructions p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .template-link {
@@ -369,7 +369,7 @@ for (const [key, val] of Object.entries(BOQ_FIELD)) {
       align-items: center;
       gap: 0.5rem;
       margin-top: 1rem;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
       text-decoration: none;
     }
 
@@ -383,14 +383,14 @@ for (const [key, val] of Object.entries(BOQ_FIELD)) {
         display: flex;
         align-items: center;
         justify-content: center;
-        border: 2px dashed var(--bayan-border, #e4e4e7);
+        border: 2px dashed var(--bayan-slate-300, #CBD5E1);
         border-radius: var(--bayan-radius, 0.5rem);
         transition: all 0.2s;
       }
 
       .p-fileupload-content:hover {
-        border-color: var(--bayan-primary, #18181b);
-        background-color: var(--bayan-muted, #f4f4f5);
+        border-color: var(--bayan-primary, #4F46E5);
+        background-color: var(--bayan-primary-light, #EEF2FF);
       }
     }
 
@@ -404,19 +404,19 @@ for (const [key, val] of Object.entries(BOQ_FIELD)) {
 
     .upload-icon {
       font-size: 3rem;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-slate-400, #94A3B8);
     }
 
     .upload-text {
       margin: 0;
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .upload-hint {
       margin: 0;
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-400, #94A3B8);
     }
 
     .file-icon {
@@ -427,13 +427,13 @@ for (const [key, val] of Object.entries(BOQ_FIELD)) {
     .file-name {
       margin: 0;
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .file-size {
       margin: 0;
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .mapping-step {
@@ -452,13 +452,13 @@ for (const [key, val] of Object.entries(BOQ_FIELD)) {
 
     .mapping-header h4 {
       margin: 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .mapping-header p {
       flex: 1 1 100%;
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .column-header {
@@ -469,7 +469,7 @@ for (const [key, val] of Object.entries(BOQ_FIELD)) {
 
     .excel-col {
       font-weight: 600;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
     }
 
     :host ::ng-deep .mapping-dropdown {
@@ -496,7 +496,7 @@ for (const [key, val] of Object.entries(BOQ_FIELD)) {
 
     .validation-header h4 {
       margin: 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .validation-summary {
@@ -516,17 +516,17 @@ for (const [key, val] of Object.entries(BOQ_FIELD)) {
 
     .summary-badge.valid {
       background-color: var(--bayan-success-bg, #f0fdf4);
-      color: #16a34a;
+      color: var(--bayan-success, #16A34A);
     }
 
     .summary-badge.warning {
       background-color: var(--bayan-warning-bg, #fffbeb);
-      color: #d97706;
+      color: var(--bayan-warning, #D97706);
     }
 
     .summary-badge.error {
       background-color: var(--bayan-danger-bg, #fef2f2);
-      color: #dc2626;
+      color: var(--bayan-danger, #DC2626);
     }
 
     .validating-state {
@@ -539,18 +539,18 @@ for (const [key, val] of Object.entries(BOQ_FIELD)) {
 
     .validating-state p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .detected-sections {
       padding: 1rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-accent, #EEF2FF);
       border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .detected-sections h5 {
       margin: 0 0 0.5rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .section-tags {
@@ -575,18 +575,18 @@ for (const [key, val] of Object.entries(BOQ_FIELD)) {
     }
 
     .error-text {
-      color: #dc2626;
+      color: var(--bayan-danger, #DC2626);
       font-size: 0.8rem;
     }
 
     .warning-text {
-      color: #d97706;
+      color: var(--bayan-warning, #D97706);
       font-size: 0.8rem;
     }
 
     .import-options {
       padding: 0.75rem 1rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-accent, #EEF2FF);
       border-radius: var(--bayan-radius, 0.5rem);
       margin-bottom: 0.5rem;
     }
@@ -599,7 +599,7 @@ for (const [key, val] of Object.entries(BOQ_FIELD)) {
 
     .checkbox-item label {
       cursor: pointer;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
       font-size: 0.875rem;
     }
 
@@ -608,7 +608,7 @@ for (const [key, val] of Object.entries(BOQ_FIELD)) {
       justify-content: space-between;
       align-items: center;
       padding-top: 1rem;
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-border, #E2E8F0);
       margin-top: auto;
     }
 

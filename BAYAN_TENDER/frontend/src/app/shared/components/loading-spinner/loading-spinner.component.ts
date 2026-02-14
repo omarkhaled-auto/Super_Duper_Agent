@@ -40,7 +40,8 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
       left: 0;
       width: 100%;
       height: 100%;
-      background-color: rgba(0, 0, 0, 0.5);
+      background-color: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
       display: flex;
       justify-content: center;
       align-items: center;
@@ -52,10 +53,11 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
       flex-direction: column;
       align-items: center;
       gap: 1rem;
-      background: white;
+      background: var(--bayan-card, #ffffff);
       padding: 2rem;
-      border-radius: var(--bayan-radius, 0.5rem);
-      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      border-radius: var(--bayan-radius-lg, 0.75rem);
+      border: 1px solid var(--bayan-border, #E2E8F0);
+      box-shadow: var(--bayan-shadow-lg, 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1));
     }
 
     .spinner-inline {
@@ -68,12 +70,16 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
 
     .loading-message {
       margin: 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-500, #64748B);
       font-size: 0.875rem;
     }
 
+    .spinner-inline ::ng-deep .p-progress-spinner-svg circle {
+      stroke: var(--bayan-slate-200, #E2E8F0);
+    }
+
     :host ::ng-deep .p-progress-spinner-circle {
-      stroke: var(--bayan-primary, #18181b) !important;
+      stroke: var(--bayan-primary, #4F46E5) !important;
     }
   `]
 })

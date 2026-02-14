@@ -28,6 +28,7 @@ import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { MessageService, ConfirmationService } from 'primeng/api';
 
 // Services and Models
+import { AuthService } from '../../../../core/auth/auth.service';
 import { EvaluationService } from '../../../../core/services/evaluation.service';
 import {
   TechnicalSummary,
@@ -35,6 +36,7 @@ import {
   EvaluationCriterion,
   BidderAggregatedScore
 } from '../../../../core/models/evaluation.model';
+import { UserRole } from '../../../../core/models/user.model';
 
 @Component({
   selector: 'app-technical-summary',
@@ -244,15 +246,17 @@ import {
             (click)="showCommentsDialog = true; loadComments()"
           ></button>
 
-          <button
-            pButton
-            label="Lock Scores"
-            icon="pi pi-lock"
-            class="p-button-warning"
-            [loading]="isLocking()"
-            [disabled]="summary()!.completedPanelists < summary()!.totalPanelists || summary()!.status === 'locked'"
-            (click)="confirmLockScores()"
-          ></button>
+          @if (canLockScores()) {
+            <button
+              pButton
+              label="Lock Scores"
+              icon="pi pi-lock"
+              class="p-button-warning"
+              [loading]="isLocking()"
+              [disabled]="summary()!.completedPanelists < summary()!.totalPanelists || summary()!.status === 'locked'"
+              (click)="confirmLockScores()"
+            ></button>
+          }
         </div>
 
         @if (summary()!.status === 'locked') {
@@ -265,7 +269,7 @@ import {
       } @else {
         <!-- No Data -->
         <div class="empty-state">
-          <i class="pi pi-chart-bar" style="font-size: 3rem; color: var(--bayan-border, #e4e4e7);"></i>
+          <i class="pi pi-chart-bar" style="font-size: 3rem; color: var(--bayan-slate-300, #CBD5E1);"></i>
           <h3>No Summary Available</h3>
           <p>Technical evaluation data is not yet available.</p>
         </div>
@@ -312,7 +316,7 @@ import {
         </div>
       } @else {
         <div class="empty-comments">
-          <i class="pi pi-comments" style="font-size: 2rem; color: var(--bayan-border, #e4e4e7);"></i>
+          <i class="pi pi-comments" style="font-size: 2rem; color: var(--bayan-slate-300, #CBD5E1);"></i>
           <p>No comments have been submitted yet.</p>
         </div>
       }
@@ -344,11 +348,15 @@ import {
     }
 
     .loading-container p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       margin: 0;
     }
 
-    /* Status Card */
+    /* Status Card — KPI-style with indigo left border */
+    :host ::ng-deep .status-card .p-card {
+      border-left: 4px solid var(--bayan-primary, #4F46E5);
+    }
+
     .status-header {
       display: flex;
       flex-direction: column;
@@ -361,15 +369,16 @@ import {
       align-items: center;
     }
 
-    .status-label {
-      font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+    .status-info .status-label {
+      font-weight: 500;
+      font-size: 0.875rem;
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
-    .status-value {
+    .status-info .status-value {
       font-size: 1.125rem;
-      font-weight: 600;
-      color: var(--bayan-primary, #18181b);
+      font-weight: 700;
+      color: var(--bayan-foreground, #0F172A);
     }
 
     :host ::ng-deep .completion-bar .p-progressbar {
@@ -377,19 +386,31 @@ import {
       border-radius: 5px;
     }
 
+    :host ::ng-deep .completion-bar .p-progressbar-value {
+      background: var(--bayan-primary, #4F46E5);
+    }
+
     /* Matrix Card */
     .table-wrapper {
       overflow-x: auto;
     }
 
+    :host ::ng-deep .matrix-card .p-datatable th {
+      color: var(--bayan-foreground-secondary, #475569);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.025em;
+    }
+
     .bidder-header {
-      background: var(--bayan-accent, #f4f4f5) !important;
-      border-bottom: 2px solid var(--bayan-primary, #18181b);
+      background: var(--bayan-accent, #EEF2FF) !important;
+      border-bottom: 2px solid var(--bayan-primary, #4F46E5);
     }
 
     .criterion-header {
       font-size: 0.75rem;
-      background: var(--bayan-muted, #f4f4f5);
+      background: var(--bayan-muted, #F8FAFC);
       min-width: 50px;
     }
 
@@ -417,7 +438,7 @@ import {
 
     .weight-label {
       font-size: 0.75rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       font-weight: 400;
     }
 
@@ -432,14 +453,28 @@ import {
       width: 32px;
       height: 32px;
       border-radius: 50%;
-      background: var(--bayan-border, #e4e4e7);
+      background: var(--bayan-border, #E2E8F0);
       font-weight: 600;
       font-size: 0.875rem;
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .rank-badge.rank-1 {
-      background: var(--bayan-warning-bg, #fffbeb); border: 1px solid var(--bayan-warning, #f59e0b);
-      color: var(--bayan-foreground, #09090b);
+      background: #FFFBEB;
+      border: 2px solid #D97706;
+      color: #92400E;
+    }
+
+    .rank-badge.rank-2 {
+      background: #F8FAFC;
+      border: 2px solid #94A3B8;
+      color: #475569;
+    }
+
+    .rank-badge.rank-3 {
+      background: #FFFBEB;
+      border: 2px solid #B45309;
+      color: #78350F;
     }
 
     .bidder-cell {
@@ -463,22 +498,26 @@ import {
     }
 
     .avg-score.has-variance {
-      color: #ed6c02;
+      color: #D97706;
     }
 
     .variance-alert {
-      color: #ed6c02;
+      background: #FFFBEB;
+      border-left: 3px solid #D97706;
+      color: #92400E;
       font-size: 0.875rem;
+      padding: 0.125rem 0.375rem;
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .total-average {
       font-size: 1.125rem;
       font-weight: 700;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
     }
 
     .no-alerts {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .variance-info {
@@ -488,8 +527,17 @@ import {
     }
 
     .variance-info i {
-      color: #ed6c02;
+      color: #D97706;
       margin-top: 0.125rem;
+    }
+
+    /* Pass/Fail indicators */
+    .pi-check-circle {
+      color: #16A34A;
+    }
+
+    .pi-times-circle {
+      color: #DC2626;
     }
 
     /* Action Bar */
@@ -513,12 +561,12 @@ import {
 
     .empty-state h3 {
       margin: 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .empty-state p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     /* Comments Dialog */
@@ -532,9 +580,9 @@ import {
 
     .comment-item {
       padding: 1rem;
-      background: var(--bayan-accent, #f4f4f5);
+      background: var(--bayan-accent, #F8FAFC);
       border-radius: var(--bayan-radius, 0.5rem);
-      border-left: 3px solid var(--bayan-primary, #18181b);
+      border-left: 3px solid var(--bayan-primary, #4F46E5);
     }
 
     .comment-header {
@@ -553,11 +601,11 @@ import {
 
     .comment-meta .panelist-name {
       font-weight: 600;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
     }
 
     .comment-meta i {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       font-size: 0.75rem;
     }
 
@@ -566,22 +614,22 @@ import {
     }
 
     .comment-meta .criterion-name {
-      color: var(--bayan-muted-foreground, #71717a);
-      background: var(--bayan-border, #e4e4e7);
+      color: var(--bayan-muted-foreground, #64748B);
+      background: var(--bayan-border, #E2E8F0);
       padding: 0.125rem 0.5rem;
       border-radius: var(--bayan-radius-sm, 0.375rem);
       font-size: 0.8rem;
     }
 
     .comment-body {
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
       line-height: 1.5;
       margin-bottom: 0.5rem;
     }
 
     .comment-footer {
       font-size: 0.8rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .empty-comments {
@@ -595,8 +643,18 @@ import {
     }
 
     .empty-comments p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       margin: 0;
+    }
+
+    /* Card titles → slate-900 */
+    :host ::ng-deep .p-card .p-card-title {
+      color: var(--bayan-foreground, #0F172A);
+    }
+
+    /* All border-radius overrides to use CSS var */
+    :host ::ng-deep .p-card {
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     /* Responsive */
@@ -626,6 +684,7 @@ export class TechnicalSummaryComponent implements OnInit, OnDestroy {
   @Input() blindMode = true;
   @Output() scoresLocked = new EventEmitter<void>();
 
+  private readonly authService = inject(AuthService);
   private readonly evaluationService = inject(EvaluationService);
   private readonly messageService = inject(MessageService);
   private readonly confirmationService = inject(ConfirmationService);
@@ -643,6 +702,8 @@ export class TechnicalSummaryComponent implements OnInit, OnDestroy {
   showCommentsDialog = false;
 
   // Computed
+  canLockScores = computed(() => this.authService.hasRole([UserRole.ADMIN, UserRole.TENDER_MANAGER]));
+
   completionPercentage = computed(() => {
     const s = this.summary();
     if (!s || s.totalPanelists === 0) return 0;

@@ -250,7 +250,7 @@ import {
       align-items: center;
       justify-content: center;
       padding: 4rem 2rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .loading-container p {
@@ -263,8 +263,8 @@ import {
       justify-content: space-between;
       align-items: center;
       padding: 1rem 1.5rem;
-      background: var(--bayan-accent, #f4f4f5);
-      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
+      background: var(--bayan-slate-50, #F8FAFC);
+      border-bottom: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     .card-header h3 {
@@ -274,22 +274,22 @@ import {
       margin: 0;
       font-size: 1.125rem;
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .card-header h3 i {
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
     }
 
     .total-size {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       font-size: 0.875rem;
     }
 
     /* Addenda Styles */
     .addenda-header {
-      background: #fffbeb !important;
-      border-bottom-color: #fcd34d !important;
+      background: var(--bayan-warning-bg, #FFFBEB) !important;
+      border-bottom-color: var(--bayan-warning, #D97706) !important;
     }
 
     .addenda-header .header-left {
@@ -299,7 +299,7 @@ import {
     }
 
     .addenda-header i {
-      color: #d97706;
+      color: var(--bayan-warning, #D97706);
       font-size: 1.25rem;
     }
 
@@ -312,7 +312,7 @@ import {
       align-items: center;
       gap: 0.5rem;
       padding: 0.75rem 1rem;
-      background: #fffbeb;
+      background: var(--bayan-warning-bg, #FFFBEB);
       border-radius: var(--bayan-radius-sm, 0.375rem);
       margin-bottom: 1.5rem;
       color: #92400e;
@@ -326,7 +326,7 @@ import {
     }
 
     .addendum-item {
-      border: 1px solid var(--bayan-border, #e4e4e7);
+      border: 1px solid var(--bayan-border, #E2E8F0);
       border-radius: var(--bayan-radius-sm, 0.375rem);
       padding: 1.25rem;
       background: var(--bayan-card, #ffffff);
@@ -334,8 +334,8 @@ import {
     }
 
     .addendum-item.acknowledged {
-      border-color: #86efac;
-      background: #f0fdf4;
+      border-color: var(--bayan-success, #16A34A);
+      background: var(--bayan-success-bg, #F0FDF4);
     }
 
     .addendum-header {
@@ -353,16 +353,16 @@ import {
 
     .addendum-title strong {
       font-size: 1rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .addendum-date {
       font-size: 0.8rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .addendum-description {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       margin: 0.75rem 0;
       font-size: 0.9375rem;
     }
@@ -374,7 +374,7 @@ import {
     .documents-label {
       display: block;
       font-size: 0.8rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       margin-bottom: 0.5rem;
     }
 
@@ -387,7 +387,7 @@ import {
     .addendum-actions {
       margin-top: 1rem;
       padding-top: 1rem;
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     .acknowledged-info {
@@ -395,7 +395,7 @@ import {
       align-items: center;
       gap: 0.5rem;
       margin-top: 0.75rem;
-      color: #16a34a;
+      color: var(--bayan-success, #16A34A);
       font-size: 0.8rem;
     }
 
@@ -409,7 +409,7 @@ import {
 
     .folder-header i {
       font-size: 1.25rem;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
     }
 
     .folder-name {
@@ -425,7 +425,7 @@ import {
 
     .file-info i {
       font-size: 1.25rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .file-name {
@@ -442,7 +442,7 @@ import {
       align-items: center;
       justify-content: center;
       padding: 4rem 2rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .empty-state i {
@@ -464,11 +464,13 @@ import {
         padding: 0;
       }
 
-      .p-accordion .p-accordion-header .p-accordion-header-link {
+      .p-accordion .p-accordion-header .p-accordion-header-link,
+      .p-accordion .p-accordionheader {
         padding: 1rem 1.25rem;
       }
 
-      .p-accordion .p-accordion-content {
+      .p-accordion .p-accordion-content,
+      .p-accordion .p-accordioncontent-content {
         padding: 0;
       }
 

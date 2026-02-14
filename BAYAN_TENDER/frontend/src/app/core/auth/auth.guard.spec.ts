@@ -91,13 +91,13 @@ describe('Auth Guards', () => {
       expect(routerSpy.navigate).not.toHaveBeenCalled();
     });
 
-    it('should redirect to dashboard when authenticated', () => {
+    it('should redirect to home when authenticated', () => {
       authServiceSpy.isAuthenticated.and.returnValue(true);
 
       const result = runGuard(guestGuard, mockRoute, mockState);
 
       expect(result).toBeFalse();
-      expect(routerSpy.navigate).toHaveBeenCalledWith(['/dashboard']);
+      expect(routerSpy.navigate).toHaveBeenCalledWith(['/home']);
     });
   });
 

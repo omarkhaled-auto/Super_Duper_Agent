@@ -4,6 +4,7 @@ using Bayan.Application.Features.Clients.Commands.UpdateClient;
 using Bayan.Application.Features.Clients.DTOs;
 using Bayan.Application.Features.Clients.Queries.GetClientById;
 using Bayan.Application.Features.Clients.Queries.GetClients;
+using Bayan.API.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,7 +16,7 @@ namespace Bayan.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin,TenderManager")]
+[Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
 public class ClientsController : ControllerBase
 {
     private readonly IMediator _mediator;

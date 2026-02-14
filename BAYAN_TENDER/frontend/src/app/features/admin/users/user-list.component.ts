@@ -160,7 +160,7 @@ import { UserFormDialogComponent, UserFormDialogData } from './user-form-dialog.
             <tr>
               <td colspan="6" class="text-center p-4">
                 <div class="empty-state">
-                  <i class="pi pi-users" style="font-size: 3rem; color: var(--bayan-muted-foreground, #71717a);"></i>
+                  <i class="pi pi-users" style="font-size: 3rem; color: var(--bayan-muted-foreground, #64748B);"></i>
                   <p>No users found.</p>
                   <button pButton label="Add First User" icon="pi pi-plus" class="p-button-outlined" (click)="showUserDialog()"></button>
                 </div>
@@ -189,12 +189,12 @@ import { UserFormDialogComponent, UserFormDialogData } from './user-form-dialog.
     .page-header h1 {
       margin: 0;
       font-size: 1.75rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .page-header p {
       margin: 0.25rem 0 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     :host ::ng-deep .filter-card .p-card-body {
@@ -237,7 +237,7 @@ import { UserFormDialogComponent, UserFormDialogData } from './user-form-dialog.
       width: 36px;
       height: 36px;
       border-radius: 50%;
-      background: var(--bayan-primary, #18181b);
+      background: var(--bayan-primary, #4F46E5);
       color: white;
       display: flex;
       align-items: center;
@@ -260,8 +260,16 @@ import { UserFormDialogComponent, UserFormDialogData } from './user-form-dialog.
     }
 
     .empty-state p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       margin: 0;
+    }
+
+    :host ::ng-deep .p-datatable .p-datatable-tbody > tr:hover {
+      background-color: var(--bayan-accent, #F1F5F9) !important;
+    }
+
+    :host ::ng-deep .action-buttons .p-button-text:hover {
+      background-color: var(--bayan-accent, #F1F5F9);
     }
   `]
 })

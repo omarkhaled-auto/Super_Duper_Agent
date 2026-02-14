@@ -25,8 +25,9 @@ export class ApiService {
     return httpParams;
   }
 
-  private handleError(error: HttpErrorResponse): Observable<never> {
+  private handleError = (error: HttpErrorResponse): Observable<never> => {
     let errorMessage = 'An unexpected error occurred';
+    const validationErrors = this.extractValidationErrors(error.error?.errors);
 
     if (error.error instanceof ErrorEvent) {
       // Client-side error
@@ -35,6 +36,9 @@ export class ApiService {
       // Server-side error
       if (error.error?.message) {
         errorMessage = error.error.message;
+        if (error.status === 400 && validationErrors.length > 0) {
+          errorMessage = `${errorMessage}: ${validationErrors.join('; ')}`;
+        }
       } else if (error.status === 0) {
         errorMessage = 'Unable to connect to the server';
       } else if (error.status === 401) {
@@ -51,8 +55,24 @@ export class ApiService {
     return throwError(() => ({
       message: errorMessage,
       status: error.status,
-      errors: error.error?.errors || []
+      errors: validationErrors
     }));
+  };
+
+  private extractValidationErrors(errors: unknown): string[] {
+    if (!Array.isArray(errors)) {
+      return [];
+    }
+
+    return errors
+      .map((error: any) => {
+        const message = typeof error?.message === 'string' ? error.message.trim() : '';
+        if (!message) return null;
+
+        const property = typeof error?.property === 'string' ? error.property.trim() : '';
+        return property ? `${property}: ${message}` : message;
+      })
+      .filter((message: string | null): message is string => Boolean(message));
   }
 
   get<T>(endpoint: string, params?: QueryParams): Observable<T> {

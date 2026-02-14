@@ -305,12 +305,12 @@ import {
 
     .step-header h4 {
       margin: 0 0 0.5rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .step-header p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .loading-state {
@@ -323,25 +323,25 @@ import {
     }
 
     .loading-state p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .reference-badge {
       font-family: monospace;
       font-size: 0.875rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-accent, #EEF2FF);
       padding: 0.25rem 0.5rem;
       border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .selection-summary {
       padding: 1rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-primary-light, #EEF2FF);
       border-radius: var(--bayan-radius, 0.5rem);
       text-align: center;
       margin-top: 1rem;
       font-weight: 500;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
     }
 
     .form-grid {
@@ -361,17 +361,18 @@ import {
     }
 
     .form-field label {
-      font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: var(--bayan-slate-700, #334155);
     }
 
     .required {
-      color: #ef4444;
+      color: var(--bayan-danger, #DC2626);
     }
 
     .bulletin-preview {
       background-color: white;
-      border: 1px solid var(--bayan-border, #e4e4e7);
+      border: 1px solid var(--bayan-border, #E2E8F0);
       border-radius: var(--bayan-radius, 0.5rem);
       padding: 2rem;
       max-height: 400px;
@@ -385,26 +386,26 @@ import {
 
     .preview-header h2 {
       margin: 0 0 0.5rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .issue-date {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       font-size: 0.9rem;
     }
 
     .preview-intro,
     .preview-closing {
       padding: 1rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-slate-50, #F8FAFC);
       border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .preview-intro p,
     .preview-closing p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .qa-list {
@@ -425,7 +426,7 @@ import {
       display: flex;
       align-items: center;
       justify-content: center;
-      background-color: var(--bayan-primary, #18181b);
+      background-color: var(--bayan-primary, #4F46E5);
       color: white;
       border-radius: 50%;
       font-weight: 600;
@@ -442,13 +443,13 @@ import {
 
     .question strong,
     .answer strong {
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .question p,
     .answer p {
       margin: 0.25rem 0 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       line-height: 1.6;
     }
 
@@ -457,7 +458,7 @@ import {
       justify-content: space-between;
       align-items: center;
       padding-top: 1rem;
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-border, #E2E8F0);
       margin-top: auto;
     }
 

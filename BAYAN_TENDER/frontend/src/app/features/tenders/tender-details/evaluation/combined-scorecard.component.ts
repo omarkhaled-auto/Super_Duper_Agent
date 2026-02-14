@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Subject, takeUntil, switchMap } from 'rxjs';
+import { Subject, takeUntil } from 'rxjs';
 
 // PrimeNG
 import { CardModule } from 'primeng/card';
@@ -30,7 +30,6 @@ import { MessageService, ConfirmationService } from 'primeng/api';
 
 // Services and Models
 import { EvaluationService } from '../../../../core/services/evaluation.service';
-import { ApprovalService } from '../../../../core/services/approval.service';
 import {
   CombinedScorecard,
   ScorecardBidder,
@@ -40,6 +39,7 @@ import {
 
 // Child Components
 import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialog.component';
+import { InitiateApprovalDialogComponent } from '../approval/initiate-approval-dialog.component';
 
 @Component({
   selector: 'app-combined-scorecard',
@@ -59,7 +59,8 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
     MessageModule,
     DialogModule,
     ConfirmDialogModule,
-    SensitivityAnalysisDialogComponent
+    SensitivityAnalysisDialogComponent,
+    InitiateApprovalDialogComponent
   ],
   providers: [MessageService, ConfirmationService, DecimalPipe],
   template: `
@@ -253,7 +254,6 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
               label="Start Approval"
               icon="pi pi-send"
               class="p-button-success"
-              [loading]="isStartingApproval()"
               (click)="startApproval()"
             ></button>
           </div>
@@ -261,7 +261,7 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
       } @else {
         <!-- No Data -->
         <div class="empty-state">
-          <i class="pi pi-chart-bar" style="font-size: 3rem; color: var(--bayan-muted-foreground, #71717a); opacity: 0.5;"></i>
+          <i class="pi pi-chart-bar" style="font-size: 3rem; color: var(--bayan-slate-300, #CBD5E1);"></i>
           <h3>No Scorecard Available</h3>
           <p>Combined scorecard data is not yet available. Please complete technical and commercial evaluation first.</p>
         </div>
@@ -275,6 +275,16 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
         [visible]="showSensitivityDialog"
         (visibleChange)="showSensitivityDialog = $event"
       ></app-sensitivity-analysis-dialog>
+    }
+
+    <!-- Initiate Approval Dialog -->
+    @if (showApprovalDialog) {
+      <app-initiate-approval-dialog
+        [visible]="showApprovalDialog"
+        [tenderId]="tenderId"
+        (visibleChange)="showApprovalDialog = $event"
+        (initiated)="onApprovalInitiated()"
+      ></app-initiate-approval-dialog>
     }
   `,
   styles: [`
@@ -294,7 +304,7 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
     }
 
     .loading-container p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       margin: 0;
     }
 
@@ -314,7 +324,7 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
 
     .weight-field label {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-700, #334155);
     }
 
     :host ::ng-deep .weight-input {
@@ -326,7 +336,7 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
       align-items: center;
       justify-content: center;
       padding: 0.5rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-400, #94A3B8);
     }
 
     .weight-total {
@@ -334,29 +344,29 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
       flex-direction: column;
       align-items: center;
       padding: 0.5rem 1rem;
-      background: var(--bayan-accent, #f4f4f5);
-      border-radius: 6px;
-      border: 2px solid var(--bayan-primary, #18181b);
+      background: #EEF2FF;
+      border-radius: var(--bayan-radius, 0.5rem);
+      border: 2px solid var(--bayan-primary, #4F46E5);
     }
 
     .weight-total.invalid {
-      background: var(--bayan-danger-bg, #fef2f2);
-      border-color: #dc2626;
+      background: #FEF2F2;
+      border-color: var(--bayan-danger, #DC2626);
     }
 
     .total-label {
       font-size: 0.8rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .total-value {
       font-size: 1.25rem;
       font-weight: 700;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
     }
 
     .weight-total.invalid .total-value {
-      color: #dc2626;
+      color: var(--bayan-danger, #DC2626);
     }
 
     .preset-weights {
@@ -365,13 +375,13 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
       gap: 0.5rem;
       margin-top: 1rem;
       padding-top: 1rem;
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-slate-200, #E2E8F0);
       flex-wrap: wrap;
     }
 
     .preset-label {
       font-size: 0.9rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     /* Scorecard Table */
@@ -384,19 +394,19 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
 
     .weight-badge {
       font-size: 0.75rem;
-      color: var(--bayan-muted-foreground, #71717a);
-      background: var(--bayan-accent, #f4f4f5);
+      color: var(--bayan-slate-500, #64748B);
+      background: #EEF2FF;
       padding: 0.125rem 0.5rem;
       border-radius: var(--bayan-radius-sm, 0.375rem);
       font-weight: 400;
     }
 
     .winner-row {
-      background: var(--bayan-success-bg, #f0fdf4) !important;
+      background: #F0FDF4 !important;
     }
 
     .disqualified-row {
-      background: var(--bayan-danger-bg, #fef2f2) !important;
+      background: #FEF2F2 !important;
       opacity: 0.7;
     }
 
@@ -408,15 +418,31 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
       width: 32px;
       height: 32px;
       border-radius: 50%;
-      background: var(--bayan-border, #e4e4e7);
+      background: var(--bayan-slate-200, #E2E8F0);
+      color: var(--bayan-slate-600, #475569);
       font-weight: 600;
       font-size: 0.875rem;
     }
 
     .rank-badge.rank-1,
     .final-rank.rank-1 {
-      background: var(--bayan-warning-bg, #fffbeb); border: 1px solid var(--bayan-warning, #f59e0b);
-      color: var(--bayan-foreground, #09090b);
+      background: #FFFBEB;
+      border: 1px solid #D97706;
+      color: #D97706;
+    }
+
+    .rank-badge.rank-2,
+    .final-rank.rank-2 {
+      background: #F1F5F9;
+      border: 1px solid #94A3B8;
+      color: #94A3B8;
+    }
+
+    .rank-badge.rank-3,
+    .final-rank.rank-3 {
+      background: #FFFBEB;
+      border: 1px solid #B45309;
+      color: #B45309;
     }
 
     .bidder-cell {
@@ -425,30 +451,37 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
     }
 
     .bidder-name {
-      font-weight: 500;
+      font-weight: 600;
+      color: var(--bayan-slate-900, #0F172A);
+    }
+
+    :host ::ng-deep .bidder-cell .p-tag.p-tag-success {
+      background: var(--bayan-primary, #4F46E5);
     }
 
     .score-value {
-      font-weight: 500;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
     }
 
     .rank-value {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .combined-score {
       font-size: 1.125rem;
       font-weight: 700;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .combined-score.winner {
-      color: #16a34a;
+      color: var(--bayan-success, #16A34A);
     }
 
     /* Recommendation Card */
     :host ::ng-deep .recommendation-card {
-      background: var(--bayan-success-bg, #f0fdf4); border: 1px solid var(--bayan-success, #22c55e);
+      background: #F0FDF4;
+      border: 1px solid var(--bayan-success, #16A34A);
     }
 
     .recommendation {
@@ -463,19 +496,20 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
       display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--bayan-warning-bg, #fffbeb); border: 1px solid var(--bayan-warning, #f59e0b);
+      background: #FFFBEB;
+      border: 1px solid #D97706;
       border-radius: 50%;
     }
 
     .recommendation-icon i {
       font-size: 2rem;
-      color: var(--bayan-foreground, #09090b);
+      color: #D97706;
     }
 
     .recommendation-text h3 {
       margin: 0 0 0.5rem 0;
       font-size: 1rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
       font-weight: 500;
     }
 
@@ -483,13 +517,13 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
       margin: 0;
       font-size: 1.5rem;
       font-weight: 700;
-      color: #16a34a;
+      color: var(--bayan-success, #16A34A);
     }
 
     .recommendation-score {
       margin: 0.25rem 0 0 0;
       font-size: 0.9rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     /* Action Bar */
@@ -518,12 +552,12 @@ import { SensitivityAnalysisDialogComponent } from './sensitivity-analysis-dialo
 
     .empty-state h3 {
       margin: 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .empty-state p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
       max-width: 400px;
     }
 
@@ -577,7 +611,6 @@ export class CombinedScorecardComponent implements OnInit, OnDestroy {
   @Output() awardPackGenerated = new EventEmitter<AwardPack>();
 
   private readonly evaluationService = inject(EvaluationService);
-  private readonly approvalService = inject(ApprovalService);
   private readonly messageService = inject(MessageService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly decimalPipe = inject(DecimalPipe);
@@ -588,7 +621,6 @@ export class CombinedScorecardComponent implements OnInit, OnDestroy {
   isLoading = signal<boolean>(true);
   isRecalculating = signal<boolean>(false);
   isGeneratingPack = signal<boolean>(false);
-  isStartingApproval = signal<boolean>(false);
 
   // Weight form
   technicalWeight = 40;
@@ -596,6 +628,7 @@ export class CombinedScorecardComponent implements OnInit, OnDestroy {
 
   // Dialog state
   showSensitivityDialog = false;
+  showApprovalDialog = false;
 
   // Computed
   totalWeight = computed(() => this.technicalWeight + this.commercialWeight);
@@ -734,47 +767,16 @@ export class CombinedScorecardComponent implements OnInit, OnDestroy {
   }
 
   startApproval(): void {
-    this.confirmationService.confirm({
-      message: 'Start the approval workflow? The recommendation will be sent to the designated approvers.',
-      header: 'Start Approval',
-      icon: 'pi pi-send',
-      acceptLabel: 'Start Approval',
-      rejectLabel: 'Cancel',
-      accept: () => {
-        this.isStartingApproval.set(true);
+    this.showApprovalDialog = true;
+  }
 
-        // Fetch approvers first, then initiate with their IDs
-        this.approvalService.getApprovers()
-          .pipe(
-            switchMap((approvers) => {
-              if (approvers.length < 3) {
-                throw new Error(`Need at least 3 approvers, found ${approvers.length}. Please add more approver users.`);
-              }
-              const approverIds = approvers.slice(0, 3).map(a => String(a.id));
-              return this.evaluationService.startApproval(this.tenderId, approverIds);
-            }),
-            takeUntil(this.destroy$)
-          )
-          .subscribe({
-            next: () => {
-              this.isStartingApproval.set(false);
-              this.messageService.add({
-                severity: 'success',
-                summary: 'Success',
-                detail: 'Approval workflow started successfully'
-              });
-              this.approvalStarted.emit();
-            },
-            error: (error) => {
-              this.isStartingApproval.set(false);
-              this.messageService.add({
-                severity: 'error',
-                summary: 'Error',
-                detail: error.message || 'Failed to start approval'
-              });
-            }
-          });
-      }
+  onApprovalInitiated(): void {
+    this.showApprovalDialog = false;
+    this.messageService.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Approval workflow started successfully'
     });
+    this.approvalStarted.emit();
   }
 }

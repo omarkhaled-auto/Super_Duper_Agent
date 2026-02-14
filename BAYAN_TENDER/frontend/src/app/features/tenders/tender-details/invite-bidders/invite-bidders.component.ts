@@ -1,8 +1,6 @@
 import { Component, OnInit, inject, signal, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
-import { environment } from '../../../../../environments/environment';
 import { CardModule } from 'primeng/card';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
@@ -263,7 +261,7 @@ interface Tender {
               <tr>
                 <td colspan="4" class="text-center p-4">
                   <div class="empty-selection">
-                    <i class="pi pi-users" style="font-size: 2rem; color: var(--bayan-muted-foreground, #71717a); opacity: 0.5;"></i>
+                    <i class="pi pi-users" style="font-size: 2rem; color: var(--bayan-muted-foreground, #64748B); opacity: 0.5;"></i>
                     <p>No bidders selected</p>
                     <small>Select bidders from the available list</small>
                   </div>
@@ -412,16 +410,16 @@ interface Tender {
     .page-header h2 {
       margin: 0;
       font-size: 1.5rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .page-header p {
       margin: 0.25rem 0 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .selected-label {
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
       font-weight: 500;
     }
 
@@ -440,7 +438,7 @@ interface Tender {
     :host ::ng-deep .bidders-panel {
       .p-card-header {
         padding: 1rem;
-        border-bottom: 1px solid var(--bayan-border, #e4e4e7);
+        border-bottom: 1px solid var(--bayan-border, #E2E8F0);
       }
 
       .p-card-body {
@@ -461,7 +459,7 @@ interface Tender {
     .panel-header h3 {
       margin: 0;
       font-size: 1.1rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .filters {
@@ -485,12 +483,12 @@ interface Tender {
 
     .company-name {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .email {
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .trade-tags {
@@ -510,15 +508,15 @@ interface Tender {
 
     .more-count {
       font-size: 0.75rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .selected-row {
-      background-color: var(--bayan-accent, #f4f4f5) !important;
+      background-color: var(--bayan-accent, #F1F5F9) !important;
     }
 
     :host ::ng-deep .selected-panel {
-      border: 2px solid var(--bayan-primary, #18181b);
+      border: 2px solid var(--bayan-primary, #4F46E5);
     }
 
     .empty-selection {
@@ -531,11 +529,11 @@ interface Tender {
 
     .empty-selection p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .empty-selection small {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     :host ::ng-deep .email-preview-panel {
@@ -553,7 +551,7 @@ interface Tender {
     .merge-fields-info h4 {
       margin: 0 0 0.5rem;
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .merge-fields {
@@ -563,31 +561,31 @@ interface Tender {
     }
 
     .merge-fields code {
-      background: var(--bayan-accent, #f4f4f5);
+      background: var(--bayan-accent, #F1F5F9);
       padding: 0.25rem 0.5rem;
       border-radius: var(--bayan-radius-sm, 0.375rem);
       font-size: 0.875rem;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
     }
 
     .email-content label {
       display: block;
       margin-bottom: 0.5rem;
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .email-sample h4 {
       margin: 0 0 0.5rem;
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .email-body {
-      background: var(--bayan-accent, #f4f4f5);
+      background: var(--bayan-accent, #F1F5F9);
       padding: 1rem;
       border-radius: var(--bayan-radius, 0.5rem);
-      border: 1px solid var(--bayan-border, #e4e4e7);
+      border: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     .email-body p {
@@ -596,10 +594,10 @@ interface Tender {
     }
 
     .custom-message {
-      background: #fff3cd;
+      background: var(--bayan-warning-bg, #FFFBEB);
       padding: 0.75rem;
       border-radius: var(--bayan-radius-sm, 0.375rem);
-      border-left: 4px solid #ffc107;
+      border-left: 4px solid var(--bayan-warning, #D97706);
     }
 
     .action-buttons {
@@ -607,7 +605,14 @@ interface Tender {
       justify-content: flex-end;
       gap: 0.5rem;
       padding-top: 1rem;
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-border, #E2E8F0);
+    }
+
+    :host ::ng-deep .p-checkbox .p-checkbox-box.p-highlight,
+    :host ::ng-deep .p-checkbox.p-highlight .p-checkbox-box,
+    :host ::ng-deep .p-checkbox.p-checkbox-checked .p-checkbox-box {
+      background-color: var(--bayan-primary, #4F46E5);
+      border-color: var(--bayan-primary, #4F46E5);
     }
   `]
 })
@@ -616,7 +621,6 @@ export class InviteBiddersComponent implements OnInit {
   private readonly messageService = inject(MessageService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly dialogService = inject(DialogService);
-  private readonly http = inject(HttpClient);
 
   @Input() tender?: Tender;
   @Input() existingBidderIds: (number | string)[] = [];
@@ -696,12 +700,15 @@ export class InviteBiddersComponent implements OnInit {
   }
 
   private mapPrequalStatus(status: number | string): PrequalificationStatus {
-    if (typeof status === 'number') {
-      return status === 1 ? PrequalificationStatus.APPROVED
-        : status === 2 ? PrequalificationStatus.REJECTED
-        : PrequalificationStatus.PENDING;
+    if (typeof status === 'string') {
+      const lower = status.toLowerCase();
+      if (lower === 'qualified' || lower === 'approved') return PrequalificationStatus.APPROVED;
+      if (lower === 'rejected') return PrequalificationStatus.REJECTED;
+      return PrequalificationStatus.PENDING;
     }
-    return (status as PrequalificationStatus) || PrequalificationStatus.PENDING;
+    return status === 1 ? PrequalificationStatus.APPROVED
+      : status === 2 ? PrequalificationStatus.REJECTED
+      : PrequalificationStatus.PENDING;
   }
 
   onSearch(): void {
@@ -866,12 +873,12 @@ export class InviteBiddersComponent implements OnInit {
 
     this.qualificationLoading.set(true);
 
-    const apiUrl = environment.apiUrl;
-
-    this.http.put(`${apiUrl}/tenders/${this.tender.id}/bidders/${this.qualificationBidder.id}/qualification`, {
-      qualificationStatus: this.qualificationAction,
-      reason: this.qualificationReason || undefined
-    }).subscribe({
+    this.bidderService.updateBidderQualification(
+      this.tender.id,
+      this.qualificationBidder.id,
+      this.qualificationAction,
+      this.qualificationReason || undefined
+    ).subscribe({
       next: () => {
         this.qualificationLoading.set(false);
         this.showQualificationDialog = false;
@@ -896,7 +903,7 @@ export class InviteBiddersComponent implements OnInit {
         this.messageService.add({
           severity: 'error',
           summary: 'Error',
-          detail: error.error?.message || 'Failed to update qualification status'
+          detail: error?.message || 'Failed to update qualification status'
         });
       }
     });

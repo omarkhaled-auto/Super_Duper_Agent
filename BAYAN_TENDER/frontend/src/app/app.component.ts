@@ -50,28 +50,28 @@ import { ToastService } from './core/services/toast.service';
 
       .p-toast-message-success {
         background: var(--bayan-success-bg, #f0fdf4);
-        border: 1px solid var(--bayan-success, #22c55e);
+        border: 1px solid var(--bayan-success, #16A34A);
         border-left-width: 4px;
         border-radius: 0.5rem;
       }
 
       .p-toast-message-info {
         background: var(--bayan-info-bg, #eff6ff);
-        border: 1px solid var(--bayan-info, #3b82f6);
+        border: 1px solid var(--bayan-info, #2563EB);
         border-left-width: 4px;
         border-radius: 0.5rem;
       }
 
       .p-toast-message-warn {
         background: var(--bayan-warning-bg, #fffbeb);
-        border: 1px solid var(--bayan-warning, #f59e0b);
+        border: 1px solid var(--bayan-warning, #D97706);
         border-left-width: 4px;
         border-radius: 0.5rem;
       }
 
       .p-toast-message-error {
         background: var(--bayan-danger-bg, #fef2f2);
-        border: 1px solid var(--bayan-danger, #ef4444);
+        border: 1px solid var(--bayan-danger, #DC2626);
         border-left-width: 4px;
         border-radius: 0.5rem;
       }

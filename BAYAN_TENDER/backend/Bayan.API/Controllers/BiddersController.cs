@@ -4,6 +4,7 @@ using Bayan.Application.Features.Bidders.Commands.UpdateBidder;
 using Bayan.Application.Features.Bidders.DTOs;
 using Bayan.Application.Features.Bidders.Queries.GetBidderById;
 using Bayan.Application.Features.Bidders.Queries.GetBidders;
+using Bayan.API.Authorization;
 using Bayan.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -16,7 +17,7 @@ namespace Bayan.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin,TenderManager")]
+[Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
 public class BiddersController : ControllerBase
 {
     private readonly IMediator _mediator;

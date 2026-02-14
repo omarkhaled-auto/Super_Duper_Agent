@@ -205,8 +205,8 @@ interface UserOption {
           <ng-template pTemplate="emptymessage">
             <tr>
               <td colspan="7" class="text-center p-4">
-                <i class="pi pi-inbox text-4xl text-gray-300 mb-3"></i>
-                <p class="text-gray-500">No audit logs found</p>
+                <i class="pi pi-inbox" style="font-size: 2.5rem; color: var(--bayan-muted-foreground, #64748B); opacity: 0.4; margin-bottom: 0.75rem; display: block;"></i>
+                <p style="color: var(--bayan-muted-foreground, #64748B); margin: 0;">No audit logs found</p>
               </td>
             </tr>
           </ng-template>
@@ -226,11 +226,11 @@ interface UserOption {
       @if (selectedLog) {
         <div class="diff-container">
           <div class="diff-section">
-            <h4><i class="pi pi-minus-circle text-red-500"></i> Old Values</h4>
+            <h4><i class="pi pi-minus-circle" style="color: var(--bayan-danger, #DC2626)"></i> Old Values</h4>
             <pre class="json-display old-values">{{ formatJson(selectedLog.oldValues) }}</pre>
           </div>
           <div class="diff-section">
-            <h4><i class="pi pi-plus-circle text-green-500"></i> New Values</h4>
+            <h4><i class="pi pi-plus-circle" style="color: var(--bayan-success, #16A34A)"></i> New Values</h4>
             <pre class="json-display new-values">{{ formatJson(selectedLog.newValues) }}</pre>
           </div>
         </div>
@@ -256,18 +256,18 @@ interface UserOption {
     .page-header h1 {
       margin: 0;
       font-size: 1.75rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .page-header p {
       margin: 0.25rem 0 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .filters-section {
       margin-bottom: 1.5rem;
       padding-bottom: 1.5rem;
-      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
+      border-bottom: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     .filter-row {
@@ -291,7 +291,7 @@ interface UserOption {
 
     .filter-item label {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
       font-size: 0.875rem;
     }
 
@@ -313,11 +313,12 @@ interface UserOption {
 
     .user-name {
       font-weight: 500;
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .user-email {
       font-size: 0.75rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .entity-id-cell {
@@ -330,7 +331,7 @@ interface UserOption {
     }
 
     .text-muted {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .diff-container {
@@ -351,8 +352,8 @@ interface UserOption {
     }
 
     .json-display {
-      background: var(--bayan-accent, #f4f4f5);
-      border: 1px solid var(--bayan-border, #e4e4e7);
+      background: var(--bayan-accent, #F1F5F9);
+      border: 1px solid var(--bayan-border, #E2E8F0);
       border-radius: var(--bayan-radius-sm, 0.375rem);
       padding: 1rem;
       font-size: 0.8rem;
@@ -364,13 +365,13 @@ interface UserOption {
     }
 
     .old-values {
-      background: #fff5f5;
-      border-color: #fed7d7;
+      background: var(--bayan-danger-bg, #FEF2F2);
+      border-color: #FECACA;
     }
 
     .new-values {
-      background: #f0fff4;
-      border-color: #c6f6d5;
+      background: var(--bayan-success-bg, #F0FDF4);
+      border-color: #BBF7D0;
     }
 
     :host ::ng-deep {
@@ -378,6 +379,18 @@ interface UserOption {
         background: transparent;
         border: none;
         padding: 0;
+      }
+
+      .p-datatable .p-datatable-tbody > tr > td:first-child {
+        font-variant-numeric: tabular-nums;
+        font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Courier New', monospace;
+        color: var(--bayan-muted-foreground, #64748B);
+        font-size: 0.8rem;
+      }
+
+      .filter-actions .p-button:not(.p-button-secondary) {
+        background-color: var(--bayan-primary, #4F46E5);
+        border-color: var(--bayan-primary, #4F46E5);
       }
 
       .p-datepicker {

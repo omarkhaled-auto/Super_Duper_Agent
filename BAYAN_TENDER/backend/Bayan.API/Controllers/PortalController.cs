@@ -183,6 +183,19 @@ public class PortalController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Logs out the current portal user.
+    /// For JWT-based auth, the client clears stored tokens.
+    /// </summary>
+    /// <returns>Success response.</returns>
+    [HttpPost("auth/logout")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult PortalLogout()
+    {
+        return Ok(ApiResponse<object>.SuccessResponse(new { message = "Logged out successfully." }));
+    }
+
     #endregion
 
     #region Tender Information

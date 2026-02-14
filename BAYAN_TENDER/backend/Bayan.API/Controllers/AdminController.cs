@@ -12,6 +12,7 @@ using Bayan.Application.Features.Admin.Users.Queries.GetUserById;
 using Bayan.Application.Features.Admin.Users.Queries.GetUsers;
 using Bayan.Domain.Enums;
 using Bayan.Application.Common.Interfaces;
+using Bayan.API.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -23,7 +24,7 @@ namespace Bayan.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = BayanRoles.AuditLogViewers)]
 public class AdminController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -48,6 +49,7 @@ public class AdminController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A paginated list of users.</returns>
     [HttpGet("users")]
+    [Authorize(Roles = BayanRoles.Admin)]
     [ProducesResponseType(typeof(PaginatedList<UserDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<PaginatedList<UserDto>>> GetUsers(
         [FromQuery] int page = 1,
@@ -77,6 +79,7 @@ public class AdminController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The user if found.</returns>
     [HttpGet("users/{id:guid}")]
+    [Authorize(Roles = BayanRoles.Admin)]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<UserDto>> GetUser(
@@ -101,6 +104,7 @@ public class AdminController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result of the user creation including the user ID.</returns>
     [HttpPost("users")]
+    [Authorize(Roles = BayanRoles.Admin)]
     [ProducesResponseType(typeof(CreateUserResult), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<CreateUserResult>> CreateUser(
@@ -133,6 +137,7 @@ public class AdminController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>No content if successful.</returns>
     [HttpPut("users/{id:guid}")]
+    [Authorize(Roles = BayanRoles.Admin)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -173,6 +178,7 @@ public class AdminController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result of the toggle operation including the new active status.</returns>
     [HttpPost("users/{id:guid}/toggle-active")]
+    [Authorize(Roles = BayanRoles.Admin)]
     [ProducesResponseType(typeof(ToggleUserActiveResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ToggleUserActiveResult>> ToggleUserActive(
@@ -194,6 +200,7 @@ public class AdminController : ControllerBase
     /// Deletes a user by ID. Cannot delete yourself.
     /// </summary>
     [HttpDelete("users/{id:guid}")]
+    [Authorize(Roles = BayanRoles.Admin)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -231,6 +238,7 @@ public class AdminController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>All system settings and units of measure.</returns>
     [HttpGet("settings")]
+    [Authorize(Roles = BayanRoles.Admin)]
     [ProducesResponseType(typeof(GetSettingsResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<GetSettingsResponse>> GetSettings(
         [FromQuery] string? category = null,
@@ -249,6 +257,7 @@ public class AdminController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The updated setting if successful.</returns>
     [HttpPut("settings/{key}")]
+    [Authorize(Roles = BayanRoles.Admin)]
     [ProducesResponseType(typeof(SystemSettingDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -296,7 +305,7 @@ public class AdminController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A paginated list of audit logs.</returns>
     [HttpGet("audit-logs")]
-    [Authorize(Roles = "Admin,Auditor")]
+    [Authorize(Roles = BayanRoles.AuditLogViewers)]
     [ProducesResponseType(typeof(PaginatedList<AuditLogDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<PaginatedList<AuditLogDto>>> GetAuditLogs(
         [FromQuery] int page = 1,

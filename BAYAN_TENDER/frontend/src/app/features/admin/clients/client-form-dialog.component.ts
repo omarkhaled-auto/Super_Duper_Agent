@@ -262,7 +262,7 @@ export interface ClientFormDialogData {
     h4 {
       margin: 0 0 1rem;
       font-size: 1rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
       font-weight: 600;
     }
 
@@ -284,11 +284,11 @@ export interface ClientFormDialogData {
 
     .form-field label {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .required {
-      color: #ef4444;
+      color: var(--bayan-danger, #DC2626);
     }
 
     .checkbox-field {
@@ -307,7 +307,7 @@ export interface ClientFormDialogData {
       gap: 0.5rem;
       margin-top: 1.5rem;
       padding-top: 1rem;
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     .p-error {

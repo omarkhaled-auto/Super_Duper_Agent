@@ -43,7 +43,7 @@ import { SidebarComponent } from './sidebar/sidebar.component';
       margin-top: 64px;
       min-height: calc(100vh - 64px);
       transition: margin-left 0.2s ease;
-      background-color: var(--bayan-muted, #f4f4f5);
+      background-color: var(--bayan-muted, #F1F5F9);
     }
 
     .layout-wrapper.sidebar-collapsed .main-content {
@@ -62,7 +62,7 @@ import { SidebarComponent } from './sidebar/sidebar.component';
       left: 0;
       right: 0;
       bottom: 0;
-      background-color: rgba(0, 0, 0, 0.8);
+      background-color: rgba(15, 23, 42, 0.5);
       z-index: 998;
     }
 

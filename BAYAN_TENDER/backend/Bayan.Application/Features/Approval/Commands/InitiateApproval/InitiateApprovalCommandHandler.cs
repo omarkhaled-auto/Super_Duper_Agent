@@ -3,6 +3,7 @@ using Bayan.Application.Common.Interfaces;
 using Bayan.Application.Features.Approval.DTOs;
 using Bayan.Domain.Entities;
 using Bayan.Domain.Enums;
+using System.Text.Json;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -50,8 +51,19 @@ public class InitiateApprovalCommandHandler : IRequestHandler<InitiateApprovalCo
             .Include(w => w.Levels)
             .FirstOrDefaultAsync(w => w.TenderId == request.TenderId, cancellationToken);
 
+        var previousApproverIds = new List<Guid>();
+        var approversChangedOnReinit = false;
+
         if (existingWorkflow != null)
         {
+            previousApproverIds = existingWorkflow.Levels
+                .OrderBy(l => l.LevelNumber)
+                .Select(l => l.ApproverUserId)
+                .ToList();
+
+            approversChangedOnReinit = previousApproverIds.Count == request.ApproverUserIds.Count &&
+                !previousApproverIds.SequenceEqual(request.ApproverUserIds);
+
             _context.ApprovalLevels.RemoveRange(existingWorkflow.Levels);
             _context.ApprovalWorkflows.Remove(existingWorkflow);
             await _context.SaveChangesAsync(cancellationToken);
@@ -104,6 +116,32 @@ public class InitiateApprovalCommandHandler : IRequestHandler<InitiateApprovalCo
         var level1NotificationSent = false;
         var level1Approver = approverUsers[request.ApproverUserIds[0]];
         var initiator = await _context.Users.FirstOrDefaultAsync(u => u.Id == currentUserId, cancellationToken);
+
+        if (approversChangedOnReinit)
+        {
+            var auditLog = new AuditLog
+            {
+                Id = Guid.NewGuid(),
+                UserId = currentUserId,
+                UserEmail = initiator?.Email,
+                Action = "Approval.ReinitApproversChanged",
+                EntityType = "ApprovalWorkflow",
+                EntityId = workflow.Id,
+                OldValues = JsonSerializer.Serialize(new
+                {
+                    approverUserIds = previousApproverIds
+                }),
+                NewValues = JsonSerializer.Serialize(new
+                {
+                    approverUserIds = request.ApproverUserIds,
+                    reason = request.ApproverChangeReason?.Trim()
+                }),
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.AuditLogs.Add(auditLog);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
 
         try
         {

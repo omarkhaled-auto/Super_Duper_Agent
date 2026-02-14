@@ -490,11 +490,14 @@ export class BidImportService {
     ).pipe(
       map(dto => {
         // Transform backend ImportResultDto -> frontend BidImportResponse
+        const statusStr = typeof dto.status === 'string' ? dto.status.toLowerCase() : '';
+        const isSuccess = dto.isSuccess || dto.status === 0 || dto.status === 1 || statusStr === 'imported' || statusStr === 'importedwithwarnings';
+        const isFailed = dto.status === 3 || statusStr === 'failed';
         return {
-          success: dto.status === 0 || dto.status === 1 || dto.isSuccess,
+          success: isSuccess,
           importedCount: dto.itemsImported || 0,
           skippedCount: dto.itemsSkipped || 0,
-          errorCount: dto.status === 3 ? 1 : 0,
+          errorCount: isFailed ? 1 : 0,
           totalAmount: dto.normalizedTotal || dto.totalAmount || 0,
           currency: dto.baseCurrency || dto.nativeCurrency || request.currency.baseCurrency,
           errors: dto.warnings || []

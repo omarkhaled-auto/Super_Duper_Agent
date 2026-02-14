@@ -7,6 +7,7 @@ using Bayan.Application.Features.Bids.Commands.RejectLateBid;
 using Bayan.Application.Features.Bids.DTOs;
 using Bayan.Application.Features.Bids.Queries.GetBidDetails;
 using Bayan.Application.Features.Bids.Queries.GetBids;
+using Bayan.API.Authorization;
 using Bayan.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -19,7 +20,7 @@ namespace Bayan.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/tenders/{tenderId:guid}/bids")]
-[Authorize(Roles = "Admin,TenderManager")]
+[Authorize(Roles = BayanRoles.BidImporters)]
 public class BidsController : ControllerBase
 {
     private readonly IMediator _mediator;

@@ -240,20 +240,23 @@ import { EvaluationCriterion, DEFAULT_EVALUATION_CRITERIA } from '../../../core/
 
     .weight-distribution {
       padding: 1.5rem;
-      background-color: var(--bayan-accent, #f4f4f5);
-      border-radius: var(--bayan-radius, 0.5rem);
+      background-color: var(--bayan-primary-light, #EEF2FF);
+      border-radius: var(--bayan-radius-lg, 0.75rem);
     }
 
     .weight-distribution h3 {
       margin: 0 0 0.5rem 0;
       font-size: 1.1rem;
-      color: var(--bayan-foreground, #09090b);
+      font-weight: 600;
+      color: var(--bayan-slate-900, #0F172A);
+      border-bottom: 1px solid var(--bayan-slate-200, #E2E8F0);
+      padding-bottom: 0.75rem;
     }
 
     .weight-description {
-      color: var(--bayan-muted-foreground, #71717a);
-      font-size: 0.9rem;
-      margin: 0 0 1.5rem 0;
+      color: var(--bayan-slate-500, #64748B);
+      font-size: 0.875rem;
+      margin: 0.5rem 0 1.5rem 0;
     }
 
     .weight-inputs {
@@ -271,9 +274,9 @@ import { EvaluationCriterion, DEFAULT_EVALUATION_CRITERIA } from '../../../core/
     .weight-field label {
       display: block;
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-700, #334155);
       margin-bottom: 0.5rem;
-      font-size: 0.9rem;
+      font-size: 0.875rem;
     }
 
     .weight-input-group {
@@ -289,7 +292,7 @@ import { EvaluationCriterion, DEFAULT_EVALUATION_CRITERIA } from '../../../core/
       width: 40px;
       height: 40px;
       font-size: 1.5rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-400, #94A3B8);
       margin-top: 1.5rem;
     }
 
@@ -299,20 +302,20 @@ import { EvaluationCriterion, DEFAULT_EVALUATION_CRITERIA } from '../../../core/
       align-items: center;
       justify-content: center;
       padding: 1rem 1.5rem;
-      border-radius: var(--bayan-radius, 0.5rem);
-      background-color: #fff;
-      border: 2px solid var(--bayan-border, #e4e4e7);
+      border-radius: var(--bayan-radius-lg, 0.75rem);
+      background-color: var(--bayan-card, #ffffff);
+      border: 2px solid var(--bayan-border, #E2E8F0);
       margin-top: 1.5rem;
     }
 
     .weight-total.valid {
-      border-color: var(--bayan-success, #22c55e);
-      background-color: var(--bayan-success-bg, #f0fdf4);
+      border-color: var(--bayan-success, #16A34A);
+      background-color: var(--bayan-success-bg, #F0FDF4);
     }
 
     .weight-total.invalid {
-      border-color: #f44336;
-      background-color: var(--bayan-danger-bg, #fef2f2);
+      border-color: var(--bayan-danger, #DC2626);
+      background-color: var(--bayan-danger-bg, #FEF2F2);
     }
 
     .total-value {
@@ -321,16 +324,16 @@ import { EvaluationCriterion, DEFAULT_EVALUATION_CRITERIA } from '../../../core/
     }
 
     .weight-total.valid .total-value {
-      color: #16a34a;
+      color: var(--bayan-success, #16A34A);
     }
 
     .weight-total.invalid .total-value {
-      color: #dc2626;
+      color: var(--bayan-danger, #DC2626);
     }
 
     .total-label {
       font-size: 0.8rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .evaluation-criteria {
@@ -345,12 +348,15 @@ import { EvaluationCriterion, DEFAULT_EVALUATION_CRITERIA } from '../../../core/
       align-items: center;
       flex-wrap: wrap;
       gap: 1rem;
+      border-bottom: 1px solid var(--bayan-slate-200, #E2E8F0);
+      padding-bottom: 0.75rem;
     }
 
     .criteria-header h3 {
       margin: 0;
       font-size: 1.1rem;
-      color: var(--bayan-foreground, #09090b);
+      font-weight: 600;
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .criteria-actions {
@@ -375,11 +381,11 @@ import { EvaluationCriterion, DEFAULT_EVALUATION_CRITERIA } from '../../../core/
     }
 
     .text-success {
-      color: #16a34a;
+      color: var(--bayan-success, #16A34A);
     }
 
     .text-danger {
-      color: #dc2626;
+      color: var(--bayan-danger, #DC2626);
     }
 
     @media (max-width: 768px) {

@@ -3,6 +3,7 @@ using Bayan.Application.Features.Dashboard.DTOs;
 using Bayan.Application.Features.Dashboard.Queries.GetApproverDashboard;
 using Bayan.Application.Features.Dashboard.Queries.GetOverviewDashboard;
 using Bayan.Application.Features.Dashboard.Queries.GetTenderManagerDashboard;
+using Bayan.API.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,7 +15,7 @@ namespace Bayan.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Roles = BayanRoles.InternalUsers)]
 public class DashboardController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -33,6 +34,7 @@ public class DashboardController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The Tender Manager dashboard data.</returns>
     [HttpGet("tender-manager")]
+    [Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
     [ProducesResponseType(typeof(TenderManagerDashboardDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<TenderManagerDashboardDto>> GetTenderManagerDashboard(
         [FromQuery] int deadlineDaysAhead = 7,
@@ -59,6 +61,7 @@ public class DashboardController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The overview dashboard data.</returns>
     [HttpGet("overview")]
+    [Authorize(Roles = BayanRoles.Admin + "," + BayanRoles.TenderManager + "," + BayanRoles.CommercialAnalyst + "," + BayanRoles.Auditor)]
     [ProducesResponseType(typeof(ApiResponse<OverviewDashboardDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<OverviewDashboardDto>> GetOverviewDashboard(
         [FromQuery] int monthsBack = 6,
@@ -77,6 +80,7 @@ public class DashboardController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The Approver dashboard data.</returns>
     [HttpGet("approver")]
+    [Authorize(Roles = BayanRoles.Approver)]
     [ProducesResponseType(typeof(ApproverDashboardDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<ApproverDashboardDto>> GetApproverDashboard(
         [FromQuery] int recentDecisionsLimit = 10,

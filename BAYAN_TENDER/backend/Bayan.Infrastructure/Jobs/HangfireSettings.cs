@@ -38,5 +38,5 @@ public class HangfireSettings
     /// <summary>
     /// Roles that can access the dashboard.
     /// </summary>
-    public string[] AllowedRoles { get; set; } = { "Admin", "Manager" };
+    public string[] AllowedRoles { get; set; } = { "Admin", "TenderManager" };
 }

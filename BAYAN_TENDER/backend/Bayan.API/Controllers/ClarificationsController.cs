@@ -14,6 +14,7 @@ using Bayan.Application.Features.Clarifications.Queries.GetClarificationById;
 using Bayan.Application.Features.Clarifications.Queries.GetClarificationBulletins;
 using Bayan.Application.Features.Clarifications.Queries.GetClarifications;
 using Bayan.Application.Features.Clarifications.Queries.GetNextClarificationRef;
+using Bayan.API.Authorization;
 using Bayan.Domain.Entities;
 using Bayan.Domain.Enums;
 using MediatR;
@@ -29,7 +30,7 @@ namespace Bayan.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/tenders/{tenderId:guid}/clarifications")]
-[Authorize(Roles = "Admin,TenderManager")]
+[Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
 public class ClarificationsController : ControllerBase
 {
     private readonly IMediator _mediator;

@@ -148,7 +148,7 @@ export class EvaluationService {
           id: dto.tenderId,
           tenderId: dto.tenderId,
           status,
-          scoringMethod: dto.scoringMethod === 0 ? 'numeric' : 'star',
+          scoringMethod: dto.scoringMethod === 0 || (typeof dto.scoringMethod === 'string' && dto.scoringMethod.toLowerCase() === 'numeric') ? 'numeric' : 'star',
           blindMode: dto.blindMode,
           deadline: dto.technicalEvaluationDeadline,
           panelMembers,
@@ -608,9 +608,11 @@ export class EvaluationService {
       switchMap(() => this.api.get<any>(`/tenders/${tenderId}/approval`)),
       map((dto: any) => {
         const statusMap: Record<number, string> = { 0: 'pending', 1: 'in_progress', 2: 'approved', 3: 'rejected', 4: 'returned' };
+        const statusNameMap: Record<string, string> = { pending: 'pending', inprogress: 'in_progress', approved: 'approved', rejected: 'rejected', revisionneeded: 'returned' };
         const decisionMap: Record<number, string> = { 0: 'approved', 1: 'rejected', 2: 'returned' };
-        const mapStatus = (v: any) => typeof v === 'number' ? (statusMap[v] || 'pending') : String(v || 'pending').toLowerCase();
-        const mapDecision = (v: any) => typeof v === 'number' ? (decisionMap[v] || 'pending') : String(v || 'pending').toLowerCase();
+        const decisionNameMap: Record<string, string> = { approve: 'approved', reject: 'rejected', returnforrevision: 'returned' };
+        const mapStatus = (v: any) => typeof v === 'number' ? (statusMap[v] || 'pending') : (statusNameMap[String(v || '').toLowerCase()] || String(v || 'pending').toLowerCase());
+        const mapDecision = (v: any) => typeof v === 'number' ? (decisionMap[v] || 'pending') : (decisionNameMap[String(v || '').toLowerCase()] || String(v || 'pending').toLowerCase());
 
         return {
           tenderId: dto.tenderId || tenderId,
@@ -828,17 +830,19 @@ export class EvaluationService {
   private mapBidException(e: any, tenderId: string | number): BidException {
     const exceptionTypeMap: Record<number, string> = { 0: 'technical', 1: 'commercial', 2: 'contractual' };
     const riskLevelMap: Record<number, string> = { 0: 'low', 1: 'medium', 2: 'high', 3: 'critical' };
+    const mapExType = (v: any) => typeof v === 'string' ? v.toLowerCase() : exceptionTypeMap[v];
+    const mapRisk = (v: any) => typeof v === 'string' ? v.toLowerCase() : riskLevelMap[v];
 
     return {
       id: e.id,
       tenderId: tenderId as any,
       bidderId: e.bidderId,
       bidderName: e.bidderCompanyName || '',
-      type: (e.exceptionTypeName?.toLowerCase() || exceptionTypeMap[e.exceptionType] || 'technical') as any,
+      type: (e.exceptionTypeName?.toLowerCase() || mapExType(e.exceptionType) || 'technical') as any,
       description: e.description || '',
       costImpact: e.costImpact,
       timeImpact: e.timeImpactDays != null ? String(e.timeImpactDays) : undefined,
-      riskLevel: (e.riskLevelName?.toLowerCase() || riskLevelMap[e.riskLevel] || 'low') as any,
+      riskLevel: (e.riskLevelName?.toLowerCase() || mapRisk(e.riskLevel) || 'low') as any,
       mitigation: e.mitigation,
       createdAt: e.createdAt,
       createdBy: e.loggedBy,

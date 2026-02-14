@@ -285,7 +285,7 @@ interface CriterionScoreForm {
         } @else {
           <!-- No Bidders -->
           <div class="empty-state">
-            <i class="pi pi-users" style="font-size: 3rem; color: var(--bayan-border, #e4e4e7);"></i>
+            <i class="pi pi-users" style="font-size: 3rem; color: var(--bayan-slate-300, #CBD5E1);"></i>
             <h3>No Bidders Available</h3>
             <p>There are no bidders to score for this tender.</p>
           </div>
@@ -310,7 +310,7 @@ interface CriterionScoreForm {
     }
 
     .loading-container p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
       margin: 0;
     }
 
@@ -319,7 +319,7 @@ interface CriterionScoreForm {
       background: white;
       padding: 1.25rem;
       border-radius: var(--bayan-radius, 0.5rem);
-      border: 1px solid var(--bayan-border, #e4e4e7);
+      border: 1px solid var(--bayan-slate-200, #E2E8F0);
       box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
     }
 
@@ -332,17 +332,21 @@ interface CriterionScoreForm {
 
     .progress-label {
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .progress-value {
       font-size: 0.9rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     :host ::ng-deep .progress-bar .p-progressbar {
       height: 8px;
       border-radius: var(--bayan-radius-sm, 0.375rem);
+    }
+
+    :host ::ng-deep .progress-bar .p-progressbar-value {
+      background: var(--bayan-primary, #4F46E5);
     }
 
     /* Bidder Header Card */
@@ -365,12 +369,12 @@ interface CriterionScoreForm {
     .bidder-info h2 {
       margin: 0;
       font-size: 1.5rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .bidder-position {
       font-size: 1rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
       font-weight: 500;
     }
 
@@ -386,18 +390,18 @@ interface CriterionScoreForm {
       align-items: center;
       gap: 0.5rem;
       padding: 0.75rem 1rem;
-      background: var(--bayan-accent, #f4f4f5);
-      border-radius: 6px;
-      color: var(--bayan-foreground, #09090b);
+      background: var(--bayan-slate-50, #F8FAFC);
+      border-radius: var(--bayan-radius, 0.5rem);
+      color: var(--bayan-slate-900, #0F172A);
       text-decoration: none;
       transition: all 0.2s ease;
-      border: 1px solid var(--bayan-border, #e4e4e7);
+      border: 1px solid var(--bayan-slate-200, #E2E8F0);
     }
 
     .document-link:hover {
-      background: var(--bayan-muted, #f4f4f5);
-      border-color: var(--bayan-primary, #18181b);
-      color: var(--bayan-primary, #18181b);
+      background: var(--bayan-slate-50, #F8FAFC);
+      border-color: var(--bayan-primary, #4F46E5);
+      color: var(--bayan-primary, #4F46E5);
     }
 
     .document-link i:first-child {
@@ -412,9 +416,9 @@ interface CriterionScoreForm {
     /* Criterion Card */
     :host ::ng-deep .criterion-card {
       .p-card-header {
-        background: var(--bayan-accent, #f4f4f5);
+        background: var(--bayan-slate-50, #F8FAFC);
         padding: 1rem;
-        border-bottom: 1px solid var(--bayan-border, #e4e4e7);
+        border-bottom: 1px solid var(--bayan-slate-200, #E2E8F0);
       }
 
       .p-card-body {
@@ -431,7 +435,7 @@ interface CriterionScoreForm {
     .criterion-info h3 {
       margin: 0 0 0.5rem 0;
       font-size: 1.125rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .criterion-meta {
@@ -445,12 +449,12 @@ interface CriterionScoreForm {
       align-items: center;
       gap: 0.375rem;
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .weight-badge i,
     .max-score-badge i {
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
     }
 
     /* Guidance Notes */
@@ -459,15 +463,15 @@ interface CriterionScoreForm {
       align-items: flex-start;
       gap: 0.5rem;
       padding: 0.75rem 1rem;
-      background: #fff8e1;
-      border-radius: 6px;
+      background: #FFFBEB;
+      border-radius: var(--bayan-radius, 0.5rem);
       font-size: 0.875rem;
-      color: #5d4037;
+      color: #92400E;
       margin-bottom: 1.25rem;
     }
 
     .guidance-notes i {
-      color: var(--bayan-warning, #f59e0b);
+      color: var(--bayan-warning, #D97706);
       margin-top: 0.125rem;
     }
 
@@ -479,7 +483,7 @@ interface CriterionScoreForm {
     .score-input-section > label {
       display: block;
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
       margin-bottom: 0.75rem;
     }
 
@@ -498,32 +502,41 @@ interface CriterionScoreForm {
       margin-left: -10px;
     }
 
+    :host ::ng-deep .p-slider .p-slider-range {
+      background: var(--bayan-primary, #4F46E5);
+    }
+
+    :host ::ng-deep .p-slider .p-slider-handle {
+      background: var(--bayan-primary, #4F46E5);
+      border-color: var(--bayan-primary, #4F46E5);
+    }
+
     .slider-labels {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-top: 0.5rem;
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .current-score {
       font-size: 1.5rem;
       font-weight: 700;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
       padding: 0.25rem 0.75rem;
-      background: var(--bayan-accent, #f4f4f5);
-      border-radius: 6px;
+      background: var(--bayan-primary-light, #EEF2FF);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .current-score.low {
-      background: #ffcdd2;
-      color: #dc2626;
+      background: #FEE2E2;
+      color: #B91C1C;
     }
 
     .current-score.high {
-      background: #c8e6c9;
-      color: #16a34a;
+      background: #DCFCE7;
+      color: #15803D;
     }
 
     .rating-container {
@@ -535,7 +548,7 @@ interface CriterionScoreForm {
     .rating-value {
       font-size: 1.25rem;
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     /* Comment Section */
@@ -547,17 +560,17 @@ interface CriterionScoreForm {
 
     .comment-section label {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-700, #334155);
     }
 
     .comment-section label.required {
-      color: #dc2626;
+      color: var(--bayan-danger, #DC2626);
     }
 
     .required-indicator {
       font-size: 0.8rem;
       font-weight: 400;
-      color: #dc2626;
+      color: var(--bayan-danger, #DC2626);
     }
 
     .comment-section textarea {
@@ -573,7 +586,7 @@ interface CriterionScoreForm {
       padding: 1.25rem;
       background: white;
       border-radius: var(--bayan-radius, 0.5rem);
-      border: 1px solid var(--bayan-border, #e4e4e7);
+      border: 1px solid var(--bayan-slate-200, #E2E8F0);
       box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
       margin-top: 0.5rem;
     }
@@ -613,12 +626,12 @@ interface CriterionScoreForm {
 
     .empty-state h3 {
       margin: 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .empty-state p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     /* Responsive */

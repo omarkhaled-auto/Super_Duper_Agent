@@ -5,6 +5,7 @@ using Bayan.Application.Features.Auth.Commands.RefreshToken;
 using Bayan.Application.Features.Auth.Commands.ResetPassword;
 using Bayan.Application.Features.Auth.DTOs;
 using Bayan.Application.Features.Auth.Queries.GetCurrentUser;
+using Bayan.API.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -160,7 +161,7 @@ public class AuthController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Current user's information.</returns>
     [HttpGet("me")]
-    [Authorize]
+    [Authorize(Roles = BayanRoles.InternalUsers)]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<UserDto>> GetCurrentUser(
@@ -175,6 +176,22 @@ public class AuthController : ControllerBase
         {
             return Unauthorized(ApiResponse<object>.FailureResponse(ex.Message));
         }
+    }
+
+    /// <summary>
+    /// Logs out the current user.
+    /// For JWT-based auth, this is a no-op on the server side — the client
+    /// is responsible for clearing the stored tokens.
+    /// </summary>
+    /// <returns>Success response.</returns>
+    [HttpPost("logout")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult Logout()
+    {
+        // JWT tokens are stateless — server-side invalidation would require
+        // a token blacklist. For now, the client clears its stored tokens.
+        return Ok(ApiResponse<object>.SuccessResponse(new { message = "Logged out successfully." }));
     }
 
     /// <summary>

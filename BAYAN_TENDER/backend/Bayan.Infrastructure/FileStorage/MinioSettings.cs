@@ -39,4 +39,12 @@ public class MinioSettings
     /// Region for the bucket (optional, used for AWS S3 compatibility).
     /// </summary>
     public string? Region { get; set; }
+
+    /// <summary>
+    /// Public endpoint for presigned URLs (e.g., "localhost:9000" from the browser's perspective).
+    /// When running in Docker, the internal Endpoint (e.g., "minio:9000") is unreachable from the browser.
+    /// Set this to the externally accessible host:port so presigned URLs work from the client.
+    /// If empty/null, the internal Endpoint is used as-is (backward compatible).
+    /// </summary>
+    public string? PublicEndpoint { get; set; }
 }

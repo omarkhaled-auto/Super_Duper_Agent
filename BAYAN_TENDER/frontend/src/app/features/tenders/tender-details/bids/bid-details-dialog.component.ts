@@ -317,7 +317,7 @@ import { BidImportResponse } from '../../../../core/models/bid-import.model';
     }
 
     .loading-container p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .bid-details-content {
@@ -331,6 +331,8 @@ import { BidImportResponse } from '../../../../core/models/bid-import.model';
       justify-content: space-between;
       align-items: flex-start;
       gap: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid var(--bayan-slate-100, #F1F5F9);
     }
 
     .header-info {
@@ -341,18 +343,19 @@ import { BidImportResponse } from '../../../../core/models/bid-import.model';
 
     .header-info h3 {
       margin: 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
+      font-weight: 700;
     }
 
     .bidder-name-ar {
       font-size: 0.95rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
       direction: rtl;
     }
 
     .bidder-email {
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .submission-info {
@@ -360,8 +363,9 @@ import { BidImportResponse } from '../../../../core/models/bid-import.model';
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 1rem;
       padding: 1rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-slate-50, #F8FAFC);
       border-radius: var(--bayan-radius, 0.5rem);
+      border: 1px solid var(--bayan-slate-200, #E2E8F0);
     }
 
     .info-item {
@@ -372,31 +376,35 @@ import { BidImportResponse } from '../../../../core/models/bid-import.model';
 
     .info-item label {
       font-size: 0.75rem;
-      font-weight: 500;
-      color: var(--bayan-muted-foreground, #71717a);
+      font-weight: 600;
+      color: var(--bayan-slate-500, #64748B);
       text-transform: uppercase;
+      letter-spacing: 0.025em;
     }
 
     .info-item span {
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .late-reason {
-      color: #d97706 !important;
+      color: var(--bayan-warning, #D97706) !important;
     }
 
     .documents-section h4 {
       margin: 0 0 1rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
+      font-weight: 600;
     }
 
     :host ::ng-deep .documents-panel {
       margin-bottom: 0.75rem;
+      border-radius: var(--bayan-radius, 0.5rem);
+      overflow: hidden;
     }
 
     :host ::ng-deep .documents-panel .p-panel-header {
       padding: 0.75rem 1rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-slate-50, #F8FAFC);
     }
 
     :host ::ng-deep .documents-panel .p-panel-content {
@@ -415,8 +423,13 @@ import { BidImportResponse } from '../../../../core/models/bid-import.model';
       align-items: center;
       padding: 0.75rem;
       background-color: #fff;
-      border: 1px solid var(--bayan-border, #e4e4e7);
+      border: 1px solid var(--bayan-slate-200, #E2E8F0);
       border-radius: var(--bayan-radius-sm, 0.375rem);
+      transition: background-color 0.15s ease;
+    }
+
+    .document-item:hover {
+      background-color: var(--bayan-slate-50, #F8FAFC);
     }
 
     .document-info {
@@ -427,7 +440,7 @@ import { BidImportResponse } from '../../../../core/models/bid-import.model';
 
     .document-info > i {
       font-size: 1.5rem;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
     }
 
     .document-details {
@@ -437,12 +450,12 @@ import { BidImportResponse } from '../../../../core/models/bid-import.model';
 
     .document-name {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .document-meta {
       font-size: 0.8rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .separator {
@@ -456,7 +469,8 @@ import { BidImportResponse } from '../../../../core/models/bid-import.model';
 
     .bid-summary-section h4 {
       margin: 0 0 1rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
+      font-weight: 600;
     }
 
     .summary-grid {
@@ -464,7 +478,8 @@ import { BidImportResponse } from '../../../../core/models/bid-import.model';
       grid-template-columns: repeat(3, 1fr);
       gap: 1rem;
       padding: 1rem;
-      background-color: var(--bayan-success-bg, #f0fdf4);
+      background-color: #F0FDF4;
+      border: 1px solid #BBF7D0;
       border-radius: var(--bayan-radius, 0.5rem);
     }
 
@@ -480,21 +495,22 @@ import { BidImportResponse } from '../../../../core/models/bid-import.model';
 
     .summary-item label {
       font-size: 0.75rem;
-      font-weight: 500;
-      color: var(--bayan-muted-foreground, #71717a);
+      font-weight: 600;
+      color: var(--bayan-slate-500, #64748B);
       text-transform: uppercase;
+      letter-spacing: 0.025em;
     }
 
     .summary-item .amount {
       font-size: 1.25rem;
-      font-weight: 600;
-      color: #16a34a;
+      font-weight: 700;
+      color: var(--bayan-success, #16A34A);
     }
 
     .exceptions-list {
       margin: 0;
       padding-left: 1.25rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .disqualification-info {
@@ -509,19 +525,19 @@ import { BidImportResponse } from '../../../../core/models/bid-import.model';
 
     .disqualification-info .meta {
       font-size: 0.8rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .disqualify-form {
       padding: 1rem;
-      background-color: var(--bayan-danger-bg, #fef2f2);
-      border: 1px solid #ef5350;
+      background-color: #FEF2F2;
+      border: 1px solid var(--bayan-danger, #DC2626);
       border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .disqualify-form h4 {
       margin: 0 0 1rem;
-      color: #dc2626;
+      color: var(--bayan-danger, #DC2626);
     }
 
     .form-field {
@@ -532,11 +548,11 @@ import { BidImportResponse } from '../../../../core/models/bid-import.model';
 
     .form-field label {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-700, #334155);
     }
 
     .required {
-      color: #ef4444;
+      color: var(--bayan-danger, #DC2626);
     }
 
     .form-actions {

@@ -285,11 +285,11 @@ export interface BidderFormDialogData {
 
     .form-field label {
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .required {
-      color: #ef4444;
+      color: var(--bayan-danger, #DC2626);
     }
 
     .dialog-actions {
@@ -312,12 +312,20 @@ export interface BidderFormDialogData {
         width: 100%;
       }
 
-      .p-tabview-panels {
+      .p-tabview-panels,
+      .p-tabpanels {
         padding: 0;
       }
 
-      .p-tabview-nav {
+      .p-tabview-nav,
+      .p-tablist {
         justify-content: flex-start;
+      }
+
+      .p-tabview .p-tabview-nav li.p-highlight .p-tabview-nav-link,
+      .p-tab.p-tab-active {
+        border-color: var(--bayan-primary, #4F46E5);
+        color: var(--bayan-primary, #4F46E5);
       }
     }
   `]

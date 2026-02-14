@@ -232,12 +232,13 @@ import {
     }
 
     .form-field label {
-      font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: var(--bayan-slate-700, #334155);
     }
 
     .required {
-      color: #ef4444;
+      color: var(--bayan-danger, #DC2626);
     }
 
     .type-options {
@@ -251,14 +252,14 @@ import {
       align-items: flex-start;
       gap: 0.5rem;
       padding: 0.75rem;
-      border: 1px solid var(--bayan-border, #e4e4e7);
+      border: 1px solid var(--bayan-border, #E2E8F0);
       border-radius: 6px;
       transition: all 0.2s;
     }
 
     .type-option:hover {
-      border-color: var(--bayan-primary, #18181b);
-      background-color: var(--bayan-accent, #f4f4f5);
+      border-color: var(--bayan-primary, #4F46E5);
+      background-color: var(--bayan-primary-light, #EEF2FF);
     }
 
     .type-label {
@@ -270,12 +271,12 @@ import {
 
     .type-name {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .type-description {
       font-size: 0.75rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .dialog-actions {
@@ -284,7 +285,7 @@ import {
       gap: 0.5rem;
       margin-top: 1.5rem;
       padding-top: 1rem;
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     :host ::ng-deep {

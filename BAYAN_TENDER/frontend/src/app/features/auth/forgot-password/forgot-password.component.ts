@@ -23,18 +23,31 @@ import { AuthService } from '../../../core/auth/auth.service';
   template: `
     <div class="forgot-container">
       <div class="forgot-card">
+        <a routerLink="/auth/login" class="back-link">
+          <i class="pi pi-arrow-left"></i>
+          Back to login
+        </a>
+
         <div class="forgot-header">
-          <img src="assets/images/logo.svg" alt="Bayan" class="logo" />
-          <h1>Forgot Password</h1>
-          <p>Enter your email to receive a password reset link</p>
+          <div class="logo-icon">
+            <i class="pi pi-lock"></i>
+          </div>
+          <h1>Reset Password</h1>
+          <p>Enter your email to receive a reset link</p>
         </div>
 
         @if (successMessage()) {
-          <p-message severity="success" [text]="successMessage()!" styleClass="w-full mb-3"></p-message>
+          <div class="success-alert">
+            <i class="pi pi-check-circle"></i>
+            <span>{{ successMessage() }}</span>
+          </div>
         }
 
         @if (errorMessage()) {
-          <p-message severity="error" [text]="errorMessage()!" styleClass="w-full mb-3"></p-message>
+          <div class="error-alert">
+            <i class="pi pi-exclamation-circle"></i>
+            <span>{{ errorMessage() }}</span>
+          </div>
         }
 
         <form [formGroup]="forgotForm" (ngSubmit)="onSubmit()">
@@ -50,7 +63,8 @@ import { AuthService } from '../../../core/auth/auth.service';
               [class.ng-invalid]="isFieldInvalid('email')"
             />
             @if (isFieldInvalid('email')) {
-              <small class="p-error">
+              <small class="field-error">
+                <i class="pi pi-exclamation-circle"></i>
                 @if (forgotForm.get('email')?.errors?.['required']) {
                   Email is required
                 }
@@ -71,13 +85,6 @@ import { AuthService } from '../../../core/auth/auth.service';
             [disabled]="forgotForm.invalid || isLoading()"
           ></button>
         </form>
-
-        <div class="forgot-footer">
-          <a routerLink="/auth/login">
-            <i class="pi pi-arrow-left"></i>
-            Back to Sign In
-          </a>
-        </div>
       </div>
     </div>
   `,
@@ -87,7 +94,7 @@ import { AuthService } from '../../../core/auth/auth.service';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--bayan-muted, #f4f4f5);
+      background: linear-gradient(135deg, var(--bayan-slate-50, #F8FAFC) 0%, var(--bayan-slate-100, #F1F5F9) 100%);
       padding: 2rem;
     }
 
@@ -97,8 +104,24 @@ import { AuthService } from '../../../core/auth/auth.service';
       padding: 2.5rem;
       width: 100%;
       max-width: 420px;
-      border: 1px solid var(--bayan-border, #e4e4e7);
-      box-shadow: var(--bayan-shadow, 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1));
+      box-shadow: var(--bayan-shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1));
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--bayan-primary, #4F46E5);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 500;
+      margin-bottom: 1.5rem;
+      transition: color var(--bayan-transition-fast, 150ms ease);
+    }
+
+    .back-link:hover {
+      color: var(--bayan-primary-hover, #4338CA);
+      text-decoration: underline;
     }
 
     .forgot-header {
@@ -106,21 +129,30 @@ import { AuthService } from '../../../core/auth/auth.service';
       margin-bottom: 2rem;
     }
 
-    .logo {
-      height: 60px;
+    .logo-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: var(--bayan-radius-lg, 0.75rem);
+      background: var(--bayan-primary-light, #EEF2FF);
+      color: var(--bayan-primary, #4F46E5);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       margin-bottom: 1rem;
+      font-size: 1.5rem;
     }
 
     .forgot-header h1 {
       margin: 0;
-      font-size: 1.75rem;
+      font-size: 1.5rem;
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .forgot-header p {
       margin: 0.5rem 0 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
+      font-size: 0.875rem;
     }
 
     .form-field {
@@ -131,35 +163,74 @@ import { AuthService } from '../../../core/auth/auth.service';
       display: block;
       margin-bottom: 0.5rem;
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      font-size: 0.875rem;
+      color: var(--bayan-slate-700, #334155);
     }
 
-    .forgot-footer {
-      text-align: center;
-      margin-top: 1.5rem;
-    }
-
-    .forgot-footer a {
-      color: var(--bayan-primary, #18181b);
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
+    .success-alert {
+      display: flex;
+      align-items: flex-start;
       gap: 0.5rem;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1.25rem;
+      background: var(--bayan-success-bg, #F0FDF4);
+      border-left: 4px solid var(--bayan-success, #16A34A);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
+      color: var(--bayan-success, #16A34A);
+      font-size: 0.875rem;
+      line-height: 1.5;
     }
 
-    .forgot-footer a:hover {
-      text-decoration: underline;
+    .success-alert i {
+      margin-top: 2px;
+      font-size: 0.875rem;
     }
 
-    .p-error {
-      display: block;
+    .error-alert {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1.25rem;
+      background: var(--bayan-danger-bg, #FEF2F2);
+      border-left: 4px solid var(--bayan-danger, #DC2626);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
+      color: var(--bayan-danger, #DC2626);
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+
+    .error-alert i {
+      margin-top: 2px;
+      font-size: 0.875rem;
+    }
+
+    .field-error {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
       margin-top: 0.25rem;
+      color: var(--bayan-danger, #DC2626);
+      font-size: 0.8rem;
+    }
+
+    .field-error i {
+      font-size: 0.7rem;
     }
 
     :host ::ng-deep {
       .p-inputtext {
         width: 100%;
         height: 44px;
+        border: 1px solid var(--bayan-input, #E2E8F0);
+        border-radius: var(--bayan-radius-sm, 0.375rem);
+        transition: border-color var(--bayan-transition-fast, 150ms ease),
+                    box-shadow var(--bayan-transition-fast, 150ms ease);
+      }
+
+      .p-inputtext:focus {
+        border-color: var(--bayan-primary, #4F46E5);
+        box-shadow: 0 0 0 3px var(--bayan-primary-ring, rgba(79, 70, 229, 0.15));
       }
 
       .p-button {
@@ -167,13 +238,22 @@ import { AuthService } from '../../../core/auth/auth.service';
         height: 46px;
         font-size: 0.9375rem;
         font-weight: 600;
-        border-radius: var(--bayan-radius, 0.5rem);
+        background: var(--bayan-primary, #4F46E5);
+        border-color: var(--bayan-primary, #4F46E5);
+        border-radius: var(--bayan-radius-lg, 0.75rem);
         justify-content: center;
+        transition: background-color var(--bayan-transition, 200ms ease),
+                    border-color var(--bayan-transition, 200ms ease);
       }
 
-      .p-message {
-        width: 100%;
-        margin-bottom: 1rem;
+      .p-button:hover:not(:disabled) {
+        background: var(--bayan-primary-hover, #4338CA);
+        border-color: var(--bayan-primary-hover, #4338CA);
+      }
+
+      .p-button:active:not(:disabled) {
+        background: var(--bayan-primary-active, #3730A3);
+        border-color: var(--bayan-primary-active, #3730A3);
       }
     }
   `]

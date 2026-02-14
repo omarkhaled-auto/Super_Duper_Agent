@@ -27,6 +27,7 @@ import { MessageService, MenuItem } from 'primeng/api';
 
 import { ApprovalService } from '../../../../core/services/approval.service';
 import { AuthService } from '../../../../core/auth/auth.service';
+import { UserRole } from '../../../../core/models/user.model';
 import {
   ApprovalWorkflow,
   ApprovalLevel,
@@ -82,13 +83,17 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
             <i class="pi pi-check-circle empty-icon"></i>
             <h3>No Approval Workflow</h3>
             <p>An approval workflow has not been initiated for this tender.</p>
-            <button
-              pButton
-              label="Initiate Approval Workflow"
-              icon="pi pi-play"
-              data-testid="initiate-approval-btn"
-              (click)="showInitiateDialog = true"
-            ></button>
+            @if (canInitiateApproval()) {
+              <button
+                pButton
+                label="Initiate Approval Workflow"
+                icon="pi pi-play"
+                data-testid="initiate-approval-btn"
+                (click)="showInitiateDialog = true"
+              ></button>
+            } @else {
+              <p-message severity="info" text="Only a Tender Manager can initiate an approval workflow."></p-message>
+            }
           </div>
         </div>
       } @else {
@@ -104,6 +109,16 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
               ></p-tag>
             </div>
             <div class="header-right">
+              @if (canReinitiateWorkflow()) {
+                <button
+                  pButton
+                  label="Re-initiate Approval Workflow"
+                  icon="pi pi-refresh"
+                  class="p-button-outlined"
+                  data-testid="reinitiate-approval-btn"
+                  (click)="showInitiateDialog = true"
+                ></button>
+              }
               @if (workflow()!.awardPackUrl) {
                 <button
                   pButton
@@ -304,6 +319,8 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
       <app-initiate-approval-dialog
         [visible]="showInitiateDialog"
         [tenderId]="tenderId"
+        [existingWorkflow]="workflow()"
+        [isReinitiation]="canReinitiateWorkflow()"
         (visibleChange)="showInitiateDialog = $event"
         (initiated)="onWorkflowInitiated($event)"
       ></app-initiate-approval-dialog>
@@ -326,7 +343,7 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
     }
 
     .loading-container p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .no-workflow-state {
@@ -346,18 +363,18 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
 
     .empty-icon {
       font-size: 4rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       opacity: 0.5;
     }
 
     .empty-state-content h3 {
       margin: 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .empty-state-content p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .workflow-container {
@@ -382,7 +399,7 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
 
     .header-left h3 {
       margin: 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .initiator-info {
@@ -390,23 +407,23 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
       align-items: center;
       gap: 0.5rem;
       padding: 0.75rem 1rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-accent, #F1F5F9);
       border-radius: var(--bayan-radius, 0.5rem);
       font-size: 0.9rem;
       flex-wrap: wrap;
     }
 
     .info-label {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .info-value {
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
       font-weight: 500;
     }
 
     .info-separator {
-      color: var(--bayan-border, #e4e4e7);
+      color: var(--bayan-border, #E2E8F0);
     }
 
     .stepper-container {
@@ -417,9 +434,32 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
       flex: 1;
     }
 
+    :host ::ng-deep .approval-steps .p-steps-item .p-steps-item-link,
     :host ::ng-deep .approval-steps .p-steps-item .p-menuitem-link {
       flex-direction: column;
       gap: 0.5rem;
+    }
+
+    :host ::ng-deep .approval-steps .p-steps-item.p-steps-current .p-steps-item-link .p-steps-item-number,
+    :host ::ng-deep .approval-steps .p-steps-item.p-steps-current .p-menuitem-link .p-steps-number,
+    :host ::ng-deep .approval-steps .p-steps-item-active .p-steps-item-link .p-steps-item-number {
+      background-color: var(--bayan-primary, #4F46E5);
+      color: white;
+      border-color: var(--bayan-primary, #4F46E5);
+      box-shadow: 0 0 0 3px var(--bayan-primary-ring, rgba(79,70,229,0.15));
+    }
+
+    :host ::ng-deep .approval-steps .p-steps-item.p-highlight .p-steps-item-link .p-steps-item-number,
+    :host ::ng-deep .approval-steps .p-steps-item.p-highlight .p-menuitem-link .p-steps-number {
+      background-color: var(--bayan-success, #16A34A);
+      color: white;
+      border-color: var(--bayan-success, #16A34A);
+    }
+
+    :host ::ng-deep .approval-steps .p-steps-item .p-steps-item-link .p-steps-item-number,
+    :host ::ng-deep .approval-steps .p-steps-item .p-menuitem-link .p-steps-number {
+      border-color: var(--bayan-border, #E2E8F0);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .levels-grid {
@@ -429,31 +469,31 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
     }
 
     :host ::ng-deep .level-card {
-      border: 2px solid var(--bayan-border, #e4e4e7);
+      border: 2px solid var(--bayan-border, #E2E8F0);
       transition: border-color 0.2s;
     }
 
     :host ::ng-deep .level-card.active {
-      border-color: var(--bayan-primary, #18181b);
-      box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.1);
+      border-color: var(--bayan-primary, #4F46E5);
+      box-shadow: 0 0 0 3px var(--bayan-primary-ring, rgba(79,70,229,0.15));
     }
 
     :host ::ng-deep .level-card.approved {
-      border-color: var(--bayan-success, #22c55e);
+      border-color: var(--bayan-success, #16A34A);
     }
 
     :host ::ng-deep .level-card.rejected {
-      border-color: #f44336;
+      border-color: var(--bayan-danger, #DC2626);
     }
 
     :host ::ng-deep .level-card.returned {
-      border-color: var(--bayan-warning, #f59e0b);
+      border-color: var(--bayan-warning, #D97706);
     }
 
     :host ::ng-deep .level-card .p-card-header {
       padding: 1rem;
-      background-color: var(--bayan-accent, #f4f4f5);
-      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
+      background-color: var(--bayan-accent, #F1F5F9);
+      border-bottom: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     .level-header {
@@ -464,7 +504,7 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
 
     .level-number {
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .level-content {
@@ -486,12 +526,12 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
 
     .approver-name {
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .approver-email {
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .level-deadline,
@@ -501,7 +541,7 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
       align-items: flex-start;
       gap: 0.5rem;
       font-size: 0.9rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .level-deadline i,
@@ -511,7 +551,7 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
     }
 
     .level-comment {
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-accent, #F1F5F9);
       padding: 0.75rem;
       border-radius: 6px;
       font-style: italic;
@@ -519,8 +559,8 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
 
     /* Decision Form Styles */
     :host ::ng-deep .decision-card {
-      background-color: var(--bayan-accent, #f4f4f5);
-      border: 2px solid var(--bayan-primary, #18181b);
+      background-color: var(--bayan-accent, #F1F5F9);
+      border: 2px solid var(--bayan-primary, #4F46E5);
     }
 
     .decision-options {
@@ -556,11 +596,11 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
 
     .comment-section label {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .required {
-      color: #f44336;
+      color: var(--bayan-danger, #DC2626);
     }
 
     .form-actions {
@@ -575,7 +615,7 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
 
     .timeline-section h4 {
       margin: 0 0 1rem 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .timeline-marker {
@@ -585,22 +625,22 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
       width: 32px;
       height: 32px;
       border-radius: 50%;
-      background-color: var(--bayan-border, #e4e4e7);
-      color: var(--bayan-muted-foreground, #71717a);
+      background-color: var(--bayan-border, #E2E8F0);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .timeline-marker.approved {
-      background-color: var(--bayan-success, #22c55e);
+      background-color: var(--bayan-success, #16A34A);
       color: white;
     }
 
     .timeline-marker.rejected {
-      background-color: #f44336;
+      background-color: var(--bayan-danger, #DC2626);
       color: white;
     }
 
     .timeline-marker.returned {
-      background-color: var(--bayan-warning, #f59e0b);
+      background-color: var(--bayan-warning, #D97706);
       color: white;
     }
 
@@ -619,14 +659,14 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
 
     .event-approver {
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .event-meta {
       display: flex;
       gap: 1rem;
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .event-comment {
@@ -634,15 +674,15 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
       align-items: flex-start;
       gap: 0.5rem;
       padding: 0.75rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-accent, #F1F5F9);
       border-radius: 6px;
       font-size: 0.9rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .event-comment i {
       margin-top: 2px;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .w-full {
@@ -676,7 +716,7 @@ import { InitiateApprovalDialogComponent } from './initiate-approval-dialog.comp
   `]
 })
 export class ApprovalTabComponent implements OnInit, OnDestroy {
-  @Input() tenderId!: number;
+  @Input() tenderId!: string | number;
 
   readonly approvalService = inject(ApprovalService);
   private readonly authService = inject(AuthService);
@@ -691,6 +731,8 @@ export class ApprovalTabComponent implements OnInit, OnDestroy {
   showInitiateDialog = false;
   isDownloading = signal(false);
   isSubmitting = signal(false);
+
+  canInitiateApproval = computed(() => this.authService.hasRole([UserRole.ADMIN, UserRole.TENDER_MANAGER]));
 
   // Decision form
   decisionForm: FormGroup;
@@ -768,6 +810,12 @@ export class ApprovalTabComponent implements OnInit, OnDestroy {
     if (!wf || !currentUser) return false;
 
     return this.approvalService.isCurrentUserActiveApprover(wf, currentUser.id);
+  }
+
+  canReinitiateWorkflow(): boolean {
+    if (!this.canInitiateApproval()) return false;
+    const status = this.workflow()?.status;
+    return status === 'returned' || status === 'rejected';
   }
 
   requiresComment(): boolean {

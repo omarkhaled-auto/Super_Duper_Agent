@@ -5,6 +5,7 @@ import { PanelMenuModule } from 'primeng/panelmenu';
 import { MenuItem } from 'primeng/api';
 import { AuthService } from '../../core/auth/auth.service';
 import { UserRole } from '../../core/models/user.model';
+import { RoleGroups } from '../../core/auth/role-groups';
 
 @Component({
   selector: 'app-sidebar',
@@ -24,8 +25,9 @@ import { UserRole } from '../../core/models/user.model';
     .sidebar-container {
       width: 280px;
       height: calc(100vh - 64px);
-      background: var(--bayan-sidebar-bg, #fafafa);
-      border-right: 1px solid var(--bayan-sidebar-border, #e4e4e7);
+      background: var(--bayan-sidebar-bg, #0F172A);
+      color: var(--bayan-sidebar-foreground, #F8FAFC);
+      border-right: 1px solid var(--bayan-sidebar-border, #1E293B);
       position: fixed;
       left: 0;
       top: 64px;
@@ -47,69 +49,182 @@ import { UserRole } from '../../core/models/user.model';
       padding: 1rem 0;
     }
 
+    /* Dark-themed scrollbar for sidebar */
+    .sidebar-content::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .sidebar-content::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .sidebar-content::-webkit-scrollbar-thumb {
+      background: rgba(248, 250, 252, 0.15);
+      border-radius: 3px;
+    }
+
+    .sidebar-content::-webkit-scrollbar-thumb:hover {
+      background: rgba(248, 250, 252, 0.25);
+    }
+
     .sidebar-footer {
       padding: 1rem;
-      border-top: 1px solid var(--bayan-sidebar-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-sidebar-border, #1E293B);
       text-align: center;
     }
 
     .version {
       font-size: 0.75rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     :host ::ng-deep {
       .sidebar-menu {
         border: none;
+        background: transparent;
 
         .p-panelmenu-panel {
-          margin-bottom: 0.25rem;
+          background: transparent !important;
+          border: none !important;
+          border-radius: 0 !important;
+          margin-bottom: 0.125rem;
         }
 
+        /* ── Header items (Dashboard, Tenders, etc.) ── */
         .p-panelmenu-header {
           border-radius: 0;
+          color: var(--bayan-sidebar-foreground, #F8FAFC) !important;
         }
 
         .p-panelmenu-header-content {
-          border: none;
-          background: transparent;
-          border-radius: 0.375rem;
+          border: none !important;
+          background: transparent !important;
+          border-radius: var(--bayan-radius-sm, 0.375rem);
           margin: 0 0.5rem;
+          padding: 0 !important;
           transition: background-color 150ms ease;
         }
 
         .p-panelmenu-header-content:hover {
-          background-color: var(--bayan-sidebar-accent, #f4f4f5);
+          background-color: rgba(248, 250, 252, 0.08) !important;
         }
 
         .p-panelmenu-header-link {
-          padding: 0.5rem 0.75rem;
-          color: var(--bayan-muted-foreground, #71717a);
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 0.625rem 0.75rem;
+          color: var(--bayan-sidebar-foreground, #F8FAFC) !important;
+          font-size: 0.875rem;
+          font-weight: 500;
+          text-decoration: none;
+          cursor: pointer;
+        }
+
+        .p-panelmenu-header-label {
+          color: var(--bayan-sidebar-foreground, #F8FAFC) !important;
           font-size: 0.875rem;
           font-weight: 500;
         }
 
-        .p-panelmenu-content {
-          border: none;
-          background: transparent;
+        .p-panelmenu-header-link .pi {
+          color: var(--bayan-sidebar-muted, #94A3B8);
+          font-size: 1.125rem;
         }
 
-        .p-menuitem-link {
-          padding: 0.5rem 0.75rem 0.5rem 2.5rem;
-          border-radius: 0.375rem;
+        /* ── Submenu chevron icon ── */
+        .p-panelmenu-submenu-icon {
+          color: var(--bayan-sidebar-muted, #94A3B8) !important;
+          font-size: 0.75rem !important;
+          margin-left: auto;
+        }
+
+        /* ── Expanded submenu content ── */
+        .p-panelmenu-content {
+          border: none !important;
+          background: transparent !important;
+          padding: 0;
+        }
+
+        .p-panelmenu-content-container {
+          overflow: visible !important;
+        }
+
+        .p-panelmenu-submenu {
+          padding: 0.25rem 0;
+          list-style: none;
+          margin: 0;
+        }
+
+        /* ── Sub-items (All Tenders, Users, etc.) ── */
+        .p-panelmenu-item {
+          margin: 0.0625rem 0;
+        }
+
+        .p-panelmenu-item-content {
+          border: none !important;
+          background: transparent !important;
+          border-radius: var(--bayan-radius-sm, 0.375rem);
           margin: 0 0.5rem;
-          color: var(--bayan-muted-foreground, #71717a);
+          transition: background-color 150ms ease;
+        }
+
+        .p-panelmenu-item-content:hover {
+          background-color: rgba(248, 250, 252, 0.08) !important;
+        }
+
+        .p-panelmenu-item-link {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 0.5rem 0.75rem 0.5rem 2.75rem;
+          color: var(--bayan-sidebar-muted, #94A3B8) !important;
+          font-size: 0.875rem;
+          text-decoration: none;
+          cursor: pointer;
+          transition: color 150ms ease;
+        }
+
+        .p-panelmenu-item-link:hover {
+          color: var(--bayan-sidebar-foreground, #F8FAFC) !important;
+        }
+
+        .p-panelmenu-item-label {
+          color: inherit !important;
           font-size: 0.875rem;
         }
 
-        .p-menuitem-link:hover {
-          background-color: var(--bayan-sidebar-accent, #f4f4f5);
+        .p-panelmenu-item-link .pi {
+          color: inherit;
+          font-size: 1rem;
         }
 
-        .p-menuitem-icon {
-          margin-right: 0.75rem;
-          color: var(--bayan-muted-foreground, #71717a);
-          font-size: 1rem;
+        /* ── Active/Highlight state for sub-items ── */
+        .p-panelmenu-item.p-focus > .p-panelmenu-item-content,
+        .p-panelmenu-item.p-highlight > .p-panelmenu-item-content {
+          background-color: rgba(79, 70, 229, 0.12) !important;
+          border-left: 3px solid var(--bayan-sidebar-active-border, #4F46E5);
+        }
+
+        .p-panelmenu-item.p-focus > .p-panelmenu-item-content .p-panelmenu-item-link,
+        .p-panelmenu-item.p-highlight > .p-panelmenu-item-content .p-panelmenu-item-link {
+          color: #ffffff !important;
+        }
+
+        .p-panelmenu-item.p-focus > .p-panelmenu-item-content .p-panelmenu-item-link .pi,
+        .p-panelmenu-item.p-highlight > .p-panelmenu-item-content .p-panelmenu-item-link .pi {
+          color: #A5B4FC;
+        }
+
+        /* ── Active/Highlight state for header items ── */
+        .p-panelmenu-header.p-highlight .p-panelmenu-header-content,
+        .p-panelmenu-header.p-panelmenu-header-active .p-panelmenu-header-content {
+          background-color: rgba(79, 70, 229, 0.12) !important;
+        }
+
+        .p-panelmenu-header.p-highlight .p-panelmenu-header-link .pi,
+        .p-panelmenu-header.p-panelmenu-header-active .p-panelmenu-header-link .pi {
+          color: #A5B4FC;
         }
       }
     }
@@ -130,13 +245,13 @@ export class SidebarComponent {
    */
   menuItems = computed<MenuItem[]>(() => {
     // Reading currentUser signal makes this recompute only when user changes
-    const user = this.currentUser();
+    this.currentUser();
 
     const baseItems: MenuItem[] = [
       {
         label: 'Dashboard',
         icon: 'pi pi-home',
-        routerLink: ['/dashboard'],
+        routerLink: ['/home'],
         command: () => this.menuItemClick.emit()
       },
       {
@@ -162,64 +277,69 @@ export class SidebarComponent {
             command: () => this.menuItemClick.emit()
           }
         ]
-      },
-      {
-        label: 'Reports',
-        icon: 'pi pi-chart-bar',
-        items: [
-          {
-            label: 'Analytics',
-            icon: 'pi pi-chart-line',
-            routerLink: ['/reports/analytics'],
-            command: () => this.menuItemClick.emit()
-          },
-          {
-            label: 'Export',
-            icon: 'pi pi-download',
-            routerLink: ['/reports/export'],
-            command: () => this.menuItemClick.emit()
-          }
-        ]
       }
     ];
 
-    // Add admin menu items if user has admin role
+    if (this.authService.hasRole([...RoleGroups.vendorPricingViewers])) {
+      baseItems.push({
+        label: 'Vendor Pricing',
+        icon: 'pi pi-chart-line',
+        routerLink: ['/vendor-pricing'],
+        command: () => this.menuItemClick.emit()
+      });
+    }
+
+    const adminItems: MenuItem[] = [];
+
+    if (this.authService.hasRole([UserRole.ADMIN])) {
+      adminItems.push({
+        label: 'Users',
+        icon: 'pi pi-users',
+        routerLink: ['/admin/users'],
+        command: () => this.menuItemClick.emit()
+      });
+    }
+
     if (this.authService.hasRole([UserRole.ADMIN, UserRole.TENDER_MANAGER])) {
+      adminItems.push(
+        {
+          label: 'Clients',
+          icon: 'pi pi-briefcase',
+          routerLink: ['/admin/clients'],
+          command: () => this.menuItemClick.emit()
+        },
+        {
+          label: 'Bidders',
+          icon: 'pi pi-building',
+          routerLink: ['/admin/bidders'],
+          command: () => this.menuItemClick.emit()
+        }
+      );
+    }
+
+    if (this.authService.hasRole([UserRole.ADMIN])) {
+      adminItems.push({
+        label: 'System Settings',
+        icon: 'pi pi-sliders-h',
+        routerLink: ['/admin/settings'],
+        command: () => this.menuItemClick.emit()
+      });
+    }
+
+    if (this.authService.hasRole([UserRole.ADMIN, UserRole.AUDITOR])) {
+      adminItems.push({
+        label: 'Audit Logs',
+        icon: 'pi pi-history',
+        routerLink: ['/admin/audit-logs'],
+        command: () => this.menuItemClick.emit()
+      });
+    }
+
+    if (adminItems.length > 0) {
       baseItems.push({
         label: 'Administration',
         icon: 'pi pi-cog',
-        items: [
-          {
-            label: 'Users',
-            icon: 'pi pi-users',
-            routerLink: ['/admin/users'],
-            command: () => this.menuItemClick.emit()
-          },
-          {
-            label: 'Clients',
-            icon: 'pi pi-briefcase',
-            routerLink: ['/admin/clients'],
-            command: () => this.menuItemClick.emit()
-          },
-          {
-            label: 'Bidders',
-            icon: 'pi pi-building',
-            routerLink: ['/admin/bidders'],
-            command: () => this.menuItemClick.emit()
-          },
-          {
-            label: 'Settings',
-            icon: 'pi pi-sliders-h',
-            routerLink: ['/admin/settings'],
-            command: () => this.menuItemClick.emit()
-          },
-          {
-            label: 'Audit Logs',
-            icon: 'pi pi-history',
-            routerLink: ['/admin/audit-logs'],
-            command: () => this.menuItemClick.emit()
-          }
-        ]
+        items: adminItems
       });
     }
 

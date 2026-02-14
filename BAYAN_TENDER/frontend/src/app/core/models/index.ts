@@ -75,10 +75,14 @@ export {
   type TenderDashboardStatus,
   type DeadlineItem,
   type ActivityFeedItem,
+  type OverviewDashboard,
+  type TenderCountsByStatus,
+  type MonthlyTrendItem,
   type ApproverDashboard,
   type RecentDecision,
   type ApprovalDecisionType,
   type ApprovalStats,
   type TenderManagerDashboardParams,
+  type OverviewDashboardParams,
   type ApproverDashboardParams
 } from './dashboard.model';

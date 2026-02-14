@@ -158,16 +158,17 @@ import {
     }
 
     .form-field label {
-      font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: var(--bayan-slate-700, #334155);
     }
 
     .required {
-      color: #ef4444;
+      color: var(--bayan-danger, #DC2626);
     }
 
     .field-hint {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       font-size: 0.8rem;
     }
 
@@ -177,7 +178,7 @@ import {
       gap: 0.5rem;
       margin-top: 1.5rem;
       padding-top: 1rem;
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     :host ::ng-deep {

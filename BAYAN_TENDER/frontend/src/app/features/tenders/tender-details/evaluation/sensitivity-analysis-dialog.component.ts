@@ -187,7 +187,7 @@ import {
         </div>
       } @else {
         <div class="empty-state">
-          <i class="pi pi-chart-line" style="font-size: 2rem; color: var(--bayan-muted-foreground, #71717a); opacity: 0.5;"></i>
+          <i class="pi pi-chart-line" style="font-size: 2rem; color: var(--bayan-muted-foreground, #64748B); opacity: 0.5;"></i>
           <p>Unable to load sensitivity analysis.</p>
         </div>
       }
@@ -215,7 +215,7 @@ import {
     }
 
     .loading-container p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       margin: 0;
     }
 
@@ -232,15 +232,16 @@ import {
     }
 
     .info-content i {
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
       margin-top: 0.125rem;
     }
 
     .highlight-winner {
-      background: #c8e6c9;
+      background: #DCFCE7;
       padding: 0.125rem 0.375rem;
-      border-radius: 3px;
+      border-radius: var(--bayan-radius, 0.5rem);
       font-weight: 500;
+      color: #15803D;
     }
 
     .table-wrapper {
@@ -249,12 +250,14 @@ import {
 
     :host ::ng-deep .sensitivity-table {
       .p-datatable-thead > tr > th {
-        background: var(--bayan-accent, #f4f4f5);
+        background: var(--bayan-accent, #EEF2FF);
         padding: 0.75rem 0.5rem;
+        border-color: var(--bayan-border, #E2E8F0);
       }
 
       .p-datatable-tbody > tr > td {
         padding: 0.75rem 0.5rem;
+        border-color: var(--bayan-border, #E2E8F0);
       }
     }
 
@@ -272,22 +275,22 @@ import {
     }
 
     .tech-weight {
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
     }
 
     .comm-weight {
-      color: #388e3c;
+      color: var(--bayan-success, #16A34A);
     }
 
     .separator {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .weight-labels {
       display: flex;
       justify-content: space-around;
       font-size: 0.7rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       font-weight: 400;
       margin-top: 0.25rem;
     }
@@ -301,6 +304,7 @@ import {
 
     .bidder-name {
       font-weight: 500;
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .rank-cell {
@@ -308,21 +312,36 @@ import {
     }
 
     .rank-cell.winner-cell {
-      background: #c8e6c9 !important;
+      background: #DCFCE7 !important;
+      color: #15803D;
     }
 
     .rank-value {
       font-weight: 600;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
     }
 
     .rank-value.rank-1 {
-      color: #16a34a;
+      color: #D97706;
       font-size: 1.125rem;
     }
 
+    .rank-value.rank-2 {
+      color: #94A3B8;
+    }
+
+    .rank-value.rank-3 {
+      color: #B45309;
+    }
+
     .has-change {
-      background: #fff8e1 !important;
+      background: #FEF2F2 !important;
+    }
+
+    .has-change.improved {
+      background: #F0FDF4 !important;
     }
 
     .text-center {
@@ -331,10 +350,10 @@ import {
 
     /* Winner Changes */
     .winner-changes {
-      background: #fff8e1;
+      background: #FFFBEB;
       padding: 1rem;
       border-radius: var(--bayan-radius, 0.5rem);
-      border-left: 4px solid var(--bayan-warning, #f59e0b);
+      border-left: 3px solid var(--bayan-warning, #D97706);
     }
 
     .winner-changes h4 {
@@ -342,7 +361,7 @@ import {
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      color: #e65100;
+      color: #B45309;
       font-size: 1rem;
     }
 
@@ -358,12 +377,12 @@ import {
       gap: 0.5rem;
       padding: 0.5rem;
       background: white;
-      border-radius: var(--bayan-radius-sm, 0.375rem);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .change-split {
       font-weight: 600;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       min-width: 80px;
     }
 
@@ -373,11 +392,11 @@ import {
     }
 
     .change-item i {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .change-to {
-      color: #16a34a;
+      color: var(--bayan-success, #16A34A);
       font-weight: 600;
     }
 
@@ -393,7 +412,7 @@ import {
     }
 
     .empty-state p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       margin: 0;
     }
   `]

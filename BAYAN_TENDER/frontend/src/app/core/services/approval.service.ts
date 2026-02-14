@@ -26,7 +26,7 @@ export class ApprovalService {
   readonly isLoading = this._isLoading.asReadonly();
   readonly error = this._error.asReadonly();
 
-  // Maps for converting backend numeric enums to frontend string types
+  // Maps for converting backend enums to frontend string types (handles both string and numeric)
   private readonly workflowStatusMap: Record<number, ApprovalWorkflowStatus> = {
     0: 'not_initiated',  // Pending
     1: 'in_progress',    // InProgress
@@ -43,10 +43,10 @@ export class ApprovalService {
     4: 'returned'   // Returned
   };
 
-  private readonly decisionToBackendMap: Record<ApprovalDecision, number> = {
-    'approve': 0,            // Approve
-    'reject': 1,             // Reject
-    'return': 2              // ReturnForRevision
+  private readonly decisionToBackendMap: Record<ApprovalDecision, string> = {
+    'approve': 'Approve',
+    'reject': 'Reject',
+    'return': 'ReturnForRevision'
   };
 
   private readonly decisionFromBackendMap: Record<number, ApprovalDecision> = {
@@ -59,7 +59,7 @@ export class ApprovalService {
    * Get approval workflow for a tender
    * GET /api/tenders/{id}/approval
    */
-  getApprovalWorkflow(tenderId: number): Observable<ApprovalWorkflow | null> {
+  getApprovalWorkflow(tenderId: string | number): Observable<ApprovalWorkflow | null> {
     this._isLoading.set(true);
     this._error.set(null);
 
@@ -82,7 +82,7 @@ export class ApprovalService {
    * Initiate approval workflow
    * POST /api/tenders/{id}/approval/initiate
    */
-  initiateApproval(tenderId: number, data: InitiateApprovalDto): Observable<ApprovalWorkflow> {
+  initiateApproval(tenderId: string | number, data: InitiateApprovalDto): Observable<ApprovalWorkflow> {
     this._isLoading.set(true);
     this._error.set(null);
 
@@ -97,7 +97,8 @@ export class ApprovalService {
         data.level1Deadline || null,
         data.level2Deadline || null,
         data.level3Deadline || null
-      ]
+      ],
+      approverChangeReason: data.approverChangeReason || null
     };
 
     return this.api.post<any>(`/tenders/${tenderId}/approval/initiate`, requestBody).pipe(
@@ -115,7 +116,7 @@ export class ApprovalService {
    * Submit approval decision
    * POST /api/tenders/{id}/approval/decide
    */
-  submitDecision(tenderId: number, data: SubmitDecisionDto): Observable<ApprovalWorkflow> {
+  submitDecision(tenderId: string | number, data: SubmitDecisionDto): Observable<ApprovalWorkflow> {
     this._isLoading.set(true);
     this._error.set(null);
 
@@ -178,14 +179,14 @@ export class ApprovalService {
   /**
    * Download award pack PDF
    */
-  downloadAwardPack(tenderId: number): Observable<Blob> {
+  downloadAwardPack(tenderId: string | number): Observable<Blob> {
     return this.api.download(`/tenders/${tenderId}/award-pack.pdf`);
   }
 
   /**
    * Check if current user is the active approver for a workflow
    */
-  isCurrentUserActiveApprover(workflow: ApprovalWorkflow, currentUserId: number): boolean {
+  isCurrentUserActiveApprover(workflow: ApprovalWorkflow, currentUserId: string | number): boolean {
     const activeLevel = workflow.levels.find(l => l.status === 'active');
     return activeLevel?.approver.id === currentUserId;
   }

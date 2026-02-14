@@ -7,6 +7,7 @@ using Bayan.Application.Features.Approval.Queries.GetApprovalStatus;
 using Bayan.Application.Features.Approval.Queries.GetPendingApprovals;
 using Bayan.Application.Features.Admin.Users;
 using Bayan.Application.Features.Admin.Users.Queries.GetUsers;
+using Bayan.API.Authorization;
 using Bayan.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -19,7 +20,7 @@ namespace Bayan.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api")]
-[Authorize]
+[Authorize(Roles = BayanRoles.InternalUsers)]
 public class ApprovalController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -63,7 +64,7 @@ public class ApprovalController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The created approval workflow.</returns>
     [HttpPost("tenders/{id:guid}/approval/initiate")]
-    [Authorize(Roles = "Admin,TenderManager")]
+    [Authorize(Roles = BayanRoles.ApprovalInitiators)]
     [ProducesResponseType(typeof(InitiateApprovalResult), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -77,7 +78,8 @@ public class ApprovalController : ControllerBase
             TenderId = id,
             AwardPackPdfPath = request.AwardPackPdfPath,
             ApproverUserIds = request.ApproverUserIds,
-            LevelDeadlines = request.LevelDeadlines
+            LevelDeadlines = request.LevelDeadlines,
+            ApproverChangeReason = request.ApproverChangeReason
         };
 
         var result = await _mediator.Send(command, cancellationToken);
@@ -98,7 +100,7 @@ public class ApprovalController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result of the approval decision.</returns>
     [HttpPost("tenders/{id:guid}/approval/decide")]
-    [Authorize(Roles = "Approver")]
+    [Authorize(Roles = BayanRoles.ApprovalDeciders)]
     [ProducesResponseType(typeof(SubmitApprovalDecisionResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -147,6 +149,7 @@ public class ApprovalController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A paginated list of pending approvals.</returns>
     [HttpGet("approvals/pending")]
+    [Authorize(Roles = BayanRoles.ApprovalDeciders)]
     [ProducesResponseType(typeof(PaginatedList<PendingApprovalDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<PaginatedList<PendingApprovalDto>>> GetPendingApprovals(
         [FromQuery] int page = 1,
@@ -174,7 +177,7 @@ public class ApprovalController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A paginated list of active approver users.</returns>
     [HttpGet("approvers")]
-    [Authorize(Roles = "Admin,TenderManager")]
+    [Authorize(Roles = BayanRoles.ApprovalInitiators)]
     [ProducesResponseType(typeof(PaginatedList<UserDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<PaginatedList<UserDto>>> GetApprovers(
         CancellationToken cancellationToken = default)
@@ -213,4 +216,10 @@ public class InitiateApprovalRequest
     /// If provided, must contain exactly 3 dates (one per level).
     /// </summary>
     public List<DateTime?>? LevelDeadlines { get; set; }
+
+    /// <summary>
+    /// Optional reason for changing approvers during re-initiation.
+    /// Required when approver route differs from previous returned/rejected workflow.
+    /// </summary>
+    public string? ApproverChangeReason { get; set; }
 }

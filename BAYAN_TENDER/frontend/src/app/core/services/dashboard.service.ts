@@ -5,6 +5,8 @@ import { ApiService } from './api.service';
 import {
   TenderManagerDashboard,
   TenderManagerDashboardParams,
+  OverviewDashboard,
+  OverviewDashboardParams,
   ApproverDashboard,
   ApproverDashboardParams,
   TenderDashboardStatus,
@@ -84,6 +86,24 @@ export class DashboardService {
       catchError(error => {
         this._isLoading.set(false);
         this._error.set(error.message || 'Failed to load approver dashboard data');
+        return throwError(() => error);
+      })
+    );
+  }
+
+  /**
+   * Get Overview dashboard data
+   * GET /api/dashboard/overview
+   */
+  getOverviewDashboard(params?: OverviewDashboardParams): Observable<OverviewDashboard> {
+    this._isLoading.set(true);
+    this._error.set(null);
+
+    return this.api.get<OverviewDashboard>(`${this.endpoint}/overview`, params as any).pipe(
+      tap(() => this._isLoading.set(false)),
+      catchError(error => {
+        this._isLoading.set(false);
+        this._error.set(error.message || 'Failed to load overview dashboard data');
         return throwError(() => error);
       })
     );

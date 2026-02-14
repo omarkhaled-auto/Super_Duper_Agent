@@ -11,6 +11,7 @@ using Bayan.Application.Features.Evaluation.Queries.GetBidExceptions;
 using Bayan.Application.Features.Evaluation.Queries.GetComparableSheet;
 using Bayan.Application.Features.Evaluation.Queries.GetCombinedScorecard;
 using Bayan.Application.Features.Evaluation.Queries.GetSensitivityAnalysis;
+using Bayan.API.Authorization;
 using Bayan.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -24,7 +25,7 @@ namespace Bayan.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/tenders/{tenderId:guid}/evaluation")]
-[Authorize(Roles = "Admin,TenderManager,CommercialAnalyst,Approver,Auditor")]
+[Authorize(Roles = BayanRoles.EvaluationViewers)]
 public class EvaluationController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -145,6 +146,7 @@ public class EvaluationController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The calculated commercial scores for all bidders.</returns>
     [HttpPost("calculate-commercial-scores")]
+    [Authorize(Roles = BayanRoles.EvaluationEditors)]
     [ProducesResponseType(typeof(CalculateCommercialScoresResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -195,6 +197,7 @@ public class EvaluationController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Summary of outlier detection results.</returns>
     [HttpPost("recalculate-outliers")]
+    [Authorize(Roles = BayanRoles.EvaluationEditors)]
     [ProducesResponseType(typeof(OutlierRecalculationResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<OutlierRecalculationResultDto>> RecalculateOutliers(
@@ -279,6 +282,7 @@ public class EvaluationController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The calculated combined scores for all bidders.</returns>
     [HttpPost("calculate-combined")]
+    [Authorize(Roles = BayanRoles.EvaluationEditors)]
     [ProducesResponseType(typeof(CombinedScorecardDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -384,6 +388,7 @@ public class EvaluationController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The created bid exception.</returns>
     [HttpPost("~/api/tenders/{tenderId:guid}/exceptions")]
+    [Authorize(Roles = BayanRoles.EvaluationEditors)]
     [ProducesResponseType(typeof(BidExceptionDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -442,6 +447,7 @@ public class EvaluationController : ControllerBase
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Award pack metadata with download URL.</returns>
     [HttpPost("generate-award-pack")]
+    [Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
     [ProducesResponseType(typeof(AwardPackDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

@@ -289,7 +289,7 @@ interface BidderOption {
               <tr>
                 <td colspan="7" class="text-center p-4">
                   <div class="empty-state">
-                    <i class="pi pi-list" style="font-size: 2rem; color: var(--bayan-muted-foreground, #71717a); opacity: 0.5;"></i>
+                    <i class="pi pi-list" style="font-size: 2rem; color: var(--bayan-slate-300, #CBD5E1);"></i>
                     <p>No exceptions logged yet.</p>
                   </div>
                 </td>
@@ -337,6 +337,11 @@ interface BidderOption {
     </div>
   `,
   styles: [`
+    :host ::ng-deep .p-panel .p-panel-header {
+      background: var(--bayan-slate-50, #F8FAFC);
+      color: var(--bayan-slate-700, #334155);
+    }
+
     .exceptions-panel-container {
       display: flex;
       flex-direction: column;
@@ -353,7 +358,7 @@ interface BidderOption {
     }
 
     .loading-container p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       margin: 0;
     }
 
@@ -382,7 +387,7 @@ interface BidderOption {
 
     .form-field label {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-700, #334155);
       font-size: 0.9rem;
     }
 
@@ -400,12 +405,30 @@ interface BidderOption {
       gap: 0.75rem;
       margin-top: 0.5rem;
       padding-top: 1rem;
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-border, #E2E8F0);
+    }
+
+    /* Exception Card Styles */
+    :host ::ng-deep .exceptions-list-card .p-card-body {
+      background: #ffffff;
+    }
+
+    :host ::ng-deep .exceptions-list-card .p-card {
+      border-left: 4px solid var(--bayan-warning, #D97706);
     }
 
     /* Table Styles */
+    :host ::ng-deep .p-datatable .p-datatable-thead > tr > th {
+      color: var(--bayan-slate-600, #475569);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+    }
+
     .bidder-name {
       font-weight: 500;
+      color: var(--bayan-primary, #4F46E5);
     }
 
     .description-cell {
@@ -415,7 +438,7 @@ interface BidderOption {
     }
 
     .description-text {
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-600, #475569);
     }
 
     .mitigation-text {
@@ -423,14 +446,15 @@ interface BidderOption {
       align-items: flex-start;
       gap: 0.375rem;
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
+      font-style: italic;
       padding: 0.375rem 0.5rem;
-      background: var(--bayan-accent, #f4f4f5);
-      border-radius: var(--bayan-radius-sm, 0.375rem);
+      background: var(--bayan-accent, #F8FAFC);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .mitigation-text i {
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
       margin-top: 0.125rem;
     }
 
@@ -443,15 +467,15 @@ interface BidderOption {
     }
 
     .positive {
-      color: #dc2626;
+      color: #16A34A;
     }
 
     .negative {
-      color: #16a34a;
+      color: #DC2626;
     }
 
     .no-value {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     /* Summary Stats */
@@ -460,7 +484,8 @@ interface BidderOption {
       align-items: center;
       gap: 1.5rem;
       padding: 1rem;
-      background: var(--bayan-accent, #f4f4f5);
+      background: var(--bayan-slate-50, #F8FAFC);
+      border: 1px solid var(--bayan-border, #E2E8F0);
       border-radius: var(--bayan-radius, 0.5rem);
       margin-top: 1rem;
       flex-wrap: wrap;
@@ -474,23 +499,24 @@ interface BidderOption {
 
     .summary-label {
       font-size: 0.8rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .summary-value {
       font-size: 1.25rem;
       font-weight: 700;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .summary-value.risk-high {
-      color: #dc2626;
+      color: #DC2626;
     }
 
     .summary-divider {
       width: 1px;
       height: 40px;
-      background: var(--bayan-border, #e4e4e7);
+      background: var(--bayan-primary, #4F46E5);
+      opacity: 0.2;
     }
 
     /* Empty State */
@@ -506,12 +532,12 @@ interface BidderOption {
 
     .empty-state h3 {
       margin: 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .empty-state p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     /* Responsive */
@@ -534,7 +560,7 @@ interface BidderOption {
         justify-content: space-between;
         align-items: center;
         padding: 0.5rem 0;
-        border-bottom: 1px solid var(--bayan-border, #e4e4e7);
+        border-bottom: 1px solid var(--bayan-border, #E2E8F0);
       }
 
       .summary-item:last-child {

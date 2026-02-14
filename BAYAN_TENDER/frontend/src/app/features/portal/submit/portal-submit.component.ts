@@ -423,8 +423,8 @@ interface UploadSection {
       align-items: center;
       gap: 1rem;
       padding: 1rem 1.5rem;
-      background: var(--bayan-accent, #f4f4f5);
-      border: 1px solid var(--bayan-border, #e4e4e7);
+      background: var(--bayan-accent, #EEF2FF);
+      border: 1px solid var(--bayan-border, #E2E8F0);
       border-radius: var(--bayan-radius, 0.5rem);
       margin-bottom: 1.5rem;
     }
@@ -447,7 +447,7 @@ interface UploadSection {
 
     .banner-icon {
       font-size: 2rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .deadline-banner.urgent .banner-icon {
@@ -465,7 +465,7 @@ interface UploadSection {
     .banner-content strong {
       display: block;
       margin-bottom: 0.25rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .deadline-banner.urgent .banner-content strong {
@@ -479,7 +479,7 @@ interface UploadSection {
     .deadline-time {
       font-size: 1.25rem;
       font-weight: 700;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .deadline-banner.urgent .deadline-time {
@@ -492,7 +492,7 @@ interface UploadSection {
 
     .banner-date {
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     /* Section Cards */
@@ -501,23 +501,23 @@ interface UploadSection {
       justify-content: space-between;
       align-items: center;
       padding: 1rem 1.5rem;
-      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
+      border-bottom: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     .section-header.commercial {
-      background: #f0fdf4;
+      background: var(--bayan-success-bg, #F0FDF4);
     }
 
     .section-header.technical {
-      background: var(--bayan-accent, #f4f4f5);
+      background: var(--bayan-accent, #EEF2FF);
     }
 
     .section-header.supporting {
-      background: var(--bayan-muted, #f4f4f5);
+      background: var(--bayan-muted, #F1F5F9);
     }
 
     .section-header.submit {
-      background: #fffbeb;
+      background: var(--bayan-warning-bg, #FFFBEB);
     }
 
     .header-info {
@@ -534,7 +534,7 @@ interface UploadSection {
       margin: 0;
       font-size: 1.125rem;
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     /* Upload Zone */
@@ -543,13 +543,13 @@ interface UploadSection {
     }
 
     .section-description {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       margin: 0 0 1.5rem 0;
     }
 
     .upload-item {
       padding: 1rem;
-      border: 1px solid var(--bayan-border, #e4e4e7);
+      border: 1px solid var(--bayan-border, #E2E8F0);
       border-radius: var(--bayan-radius-sm, 0.375rem);
       margin-bottom: 1rem;
     }
@@ -567,7 +567,7 @@ interface UploadSection {
 
     .upload-label > i {
       font-size: 1.5rem;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
       margin-top: 2px;
     }
 
@@ -577,20 +577,20 @@ interface UploadSection {
 
     .label-info strong {
       display: block;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
       margin-bottom: 0.25rem;
     }
 
     .label-info small {
       display: block;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       margin-bottom: 0.25rem;
     }
 
     .file-info {
       display: block;
       font-size: 0.75rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .dropzone {
@@ -600,25 +600,25 @@ interface UploadSection {
       justify-content: center;
       gap: 0.5rem;
       padding: 2rem;
-      border: 2px dashed var(--bayan-border, #e4e4e7);
+      border: 2px dashed var(--bayan-border, #E2E8F0);
       border-radius: var(--bayan-radius-sm, 0.375rem);
-      background: var(--bayan-accent, #f4f4f5);
+      background: var(--bayan-slate-50, #F8FAFC);
       cursor: pointer;
       transition: all 0.2s ease;
     }
 
     .dropzone:hover {
-      border-color: var(--bayan-primary, #18181b);
-      background: var(--bayan-muted, #f4f4f5);
+      border-color: var(--bayan-primary, #4F46E5);
+      background: var(--bayan-primary-light, #EEF2FF);
     }
 
     .dropzone i {
       font-size: 2rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .dropzone span {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .uploaded-file {
@@ -626,8 +626,8 @@ interface UploadSection {
       align-items: center;
       justify-content: space-between;
       padding: 0.75rem 1rem;
-      background: #f0fdf4;
-      border: 1px solid #86efac;
+      background: var(--bayan-success-bg, #F0FDF4);
+      border: 1px solid var(--bayan-success, #16A34A);
       border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
@@ -646,12 +646,12 @@ interface UploadSection {
 
     .file-details i {
       font-size: 1.25rem;
-      color: #16a34a;
+      color: var(--bayan-success, #16A34A);
     }
 
     .file-name {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
       max-width: 300px;
       white-space: nowrap;
       overflow: hidden;
@@ -659,20 +659,20 @@ interface UploadSection {
     }
 
     .file-size {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       font-size: 0.875rem;
     }
 
     .upload-progress {
       padding: 1rem;
-      background: var(--bayan-accent, #f4f4f5);
+      background: var(--bayan-accent, #EEF2FF);
       border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .upload-progress span {
       display: block;
       margin-bottom: 0.5rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       font-size: 0.875rem;
     }
 
@@ -684,14 +684,14 @@ interface UploadSection {
     .form-field label {
       display: block;
       margin-bottom: 0.5rem;
-      font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      font-weight: 600;
+      color: var(--bayan-slate-700, #334155);
     }
 
     .field-hint {
       display: block;
       margin-top: 0.25rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       font-size: 0.8rem;
     }
 
@@ -702,7 +702,7 @@ interface UploadSection {
     .upload-summary h4 {
       margin: 0 0 1rem 0;
       font-size: 1rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .summary-grid {
@@ -716,18 +716,18 @@ interface UploadSection {
       align-items: center;
       gap: 0.5rem;
       padding: 0.5rem 0.75rem;
-      background: var(--bayan-accent, #f4f4f5);
+      background: var(--bayan-accent, #EEF2FF);
       border-radius: var(--bayan-radius-sm, 0.375rem);
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .summary-item.complete {
-      background: #f0fdf4;
-      color: #16a34a;
+      background: var(--bayan-success-bg, #F0FDF4);
+      color: var(--bayan-success, #16A34A);
     }
 
     .summary-item .pi-check-circle {
-      color: #16a34a;
+      color: var(--bayan-success, #16A34A);
     }
 
     .required-badge {
@@ -740,20 +740,20 @@ interface UploadSection {
       align-items: flex-start;
       gap: 1rem;
       padding: 1.5rem;
-      background: var(--bayan-accent, #f4f4f5);
+      background: var(--bayan-accent, #EEF2FF);
       border-radius: var(--bayan-radius-sm, 0.375rem);
       margin-bottom: 1.5rem;
     }
 
     .terms-label {
       cursor: pointer;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .terms-label ul {
       margin: 0.5rem 0 0 0;
       padding-left: 1.25rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .terms-label li {
@@ -793,8 +793,8 @@ interface UploadSection {
       text-align: center;
       padding: 3rem 2rem;
       background: var(--bayan-background, #ffffff);
-      border: 1px solid var(--bayan-border, #e4e4e7);
-      border-radius: var(--bayan-radius, 0.5rem);
+      border: 1px solid var(--bayan-border, #E2E8F0);
+      border-radius: var(--bayan-radius-lg, 0.75rem);
       animation: fadeIn 0.3s ease;
     }
 
@@ -802,7 +802,7 @@ interface UploadSection {
       width: 80px;
       height: 80px;
       border-radius: 50%;
-      background: #f0fdf4;
+      background: var(--bayan-success-bg, #F0FDF4);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -811,18 +811,18 @@ interface UploadSection {
 
     .submitted-icon i {
       font-size: 3rem;
-      color: #16a34a;
+      color: var(--bayan-success, #16A34A);
     }
 
     .already-submitted h2 {
       margin: 0 0 0.5rem 0;
       font-size: 1.5rem;
       font-weight: 700;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .submitted-message {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       margin: 0 0 2rem 0;
       font-size: 1rem;
     }
@@ -830,7 +830,7 @@ interface UploadSection {
     .submitted-details {
       width: 100%;
       max-width: 400px;
-      background: var(--bayan-accent, #f4f4f5);
+      background: var(--bayan-accent, #EEF2FF);
       border-radius: var(--bayan-radius-sm, 0.375rem);
       padding: 1.25rem;
       margin-bottom: 2rem;
@@ -844,17 +844,17 @@ interface UploadSection {
     }
 
     .detail-row + .detail-row {
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     .detail-label {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       font-size: 0.875rem;
     }
 
     .detail-value {
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
       font-size: 0.875rem;
     }
 

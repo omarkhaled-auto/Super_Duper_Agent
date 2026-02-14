@@ -580,12 +580,12 @@ interface TradeOption {
     .page-header h1 {
       margin: 0;
       font-size: 1.75rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .page-header p {
       margin: 0.25rem 0 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .header-actions {
@@ -631,7 +631,7 @@ interface TradeOption {
 
     .summary-icon {
       font-size: 2rem;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
     }
 
     .summary-text {
@@ -642,12 +642,12 @@ interface TradeOption {
     .summary-value {
       font-size: 1.5rem;
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .summary-label {
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .dashboard-grid {
@@ -669,7 +669,7 @@ interface TradeOption {
       align-items: center;
       justify-content: center;
       min-height: 200px;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .trend-cell {
@@ -689,7 +689,7 @@ interface TradeOption {
 
     .tender-title {
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       display: block;
     }
 
@@ -719,7 +719,7 @@ interface TradeOption {
 
     .email {
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .comparison-header {
@@ -743,7 +743,7 @@ interface TradeOption {
     }
 
     .no-selection {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       font-style: italic;
     }
 
@@ -758,7 +758,7 @@ interface TradeOption {
 
     .rate-diff {
       font-size: 0.75rem;
-      color: #e74c3c;
+      color: var(--bayan-danger, #DC2626);
     }
 
     .lowest-rate {
@@ -766,7 +766,7 @@ interface TradeOption {
     }
 
     .lowest-rate .rate-value {
-      color: #16a34a;
+      color: var(--bayan-success, #16A34A);
     }
 
     .trends-dialog-content {
@@ -780,8 +780,8 @@ interface TradeOption {
       flex-wrap: wrap;
       gap: 2rem;
       padding: 1rem;
-      background: var(--bayan-accent, #f4f4f5);
-      border-radius: var(--bayan-radius, 0.5rem);
+      background: var(--bayan-accent, #EEF2FF);
+      border-radius: var(--bayan-radius-lg, 0.75rem);
     }
 
     .summary-item {
@@ -791,7 +791,7 @@ interface TradeOption {
 
     .summary-item .label {
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .summary-item .value {
@@ -909,7 +909,7 @@ export class VendorPricingComponent implements OnInit {
         label: 'Average Rate',
         data: dash.rateTrends.map(t => t.averageRate),
         fill: false,
-        borderColor: '#18181b',
+        borderColor: '#4F46E5',
         tension: 0.4
       }]
     };
@@ -919,7 +919,7 @@ export class VendorPricingComponent implements OnInit {
     const dash = this.dashboard();
     if (!dash?.tradeBreakdown?.length) return null;
 
-    const colors = ['#18181b', '#71717a', '#a1a1aa', '#d4d4d8', '#52525b', '#3f3f46', '#27272a', '#e4e4e7'];
+    const colors = ['#4F46E5', '#6366F1', '#818CF8', '#A5B4FC', '#C7D2FE', '#E0E7FF', '#334155', '#64748B'];
 
     return {
       labels: dash.tradeBreakdown.map(t => t.trade),
@@ -941,7 +941,7 @@ export class VendorPricingComponent implements OnInit {
           label: 'Average Rate',
           data: trends.trendPoints.map(t => t.averageRate),
           fill: false,
-          borderColor: '#18181b',
+          borderColor: '#4F46E5',
           tension: 0.4
         },
         {
@@ -1158,7 +1158,10 @@ export class VendorPricingComponent implements OnInit {
     });
   }
 
-  formatCurrency(value: number, currency: string = 'AED'): string {
+  formatCurrency(value: number | undefined | null, currency: string = 'AED'): string {
+    if (value == null || isNaN(value)) {
+      return `${currency} 0`;
+    }
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency,
@@ -1177,9 +1180,9 @@ export class VendorPricingComponent implements OnInit {
 
   getTrendColor(direction: string): string {
     switch (direction) {
-      case 'up': return '#e74c3c';
-      case 'down': return '#27ae60';
-      default: return '#7f8c8d';
+      case 'up': return '#DC2626';
+      case 'down': return '#16A34A';
+      default: return '#64748B';
     }
   }
 }

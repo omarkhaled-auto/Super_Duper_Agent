@@ -159,13 +159,14 @@ import { CreateTenderDto, Tender, DEFAULT_EVALUATION_CRITERIA } from '../../../c
 
     .header-content h1 {
       margin: 0;
-      font-size: 1.75rem;
-      color: var(--bayan-foreground, #09090b);
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .header-content p {
       margin: 0.25rem 0 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     :host ::ng-deep .wizard-steps {
@@ -173,11 +174,13 @@ import { CreateTenderDto, Tender, DEFAULT_EVALUATION_CRITERIA } from '../../../c
         flex: 1;
       }
 
+      .p-steps-item .p-steps-item-link,
       .p-steps-item .p-menuitem-link {
         flex-direction: column;
         gap: 0.5rem;
       }
 
+      .p-steps-item-number,
       .p-steps-number {
         min-width: 2.5rem;
         height: 2.5rem;
@@ -187,7 +190,12 @@ import { CreateTenderDto, Tender, DEFAULT_EVALUATION_CRITERIA } from '../../../c
 
     :host ::ng-deep .step-card {
       .p-card-body {
-        padding: 2rem;
+        padding: 1.5rem;
+      }
+
+      .p-card {
+        box-shadow: var(--bayan-shadow-sm, 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1));
+        border-radius: var(--bayan-radius-lg, 0.75rem);
       }
     }
 
@@ -201,15 +209,17 @@ import { CreateTenderDto, Tender, DEFAULT_EVALUATION_CRITERIA } from '../../../c
     }
 
     .loading-container p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .wizard-navigation {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding-top: 1rem;
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      padding: 1rem 0;
+      margin-top: 0.5rem;
+      background: var(--bayan-card, #ffffff);
+      border-top: 1px solid var(--bayan-slate-200, #E2E8F0);
     }
 
     .nav-left, .nav-right {
@@ -224,7 +234,9 @@ import { CreateTenderDto, Tender, DEFAULT_EVALUATION_CRITERIA } from '../../../c
       }
 
       :host ::ng-deep .wizard-steps {
+        .p-steps-item .p-steps-item-link,
         .p-steps-item .p-menuitem-link {
+          .p-steps-item-label,
           .p-steps-title {
             display: none;
           }

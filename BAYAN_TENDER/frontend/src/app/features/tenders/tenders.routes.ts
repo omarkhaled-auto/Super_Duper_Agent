@@ -1,4 +1,6 @@
 import { Routes } from '@angular/router';
+import { roleGuard } from '../../core/auth/auth.guard';
+import { UserRole } from '../../core/models/user.model';
 
 export const TENDERS_ROUTES: Routes = [
   {
@@ -9,6 +11,8 @@ export const TENDERS_ROUTES: Routes = [
   {
     path: 'new',
     loadComponent: () => import('./tender-wizard/tender-wizard.component').then(m => m.TenderWizardComponent),
+    canActivate: [roleGuard],
+    data: { roles: [UserRole.ADMIN, UserRole.TENDER_MANAGER] },
     title: 'Create Tender - Bayan'
   },
   {
@@ -30,6 +34,8 @@ export const TENDERS_ROUTES: Routes = [
   {
     path: ':id/edit',
     loadComponent: () => import('./tender-wizard/tender-wizard.component').then(m => m.TenderWizardComponent),
+    canActivate: [roleGuard],
+    data: { roles: [UserRole.ADMIN, UserRole.TENDER_MANAGER] },
     title: 'Edit Tender - Bayan'
   }
 ];

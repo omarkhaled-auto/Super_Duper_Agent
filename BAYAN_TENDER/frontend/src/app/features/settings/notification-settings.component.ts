@@ -157,12 +157,12 @@ interface NotificationPreferences {
     .page-header h1 {
       margin: 0;
       font-size: 1.75rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .page-header p {
       margin: 0.25rem 0 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .loading-container {
@@ -175,25 +175,25 @@ interface NotificationPreferences {
     }
 
     .loading-container p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .preferences-section h3 {
       margin: 0 0 0.25rem;
       font-size: 1.1rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
       display: flex;
       align-items: center;
       gap: 0.5rem;
     }
 
     .preferences-section h3 i {
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
     }
 
     .section-description {
       margin: 0 0 1rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       font-size: 0.875rem;
     }
 
@@ -202,7 +202,7 @@ interface NotificationPreferences {
       justify-content: space-between;
       align-items: center;
       padding: 1rem;
-      background: var(--bayan-accent, #f4f4f5);
+      background: var(--bayan-accent, #EEF2FF);
       border-radius: var(--bayan-radius, 0.5rem);
       margin-bottom: 0.75rem;
     }
@@ -221,12 +221,12 @@ interface NotificationPreferences {
 
     .preference-label {
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-700, #334155);
     }
 
     .preference-description {
       font-size: 0.8rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .actions {
@@ -234,12 +234,12 @@ interface NotificationPreferences {
       gap: 0.75rem;
       margin-top: 1.5rem;
       padding-top: 1.5rem;
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     .info-card {
-      background: var(--bayan-muted, #f4f4f5);
-      border: 1px solid var(--bayan-border, #e4e4e7);
+      background: var(--bayan-muted, #F1F5F9);
+      border: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     .info-content {
@@ -250,23 +250,23 @@ interface NotificationPreferences {
 
     .info-content i {
       font-size: 1.5rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .info-content h4 {
       margin: 0 0 0.25rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .info-content p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       font-size: 0.875rem;
     }
 
     :host ::ng-deep {
       .p-inputswitch.p-inputswitch-checked .p-inputswitch-slider {
-        background: var(--bayan-primary, #18181b);
+        background: var(--bayan-primary, #4F46E5);
       }
     }
 

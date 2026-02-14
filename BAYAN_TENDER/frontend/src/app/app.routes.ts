@@ -23,8 +23,13 @@ export const routes: Routes = [
     children: [
       {
         path: '',
-        redirectTo: 'dashboard',
+        redirectTo: 'home',
         pathMatch: 'full'
+      },
+      {
+        path: 'home',
+        loadComponent: () => import('./features/home/home.component').then(m => m.HomeComponent),
+        title: 'Home - Bayan'
       },
       {
         path: 'dashboard',
@@ -59,12 +64,13 @@ export const routes: Routes = [
   // Unauthorized page
   {
     path: 'unauthorized',
-    loadComponent: () => import('./features/auth/login/login.component').then(m => m.LoginComponent)
+    loadComponent: () => import('./features/auth/unauthorized/unauthorized.component').then(m => m.UnauthorizedComponent),
+    title: 'Unauthorized - Bayan'
   },
 
   // Catch-all redirect
   {
     path: '**',
-    redirectTo: 'dashboard'
+    redirectTo: 'home'
   }
 ];

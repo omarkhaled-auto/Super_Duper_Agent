@@ -164,10 +164,19 @@ def parse_master_plan(content: str) -> MasterPlan:
 
 
 def _parse_deps(raw: str) -> list[str]:
-    """Parse a dependency string like ``milestone-1, milestone-2`` or ``none``."""
+    """Parse a dependency string like ``milestone-1, milestone-2`` or ``none``.
+
+    Strips parenthetical comments before splitting so that e.g.
+    ``milestone-2 (server-side setup can parallel with milestone-3, milestone-4)``
+    is correctly parsed as ``["milestone-2"]`` rather than choking on the commas
+    inside the parentheses.
+    """
     if not raw or raw.strip().lower() in ("none", "n/a", "-", ""):
         return []
-    return [tok.strip() for tok in raw.split(",") if tok.strip()]
+    # Strip parenthetical comments: "(anything)" → ""
+    import re
+    cleaned = re.sub(r"\([^)]*\)", "", raw)
+    return [tok.strip() for tok in cleaned.split(",") if tok.strip()]
 
 
 # ---------------------------------------------------------------------------

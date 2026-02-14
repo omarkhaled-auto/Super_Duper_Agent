@@ -30,13 +30,18 @@ import { AuthService } from '../../../core/auth/auth.service';
     <div class="login-container">
       <div class="login-card">
         <div class="login-header">
-          <img src="assets/images/logo.svg" alt="Bayan" class="logo" />
-          <h1>Welcome Back</h1>
-          <p>Sign in to your Bayan Tender account</p>
+          <div class="logo-icon">
+            <i class="pi pi-building"></i>
+          </div>
+          <h1>Bayan Tender</h1>
+          <p>Sign in to your account</p>
         </div>
 
         @if (errorMessage()) {
-          <p-message severity="error" [text]="errorMessage()!" styleClass="w-full mb-3" data-testid="login-error"></p-message>
+          <div class="error-alert" data-testid="login-error">
+            <i class="pi pi-exclamation-circle"></i>
+            <span>{{ errorMessage() }}</span>
+          </div>
         }
 
         <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
@@ -53,7 +58,8 @@ import { AuthService } from '../../../core/auth/auth.service';
               [class.ng-invalid]="isFieldInvalid('email')"
             />
             @if (isFieldInvalid('email')) {
-              <small class="p-error">
+              <small class="field-error">
+                <i class="pi pi-exclamation-circle"></i>
                 @if (loginForm.get('email')?.errors?.['required']) {
                   Email is required
                 }
@@ -78,7 +84,8 @@ import { AuthService } from '../../../core/auth/auth.service';
               [class.ng-invalid]="isFieldInvalid('password')"
             ></p-password>
             @if (isFieldInvalid('password')) {
-              <small class="p-error">
+              <small class="field-error">
+                <i class="pi pi-exclamation-circle"></i>
                 @if (loginForm.get('password')?.errors?.['required']) {
                   Password is required
                 }
@@ -131,7 +138,7 @@ import { AuthService } from '../../../core/auth/auth.service';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--bayan-muted, #f4f4f5);
+      background: linear-gradient(135deg, var(--bayan-slate-50, #F8FAFC) 0%, var(--bayan-slate-100, #F1F5F9) 100%);
       padding: 2rem;
     }
 
@@ -141,8 +148,7 @@ import { AuthService } from '../../../core/auth/auth.service';
       padding: 2.5rem;
       width: 100%;
       max-width: 420px;
-      border: 1px solid var(--bayan-border, #e4e4e7);
-      box-shadow: var(--bayan-shadow, 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1));
+      box-shadow: var(--bayan-shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1));
     }
 
     .login-header {
@@ -150,21 +156,30 @@ import { AuthService } from '../../../core/auth/auth.service';
       margin-bottom: 2rem;
     }
 
-    .logo {
-      height: 60px;
+    .logo-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: var(--bayan-radius-lg, 0.75rem);
+      background: var(--bayan-primary-light, #EEF2FF);
+      color: var(--bayan-primary, #4F46E5);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       margin-bottom: 1rem;
+      font-size: 1.5rem;
     }
 
     .login-header h1 {
       margin: 0;
-      font-size: 1.75rem;
+      font-size: 1.5rem;
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .login-header p {
       margin: 0.5rem 0 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
+      font-size: 0.875rem;
     }
 
     .form-field {
@@ -175,7 +190,8 @@ import { AuthService } from '../../../core/auth/auth.service';
       display: block;
       margin-bottom: 0.5rem;
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      font-size: 0.875rem;
+      color: var(--bayan-slate-700, #334155);
     }
 
     .form-options {
@@ -193,50 +209,91 @@ import { AuthService } from '../../../core/auth/auth.service';
 
     .remember-me label {
       cursor: pointer;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
+      font-size: 0.875rem;
     }
 
     .forgot-link {
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
       text-decoration: none;
       font-size: 0.875rem;
+      font-weight: 500;
     }
 
     .forgot-link:hover {
       text-decoration: underline;
+      color: var(--bayan-primary-hover, #4338CA);
+    }
+
+    .error-alert {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1.25rem;
+      background: var(--bayan-danger-bg, #FEF2F2);
+      border-left: 4px solid var(--bayan-danger, #DC2626);
+      border-radius: var(--bayan-radius-sm, 0.375rem);
+      color: var(--bayan-danger, #DC2626);
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+
+    .error-alert i {
+      margin-top: 2px;
+      font-size: 0.875rem;
+    }
+
+    .field-error {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      margin-top: 0.25rem;
+      color: var(--bayan-danger, #DC2626);
+      font-size: 0.8rem;
+    }
+
+    .field-error i {
+      font-size: 0.7rem;
     }
 
     .login-footer {
       text-align: center;
       margin-top: 1.5rem;
       padding-top: 1.5rem;
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     .login-footer p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
+      font-size: 0.875rem;
     }
 
     .login-footer a {
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
       text-decoration: none;
       font-weight: 500;
     }
 
     .login-footer a:hover {
       text-decoration: underline;
-    }
-
-    .p-error {
-      display: block;
-      margin-top: 0.25rem;
+      color: var(--bayan-primary-hover, #4338CA);
     }
 
     :host ::ng-deep {
       .p-inputtext {
         width: 100%;
         height: 44px;
+        border: 1px solid var(--bayan-input, #E2E8F0);
+        border-radius: var(--bayan-radius-sm, 0.375rem);
+        transition: border-color var(--bayan-transition-fast, 150ms ease),
+                    box-shadow var(--bayan-transition-fast, 150ms ease);
+      }
+
+      .p-inputtext:focus {
+        border-color: var(--bayan-primary, #4F46E5);
+        box-shadow: 0 0 0 3px var(--bayan-primary-ring, rgba(79, 70, 229, 0.15));
       }
 
       .p-password {
@@ -252,18 +309,34 @@ import { AuthService } from '../../../core/auth/auth.service';
         height: 46px;
         font-size: 0.9375rem;
         font-weight: 600;
-        border-radius: var(--bayan-radius, 0.5rem);
+        background: var(--bayan-primary, #4F46E5);
+        border-color: var(--bayan-primary, #4F46E5);
+        border-radius: var(--bayan-radius-lg, 0.75rem);
         justify-content: center;
+        transition: background-color var(--bayan-transition, 200ms ease),
+                    border-color var(--bayan-transition, 200ms ease);
       }
 
-      .p-message {
-        width: 100%;
-        margin-bottom: 1rem;
+      .p-button:hover:not(:disabled) {
+        background: var(--bayan-primary-hover, #4338CA);
+        border-color: var(--bayan-primary-hover, #4338CA);
+      }
+
+      .p-button:active:not(:disabled) {
+        background: var(--bayan-primary-active, #3730A3);
+        border-color: var(--bayan-primary-active, #3730A3);
       }
 
       .p-checkbox .p-checkbox-box {
         width: 1rem;
         height: 1rem;
+      }
+
+      .p-checkbox .p-checkbox-box.p-highlight,
+      .p-checkbox.p-highlight .p-checkbox-box,
+      .p-checkbox.p-checkbox-checked .p-checkbox-box {
+        background: var(--bayan-primary, #4F46E5);
+        border-color: var(--bayan-primary, #4F46E5);
       }
     }
   `]
@@ -278,11 +351,11 @@ export class LoginComponent implements OnInit {
   isLoading = this.authService.isLoading;
   errorMessage = signal<string | null>(null);
 
-  private returnUrl = '/dashboard';
+  private returnUrl = '/home';
 
   ngOnInit(): void {
     this.initForm();
-    this.returnUrl = this.route.snapshot.queryParams['returnUrl'] || '/dashboard';
+    this.returnUrl = this.route.snapshot.queryParams['returnUrl'] || '/home';
   }
 
   private initForm(): void {

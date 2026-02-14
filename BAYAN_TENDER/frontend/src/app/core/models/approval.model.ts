@@ -31,7 +31,7 @@ export type ApprovalDecision = 'approve' | 'reject' | 'return';
  * Approver User Reference
  */
 export interface ApproverUser {
-  id: number;
+  id: string | number;
   firstName: string;
   lastName: string;
   email: string;
@@ -84,12 +84,13 @@ export interface ApprovalWorkflow {
  * Initiate Approval Workflow DTO
  */
 export interface InitiateApprovalDto {
-  level1ApproverId: number;
+  level1ApproverId: string | number;
   level1Deadline?: Date | string;
-  level2ApproverId: number;
+  level2ApproverId: string | number;
   level2Deadline?: Date | string;
-  level3ApproverId: number;
+  level3ApproverId: string | number;
   level3Deadline?: Date | string;
+  approverChangeReason?: string;
 }
 
 /**
@@ -130,7 +131,7 @@ export interface PendingApprovalsResponse {
  * User with Approver role for dropdowns
  */
 export interface ApproverOption {
-  id: number;
+  id: string | number;
   firstName: string;
   lastName: string;
   email: string;

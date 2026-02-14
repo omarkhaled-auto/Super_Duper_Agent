@@ -240,7 +240,7 @@ interface GridRowData {
       } @else if (!gridData().length) {
         <!-- Empty State -->
         <div class="empty-state">
-          <i class="pi pi-table" style="font-size: 3rem; color: var(--bayan-border, #e4e4e7);"></i>
+          <i class="pi pi-table" style="font-size: 3rem; color: var(--bayan-slate-200, #E2E8F0);"></i>
           <h3>No Data Available</h3>
           <p>The comparable sheet will be available after bids are opened and BOQ data is imported.</p>
         </div>
@@ -266,23 +266,23 @@ interface GridRowData {
           <div class="legend-title">Color Legend:</div>
           <div class="legend-items">
             <div class="legend-item">
-              <span class="legend-color" [style.background-color]="'#d4edda'"></span>
+              <span class="legend-color" [style.background-color]="'#DCFCE7'"></span>
               <span class="legend-text">Normal (&lt;10% deviation)</span>
             </div>
             <div class="legend-item">
-              <span class="legend-color" [style.background-color]="'#fff3cd'"></span>
+              <span class="legend-color" [style.background-color]="'#FEF3C7'"></span>
               <span class="legend-text">Minor Outlier (10-20%)</span>
             </div>
             <div class="legend-item">
-              <span class="legend-color" [style.background-color]="'#ffcccc'"></span>
+              <span class="legend-color" [style.background-color]="'#FEE2E2'"></span>
               <span class="legend-text">Major Outlier (&gt;20%)</span>
             </div>
             <div class="legend-item">
-              <span class="legend-color" [style.background-color]="'#f4f4f5'"></span>
+              <span class="legend-color" [style.background-color]="'#F1F5F9'"></span>
               <span class="legend-text">No Bid (NB)</span>
             </div>
             <div class="legend-item">
-              <span class="legend-color" [style.background-color]="'#faf5ff'"></span>
+              <span class="legend-color" [style.background-color]="'#F8FAFC'"></span>
               <span class="legend-text">Non-Comparable</span>
             </div>
           </div>
@@ -412,7 +412,8 @@ interface GridRowData {
       justify-content: space-between;
       align-items: center;
       padding: 1rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-slate-50, #F8FAFC);
+      border: 1px solid var(--bayan-slate-200, #E2E8F0);
       border-radius: var(--bayan-radius, 0.5rem);
       flex-wrap: wrap;
       gap: 1rem;
@@ -426,6 +427,15 @@ interface GridRowData {
       flex-wrap: wrap;
     }
 
+    .toolbar-right :host ::ng-deep .p-button-outlined {
+      color: var(--bayan-primary, #4F46E5);
+      border-color: var(--bayan-primary, #4F46E5);
+    }
+
+    .toolbar-right :host ::ng-deep .p-button-outlined:hover {
+      background-color: var(--bayan-primary-light, #EEF2FF);
+    }
+
     .p-input-icon-left {
       display: flex;
       align-items: center;
@@ -434,7 +444,7 @@ interface GridRowData {
     .p-input-icon-left i {
       position: absolute;
       left: 0.75rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .p-input-icon-left input {
@@ -447,7 +457,7 @@ interface GridRowData {
       align-items: center;
       gap: 1.5rem;
       padding: 1rem 1.5rem;
-      background: var(--bayan-primary, #18181b);
+      background: linear-gradient(135deg, var(--bayan-primary, #4F46E5), var(--bayan-primary-dark, #4338CA));
       border-radius: var(--bayan-radius, 0.5rem);
       color: white;
       flex-wrap: wrap;
@@ -476,11 +486,11 @@ interface GridRowData {
     }
 
     .stat-value.outlier-high {
-      color: #ffcccc;
+      color: #FEE2E2;
     }
 
     .stat-value.outlier-medium {
-      color: #fff3cd;
+      color: #FEF3C7;
     }
 
     .stat-value.deviation {
@@ -507,13 +517,13 @@ interface GridRowData {
 
     .loading-container p,
     .empty-state p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
       margin: 0;
     }
 
     .empty-state h3 {
       margin: 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     /* Grid Container */
@@ -522,15 +532,22 @@ interface GridRowData {
       min-height: 400px;
       border-radius: var(--bayan-radius, 0.5rem);
       overflow: hidden;
-      border: 1px solid var(--bayan-border, #e4e4e7);
+      border: 1px solid var(--bayan-slate-200, #E2E8F0);
     }
 
-    /* AG Grid Custom Styles */
-    :host ::ng-deep .ag-theme-alpine {
-      --ag-header-background-color: var(--bayan-accent, #f4f4f5);
-      --ag-header-foreground-color: var(--bayan-foreground, #09090b);
-      --ag-row-hover-color: var(--bayan-muted, #f4f4f5);
-      --ag-selected-row-background-color: var(--bayan-accent, #f4f4f5);
+    /* AG Grid Custom Styles — Slate-Indigo Theme (EVAL-003) */
+    :host ::ng-deep .ag-theme-alpine,
+    :host ::ng-deep .ag-theme-balham {
+      --ag-header-background-color: var(--bayan-slate-50, #F8FAFC);
+      --ag-header-foreground-color: var(--bayan-slate-700, #334155);
+      --ag-row-hover-color: var(--bayan-primary-light, #EEF2FF);
+      --ag-selected-row-background-color: rgba(79, 70, 229, 0.08);
+      --ag-range-selection-border-color: var(--bayan-primary, #4F46E5);
+      --ag-border-color: var(--bayan-slate-200, #E2E8F0);
+      --ag-odd-row-background-color: var(--bayan-slate-50, #F8FAFC);
+      --ag-font-size: 0.875rem;
+      --ag-foreground-color: var(--bayan-slate-700, #334155);
+      --ag-secondary-foreground-color: var(--bayan-slate-500, #64748B);
       font-family: inherit;
     }
 
@@ -539,16 +556,16 @@ interface GridRowData {
     }
 
     :host ::ng-deep .frozen-column {
-      background-color: var(--bayan-muted, #f4f4f5);
+      background-color: var(--bayan-slate-50, #F8FAFC);
     }
 
     :host ::ng-deep .section-header-row {
-      background-color: var(--bayan-accent, #f4f4f5) !important;
+      background-color: var(--bayan-primary-light, #EEF2FF) !important;
       font-weight: 600;
     }
 
     :host ::ng-deep .section-subtotal-row {
-      background-color: var(--bayan-accent, #f4f4f5) !important;
+      background-color: var(--bayan-primary-light, #EEF2FF) !important;
       font-weight: 600;
     }
 
@@ -564,18 +581,18 @@ interface GridRowData {
     }
 
     :host ::ng-deep .cell-normal {
-      background-color: #d4edda;
-      color: #155724;
+      background-color: #DCFCE7;
+      color: #15803D;
     }
 
     :host ::ng-deep .cell-minor {
-      background-color: #fff3cd;
-      color: #856404;
+      background-color: #FEF3C7;
+      color: #B45309;
     }
 
     :host ::ng-deep .cell-major {
-      background-color: #ffcccc;
-      color: #721c24;
+      background-color: #FEE2E2;
+      color: #B91C1C;
     }
 
     :host ::ng-deep .cell-extreme {
@@ -584,18 +601,19 @@ interface GridRowData {
     }
 
     :host ::ng-deep .cell-no-bid {
-      background-color: var(--bayan-accent, #f4f4f5);
-      color: #6c757d;
+      background-color: var(--bayan-slate-100, #F1F5F9);
+      color: var(--bayan-slate-400, #94A3B8);
       font-style: italic;
     }
 
     :host ::ng-deep .cell-non-comparable {
-      background-color: #faf5ff;
-      color: #9333ea;
+      background-color: var(--bayan-slate-50, #F8FAFC);
+      color: var(--bayan-slate-500, #64748B);
+      font-style: italic;
     }
 
     :host ::ng-deep .cell-lowest {
-      border: 2px solid #28a745;
+      border: 2px solid #16A34A;
       font-weight: 700;
     }
 
@@ -612,7 +630,7 @@ interface GridRowData {
 
     :host ::ng-deep .bidder-header .bidder-total {
       font-size: 0.85em;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
       display: block;
     }
 
@@ -622,14 +640,15 @@ interface GridRowData {
       align-items: center;
       gap: 1rem;
       padding: 1rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-slate-50, #F8FAFC);
+      border: 1px solid var(--bayan-slate-200, #E2E8F0);
       border-radius: var(--bayan-radius, 0.5rem);
       flex-wrap: wrap;
     }
 
     .legend-title {
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-700, #334155);
     }
 
     .legend-items {
@@ -648,12 +667,12 @@ interface GridRowData {
       width: 20px;
       height: 20px;
       border-radius: var(--bayan-radius-sm, 0.375rem);
-      border: 1px solid #ddd;
+      border: 1px solid var(--bayan-slate-200, #E2E8F0);
     }
 
     .legend-text {
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     /* Settings Dialog */
@@ -665,7 +684,7 @@ interface GridRowData {
 
     .settings-content h4 {
       margin: 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .settings-group {
@@ -681,7 +700,7 @@ interface GridRowData {
     }
 
     .setting-item label {
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-700, #334155);
     }
 
     .threshold-settings {
@@ -698,7 +717,7 @@ interface GridRowData {
 
     .threshold-item label {
       min-width: 120px;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-700, #334155);
     }
 
     /* Responsive */

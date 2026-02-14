@@ -188,12 +188,15 @@ import {
     .review-header h3 {
       margin: 0 0 0.25rem 0;
       font-size: 1.25rem;
-      color: var(--bayan-foreground, #09090b);
+      font-weight: 600;
+      color: var(--bayan-slate-900, #0F172A);
+      border-bottom: 1px solid var(--bayan-slate-200, #E2E8F0);
+      padding-bottom: 0.75rem;
     }
 
     .review-header p {
-      margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      margin: 0.5rem 0 0;
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .review-grid {
@@ -212,6 +215,11 @@ import {
       .p-card-content {
         padding: 0;
       }
+
+      .p-card-header {
+        color: var(--bayan-slate-900, #0F172A);
+        font-weight: 600;
+      }
     }
 
     :host ::ng-deep .review-card.full-width {
@@ -229,7 +237,7 @@ import {
       justify-content: space-between;
       align-items: flex-start;
       padding: 0.5rem 0;
-      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
+      border-bottom: 1px solid var(--bayan-slate-200, #E2E8F0);
     }
 
     .review-item:last-child {
@@ -237,26 +245,27 @@ import {
     }
 
     .item-label {
-      color: var(--bayan-muted-foreground, #71717a);
-      font-size: 0.9rem;
+      color: var(--bayan-slate-500, #64748B);
+      font-size: 0.875rem;
     }
 
     .item-value {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
       text-align: right;
       max-width: 60%;
     }
 
     .item-value.reference {
       font-family: monospace;
-      background-color: var(--bayan-muted, #f4f4f5);
+      background-color: var(--bayan-slate-100, #F1F5F9);
       padding: 0.25rem 0.5rem;
       border-radius: var(--bayan-radius-sm, 0.375rem);
+      color: var(--bayan-slate-700, #334155);
     }
 
     .item-value.highlight {
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
       font-weight: 600;
     }
 
@@ -281,11 +290,11 @@ import {
     }
 
     .weight-segment.technical {
-      background-color: var(--bayan-primary, #18181b);
+      background-color: var(--bayan-primary, #4F46E5);
     }
 
     .weight-segment.commercial {
-      background-color: #16a34a;
+      background-color: var(--bayan-success, #16A34A);
     }
 
     .criteria-list {
@@ -299,7 +308,7 @@ import {
       justify-content: space-between;
       align-items: center;
       padding: 0.75rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-primary-light, #EEF2FF);
       border-radius: var(--bayan-radius, 0.5rem);
     }
 
@@ -311,12 +320,12 @@ import {
 
     .criterion-name {
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .criterion-description {
       font-size: 0.8rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .criterion-weight {
@@ -329,25 +338,25 @@ import {
 
     .weight-value {
       font-weight: 600;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
     }
 
     .weight-bar-small {
       width: 80px;
       height: 4px;
-      background-color: var(--bayan-border, #e4e4e7);
+      background-color: var(--bayan-slate-200, #E2E8F0);
       border-radius: 2px;
       overflow: hidden;
     }
 
     .weight-fill {
       height: 100%;
-      background-color: var(--bayan-primary, #18181b);
+      background-color: var(--bayan-primary, #4F46E5);
       transition: width 0.3s ease;
     }
 
     .no-criteria {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
       font-style: italic;
       text-align: center;
       padding: 1rem;
@@ -359,22 +368,24 @@ import {
       align-items: center;
       padding-top: 0.5rem;
       font-size: 1rem;
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .criteria-total .valid {
-      color: #16a34a;
+      color: var(--bayan-success, #16A34A);
     }
 
     .criteria-total .invalid {
-      color: #dc2626;
+      color: var(--bayan-danger, #DC2626);
     }
 
     .description-preview {
       padding: 1rem;
-      background-color: var(--bayan-accent, #f4f4f5);
-      border-radius: var(--bayan-radius, 0.5rem);
+      background-color: var(--bayan-slate-50, #F8FAFC);
+      border-radius: var(--bayan-radius-lg, 0.75rem);
       max-height: 200px;
       overflow-y: auto;
+      color: var(--bayan-slate-700, #334155);
     }
 
     .description-preview :host ::ng-deep {
@@ -383,15 +394,15 @@ import {
     }
 
     .validation-summary {
-      background-color: #fff7ed;
-      border: 1px solid #fb923c;
-      border-radius: var(--bayan-radius, 0.5rem);
+      background-color: var(--bayan-warning-bg, #FFFBEB);
+      border: 1px solid var(--bayan-warning, #D97706);
+      border-radius: var(--bayan-radius-lg, 0.75rem);
       padding: 1rem;
     }
 
     .validation-summary h4 {
       margin: 0 0 0.5rem 0;
-      color: #e65100;
+      color: var(--bayan-warning, #D97706);
       display: flex;
       align-items: center;
       gap: 0.5rem;
@@ -400,11 +411,12 @@ import {
     .validation-summary ul {
       margin: 0;
       padding-left: 1.5rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .validation-summary li {
       margin-bottom: 0.25rem;
+      color: var(--bayan-slate-700, #334155);
     }
 
     @media (max-width: 768px) {

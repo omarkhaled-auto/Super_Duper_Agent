@@ -104,16 +104,21 @@ import { MessageModule } from 'primeng/message';
       display: flex;
       align-items: flex-start;
       gap: 0.75rem;
+      padding: 0.75rem;
+      background-color: #FEF2F2;
+      border: 1px solid var(--bayan-danger, #DC2626);
+      border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .warning-content i {
-      font-size: 1.25rem;
-      color: #d97706;
+      font-size: 1.5rem;
+      color: var(--bayan-danger, #DC2626);
       flex-shrink: 0;
     }
 
     .warning-content span {
       line-height: 1.5;
+      color: var(--bayan-slate-700, #334155);
     }
 
     .form-field {
@@ -124,17 +129,21 @@ import { MessageModule } from 'primeng/message';
 
     .form-field label {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-700, #334155);
     }
 
     .required {
-      color: #ef4444;
+      color: var(--bayan-danger, #DC2626);
     }
 
     .dialog-footer {
       display: flex;
       justify-content: flex-end;
       gap: 0.5rem;
+    }
+
+    :host ::ng-deep .p-dialog .p-dialog-header {
+      color: var(--bayan-slate-900, #0F172A);
     }
   `]
 })

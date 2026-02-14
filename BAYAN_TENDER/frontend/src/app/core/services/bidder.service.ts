@@ -36,9 +36,15 @@ function mapApiBidder(raw: any): Bidder {
     : [];
 
   const prequalRaw = raw.prequalificationStatus ?? raw.PrequalificationStatus ?? 0;
-  const prequal = typeof prequalRaw === 'number'
-    ? (PREQUAL_FROM_BACKEND[prequalRaw] || PrequalificationStatus.PENDING)
-    : prequalRaw;
+  let prequal: PrequalificationStatus;
+  if (typeof prequalRaw === 'string') {
+    const lower = prequalRaw.toLowerCase();
+    if (lower === 'qualified' || lower === 'approved') prequal = PrequalificationStatus.APPROVED;
+    else if (lower === 'rejected') prequal = PrequalificationStatus.REJECTED;
+    else prequal = PrequalificationStatus.PENDING;
+  } else {
+    prequal = PREQUAL_FROM_BACKEND[prequalRaw] || PrequalificationStatus.PENDING;
+  }
 
   return {
     id: raw.id || raw.Id,
@@ -253,6 +259,26 @@ export class BidderService {
       catchError(error => {
         this._isLoading.set(false);
         this._error.set(error.message || 'Failed to remove bidder from tender');
+        return throwError(() => error);
+      })
+    );
+  }
+
+  /**
+   * Update qualification status of a bidder for a tender
+   */
+  updateBidderQualification(tenderId: number | string, bidderId: number | string, qualificationStatus: string, reason?: string): Observable<any> {
+    this._isLoading.set(true);
+    this._error.set(null);
+
+    return this.api.put<any>(`/tenders/${tenderId}/bidders/${bidderId}/qualification`, {
+      qualificationStatus,
+      reason: reason || undefined
+    }).pipe(
+      tap(() => this._isLoading.set(false)),
+      catchError(error => {
+        this._isLoading.set(false);
+        this._error.set(error.message || 'Failed to update qualification status');
         return throwError(() => error);
       })
     );

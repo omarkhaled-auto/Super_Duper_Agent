@@ -46,6 +46,11 @@ public class VendorListItemDto
     public DateTime? LastPricingDate { get; set; }
 
     /// <summary>
+    /// Total bid value across all pricing snapshots.
+    /// </summary>
+    public decimal TotalBidValue { get; set; }
+
+    /// <summary>
     /// Whether the bidder is currently active.
     /// </summary>
     public bool IsActive { get; set; }

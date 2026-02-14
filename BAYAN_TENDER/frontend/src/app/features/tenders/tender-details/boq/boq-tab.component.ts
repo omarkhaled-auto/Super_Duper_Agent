@@ -127,7 +127,7 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
       } @else if (boqTree().length === 0) {
         <!-- Empty State -->
         <div class="empty-state">
-          <i class="pi pi-list" style="font-size: 3rem; color: var(--bayan-border, #e4e4e7);"></i>
+          <i class="pi pi-list" style="font-size: 3rem; color: var(--bayan-border, #E2E8F0);"></i>
           <h3>No Bill of Quantities Items</h3>
           <p>Start by importing from Excel or adding sections and items manually.</p>
           <div class="empty-actions">
@@ -303,7 +303,7 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
       flex-wrap: wrap;
       gap: 1rem;
       padding: 1rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-accent, #EEF2FF);
       border-radius: var(--bayan-radius, 0.5rem);
     }
 
@@ -324,7 +324,7 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
     }
 
     .loading-container p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .empty-state {
@@ -339,12 +339,12 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
 
     .empty-state h3 {
       margin: 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .empty-state p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .empty-actions {
@@ -354,22 +354,23 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
     }
 
     :host ::ng-deep .p-treetable .section-row {
-      background-color: var(--bayan-muted, #f4f4f5) !important;
+      background-color: var(--bayan-slate-100, #F1F5F9) !important;
+      color: var(--bayan-slate-800, #1E293B);
       font-weight: 500;
     }
 
     :host ::ng-deep .p-treetable .section-row:hover {
-      background-color: var(--bayan-accent, #f4f4f5) !important;
+      background-color: var(--bayan-accent, #EEF2FF) !important;
     }
 
     .section-number {
       font-weight: 600;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
     }
 
     .section-title {
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-800, #1E293B);
     }
 
     .action-cell {
@@ -382,7 +383,7 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
       align-items: center;
       gap: 1.5rem;
       padding: 1rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-slate-100, #F1F5F9);
       border-radius: var(--bayan-radius, 0.5rem);
       flex-wrap: wrap;
     }
@@ -395,18 +396,19 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
 
     .summary-label {
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .summary-value {
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      font-variant-numeric: tabular-nums;
+      color: var(--bayan-foreground, #020617);
     }
 
     .summary-divider {
       width: 1px;
       height: 20px;
-      background-color: var(--bayan-border, #e4e4e7);
+      background-color: var(--bayan-border, #E2E8F0);
     }
 
     :host ::ng-deep .p-treetable-scrollable .p-treetable-wrapper {

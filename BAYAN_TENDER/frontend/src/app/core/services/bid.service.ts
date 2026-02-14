@@ -38,10 +38,14 @@ export class BidService {
   };
 
   private mapStatus(status: number | string): BidStatus {
-    if (typeof status === 'number') {
-      return this.statusMap[status] ?? 'submitted';
+    if (typeof status === 'string') {
+      const lower = status.toLowerCase();
+      if (lower === 'submitted' || lower === 'opened' || lower === 'imported' || lower === 'disqualified') {
+        return lower as BidStatus;
+      }
+      return 'submitted';
     }
-    return (status as BidStatus) || 'submitted';
+    return this.statusMap[status] ?? 'submitted';
   }
 
   /**
@@ -81,7 +85,7 @@ export class BidService {
           bidderId: b.bidderId,
           bidderName: b.bidderName,
           submissionTime: b.submissionTime,
-          status: this.mapStatus(b.status),
+          status: (b.isLate && this.mapStatus(b.status) === 'submitted') ? 'late' : this.mapStatus(b.status),
           bidAmount: b.nativeTotalAmount ?? undefined,
           currency: b.nativeCurrency ?? undefined,
           filesCount: b.totalFileCount ?? 0,
@@ -129,7 +133,8 @@ export class BidService {
 
   /** Maps backend BidDetailDto to frontend BidSubmission */
   private mapBidDetailToSubmission(b: any): BidSubmission {
-    const status = this.mapStatus(b.status);
+    const rawStatus = this.mapStatus(b.status);
+    const status: BidStatus = (b.isLate && rawStatus === 'submitted') ? 'late' : rawStatus;
     const documents: BidDocument[] = (b.documents || []).map((d: any) => ({
       id: d.id,
       bidId: b.id,

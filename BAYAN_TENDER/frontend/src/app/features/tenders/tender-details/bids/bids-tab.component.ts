@@ -95,9 +95,9 @@ import { BidImportDialogComponent } from './bid-import-dialog.component';
           @if (!statistics()?.bidsOpened) {
             <button
               pButton
-              icon="pi pi-eye"
+              icon="pi pi-lock-open"
               label="Open Bids"
-              class="p-button-warning"
+              class="p-button-primary"
               data-testid="open-bids-btn"
               [disabled]="regularBids().length === 0"
               (click)="showOpenBidsDialog = true"
@@ -129,7 +129,7 @@ import { BidImportDialogComponent } from './bid-import-dialog.component';
       } @else if (bids().length === 0) {
         <!-- Empty State -->
         <div class="empty-state">
-          <i class="pi pi-inbox" style="font-size: 3rem; color: var(--bayan-border, #e4e4e7);"></i>
+          <i class="pi pi-inbox" style="font-size: 3rem; color: var(--bayan-slate-300, #CBD5E1);"></i>
           <h3>No Bids Received</h3>
           <p>No bids have been submitted for this tender yet.</p>
         </div>
@@ -362,20 +362,25 @@ import { BidImportDialogComponent } from './bid-import-dialog.component';
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 1rem;
-      background-color: var(--bayan-accent, #f4f4f5);
-      border-radius: var(--bayan-radius, 0.5rem);
+      padding: 1rem 1.25rem;
+      background: linear-gradient(135deg, var(--bayan-slate-50, #F8FAFC) 0%, var(--bayan-primary-light, #EEF2FF) 100%);
+      border-radius: var(--bayan-radius-lg, 0.75rem);
+      border: 1px solid var(--bayan-slate-200, #E2E8F0);
       flex-wrap: wrap;
       gap: 1rem;
     }
 
     .header-stats {
       font-size: 1rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-700, #334155);
+    }
+
+    .header-stats strong {
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .late-indicator {
-      color: #d97706;
+      color: var(--bayan-warning, #D97706);
     }
 
     .header-actions {
@@ -394,7 +399,7 @@ import { BidImportDialogComponent } from './bid-import-dialog.component';
     }
 
     .loading-container p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .empty-state {
@@ -409,12 +414,12 @@ import { BidImportDialogComponent } from './bid-import-dialog.component';
 
     .empty-state h3 {
       margin: 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .empty-state p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .bidder-info {
@@ -423,20 +428,23 @@ import { BidImportDialogComponent } from './bid-import-dialog.component';
     }
 
     .bidder-name {
-      font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      font-weight: 600;
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .bid-amount {
+      font-size: 1.125rem;
       font-weight: 600;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-slate-900, #0F172A);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
     }
 
     .hidden-amount {
       display: flex;
       align-items: center;
       gap: 0.25rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-400, #94A3B8);
       font-size: 0.875rem;
     }
 
@@ -444,7 +452,7 @@ import { BidImportDialogComponent } from './bid-import-dialog.component';
       display: flex;
       align-items: center;
       gap: 0.25rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .action-buttons {
@@ -455,18 +463,20 @@ import { BidImportDialogComponent } from './bid-import-dialog.component';
     /* Late Bids Panel */
     :host ::ng-deep .late-bids-panel {
       margin-top: 1rem;
+      border-radius: var(--bayan-radius-lg, 0.75rem);
+      overflow: hidden;
     }
 
     :host ::ng-deep .late-bids-panel .p-panel-header {
-      background-color: var(--bayan-warning-bg, #fffbeb);
-      border-color: #ffcc02;
+      background-color: #FFFBEB;
+      border-color: var(--bayan-warning, #D97706);
     }
 
     .late-bids-header {
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      color: #d97706;
+      color: var(--bayan-warning, #D97706);
       font-weight: 600;
     }
 
@@ -482,10 +492,15 @@ import { BidImportDialogComponent } from './bid-import-dialog.component';
       align-items: center;
       padding: 1rem;
       background-color: #fff;
-      border: 1px solid var(--bayan-border, #e4e4e7);
+      border: 1px solid var(--bayan-slate-200, #E2E8F0);
       border-radius: var(--bayan-radius, 0.5rem);
       flex-wrap: wrap;
       gap: 1rem;
+      transition: box-shadow 0.2s ease;
+    }
+
+    .late-bid-item:hover {
+      box-shadow: var(--bayan-shadow-sm, 0 1px 2px 0 rgba(0, 0, 0, 0.05));
     }
 
     .late-bid-info {
@@ -503,8 +518,8 @@ import { BidImportDialogComponent } from './bid-import-dialog.component';
     .late-bid-meta {
       display: flex;
       gap: 1rem;
-      font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      font-size: 0.75rem;
+      color: var(--bayan-slate-400, #94A3B8);
     }
 
     .late-bid-meta span {
@@ -516,6 +531,25 @@ import { BidImportDialogComponent } from './bid-import-dialog.component';
     .late-bid-actions {
       display: flex;
       gap: 0.5rem;
+    }
+
+    /* PrimeNG Table Overrides */
+    :host ::ng-deep .p-datatable .p-datatable-thead > tr > th {
+      color: var(--bayan-slate-600, #475569);
+      font-weight: 600;
+      font-size: 0.8125rem;
+      text-transform: uppercase;
+      letter-spacing: 0.025em;
+    }
+
+    :host ::ng-deep .p-datatable .p-sortable-column.p-highlight,
+    :host ::ng-deep .p-datatable .p-datatable-sortable-column.p-datatable-column-sorted {
+      color: var(--bayan-primary, #4F46E5);
+    }
+
+    :host ::ng-deep .p-datatable .p-sortable-column.p-highlight .p-sortable-column-icon,
+    :host ::ng-deep .p-datatable .p-datatable-sortable-column.p-datatable-column-sorted .p-datatable-sort-icon {
+      color: var(--bayan-primary, #4F46E5);
     }
 
     @media (max-width: 768px) {

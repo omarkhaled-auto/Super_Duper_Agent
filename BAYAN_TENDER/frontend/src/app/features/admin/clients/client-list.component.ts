@@ -186,7 +186,7 @@ import { ClientFormDialogComponent, ClientFormDialogData } from './client-form-d
             <tr>
               <td colspan="7" class="text-center p-4">
                 <div class="empty-state">
-                  <i class="pi pi-building" style="font-size: 3rem; color: var(--bayan-muted-foreground, #71717a);"></i>
+                  <i class="pi pi-building" style="font-size: 3rem; color: var(--bayan-muted-foreground, #64748B);"></i>
                   <p>No clients found.</p>
                   <button pButton label="Add First Client" icon="pi pi-plus" class="p-button-outlined" (click)="showClientDialog()"></button>
                 </div>
@@ -215,12 +215,12 @@ import { ClientFormDialogComponent, ClientFormDialogData } from './client-form-d
     .page-header h1 {
       margin: 0;
       font-size: 1.75rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .page-header p {
       margin: 0.25rem 0 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     :host ::ng-deep .filter-card .p-card-body {
@@ -263,7 +263,7 @@ import { ClientFormDialogComponent, ClientFormDialogData } from './client-form-d
       width: 40px;
       height: 40px;
       border-radius: var(--bayan-radius, 0.5rem);
-      background: var(--bayan-primary, #18181b);
+      background: var(--bayan-primary, #4F46E5);
       color: white;
       display: flex;
       align-items: center;
@@ -279,12 +279,12 @@ import { ClientFormDialogComponent, ClientFormDialogData } from './client-form-d
 
     .primary-name {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .secondary-name {
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       direction: rtl;
     }
 
@@ -294,16 +294,16 @@ import { ClientFormDialogComponent, ClientFormDialogData } from './client-form-d
     }
 
     .contact-info small {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .no-data {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .tender-count {
       font-weight: 600;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
     }
 
     .action-buttons {
@@ -320,8 +320,16 @@ import { ClientFormDialogComponent, ClientFormDialogData } from './client-form-d
     }
 
     .empty-state p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       margin: 0;
+    }
+
+    :host ::ng-deep .p-datatable .p-datatable-tbody > tr:hover {
+      background-color: var(--bayan-accent, #F1F5F9) !important;
+    }
+
+    :host ::ng-deep .action-buttons .p-button-text:hover {
+      background-color: var(--bayan-accent, #F1F5F9);
     }
   `]
 })

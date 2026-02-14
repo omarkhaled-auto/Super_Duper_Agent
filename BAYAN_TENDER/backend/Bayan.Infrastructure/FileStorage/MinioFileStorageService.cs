@@ -107,6 +107,15 @@ public class MinioFileStorageService : IFileStorageService
 
         var url = await _minioClient.PresignedGetObjectAsync(presignedGetObjectArgs);
 
+        // If a public endpoint is configured, replace the internal endpoint in the URL
+        // so the presigned URL is reachable from the browser (e.g., in Docker environments).
+        if (!string.IsNullOrWhiteSpace(_settings.PublicEndpoint)
+            && !string.IsNullOrWhiteSpace(_settings.Endpoint)
+            && _settings.PublicEndpoint != _settings.Endpoint)
+        {
+            url = url.Replace(_settings.Endpoint, _settings.PublicEndpoint);
+        }
+
         return url;
     }
 

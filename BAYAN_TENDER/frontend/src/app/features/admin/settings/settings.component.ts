@@ -466,18 +466,19 @@ import {
     .page-header h1 {
       margin: 0;
       font-size: 1.75rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .page-header p {
       margin: 0.25rem 0 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .settings-section h3 {
       margin: 0 0 1rem;
       font-size: 1.125rem;
-      color: var(--bayan-foreground, #09090b);
+      font-weight: 600;
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .settings-grid {
@@ -494,7 +495,7 @@ import {
 
     .setting-item label {
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .setting-item.checkbox-item {
@@ -512,7 +513,12 @@ import {
       justify-content: flex-end;
       margin-top: 1.5rem;
       padding-top: 1rem;
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-border, #E2E8F0);
+    }
+
+    .setting-hint {
+      font-size: 0.75rem;
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     :host ::ng-deep {
@@ -535,6 +541,19 @@ import {
       .p-dropdown {
         width: 100%;
       }
+    }
+
+    :host ::ng-deep .p-checkbox .p-checkbox-box.p-highlight,
+    :host ::ng-deep .p-checkbox.p-highlight .p-checkbox-box,
+    :host ::ng-deep .p-checkbox.p-checkbox-checked .p-checkbox-box {
+      background-color: var(--bayan-primary, #4F46E5);
+      border-color: var(--bayan-primary, #4F46E5);
+    }
+
+    :host ::ng-deep .p-tabview .p-tabview-nav li.p-highlight .p-tabview-nav-link,
+    :host ::ng-deep .p-tab.p-tab-active {
+      border-color: var(--bayan-primary, #4F46E5);
+      color: var(--bayan-primary, #4F46E5);
     }
   `]
 })

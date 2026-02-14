@@ -193,9 +193,7 @@ export class TenderService {
       );
     }
     if (status === 'closed') {
-      // TODO: Backend needs a dedicated /close endpoint that transitions to Evaluation status
-      // For now, using /cancel as the closest available endpoint
-      return this.api.post<any>(`${this.endpoint}/${id}/cancel`, {}).pipe(
+      return this.api.post<any>(`${this.endpoint}/${id}/close`, {}).pipe(
         map((result: any) => this.mapTenderDtoToTender(result)),
         catchError(error => throwError(() => error))
       );

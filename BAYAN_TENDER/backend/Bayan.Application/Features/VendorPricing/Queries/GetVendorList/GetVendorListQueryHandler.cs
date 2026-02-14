@@ -77,6 +77,9 @@ public class GetVendorListQueryHandler
                     .Select(s => s.TenderId)
                     .Distinct()
                     .Count(),
+                TotalBidValue = _context.VendorPricingSnapshots
+                    .Where(s => s.BidderId == b.Id)
+                    .Sum(s => s.TotalBidAmount),
                 LastPricingDate = _context.VendorPricingSnapshots
                     .Where(s => s.BidderId == b.Id)
                     .OrderByDescending(s => s.SnapshotDate)

@@ -10,6 +10,7 @@ using Bayan.Application.Features.VendorPricing.Queries.GetVendorPricingDashboard
 using Bayan.Application.Features.VendorPricing.Queries.GetVendorPricingHistory;
 using Bayan.Application.Features.VendorPricing.Queries.GetVendorRates;
 using Bayan.Application.Features.VendorPricing.Queries.GetVendorTrends;
+using Bayan.API.Authorization;
 using Bayan.Infrastructure.Caching;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -22,7 +23,7 @@ namespace Bayan.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/vendor-pricing")]
-[Authorize(Roles = "Admin,TenderManager,CommercialAnalyst,Auditor")]
+[Authorize(Roles = BayanRoles.VendorPricingViewers)]
 public class VendorPricingController : ControllerBase
 {
     private readonly IMediator _mediator;

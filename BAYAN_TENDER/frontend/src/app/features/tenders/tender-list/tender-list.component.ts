@@ -19,6 +19,7 @@ import { MultiSelectModule } from 'primeng/multiselect';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { MessageModule } from 'primeng/message';
 
+import { AuthService } from '../../../core/auth/auth.service';
 import { TenderService, TenderQueryParams } from '../../../core/services/tender.service';
 import { ClientService } from '../../../core/services/client.service';
 import {
@@ -29,6 +30,7 @@ import {
   CURRENCY_OPTIONS
 } from '../../../core/models/tender.model';
 import { Client } from '../../../core/models/client.model';
+import { UserRole } from '../../../core/models/user.model';
 
 interface StatusOption {
   label: string;
@@ -76,13 +78,15 @@ interface StatusOption {
             (click)="exportToExcel()"
             [loading]="exporting()"
           ></button>
-          <button
-            pButton
-            icon="pi pi-plus"
-            label="New Tender"
-            data-testid="new-tender-btn"
-            (click)="navigateToNewTender()"
-          ></button>
+          @if (canManageTenders()) {
+            <button
+              pButton
+              icon="pi pi-plus"
+              label="New Tender"
+              data-testid="new-tender-btn"
+              (click)="navigateToNewTender()"
+            ></button>
+          }
         </div>
       </div>
 
@@ -315,23 +319,25 @@ interface StatusOption {
                     tooltipPosition="top"
                     (click)="navigateToDetails(tender.id)"
                   ></button>
-                  <button
-                    pButton
-                    icon="pi pi-pencil"
-                    class="p-button-rounded p-button-text p-button-sm"
-                    pTooltip="Edit"
-                    tooltipPosition="top"
-                    (click)="navigateToEdit(tender.id)"
-                    [disabled]="tender.status !== 'draft'"
-                  ></button>
-                  <button
-                    pButton
-                    icon="pi pi-copy"
-                    class="p-button-rounded p-button-text p-button-sm"
-                    pTooltip="Duplicate"
-                    tooltipPosition="top"
-                    (click)="duplicateTender(tender)"
-                  ></button>
+                  @if (canManageTenders()) {
+                    <button
+                      pButton
+                      icon="pi pi-pencil"
+                      class="p-button-rounded p-button-text p-button-sm"
+                      pTooltip="Edit"
+                      tooltipPosition="top"
+                      (click)="navigateToEdit(tender.id)"
+                      [disabled]="tender.status !== 'draft'"
+                    ></button>
+                    <button
+                      pButton
+                      icon="pi pi-copy"
+                      class="p-button-rounded p-button-text p-button-sm"
+                      pTooltip="Duplicate"
+                      tooltipPosition="top"
+                      (click)="duplicateTender(tender)"
+                    ></button>
+                  }
                 </div>
               </td>
             </tr>
@@ -341,15 +347,17 @@ interface StatusOption {
             <tr>
               <td colspan="7" class="text-center p-4">
                 <div class="empty-state">
-                  <i class="pi pi-inbox" style="font-size: 3rem; color: var(--bayan-muted-foreground, #71717a);"></i>
+                  <i class="pi pi-inbox" style="font-size: 3rem; color: var(--bayan-slate-300, #CBD5E1);"></i>
                   <p>No tenders found matching your criteria.</p>
-                  <button
-                    pButton
-                    label="Create New Tender"
-                    icon="pi pi-plus"
-                    class="p-button-outlined"
-                    (click)="navigateToNewTender()"
-                  ></button>
+                  @if (canManageTenders()) {
+                    <button
+                      pButton
+                      label="Create New Tender"
+                      icon="pi pi-plus"
+                      class="p-button-outlined"
+                      (click)="navigateToNewTender()"
+                    ></button>
+                  }
                 </div>
               </td>
             </tr>
@@ -387,13 +395,14 @@ interface StatusOption {
 
     .header-content h1 {
       margin: 0;
-      font-size: 1.75rem;
-      color: var(--bayan-foreground, #09090b);
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .header-content p {
       margin: 0.25rem 0 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .header-actions {
@@ -414,8 +423,15 @@ interface StatusOption {
     }
 
     :host ::ng-deep .filter-panel {
+      .p-panel-header {
+        background: var(--bayan-slate-50, #F8FAFC);
+        border-radius: var(--bayan-radius-lg, 0.75rem);
+      }
+
       .p-panel-content {
-        padding: 1.25rem;
+        padding: 1rem;
+        background: var(--bayan-slate-50, #F8FAFC);
+        border-radius: 0 0 var(--bayan-radius-lg, 0.75rem) var(--bayan-radius-lg, 0.75rem);
       }
     }
 
@@ -433,7 +449,7 @@ interface StatusOption {
 
     .filter-label {
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-700, #334155);
       font-size: 0.875rem;
     }
 
@@ -457,7 +473,7 @@ interface StatusOption {
     }
 
     .date-separator {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-400, #94A3B8);
     }
 
     .filter-actions {
@@ -466,11 +482,11 @@ interface StatusOption {
       align-items: center;
       margin-top: 1rem;
       padding-top: 1rem;
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     .active-filters {
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
       font-size: 0.875rem;
       font-weight: 500;
     }
@@ -487,11 +503,11 @@ interface StatusOption {
 
     .clickable-row {
       cursor: pointer;
-      transition: background-color 0.2s;
+      transition: background-color var(--bayan-transition, 200ms ease);
     }
 
     .clickable-row:hover {
-      background-color: var(--bayan-accent, #f4f4f5) !important;
+      background-color: var(--bayan-primary-light, #EEF2FF) !important;
     }
 
     .tender-title {
@@ -502,20 +518,21 @@ interface StatusOption {
 
     .title-text {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .estimated-value {
       font-size: 0.8rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .reference-badge {
       font-family: monospace;
-      background-color: var(--bayan-muted, #f4f4f5);
+      background-color: var(--bayan-slate-100, #F1F5F9);
       padding: 0.25rem 0.5rem;
       border-radius: var(--bayan-radius-sm, 0.375rem);
       font-size: 0.875rem;
+      color: var(--bayan-slate-700, #334155);
     }
 
     .deadline-cell {
@@ -526,21 +543,22 @@ interface StatusOption {
 
     .days-badge {
       font-size: 0.75rem;
-      padding: 0.125rem 0.375rem;
+      font-weight: 500;
+      padding: 0.125rem 0.5rem;
       border-radius: var(--bayan-radius-full, 9999px);
-      background-color: var(--bayan-success-bg, #f0fdf4);
-      color: #16a34a;
+      background-color: var(--bayan-success-bg, #F0FDF4);
+      color: var(--bayan-success, #16A34A);
       width: fit-content;
     }
 
     .days-badge.warning {
-      background-color: var(--bayan-warning-bg, #fffbeb);
-      color: #d97706;
+      background-color: var(--bayan-warning-bg, #FFFBEB);
+      color: var(--bayan-warning, #D97706);
     }
 
     .days-badge.urgent {
-      background-color: var(--bayan-danger-bg, #fef2f2);
-      color: #dc2626;
+      background-color: var(--bayan-danger-bg, #FEF2F2);
+      color: var(--bayan-danger, #DC2626);
     }
 
     .bids-cell {
@@ -551,12 +569,12 @@ interface StatusOption {
 
     .bids-count {
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .bids-label {
       font-size: 0.75rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .action-buttons {
@@ -574,7 +592,7 @@ interface StatusOption {
     }
 
     .empty-state p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
       margin: 0;
     }
 
@@ -612,6 +630,7 @@ interface StatusOption {
   `]
 })
 export class TenderListComponent implements OnInit, OnDestroy {
+  private readonly authService = inject(AuthService);
   readonly tenderService = inject(TenderService);
   private readonly clientService = inject(ClientService);
   private readonly router = inject(Router);
@@ -623,6 +642,8 @@ export class TenderListComponent implements OnInit, OnDestroy {
   totalRecords = signal<number>(0);
   clients = signal<Client[]>([]);
   exporting = signal<boolean>(false);
+
+  canManageTenders = computed(() => this.authService.hasRole([UserRole.ADMIN, UserRole.TENDER_MANAGER]));
 
   // Filter state
   searchTerm = '';

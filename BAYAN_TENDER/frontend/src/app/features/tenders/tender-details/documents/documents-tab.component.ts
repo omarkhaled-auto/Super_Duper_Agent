@@ -4,7 +4,8 @@ import {
   OnInit,
   OnDestroy,
   inject,
-  signal
+  signal,
+  computed
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -23,11 +24,13 @@ import { FileUploadModule } from 'primeng/fileupload';
 import { InputTextModule } from 'primeng/inputtext';
 import { MessageService, ConfirmationService } from 'primeng/api';
 
+import { AuthService } from '../../../../core/auth/auth.service';
 import {
   DocumentService,
   TenderDocument,
   DocumentQueryParams
 } from '../../../../core/services/document.service';
+import { UserRole } from '../../../../core/models/user.model';
 
 interface CategoryOption {
   label: string;
@@ -91,13 +94,15 @@ const DOCUMENT_CATEGORIES: CategoryOption[] = [
           ></p-dropdown>
         </div>
         <div class="toolbar-right">
-          <button
-            pButton
-            icon="pi pi-upload"
-            label="Upload Document"
-            data-testid="upload-document-btn"
-            (click)="showUploadDialog = true"
-          ></button>
+          @if (canManageDocuments()) {
+            <button
+              pButton
+              icon="pi pi-upload"
+              label="Upload Document"
+              data-testid="upload-document-btn"
+              (click)="showUploadDialog = true"
+            ></button>
+          }
         </div>
       </div>
 
@@ -122,16 +127,20 @@ const DOCUMENT_CATEGORIES: CategoryOption[] = [
       } @else if (documents().length === 0) {
         <!-- Empty State -->
         <div class="empty-state">
-          <i class="pi pi-file" style="font-size: 3rem; color: var(--bayan-border, #e4e4e7);"></i>
+          <i class="pi pi-file" style="font-size: 3rem; color: var(--bayan-border, #E2E8F0);"></i>
           <h3>No Documents</h3>
           <p>No documents have been uploaded for this tender yet.</p>
-          <button
-            pButton
-            icon="pi pi-upload"
-            label="Upload First Document"
-            class="p-button-outlined"
-            (click)="showUploadDialog = true"
-          ></button>
+          @if (canManageDocuments()) {
+            <button
+              pButton
+              icon="pi pi-upload"
+              label="Upload First Document"
+              class="p-button-outlined"
+              (click)="showUploadDialog = true"
+            ></button>
+          } @else {
+            <p class="muted">You do not have permission to upload documents.</p>
+          }
         </div>
       } @else {
         <!-- Documents Table -->
@@ -172,7 +181,7 @@ const DOCUMENT_CATEGORIES: CategoryOption[] = [
             <tr>
               <td>
                 <div class="doc-name-cell">
-                  <i [class]="getFileIcon(doc.name)" class="doc-icon"></i>
+                  <i [class]="getFileIcon(doc.name) + ' doc-icon ' + getFileIconColorClass(doc.name)"></i>
                   <div class="doc-name-info">
                     <span
                       class="doc-name"
@@ -203,14 +212,16 @@ const DOCUMENT_CATEGORIES: CategoryOption[] = [
                     data-testid="download-doc-btn"
                     (click)="downloadDocument(doc)"
                   ></button>
-                  <button
-                    pButton
-                    icon="pi pi-trash"
-                    class="p-button-text p-button-sm p-button-danger"
-                    pTooltip="Delete"
-                    data-testid="delete-doc-btn"
-                    (click)="confirmDelete(doc)"
-                  ></button>
+                  @if (canManageDocuments()) {
+                    <button
+                      pButton
+                      icon="pi pi-trash"
+                      class="p-button-text p-button-sm p-button-danger"
+                      pTooltip="Delete"
+                      data-testid="delete-doc-btn"
+                      (click)="confirmDelete(doc)"
+                    ></button>
+                  }
                 </div>
               </td>
             </tr>
@@ -240,76 +251,78 @@ const DOCUMENT_CATEGORIES: CategoryOption[] = [
       }
     </div>
 
-    <!-- Upload Dialog -->
-    <p-dialog
-      header="Upload Document"
-      [(visible)]="showUploadDialog"
-      [modal]="true"
-      [style]="{ width: '500px' }"
-      [contentStyle]="{ overflow: 'visible' }"
-      data-testid="upload-dialog"
-    >
-      <div class="upload-form">
-        <div class="form-field">
-          <label for="category">Category</label>
-          <p-dropdown
-            id="category"
-            [options]="categories"
-            [(ngModel)]="uploadCategory"
-            placeholder="Select a category"
-            [style]="{ width: '100%' }"
-            data-testid="upload-category-dropdown"
-          ></p-dropdown>
+    @if (canManageDocuments()) {
+      <!-- Upload Dialog -->
+      <p-dialog
+        header="Upload Document"
+        [(visible)]="showUploadDialog"
+        [modal]="true"
+        [style]="{ width: '500px' }"
+        [contentStyle]="{ overflow: 'visible' }"
+        data-testid="upload-dialog"
+      >
+        <div class="upload-form">
+          <div class="form-field">
+            <label for="category">Category</label>
+            <p-dropdown
+              id="category"
+              [options]="categories"
+              [(ngModel)]="uploadCategory"
+              placeholder="Select a category"
+              [style]="{ width: '100%' }"
+              data-testid="upload-category-dropdown"
+            ></p-dropdown>
+          </div>
+
+          <div class="form-field">
+            <label>File</label>
+            <p-fileUpload
+              mode="advanced"
+              [auto]="false"
+              [customUpload]="true"
+              (uploadHandler)="onFileSelect($event)"
+              [maxFileSize]="104857600"
+              chooseLabel="Choose File"
+              uploadLabel="Upload"
+              cancelLabel="Cancel"
+              [showUploadButton]="false"
+              [showCancelButton]="false"
+              data-testid="file-upload"
+              (onSelect)="onFileSelected($event)"
+            >
+              <ng-template pTemplate="content">
+                @if (!selectedFile) {
+                  <div class="upload-placeholder">
+                    <i class="pi pi-cloud-upload" style="font-size: 2rem; color: var(--bayan-muted-foreground, #64748B);"></i>
+                    <p>Drag and drop a file here or click to browse</p>
+                    <span class="upload-hint">Maximum file size: 100MB</span>
+                  </div>
+                }
+              </ng-template>
+            </p-fileUpload>
+          </div>
         </div>
 
-        <div class="form-field">
-          <label>File</label>
-          <p-fileUpload
-            mode="advanced"
-            [auto]="false"
-            [customUpload]="true"
-            (uploadHandler)="onFileSelect($event)"
-            [maxFileSize]="104857600"
-            chooseLabel="Choose File"
-            uploadLabel="Upload"
-            cancelLabel="Cancel"
-            [showUploadButton]="false"
-            [showCancelButton]="false"
-            data-testid="file-upload"
-            (onSelect)="onFileSelected($event)"
-          >
-            <ng-template pTemplate="content">
-              @if (!selectedFile) {
-                <div class="upload-placeholder">
-                  <i class="pi pi-cloud-upload" style="font-size: 2rem; color: var(--bayan-muted-foreground, #71717a);"></i>
-                  <p>Drag and drop a file here or click to browse</p>
-                  <span class="upload-hint">Maximum file size: 100MB</span>
-                </div>
-              }
-            </ng-template>
-          </p-fileUpload>
-        </div>
-      </div>
-
-      <ng-template pTemplate="footer">
-        <button
-          pButton
-          label="Cancel"
-          icon="pi pi-times"
-          class="p-button-text"
-          (click)="cancelUpload()"
-        ></button>
-        <button
-          pButton
-          label="Upload"
-          icon="pi pi-upload"
-          [loading]="isUploading()"
-          [disabled]="!selectedFile || !uploadCategory"
-          data-testid="confirm-upload-btn"
-          (click)="uploadDocument()"
-        ></button>
-      </ng-template>
-    </p-dialog>
+        <ng-template pTemplate="footer">
+          <button
+            pButton
+            label="Cancel"
+            icon="pi pi-times"
+            class="p-button-text"
+            (click)="cancelUpload()"
+          ></button>
+          <button
+            pButton
+            label="Upload"
+            icon="pi pi-upload"
+            [loading]="isUploading()"
+            [disabled]="!selectedFile || !uploadCategory"
+            data-testid="confirm-upload-btn"
+            (click)="uploadDocument()"
+          ></button>
+        </ng-template>
+      </p-dialog>
+    }
   `,
   styles: [`
     .documents-tab-container {
@@ -325,7 +338,7 @@ const DOCUMENT_CATEGORIES: CategoryOption[] = [
       flex-wrap: wrap;
       gap: 1rem;
       padding: 1rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-slate-50, #F8FAFC);
       border-radius: var(--bayan-radius, 0.5rem);
     }
 
@@ -347,7 +360,7 @@ const DOCUMENT_CATEGORIES: CategoryOption[] = [
     }
 
     .loading-container p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .empty-state {
@@ -362,12 +375,17 @@ const DOCUMENT_CATEGORIES: CategoryOption[] = [
 
     .empty-state h3 {
       margin: 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .empty-state p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
+    }
+
+    .muted {
+      font-size: 0.875rem;
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .doc-name-cell {
@@ -378,8 +396,15 @@ const DOCUMENT_CATEGORIES: CategoryOption[] = [
 
     .doc-icon {
       font-size: 1.25rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-400, #94A3B8);
     }
+
+    .doc-icon.icon-pdf { color: #DC2626; }
+    .doc-icon.icon-word { color: #2563EB; }
+    .doc-icon.icon-excel { color: #16A34A; }
+    .doc-icon.icon-image { color: #D97706; }
+    .doc-icon.icon-archive { color: var(--bayan-slate-500, #64748B); }
+    .doc-icon.icon-drawing { color: var(--bayan-warning, #D97706); }
 
     .doc-name-info {
       display: flex;
@@ -388,7 +413,7 @@ const DOCUMENT_CATEGORIES: CategoryOption[] = [
 
     .doc-name {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -397,7 +422,7 @@ const DOCUMENT_CATEGORIES: CategoryOption[] = [
 
     .doc-version {
       font-size: 0.75rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-400, #94A3B8);
     }
 
     .action-buttons {
@@ -410,7 +435,7 @@ const DOCUMENT_CATEGORIES: CategoryOption[] = [
       align-items: center;
       gap: 1.5rem;
       padding: 1rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-slate-50, #F8FAFC);
       border-radius: var(--bayan-radius, 0.5rem);
       flex-wrap: wrap;
     }
@@ -423,18 +448,18 @@ const DOCUMENT_CATEGORIES: CategoryOption[] = [
 
     .summary-label {
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .summary-value {
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .summary-divider {
       width: 1px;
       height: 20px;
-      background-color: var(--bayan-border, #e4e4e7);
+      background-color: var(--bayan-border, #E2E8F0);
     }
 
     /* Upload Dialog */
@@ -451,8 +476,8 @@ const DOCUMENT_CATEGORIES: CategoryOption[] = [
     }
 
     .form-field label {
-      font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      font-weight: 600;
+      color: var(--bayan-slate-700, #334155);
     }
 
     .upload-placeholder {
@@ -466,16 +491,28 @@ const DOCUMENT_CATEGORIES: CategoryOption[] = [
 
     .upload-placeholder p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .upload-hint {
       font-size: 0.8rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-400, #94A3B8);
     }
 
     .text-center {
       text-align: center;
+    }
+
+    :host ::ng-deep .p-fileupload-content {
+      border: 2px dashed var(--bayan-slate-300, #CBD5E1);
+      border-radius: var(--bayan-radius, 0.5rem);
+      transition: all var(--bayan-transition-fast, 150ms ease);
+    }
+
+    :host ::ng-deep .p-fileupload-content:hover,
+    :host ::ng-deep .p-fileupload-highlight {
+      border-color: var(--bayan-primary, #4F46E5);
+      background-color: var(--bayan-primary-light, #EEF2FF);
     }
 
     @media (max-width: 768px) {
@@ -504,6 +541,7 @@ export class DocumentsTabComponent implements OnInit, OnDestroy {
   @Input() tenderId!: number;
 
   readonly documentService = inject(DocumentService);
+  private readonly authService = inject(AuthService);
   private readonly messageService = inject(MessageService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly destroy$ = new Subject<void>();
@@ -512,6 +550,8 @@ export class DocumentsTabComponent implements OnInit, OnDestroy {
   documents = signal<TenderDocument[]>([]);
   totalRecords = signal<number>(0);
   totalSize = signal<number>(0);
+
+  canManageDocuments = computed(() => this.authService.hasRole([UserRole.ADMIN, UserRole.TENDER_MANAGER]));
 
   // Filter state
   searchTerm = '';
@@ -711,6 +751,20 @@ export class DocumentsTabComponent implements OnInit, OnDestroy {
         return 'pi pi-compass';
       default:
         return 'pi pi-file';
+    }
+  }
+
+  getFileIconColorClass(fileName: string): string {
+    if (!fileName) return '';
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    switch (ext) {
+      case 'pdf': return 'icon-pdf';
+      case 'doc': case 'docx': return 'icon-word';
+      case 'xls': case 'xlsx': return 'icon-excel';
+      case 'jpg': case 'jpeg': case 'png': case 'gif': case 'svg': return 'icon-image';
+      case 'zip': case 'rar': case '7z': return 'icon-archive';
+      case 'dwg': case 'dxf': return 'icon-drawing';
+      default: return '';
     }
   }
 

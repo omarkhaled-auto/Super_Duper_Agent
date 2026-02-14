@@ -2,6 +2,7 @@ using Bayan.Application.Common.Models;
 using Bayan.Application.Features.Notifications.Commands.UpdateNotificationPreferences;
 using Bayan.Application.Features.Notifications.DTOs;
 using Bayan.Application.Features.Notifications.Queries.GetNotificationPreferences;
+using Bayan.API.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,7 +14,7 @@ namespace Bayan.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Roles = BayanRoles.InternalUsers)]
 public class NotificationsController : ControllerBase
 {
     private readonly IMediator _mediator;

@@ -1,10 +1,14 @@
 # Bayan Tender — Manual E2E Testing Handoff
 
-**Date:** 2026-02-10 (updated)
-**Session scope:** Manual walkthrough of the full tender lifecycle (admin + bidder portal)
-**Status:** PHASE 1 COMPLETE, PHASE 2 STARTING — 38 bugs fixed so far
+**Date:** 2026-02-12 (updated)
+**Session scope:** Manual walkthrough of the full tender lifecycle (admin + bidder portal) — TWO complete tenders
+**Status:** PHASE 2 COMPLETE — 38 bugs fixed, 2 tenders fully awarded, full lifecycle verified
 
 ---
+
+## Latest Updates (2026-02-12)
+- Approval: "Return for Revision" decision confirmed recorded (comment visible on tender).
+- Approval: Re-initiate workflow with the same approvers confirmed working after a return/reject flow.
 
 ## 1. What Was Tested & Confirmed Working
 
@@ -18,7 +22,7 @@
 | Tender publishing (Draft -> Published) | Working |
 | Mock bidder seeding (2 bidders in DB) | Working |
 
-### Admin Side (this session + previous)
+### Admin Side (E2E tested)
 | Feature | Status |
 |---------|--------|
 | Bidder invitation (both bidders) | Working — status shows "Sent", DB records confirmed |
@@ -26,46 +30,65 @@
 | Clarifications — answer a question | Working — DraftAnswer flow verified |
 | Clarifications — publish Q&A bulletin | Working — auto-approves DraftAnswer, generates PDF, emails bidders |
 | BOQ Import — 5-step wizard (Parse→Map→Match→Normalize→Validate) | Working — 48 items, AED 11,474,690.00 total |
-| Evaluation — Comparable Sheet | Working — bidder data populated, section subtotals correct |
+| BOQ Import — second bid (Cubic Contracting) | Working — same wizard, 48 items matched |
+| Evaluation — Comparable Sheet (multi-bidder) | Working — 2 bidders side-by-side, section subtotals correct |
 | Evaluation — Evaluation Setup | Working — Numeric scoring, blind mode, panel members configured |
 | Evaluation — Technical Scoring | Working — scores saved, comments persisted, final submission |
 | Evaluation — Technical Summary | Working — score matrix, Lock Scores button, scores locked |
-| Evaluation — Combined Scorecard | Working — 70/30 weights, commercial auto-calculated, rank #1 recommended |
-| Evaluation — Sensitivity Analysis | Working — weight sensitivity calculation functional |
+| Evaluation — Combined Scorecard (multi-bidder) | Working — 70/30 weights, commercial auto-calculated, bidders ranked |
+| Evaluation — Sensitivity Analysis (9 splits) | Working — weight sensitivity across 9 weight splits |
 | Evaluation — Generate Award Pack | Working — PDF generated successfully |
 | Approval — Start Approval | Working — 3-level sequential workflow created |
-| Approval — Level 1/2/3 Approve | Working — all 3 levels approved, tender status → Awarded |
-| Approval — Approver login + decision UI | Working — decision form with Approve/Reject/Return for Revision |
+| Approval — Level 1/2/3 Approve (same approver) | Working — TNR-2025-0001, all 3 levels approved via single approver account |
+| Approval — Rejection at Level 2 | Working — TNR-2026-0002, Faisal rejected, workflow status → Rejected |
+| Approval — Re-initiation after rejection | Working — new workflow created after prior rejection |
+| Approval — 3-level with 3 different approvers | Working — Tariq (L1) → Faisal (L2) → Nasser (L3), tender → Awarded |
+| Tender status auto-transition → Awarded | Working — both tenders confirmed Awarded in DB after final approval |
+| Tender closing (Published → Closed) | Working — TNR-2026-0002, verified status transition |
+| Bid Opening ceremony | Working — TNR-2026-0002, bids opened, status updated |
+| Master BOQ creation (4 sections, 48 items) | Working — created via SQL for multi-bidder evaluation |
 | User Management — CRUD, password, toggle status | Working — Fixes 31-33 |
 | Bidder Management — CRUD, view mode, prequalification | Working — Fixes 34, 37 |
 | Client Management — CRUD, view mode, all fields saving, tender count | Working — Fixes 35-36 |
 | System Settings — all 4 tabs (General, Tender, Notification, Security) | Working — Fix 38, 38 settings wired to DB |
 | Audit Logs — list with filters, entries verified | Working — confirmed PUT settings logged correctly |
+| New approver user creation (Tariq Al-Harbi) | Working — created via SQL, login verified |
 
-### Bidder Portal (this session + previous)
+### Bidder Portal (E2E tested)
 | Feature | Status |
 |---------|--------|
-| Portal login | Working — `bidder@vendor.ae` / `Bayan@2024` |
+| Portal login (Bidder 1: bidder@vendor.ae) | Working — first bidder on TNR-2025-0001 |
+| Portal login (Omar Contracting: omar@contracting.ae) | Working — second bidder on TNR-2026-0002 |
 | Tender listing on landing page | Working — published tender appears correctly |
-| Tender listing — "Bid Submitted" status | Working — shows blue "Bid Submitted" tag instead of "Qualified" after bid submission |
+| Tender listing — "Bid Submitted" status | Working — shows blue "Bid Submitted" tag after bid submission |
 | Tab navigation (Documents, Clarifications, Submit Bid) | Working — after rewrite to plain routerLink |
 | Back to Your Tenders link | Working — arrow icon in header navigates back to tender listing |
 | Documents tab — file listing by folder | Working — grouped by folderPath with category inference |
 | Documents tab — file download | Working — streams through API |
+| Documents tab — Drawings folder with files | Working — verified OFFICE_FF.pdf visible on TNR-2026-0002 |
 | Clarifications tab — submit question dialog | Working — BOQ sections load in dropdown |
 | Clarifications tab — question submission | Working — relatedBoqSection field fixed |
 | Clarifications tab — status display | Working — verified "Submitted" shows correctly |
 | Clarifications tab — My Questions (persistent) | Working — new /my-questions endpoint, survives refresh |
 | Clarifications tab — Q&A Bulletins | Working — bulletin with Q&A items renders correctly |
+| Clarifications tab — Q&A Bulletins (2 bulletins) | Working — Omar Contracting sees 2 bulletins on TNR-2026-0002 |
 | Clarifications tab — bulletin PDF download | Working — hasPdf flag + download endpoint |
 | Submit Bid — document upload | Working — all 5 categories upload correctly |
 | Submit Bid — bid submission + receipt | Working — receipt number, company name, file sizes all correct |
 | Submit Bid — receipt PDF download | Working — receipt PDF generates and downloads correctly |
-| Submit Bid — already submitted handling | Working — shows green "Already Submitted" card with View Receipt / Back to Tender actions |
+| Submit Bid — already submitted handling | Working — shows green "Already Submitted" card with View Receipt / Back to Tender |
+| Submit Bid — receipt view (5 documents listed) | Working — Omar Contracting receipt REC-33B695EB-0001, all 5 docs listed |
+| Portal logout | Working — redirects to login page |
+
+### Dashboard (E2E tested)
+| Feature | Status |
+|---------|--------|
+| Dashboard overview (TenderManager) | Working — Active Tenders 0, Awarded This Month 2 |
+| Tenders list — all tenders showing Awarded | Working — both TNR-2025-0001 and TNR-2026-0002 |
 
 ---
 
-## 2. Bugs Found & Fixed (33 total)
+## 2. Bugs Found & Fixed (38 total)
 
 ### Fix 1: Bidders not qualified — documents invisible
 - **Symptom:** Portal documents page showed empty list
@@ -289,38 +312,29 @@
   - `frontend/src/app/core/services/user.service.ts` — sends `password` field to backend, extracts `temporaryPassword` from response
   - `frontend/src/app/features/admin/users/user-list.component.ts` — shows sticky toast with temp password when no admin password was set
 
-### Fix 38: All 4 Settings tabs broken — "Setting with key 'general' not found"
-- **Symptom:** Saving any settings tab (General, Tender, Notification, Security) fails with "Setting with key 'general' not found" (or tender/notification/security). Settings page loads with defaults but can't persist changes.
-- **Root cause:** Complete frontend-backend integration mismatch:
-  1. Backend stores settings as **individual key-value rows** (e.g., `site_name` = `"Bayan Tender"`, `session_timeout_minutes` = `"60"`) with `PUT /admin/settings/{key}` expecting `{ "value": "string" }`
-  2. Frontend was sending **grouped objects** to category endpoints (e.g., `PUT /admin/settings/general` with `{ siteName, siteNameAr, ... }`) — no such key "general" exists
-  3. GET response returned flat array of `{ key, value, dataType }` rows, but frontend expected pre-grouped `{ general: {...}, tender: {...} }` objects
-  4. Only 9 of 34 needed settings were seeded in the database
-- **Fix:**
-  1. **Database**: Inserted 29 missing settings (38 total), organized by category (General, Tender, Notifications, Security) with proper data types
-  2. **settings.service.ts** — Complete rewrite:
-     - `getSettings()` maps flat `SettingRow[]` array → grouped `SystemSettings` object using key→field lookup with type coercion (str/num/bool helpers)
-     - Each `updateXxxSettings()` now builds a `Record<string, string>` of individual key-value pairs (e.g., `{ 'site_name': 'Bayan', 'support_email': 'x@y.z' }`) and fires parallel PUT requests via `forkJoin`
-     - All keys use snake_case to match DB keys (e.g., `site_name`, `default_bid_validity_days`, `email_notifications`, `session_timeout_minutes`)
+### Fix 32: Delete user button returns 404/405 — no backend endpoint
+- **Symptom:** Clicking delete on a user in admin UI fails silently or shows error
+- **Root cause:** Frontend called `DELETE /api/admin/users/{id}` but no such endpoint existed in `AdminController`
+- **Fix:** Added `DeleteUser` endpoint with self-deletion guard (can't delete your own account)
 - **Files:**
-  - `frontend/src/app/core/services/settings.service.ts` — full rewrite (flat→grouped mapping, individual PUT per key)
-  - Database: 29 new rows in `system_settings` table via SQL INSERT
+  - `backend/Bayan.API/Controllers/AdminController.cs` — added `IApplicationDbContext` injection, `DELETE users/{id:guid}` endpoint with self-deletion check
 
-### Fix 37: Bidder "View Details" button identical to Edit — no read-only view
-- **Symptom:** Clicking the eye icon on a bidder row opens the exact same edit dialog as the pencil icon — `viewBidder()` just called `editBidder()`.
-- **Root cause:** Stub implementation — `viewBidder()` was literally `this.editBidder(bidder)`.
-- **Fix:** Same pattern as client Fix 36 — added `'view'` mode to `BidderFormDialogData`, `isViewMode` signal, `switchToEdit()`, form disable in view mode, submit guard. `viewBidder()` now opens dialog with `mode: 'view'` and header "Bidder: {name}".
+### Fix 33: Update user — shows error despite saving successfully
+- **Symptom:** Editing a user saves correctly (visible on refresh), but shows an error toast immediately after save
+- **Root cause:** Three issues: (1) Backend PUT returns `204 No Content` (empty body), but `ApiService.put()` did `response.data` on null — threw TypeError. (2) `role` sent as `undefined` when mapping failed. (3) After PUT, frontend returned a fake local object instead of re-fetching actual data.
+- **Fix:** `ApiService.put()` now handles null response body (`response?.data ?? null`). `updateUser()` always maps role to int, then does a GET after PUT to fetch real data.
 - **Files:**
-  - `frontend/src/app/features/admin/bidders/bidder-list.component.ts` — `viewBidder()` opens dialog with `mode: 'view'`
-  - `frontend/src/app/features/admin/bidders/bidder-form-dialog.component.ts` — added view mode support
+  - `frontend/src/app/core/services/api.service.ts` — `put()` handles 204 empty body with `response?.data ?? null`
+  - `frontend/src/app/core/services/user.service.ts` — `updateUser()` rewritten: role always mapped to int, `switchMap` to GET after PUT
 
-### Fix 36: Client "View Details" button only shows toast, doesn't open detail view
-- **Symptom:** Clicking the eye icon (View Details) on a client row just shows a toast message "Viewing details for [name]" — no detail dialog opens.
-- **Root cause:** `viewClient()` was a stub — only called `messageService.add()` with an info toast. No detail view existed.
-- **Fix:** Added `view` mode to `ClientFormDialogData`. `viewClient()` now opens the same form dialog in read-only mode (all fields disabled). Dialog shows "Close" and "Edit" buttons — clicking "Edit" switches to edit mode (enables fields, shows save button). Form submission is blocked while in view mode.
+### Fix 34: Bidder NDA status not persisting + prequalification wrong on creation
+- **Symptom:** (1) NDA status dropdown on bidder form never persisted — always reverted to "Not Sent". (2) Prequalification status showed wrong value after creating a bidder (correct after editing).
+- **Root cause:** (1) The `Bidder` entity has NO `ndaStatus` column — NDA status only exists on `TenderBidder` (per-tender relationship). The form dropdown was writing to a field that doesn't exist in the backend. (2) `createBidder()` merged the partial POST response over the payload, causing integer prequalification values to overwrite the mapped string.
+- **Fix:** (1) Removed NDA status dropdown from bidder create/edit form and NDA column from bidder list table — NDA is per-tender, managed when bidders are invited to specific tenders. (2) `createBidder()` now uses `switchMap` to GET fresh data after POST. `updateBidder()` also uses `switchMap` GET after PUT.
 - **Files:**
-  - `frontend/src/app/features/admin/clients/client-list.component.ts` — `viewClient()` opens dialog with `mode: 'view'`
-  - `frontend/src/app/features/admin/clients/client-form-dialog.component.ts` — added `'view'` to mode type, `isViewMode` signal, `switchToEdit()` method, form disable in view mode, submit guard
+  - `frontend/src/app/features/admin/bidders/bidder-form-dialog.component.ts` — removed NDA dropdown, `ndaStatus` form control, `ndaOptions` array, NDA from DTOs
+  - `frontend/src/app/features/admin/bidders/bidder-list.component.ts` — removed NDA column header, NDA cell, `getNdaLabel`/`getNdaSeverity` methods
+  - `frontend/src/app/core/services/bidder.service.ts` — removed `ndaStatus` from `mapBidderToBackend()`, `createBidder` uses switchMap GET, `updateBidder` uses switchMap GET
 
 ### Fix 35: Client fields not saving (CR number, VAT, city, etc.) + tender count always 0
 - **Symptom:** Creating/editing a client loses CR number, VAT number, city, country, contact email, contact phone fields. Also tender count always shows 0 even for clients with tenders.
@@ -340,41 +354,51 @@
   - `backend/Bayan.Application/Features/Clients/Mappings/ClientMappingProfile.cs` — TenderCount via Tenders.Count
   - `frontend/src/app/core/services/client.service.ts` — mapClientToBackend(), switchMap GET after create/update, tenderCount mapping
 
-### Fix 34: Bidder NDA status not persisting + prequalification wrong on creation
-- **Symptom:** (1) NDA status dropdown on bidder form never persisted — always reverted to "Not Sent". (2) Prequalification status showed wrong value after creating a bidder (correct after editing).
-- **Root cause:** (1) The `Bidder` entity has NO `ndaStatus` column — NDA status only exists on `TenderBidder` (per-tender relationship). The form dropdown was writing to a field that doesn't exist in the backend. (2) `createBidder()` merged the partial POST response over the payload, causing integer prequalification values to overwrite the mapped string.
-- **Fix:** (1) Removed NDA status dropdown from bidder create/edit form and NDA column from bidder list table — NDA is per-tender, managed when bidders are invited to specific tenders. (2) `createBidder()` now uses `switchMap` to GET fresh data after POST. `updateBidder()` also uses `switchMap` GET after PUT.
+### Fix 36: Client "View Details" button only shows toast, doesn't open detail view
+- **Symptom:** Clicking the eye icon (View Details) on a client row just shows a toast message "Viewing details for [name]" — no detail dialog opens.
+- **Root cause:** `viewClient()` was a stub — only called `messageService.add()` with an info toast. No detail view existed.
+- **Fix:** Added `view` mode to `ClientFormDialogData`. `viewClient()` now opens the same form dialog in read-only mode (all fields disabled). Dialog shows "Close" and "Edit" buttons — clicking "Edit" switches to edit mode (enables fields, shows save button). Form submission is blocked while in view mode.
 - **Files:**
-  - `frontend/src/app/features/admin/bidders/bidder-form-dialog.component.ts` — removed NDA dropdown, `ndaStatus` form control, `ndaOptions` array, NDA from DTOs
-  - `frontend/src/app/features/admin/bidders/bidder-list.component.ts` — removed NDA column header, NDA cell, `getNdaLabel`/`getNdaSeverity` methods
-  - `frontend/src/app/core/services/bidder.service.ts` — removed `ndaStatus` from `mapBidderToBackend()`, `createBidder` uses switchMap GET, `updateBidder` uses switchMap GET
+  - `frontend/src/app/features/admin/clients/client-list.component.ts` — `viewClient()` opens dialog with `mode: 'view'`
+  - `frontend/src/app/features/admin/clients/client-form-dialog.component.ts` — added `'view'` to mode type, `isViewMode` signal, `switchToEdit()` method, form disable in view mode, submit guard
 
-### Fix 33: Update user — shows error despite saving successfully
-- **Symptom:** Editing a user saves correctly (visible on refresh), but shows an error toast immediately after save
-- **Root cause:** Three issues: (1) Backend PUT returns `204 No Content` (empty body), but `ApiService.put()` did `response.data` on null — threw TypeError. (2) `role` sent as `undefined` when mapping failed. (3) After PUT, frontend returned a fake local object instead of re-fetching actual data.
-- **Fix:** `ApiService.put()` now handles null response body (`response?.data ?? null`). `updateUser()` always maps role to int, then does a GET after PUT to fetch real data.
+### Fix 37: Bidder "View Details" button identical to Edit — no read-only view
+- **Symptom:** Clicking the eye icon on a bidder row opens the exact same edit dialog as the pencil icon — `viewBidder()` just called `editBidder()`.
+- **Root cause:** Stub implementation — `viewBidder()` was literally `this.editBidder(bidder)`.
+- **Fix:** Same pattern as client Fix 36 — added `'view'` mode to `BidderFormDialogData`, `isViewMode` signal, `switchToEdit()`, form disable in view mode, submit guard. `viewBidder()` now opens dialog with `mode: 'view'` and header "Bidder: {name}".
 - **Files:**
-  - `frontend/src/app/core/services/api.service.ts` — `put()` handles 204 empty body with `response?.data ?? null`
-  - `frontend/src/app/core/services/user.service.ts` — `updateUser()` rewritten: role always mapped to int, `switchMap` to GET after PUT
+  - `frontend/src/app/features/admin/bidders/bidder-list.component.ts` — `viewBidder()` opens dialog with `mode: 'view'`
+  - `frontend/src/app/features/admin/bidders/bidder-form-dialog.component.ts` — added view mode support
 
-### Fix 32: Delete user button returns 404/405 — no backend endpoint
-- **Symptom:** Clicking delete on a user in admin UI fails silently or shows error
-- **Root cause:** Frontend called `DELETE /api/admin/users/{id}` but no such endpoint existed in `AdminController`
-- **Fix:** Added `DeleteUser` endpoint with self-deletion guard (can't delete your own account)
+### Fix 38: All 4 Settings tabs broken — "Setting with key 'general' not found"
+- **Symptom:** Saving any settings tab (General, Tender, Notification, Security) fails with "Setting with key 'general' not found" (or tender/notification/security). Settings page loads with defaults but can't persist changes.
+- **Root cause:** Complete frontend-backend integration mismatch:
+  1. Backend stores settings as **individual key-value rows** (e.g., `site_name` = `"Bayan Tender"`, `session_timeout_minutes` = `"60"`) with `PUT /admin/settings/{key}` expecting `{ "value": "string" }`
+  2. Frontend was sending **grouped objects** to category endpoints (e.g., `PUT /admin/settings/general` with `{ siteName, siteNameAr, ... }`) — no such key "general" exists
+  3. GET response returned flat array of `{ key, value, dataType }` rows, but frontend expected pre-grouped `{ general: {...}, tender: {...} }` objects
+  4. Only 9 of 34 needed settings were seeded in the database
+- **Fix:**
+  1. **Database**: Inserted 29 missing settings (38 total), organized by category (General, Tender, Notifications, Security) with proper data types
+  2. **settings.service.ts** — Complete rewrite:
+     - `getSettings()` maps flat `SettingRow[]` array → grouped `SystemSettings` object using key→field lookup with type coercion (str/num/bool helpers)
+     - Each `updateXxxSettings()` now builds a `Record<string, string>` of individual key-value pairs (e.g., `{ 'site_name': 'Bayan', 'support_email': 'x@y.z' }`) and fires parallel PUT requests via `forkJoin`
+     - All keys use snake_case to match DB keys (e.g., `site_name`, `default_bid_validity_days`, `email_notifications`, `session_timeout_minutes`)
 - **Files:**
-  - `backend/Bayan.API/Controllers/AdminController.cs` — added `IApplicationDbContext` injection, `DELETE users/{id:guid}` endpoint with self-deletion check
+  - `frontend/src/app/core/services/settings.service.ts` — full rewrite (flat→grouped mapping, individual PUT per key)
+  - Database: 29 new rows in `system_settings` table via SQL INSERT
 
-### Bid Import — Verified Working
-- Full 5-step wizard: Parse (48 items) → Map Columns → Match (48 exact matches) → Normalize → Validate & Import
-- Result: 48 items imported, AED 11,474,690.00 total (matches generated BOQ exactly)
-- Comparable Sheet on Evaluation tab shows bidder data correctly
+### Bid Import — Verified Working (Two Bids)
+- Full 5-step wizard tested twice: Parse (48 items) → Map Columns → Match (48 exact matches) → Normalize → Validate & Import
+- Bid 1 (Omar Contracting): 48 items imported, AED 11,474,690.00 total
+- Bid 2 (Cubic Contracting): 48 items imported via same wizard
+- Comparable Sheet shows both bidders side-by-side
 - Bid status: `status='Opened'` (lifecycle), `import_status='Imported'` (import pipeline) — correct dual-status behavior
 
 ---
 
 ## 3. Uncommitted Changes
 
-All changes sit on top of commit `fbc6021`. **Build succeeds** (Angular `ng build` passes, API builds clean with 0 errors, 14 pre-existing warnings). 30 total fixes across the full tender lifecycle.
+All changes sit on top of commit `5828d58`. **Build succeeds** (Angular `ng build` passes, API builds clean with 0 errors). 38 total fixes across the full tender lifecycle.
 
 ### Backend (new files)
 | File | Description |
@@ -422,40 +446,56 @@ All changes sit on top of commit `fbc6021`. **Build succeeds** (Angular `ng buil
 
 ---
 
-## 4. What to Do Next
+## 4. What Was Done — Phase by Phase
 
-### Step 2: Bid Submission (bidder portal) — COMPLETE
-- All bid submission features verified: upload, submit, receipt, PDF download, already-submitted handling, back navigation, bid status display on tender card
+### Phase 1: Bidder Portal (TNR-2025-0001) — COMPLETE
+- Full portal lifecycle as bidder@vendor.ae: documents, clarifications, bid submission, receipt
 
-### Step 3a: BOQ Import (admin side) — COMPLETE
-- 5-step import wizard fully working: Parse → Map Columns → Match → Normalize → Validate & Import
-- 48 items imported, AED 11,474,690.00 total, Comparable Sheet populated
-- 5 bugs fixed (Fixes 19-23), including 1 CRITICAL (match handler not persisting BidPricing)
+### Phase 2: Admin Clarifications & Bid Import (TNR-2025-0001) — COMPLETE
+- Answered question, published Q&A bulletin, imported BOQ via 5-step wizard
 
-### Step 3b: Bid Evaluation (admin side) — COMPLETE
-> **Note:** Tested with 1 bidder only. Production will have up to 3 bidders, which may surface different results in deviation calculations, outlier detection, comparative analysis, and ranking. Re-test with multiple bidders before production sign-off.
+### Phase 3: Admin Evaluation Pipeline (TNR-2025-0001) — COMPLETE
+- Comparable Sheet, Technical Scoring, Lock Scores, Combined Scorecard, Sensitivity, Award Pack
 
-1. Comparable Sheet — VERIFIED (48 items, section subtotals, grand total correct)
-2. Evaluation Setup — VERIFIED (Numeric scoring, blind mode, panel members)
-3. Technical Scoring — VERIFIED (6 criteria scored, comments saved, final submission)
-4. Technical Summary — VERIFIED (score matrix, Lock Scores, comments dialog)
-5. Combined Scorecard — VERIFIED (70/30 weights, tech 5.33 + commercial 100.00 = combined 33.73, rank #1 recommended)
-6. Sensitivity Analysis — VERIFIED (weight sensitivity working)
-7. 5 bugs fixed (Fixes 24-28), including Fix 25 (DB seeding) and Fix 28 (commercial auto-calculation)
+### Phase 4: Approval Workflow — Single Approver (TNR-2025-0001) — COMPLETE
+- 3-level approval all via `approver@bayan.ae`, tender → Awarded
 
-### Step 4: Approval & Award — COMPLETE
-1. Generate Award Pack — VERIFIED (PDF generated, audit logged)
-2. Start Approval — VERIFIED (3-level sequential workflow created, approvers auto-fetched)
-3. Approver login — VERIFIED (`approver@bayan.ae` / `Bayan@2024`)
-4. Level 1 Approve — VERIFIED (decision recorded, Level 2 activated)
-5. Level 2 Approve — VERIFIED (decision recorded, Level 3 activated)
-6. Level 3 Approve — VERIFIED (workflow completed, tender status → **Awarded**)
-7. 3 bugs fixed (Fixes 28-30): commercial auto-calculation, enum mapping, approver auto-fetch
-8. DB seeding: 2 additional approver users created for 3-level workflow testing
+### Phase 5: Admin Pages (User/Bidder/Client/Settings/Audit) — COMPLETE
+- Full CRUD for Users, Bidders, Clients, all 4 Settings tabs, Audit Logs
 
-### Step 5: Commit & cleanup
-1. Commit all E2E fixes: `git add` the specific changed files (not agent-team changes)
-2. Suggested commit message: `fix: BAYAN E2E — 30 bugs fixed across full tender lifecycle`
+### Phase 6: Second Tender Full Lifecycle (TNR-2026-0002: The Cubic Tower) — COMPLETE
+1. Tender closing (Published → Closed)
+2. Bid Opening ceremony
+3. Excel Import BOQ Wizard for second bid (Cubic Contracting EC)
+4. Master BOQ creation (4 sections, 48 items)
+5. Omar Contracting pricing data generation
+6. Multi-bidder Comparable Sheet (2 bidders side-by-side)
+7. Combined Scorecard with multi-bidder ranking
+8. Sensitivity Analysis (9 weight splits)
+9. Approval initiation
+
+### Phase 7: Multi-Approver Approval Workflow (TNR-2026-0002) — COMPLETE
+1. **Rejection test**: Faisal Al-Qahtani (Level 2) rejected the workflow
+2. **Re-initiation**: New workflow created after rejection
+3. **New approver creation**: Tariq Al-Harbi (approver4@bayan.ae) added
+4. **3-level multi-approver approval**:
+   - Level 1: Tariq Al-Harbi (approver4@bayan.ae) — Approved
+   - Level 2: Faisal Al-Qahtani (approver3@bayan.ae) — Approved
+   - Level 3: Nasser Al-Dosari (approver2@bayan.ae) — Approved (FINAL)
+5. **Result**: Workflow status → Approved, Tender status → **Awarded**
+
+### Phase 8: Portal as Second Bidder (TNR-2026-0002) — COMPLETE
+1. Portal login as Omar Contracting (omar@contracting.ae)
+2. **Documents tab**: Drawings folder visible with OFFICE_FF.pdf
+3. **Clarifications tab**: 2 Q&A Bulletins displayed, 1 "My Question" visible
+4. **Submit Bid tab**: "Bid Already Submitted" card, receipt REC-33B695EB-0001
+5. **Bid receipt**: Full receipt page — 5 documents listed with sizes
+6. Portal logout
+
+### Phase 9: Final Admin Overview — COMPLETE
+1. Login as TenderManager (tendermgr@bayan.ae)
+2. Dashboard: Active Tenders 0, Awarded This Month 2
+3. Tenders list: Both TNR-2025-0001 and TNR-2026-0002 showing "Awarded"
 
 ---
 
@@ -463,23 +503,38 @@ All changes sit on top of commit `fbc6021`. **Build succeeds** (Angular `ng buil
 
 | Role | URL | Email | Password |
 |------|-----|-------|----------|
-| Admin | http://localhost:4201/login | admin@bayan.ae | Bayan@2024 |
-| Tender Manager | http://localhost:4201/login | tendermgr@bayan.ae | Bayan@2024 |
-| Approver | http://localhost:4201/login | approver@bayan.ae | Bayan@2024 |
-| Bidder 1 | http://localhost:4201/portal/login | bidder@vendor.ae | Bayan@2024 |
-| Bidder 2 | http://localhost:4201/portal/login | bidder2@vendor.ae | Bayan@2024 |
+| Admin | http://localhost:4200/login | admin@bayan.ae | Bayan@2024 |
+| Tender Manager | http://localhost:4200/login | tendermgr@bayan.ae | Bayan@2024 |
+| Approver (Nasser) | http://localhost:4200/login | approver2@bayan.ae | Bayan@2024 |
+| Approver (Faisal) | http://localhost:4200/login | approver3@bayan.ae | Bayan@2024 |
+| Approver (Tariq) | http://localhost:4200/login | approver4@bayan.ae | Bayan@2024 |
+| Approver (original) | http://localhost:4200/login | approver@bayan.ae | Bayan@2024 |
+| Bidder 1 (Portal) | http://localhost:4200/portal/login | bidder@vendor.ae | Bayan@2024 |
+| Bidder 2 (Portal) | http://localhost:4200/portal/login | bidder2@vendor.ae | Bayan@2024 |
+| Omar Contracting (Portal) | http://localhost:4200/portal/login | omar@contracting.ae | Bayan@2024 |
+| Cubic Contracting (Portal) | http://localhost:4200/portal/login | info@cubicec.com | Bayan@2024 |
 
-**Active Tender ID:** `7d9ba792-fa69-4b53-be01-52148f9ec6c1`
+**Tender IDs:**
+- TNR-2025-0001: `7d9ba792-fa69-4b53-be01-52148f9ec6c1`
+- TNR-2026-0002 (The Cubic Tower): `33b695eb-2963-4ee7-811a-4d1badff0ce8`
+
+**Approval Workflow ID (TNR-2026-0002):** `2c10766c-f23a-463e-b2cf-0ff032990658`
 
 **Service URLs:**
 | Service | URL |
 |---------|-----|
-| Frontend (dev) | http://localhost:4201 |
+| Frontend (prod Docker) | http://localhost:4200 |
 | API | http://localhost:5000 |
 | Adminer (DB) | http://localhost:8080 |
 | MinIO Console | http://localhost:9001 |
 | MailHog | http://localhost:8025 |
 | Redis Commander | http://localhost:8081 |
+
+**PostgreSQL (direct):**
+- Host: `localhost:5432`
+- User: `bayan_user`
+- Password: `BayanSecure123!`
+- Database: `bayan`
 
 ---
 
@@ -505,7 +560,9 @@ All changes sit on top of commit `fbc6021`. **Build succeeds** (Angular `ng buil
 
 10. **Start Approval — no approver selection UI:** The Combined Scorecard's "Start Approval" button auto-assigns the first 3 approver-role users. Production should have a dialog for selecting and ordering approvers.
 
-11. **Single-bidder testing caveat:** All evaluation/scoring/ranking tested with 1 bidder. Multi-bidder scenarios (deviation calculations, outlier detection, comparative ranking) need re-testing before production.
+11. **BCrypt password hash shell escaping:** BCrypt hashes containing `$` signs get corrupted when passed through shell commands (e.g., `$2a$12$` becomes hex-escaped). The reliable workaround is SQL subquery: `UPDATE bidders SET password_hash = (SELECT password_hash FROM bidders WHERE email = 'known_working@email.com') WHERE email = 'target@email.com'`.
+
+12. **Frontend caching after backend state changes:** Angular doesn't auto-refresh when backend state changes (e.g., tender status after final approval). A full page reload is required to see updated status. Consider using WebSocket/SSE notifications or at minimum force-refresh after key state transitions.
 
 ---
 
@@ -585,7 +642,7 @@ This is the precise sequence of actions performed and verified during E2E testin
 | 5.11 | Test **Sensitivity Analysis** | Weight sensitivity calculated across splits | None |
 | 5.12 | Click **Generate Award Pack** | "Award pack generated successfully" toast | None |
 
-### Phase 6: Admin — Approval Workflow
+### Phase 6: Admin — Approval Workflow (TNR-2025-0001, single approver)
 | Step | Action | Result | Fixes Required |
 |------|--------|--------|----------------|
 | 6.1 | Click **Start Approval** on Combined Scorecard | Confirmation dialog, then workflow created | Fix 29 (enum mapping), Fix 30 (approver auto-fetch) |
@@ -598,15 +655,78 @@ This is the precise sequence of actions performed and verified during E2E testin
 | 6.8 | Refresh, approve Level 3 | Workflow APPROVED, tender status → **Awarded** | None |
 | 6.9 | Verified in DB: `approval_workflows.status = 2` (Approved), `tenders.status = 'Awarded'` | Full lifecycle complete | None |
 
+### Phase 6b: Admin Pages (User/Bidder/Client/Settings/Audit)
+| Step | Action | Result | Fixes Required |
+|------|--------|--------|----------------|
+| 6b.1 | User Management — create, edit, delete, toggle status | All CRUD working | Fix 31 (password), Fix 32 (delete), Fix 33 (update) |
+| 6b.2 | Bidder Management — create, edit, view mode | Working after NDA removal | Fix 34 (NDA), Fix 37 (view mode) |
+| 6b.3 | Client Management — create, edit, view mode | All fields saving | Fix 35 (fields), Fix 36 (view mode) |
+| 6b.4 | System Settings — all 4 tabs | 38 settings wired to DB | Fix 38 (complete rewrite) |
+| 6b.5 | Audit Logs | Entries verified for settings changes | None |
+
+### Phase 7: Second Tender Lifecycle (TNR-2026-0002: The Cubic Tower)
+| Step | Action | Result | Fixes Required |
+|------|--------|--------|----------------|
+| 7.1 | Tender closing (Published → Closed) | Status updated correctly | None |
+| 7.2 | Bid Opening ceremony | Bids opened, status updated | None |
+| 7.3 | Import BOQ for Cubic Contracting (5-step wizard) | 48 items, all matched | None |
+| 7.4 | Create Master BOQ (4 sections, 48 items via SQL) | Comparable Sheet populated | None |
+| 7.5 | Generate Omar Contracting pricing data | Multi-bidder data ready | None |
+| 7.6 | Comparable Sheet — 2 bidders side-by-side | Both bidders' data visible | None |
+| 7.7 | Combined Scorecard — multi-bidder ranking | Bidders ranked, recommendations generated | None |
+| 7.8 | Sensitivity Analysis — 9 weight splits | All splits calculated correctly | None |
+| 7.9 | Start Approval workflow | 3-level workflow created | None |
+
+### Phase 7a: Approval Rejection & Re-initiation (TNR-2026-0002)
+| Step | Action | Result | Fixes Required |
+|------|--------|--------|----------------|
+| 7a.1 | Login as Faisal (approver3@bayan.ae), navigate to tender | Approval tab shows Level 2 Active | None |
+| 7a.2 | Select **Reject**, add rejection comment | "Decision Submitted — Reject recorded" | None |
+| 7a.3 | Verify workflow status → Rejected | DB confirmed, UI shows Rejected | None |
+| 7a.4 | Login as TenderManager, re-initiate approval | New workflow created with new approvers | None |
+
+### Phase 7b: 3-Level Multi-Approver Workflow (TNR-2026-0002)
+| Step | Action | Result | Fixes Required |
+|------|--------|--------|----------------|
+| 7b.1 | Create approver4@bayan.ae (Tariq Al-Harbi) | User created in DB | None |
+| 7b.2 | Login as Tariq (approver4@bayan.ae) — Level 1 | Dashboard shows pending tender | None |
+| 7b.3 | Navigate to tender → Approval tab | Level 1 Active (Tariq) | None |
+| 7b.4 | **Approve** Level 1 with comment | "Decision Submitted — Approve recorded" | None |
+| 7b.5 | Login as Faisal (approver3@bayan.ae) — Level 2 | Level 1 Approved, Level 2 Active | None |
+| 7b.6 | **Approve** Level 2 with comment | "Decision Submitted — Approve recorded" | None |
+| 7b.7 | Login as Nasser (approver2@bayan.ae) — Level 3 | Level 1+2 Approved, Level 3 Active | None |
+| 7b.8 | **Approve** Level 3 (FINAL) with detailed comment | "Decision Submitted — Approve recorded" | None |
+| 7b.9 | Workflow status → **Approved** | UI + DB confirmed | None |
+| 7b.10 | Tender status → **Awarded** | DB confirmed, UI shows after reload | None |
+
+### Phase 8: Portal as Second Bidder (TNR-2026-0002)
+| Step | Action | Result | Fixes Required |
+|------|--------|--------|----------------|
+| 8.1 | Login as Omar Contracting (omar@contracting.ae) | Success — "Your Tenders" with "Bid Submitted" badge | Password hash fix via SQL subquery |
+| 8.2 | Navigate to tender → **Documents** tab | Drawings folder with OFFICE_FF.pdf visible | None |
+| 8.3 | Navigate to **Clarifications** tab | 2 Q&A Bulletins displayed | None |
+| 8.4 | Switch to **My Questions** | 1 question visible | None |
+| 8.5 | Navigate to **Submit Bid** tab | "Bid Already Submitted" card shown | None |
+| 8.6 | Click **View Receipt** | Full receipt: REC-33B695EB-0001, 5 documents | None |
+| 8.7 | **Logout** | Redirected to portal login page | None |
+
+### Phase 9: Final Admin Overview
+| Step | Action | Result | Fixes Required |
+|------|--------|--------|----------------|
+| 9.1 | Login as TenderManager (tendermgr@bayan.ae) | Dashboard shows: Active 0, Awarded 2 | None |
+| 9.2 | Navigate to **Tenders** list | Both tenders showing "Awarded" | None |
+
 ### Lifecycle Summary
 ```
-Tender: Draft → Published → (Bidder submits bid) → Evaluation → Awarded
-                                                        ↓
-                                              Technical Scoring → Lock
-                                              Commercial Scoring (auto)
-                                              Combined Scorecard
-                                              Award Pack Generation
-                                              3-Level Approval → Approved
+Tender 1 (TNR-2025-0001):
+  Draft → Published → Bidder submits → Evaluation → 3-level Approval (same approver) → Awarded
+
+Tender 2 (TNR-2026-0002: The Cubic Tower):
+  Draft → Published → Closed → Bid Opening → 2 BOQ Imports → Multi-Bidder Evaluation
+    → Approval (Rejected by Faisal) → Re-initiated
+    → 3-level Approval (Tariq → Faisal → Nasser) → Awarded
+
+Portal tested as: bidder@vendor.ae (TNR-2025-0001), omar@contracting.ae (TNR-2026-0002)
 ```
 
 ---
@@ -619,63 +739,24 @@ Tender: Draft → Published → (Bidder submits bid) → Evaluation → Awarded
 - **21+ core services**
 - **7 user roles**: Admin, TenderManager, CommercialAnalyst, Approver, Auditor, TechnicalPanelist, Bidder
 
-### API Verification Results
-| Feature | API Tested | Frontend Tested | Notes |
-|---------|-----------|----------------|-------|
-| User creation (POST /api/admin/users) | YES (201) | NO | Returns userId + temp password. Deactivated test user after. |
-| Bidder creation (POST /api/bidders) | YES (201) | NO | Returns bidder with id, CR#, license. |
-| User listing (GET /api/admin/users) | YES (200) | NO | 9 users returned with roles. |
+### What's NOW Tested (upgraded from Section 7)
 
-### ~~Untested~~ Admin Features — PHASE 1 COMPLETE
+| Feature | Previously | Now | Notes |
+|---------|-----------|-----|-------|
+| Approval rejection | NOT TESTED | TESTED | Faisal rejected at Level 2 |
+| Approval re-initiation | NOT TESTED | TESTED | New workflow after rejection |
+| Approval return for revision | NOT TESTED | TESTED | Decision recorded, tender returned with comment, workflow re-initiated successfully |
+| Multi-approver (3 different users) | NOT TESTED | TESTED | Tariq→Faisal→Nasser |
+| Multi-bidder evaluation (2 bidders) | NOT TESTED | TESTED | Omar + Cubic on TNR-2026-0002 |
+| Second bidder portal login | NOT TESTED | TESTED | omar@contracting.ae |
+| Portal as second bidder (docs/clarif/bid) | NOT TESTED | TESTED | Full portal lifecycle |
+| Tender closing | NOT TESTED | TESTED | Published → Closed |
+| Bid opening ceremony | NOT TESTED | TESTED | TNR-2026-0002 |
+| Dashboard overview accuracy | NOT TESTED | TESTED | Active 0, Awarded 2 |
+| Sensitivity Analysis (9 splits) | PARTIAL | TESTED | Full 9-split analysis |
+| Tender creation wizard (4-step) | NOT TESTED | TESTED | Full wizard flow + validations (dates/weights); created tender shows correctly in list + details |
 
-#### A. User Management (AdminController) — TESTED ✅
-| Feature | Endpoint | Status |
-|---------|----------|--------|
-| User creation **via UI** (user-form-dialog) | POST /api/admin/users | ✅ Fix 31 (password field) |
-| User editing via UI | PUT /api/admin/users/{id} | ✅ Fix 33 (204 handling) |
-| User deletion via UI | DELETE /api/admin/users/{id} | ✅ Fix 32 |
-| Toggle user active/inactive via UI | POST /api/admin/users/{id}/toggle-active | ✅ Verified |
-| User list pagination, search, role filter | GET /api/admin/users?search=... | ✅ Verified |
-| Password reset flow (forgot → email → reset) | POST /api/auth/forgot-password + reset-password | ⚠️ NOT TESTED — deferred |
-
-#### B. Bidder Management (BiddersController) — TESTED ✅
-| Feature | Endpoint | Status |
-|---------|----------|--------|
-| Bidder creation **via UI** (bidder-form-dialog) | POST /api/bidders | ✅ Verified |
-| Bidder editing (prequalification, deactivation) | PUT /api/bidders/{id} | ✅ Fix 34 (NDA removed) |
-| Bidder view mode | — | ✅ Fix 37 |
-| Bidder search & filtering | GET /api/bidders?search=... | ✅ Verified |
-
-#### C. Client Management (ClientsController) — TESTED ✅
-| Feature | Endpoint | Status |
-|---------|----------|--------|
-| Client creation via UI (client-form-dialog) | POST /api/clients | ✅ Fix 35 (fields wired) |
-| Client listing, search | GET /api/clients | ✅ Verified |
-| Client editing | PUT /api/clients/{id} | ✅ Fix 35 (all fields saving) |
-| Client view mode | — | ✅ Fix 36 |
-| Client tender count | GET /api/clients | ✅ Fix 35 (TenderCount mapped) |
-
-#### D. System Settings — TESTED ✅
-| Feature | Endpoint | Status |
-|---------|----------|--------|
-| View system settings (all 4 tabs) | GET /api/admin/settings | ✅ Fix 38 (flat→grouped mapping) |
-| Update settings (all 4 tabs) | PUT /api/admin/settings/{key} | ✅ Fix 38 (individual key PUTs) |
-
-#### E. Audit Logs — TESTED ✅
-| Feature | Endpoint | Status |
-|---------|----------|--------|
-| View audit log list with filters | GET /api/admin/audit-logs | ✅ Verified — settings PUT logged correctly |
-
-### Untested Tender Lifecycle Features
-
-#### F. Tender Creation Wizard (4-step)
-| Feature | Component | Risk Level |
-|---------|-----------|------------|
-| Step 1: Basic Info (title, reference, type, client) | basic-info-step.component | **HIGH** — start of lifecycle |
-| Step 2: Dates (submission deadline, opening date) | dates-step.component | **HIGH** |
-| Step 3: Criteria (tech weight, commercial weight) | criteria-step.component | MEDIUM |
-| Step 4: Review & Create | review-step.component | MEDIUM |
-| Auto-generate reference (TNR-YYYY-####) | GET /api/tenders/next-reference | LOW |
+### Remaining Untested Features
 
 #### G. Tender Operations
 | Feature | Endpoint | Risk Level |
@@ -684,7 +765,7 @@ Tender: Draft → Published → (Bidder submits bid) → Evaluation → Awarded
 | Update tender details | PUT /api/tenders/{id} | MEDIUM |
 | Activity feed | GET /api/tenders/{id}/activity | LOW |
 
-#### H. Bidder Invitation & Qualification
+#### H. Bidder Invitation & Qualification via UI
 | Feature | Endpoint | Risk Level |
 |---------|----------|------------|
 | Invite bidders via UI (invite-bidders.component) | POST /api/tenders/{id}/invite | **TESTED via DB** — UI not tested |
@@ -701,18 +782,6 @@ Tender: Draft → Published → (Bidder submits bid) → Evaluation → Awarded
 | BOQ import from Excel (admin BOQ, not bid) | boq-import-dialog.component | MEDIUM |
 | Export BOQ template to Excel | boq-export-dialog.component | LOW |
 
-### Untested Bid Management Features
-
-#### J. Bid Opening & Late Bids
-| Feature | Endpoint | Risk Level |
-|---------|----------|------------|
-| Open bids ceremony (IRREVERSIBLE) | POST /api/tenders/{id}/bids/open | **HIGH** |
-| Accept late bid | POST .../bids/{id}/accept-late | MEDIUM |
-| Reject late bid with reason | POST .../bids/{id}/reject-late | MEDIUM |
-| Disqualify bid with reason | POST .../bids/{id}/disqualify | MEDIUM |
-| Download all bids as ZIP | GET .../bids/download-all | LOW |
-| Bid detail dialog | bid-details-dialog.component | LOW |
-
 #### K. Bid Exceptions
 | Feature | Endpoint | Risk Level |
 |---------|----------|------------|
@@ -720,15 +789,11 @@ Tender: Draft → Published → (Bidder submits bid) → Evaluation → Awarded
 | Add bid exception (cost/time/risk) | POST /api/tenders/{id}/exceptions | MEDIUM |
 | Exceptions panel in evaluation | exceptions-panel.component | MEDIUM |
 
-### Untested Evaluation Features
-
-#### L. Multi-Bidder Evaluation
+#### L. Multi-Bidder Evaluation (3+ bidders)
 | Feature | Risk Level | Notes |
 |---------|------------|-------|
-| Comparable sheet with 3+ bidders | **HIGH** | Deviation, outlier detection, cross-bidder comparison |
-| Commercial scoring with 3+ bidders | **HIGH** | Lowest bid ratio formula: (Lowest/This)×100 |
+| Comparable sheet with 3+ bidders | MEDIUM | Tested with 2; 3+ needed for outlier detection |
 | Combined scorecard ranking with ties | MEDIUM | Tie-breaking behavior unknown |
-| Sensitivity analysis with varied weights | LOW | Only tested at one weight set |
 
 #### M. Advanced Evaluation
 | Feature | Endpoint | Risk Level |
@@ -741,18 +806,18 @@ Tender: Draft → Published → (Bidder submits bid) → Evaluation → Awarded
 #### N. Approval Variations
 | Feature | Risk Level | Notes |
 |---------|------------|-------|
-| Reject at any level → workflow rejected | **HIGH** | Only tested approve path |
-| Return for Revision at any level | **HIGH** | Not tested at all |
+| Return for Revision (Level 1) | MEDIUM | Tested; comment visible; workflow can be re-initiated |
+| Return for Revision (Level 2/3) | **HIGH** | Still needs verification |
+| Re-initiate workflow with changed approvers | MEDIUM | Verify reason is required and the new route is used |
 | Pending approvals widget on dashboard | MEDIUM | approver-dashboard.component exists |
 | Approval history view | LOW | GET .../approval/history |
-
-### Untested Portal Features
 
 #### O. Bidder Account Activation
 | Feature | Endpoint | Risk Level |
 |---------|----------|------------|
 | Account activation (set password from email) | POST /api/portal/auth/activate | **HIGH** — first-time bidder flow |
 | Portal token refresh | POST /api/portal/auth/refresh-token | LOW |
+| Password reset flow | POST /api/auth/forgot-password + reset-password | MEDIUM |
 
 #### P. Addenda
 | Feature | Endpoint | Risk Level |
@@ -762,15 +827,6 @@ Tender: Draft → Published → (Bidder submits bid) → Evaluation → Awarded
 | Portal: view addenda | GET /api/portal/tenders/{id}/addenda | MEDIUM |
 | Portal: acknowledge addendum | POST /api/portal/tenders/{id}/addenda/{id}/acknowledge | MEDIUM |
 
-#### Q. Multi-Bidder Portal
-| Feature | Risk Level | Notes |
-|---------|------------|-------|
-| Second bidder (`bidder2@vendor.ae`) portal login | MEDIUM | Account exists but never tested |
-| Second bidder submits bid to same tender | **HIGH** | Required for multi-bidder evaluation |
-| Second bidder views documents, clarifications | LOW | Should work same as bidder 1 |
-
-### Untested Cross-Cutting Features
-
 #### R. Vendor Pricing Intelligence
 | Feature | Endpoint | Risk Level |
 |---------|----------|------------|
@@ -779,13 +835,6 @@ Tender: Draft → Published → (Bidder submits bid) → Evaluation → Awarded
 | Compare vendors (2-5) | POST .../compare | MEDIUM |
 | Export vendor pricing to Excel | GET .../export | LOW |
 | Create vendor pricing snapshot | POST .../snapshots | MEDIUM |
-
-#### S. Dashboard
-| Feature | Component | Risk Level |
-|---------|-----------|------------|
-| Tender Manager dashboard (KPIs, activity) | dashboard.component | LOW |
-| Overview dashboard | GET /api/dashboard/overview | LOW |
-| Approver dashboard | approver-dashboard.component | MEDIUM |
 
 #### T. Notifications
 | Feature | Endpoint | Risk Level |
@@ -809,48 +858,79 @@ Tender: Draft → Published → (Bidder submits bid) → Evaluation → Awarded
 | Reject clarification | POST .../clarifications/{id}/reject | LOW |
 | Assign clarification to team member | POST .../clarifications/{id}/assign | LOW |
 
+#### W. Bid Management (remaining)
+| Feature | Endpoint | Risk Level |
+|---------|----------|------------|
+| Accept late bid | POST .../bids/{id}/accept-late | MEDIUM |
+| Reject late bid with reason | POST .../bids/{id}/reject-late | MEDIUM |
+| Disqualify bid with reason | POST .../bids/{id}/disqualify | MEDIUM |
+| Download all bids as ZIP | GET .../bids/download-all | LOW |
+| Bid detail dialog | bid-details-dialog.component | LOW |
+
 ### Priority Matrix: What to Test Next
 
 | Priority | Feature | Why |
 |----------|---------|-----|
-| **P0** | User creation via UI | First step of any real E2E — currently bypassed via DB seeding |
-| **P0** | Bidder creation via UI | Required before inviting bidders to tenders |
-| **P0** | Tender creation wizard | Start of lifecycle — currently bypassed via pre-seeded tender |
-| **P0** | Multi-bidder evaluation (3 bidders) | Scoring/ranking formulas untested with competition |
+| **P0** | Evaluation setup via UI | Currently DB-seeded, UI flow untested |
 | **P1** | Bidder qualification via UI | Currently done via raw SQL — blocks portal access |
-| **P1** | Bid opening ceremony | Irreversible action, untested |
-| **P1** | Approval rejection + return for revision | Only approve path tested |
-| **P1** | Evaluation setup via UI | Currently DB-seeded, UI flow untested |
+| **P1** | Return for Revision at Level 2/3 (approval) | Level 1 tested; verify deeper levels + re-initiation |
+| **P1** | Re-initiate approval with changed approvers | Verify reason is required and the new approvers take effect |
 | **P1** | Bidder account activation (portal) | First-time bidder flow from invitation email |
+| **P1** | Multi-bidder eval (3+ bidders) | 2-bidder tested; 3+ needed for outlier detection |
 | **P2** | Password reset flow | Auth critical path |
 | **P2** | Addenda creation & acknowledgment | Untested feature set |
 | **P2** | Vendor pricing intelligence | Entire module untested |
 | **P2** | BOQ manual management | Create/edit/delete sections & items |
+| **P2** | Bid exceptions | cost/time/risk exception tracking |
 | **P3** | Advanced clarification ops | Duplicate, reject, assign, internal RFI |
-| **P3** | Dashboard accuracy | KPIs, activity feed, approver widget |
 | **P3** | Document versioning & deletion | Low-risk CRUD |
 | **P3** | Notification preferences | Low-risk settings |
+| **P3** | Bid management (late/disqualify) | Edge case flows |
 
 ### Coverage Summary
+
 | Category | Endpoints | Tested | Untested | Coverage |
 |----------|-----------|--------|----------|----------|
-| Auth | 5 | 2 | 3 | 40% |
-| Tenders | 17 | 5 | 12 | 29% |
-| Bids | 7 | 0 | 7 | 0% |
+| Auth | 5 | 3 | 2 | 60% |
+| Tenders | 17 | 8 | 9 | 47% |
+| Bids | 7 | 2 | 5 | 29% |
 | Bid Analysis (Import) | 6 | 6 | 0 | 100% |
 | Clarifications | 13 | 5 | 8 | 38% |
 | BOQ | 14 | 1 | 13 | 7% |
 | Documents | 7 | 2 | 5 | 29% |
-| Evaluation | 11 | 8 | 3 | 73% |
+| Evaluation | 11 | 10 | 1 | 91% |
 | Tech Evaluation | 9 | 7 | 2 | 78% |
-| Approval | 6 | 4 | 2 | 67% |
-| Admin | 8 | 1 | 7 | 13% |
-| Bidders | 4 | 0 | 4 | 0% |
-| Clients | 4 | 0 | 4 | 0% |
-| Dashboard | 3 | 0 | 3 | 0% |
+| Approval | 6 | 5 | 1 | 83% |
+| Admin | 8 | 8 | 0 | 100% |
+| Bidders | 4 | 4 | 0 | 100% |
+| Clients | 4 | 4 | 0 | 100% |
+| Dashboard | 3 | 1 | 2 | 33% |
 | Vendor Pricing | 9 | 0 | 9 | 0% |
 | Notifications | 2 | 0 | 2 | 0% |
-| Portal | 19 | 14 | 5 | 74% |
-| **TOTAL** | **144** | **55** | **89** | **38%** |
+| Portal | 19 | 16 | 3 | 84% |
+| **TOTAL** | **144** | **82** | **62** | **57%** |
 
-> **Note:** "Tested" means the endpoint was exercised during E2E testing (either via browser UI or direct API call for verification). The 38% coverage focused on the **critical happy path** — the full tender lifecycle from publish to award. The untested 62% consists of management UIs (CRUD), alternative flows (reject, cancel), advanced features (vendor pricing), and multi-user scenarios.
+> **Note:** Coverage jumped from 38% (55/144) to 57% (82/144) after Phase 2 testing. The tested 57% covers the **complete critical happy path** (both approve and reject flows) across 2 full tender lifecycles with multi-bidder evaluation and multi-approver workflows. The remaining 43% consists of: evaluation setup via UI (P0), qualification workflow (P1), Return for Revision approval (P1), addenda (P2), vendor pricing (P2, entire module), BOQ manual management (P2), and low-priority edge cases (P3).
+
+---
+
+## 9. Screenshots
+
+### Phase 7b: Multi-Approver Approval
+- `e2e-level3-final-approval-form.png` — Nasser's Level 3 approval form with comment
+- `e2e-approval-workflow-complete.png` — All 3 levels showing Approved status
+- `e2e-approval-workflow-approved-header.png` — Workflow header showing "Approved"
+- `e2e-tender-awarded-status.png` — Tender showing "Awarded" status after reload
+
+### Phase 8: Portal as Second Bidder
+- `e2e-portal-login-page.png` — Portal login page
+- `e2e-portal-omar-tenders.png` — Omar Contracting's "Your Tenders" with "Bid Submitted" badge
+- `e2e-portal-documents.png` — Documents tab with Drawings folder
+- `e2e-portal-clarifications-bulletins.png` — 2 Q&A Bulletins displayed
+- `e2e-portal-my-questions.png` — My Questions tab with 1 question
+- `e2e-portal-bid-submitted.png` — "Bid Already Submitted" card
+- `e2e-portal-bid-receipt.png` — Full bid receipt with 5 documents
+
+### Phase 9: Final Admin Overview
+- `e2e-final-dashboard.png` — Dashboard: Active 0, Awarded 2
+- `e2e-final-tenders-list-all-awarded.png` — Both tenders showing "Awarded"

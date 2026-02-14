@@ -1,6 +1,7 @@
 using Bayan.Application.Common.Interfaces;
 using Bayan.Application.Features.Auth.DTOs;
 using Bayan.Domain.Entities;
+using Bayan.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using RefreshTokenEntity = Bayan.Domain.Entities.RefreshToken;
@@ -63,6 +64,12 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponseDt
         if (!user.IsActive)
         {
             throw new UnauthorizedAccessException("Your account has been deactivated. Please contact support.");
+        }
+
+        // Bidder accounts authenticate through the bidder portal, not the internal admin UI.
+        if (user.Role == UserRole.Bidder)
+        {
+            throw new UnauthorizedAccessException("Bidder accounts must sign in via the Bidder Portal.");
         }
 
         // Reset failed login attempts on successful login

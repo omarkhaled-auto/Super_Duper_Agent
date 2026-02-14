@@ -207,11 +207,12 @@ export interface UserFormDialogData {
 
     .form-field label {
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      font-size: 0.875rem;
+      color: var(--bayan-foreground, #0F172A);
     }
 
     .required {
-      color: #ef4444;
+      color: var(--bayan-danger, #DC2626);
     }
 
     .checkbox-field {
@@ -230,7 +231,7 @@ export interface UserFormDialogData {
       gap: 0.5rem;
       margin-top: 1.5rem;
       padding-top: 1rem;
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     .p-error {

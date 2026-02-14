@@ -169,7 +169,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
       } @else if (clarifications().length === 0) {
         <!-- Empty State -->
         <div class="empty-state">
-          <i class="pi pi-comments" style="font-size: 3rem; color: var(--bayan-border, #e4e4e7);"></i>
+          <i class="pi pi-comments" style="font-size: 3rem; color: var(--bayan-border, #E2E8F0);"></i>
           <h3>No Clarifications Yet</h3>
           <p>Create an internal RFI or wait for bidder questions.</p>
           <button
@@ -456,7 +456,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
       flex-wrap: wrap;
       gap: 1rem;
       padding: 1rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-slate-50, #F8FAFC);
       border-radius: var(--bayan-radius, 0.5rem);
     }
 
@@ -479,20 +479,20 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
     .stat-value {
       font-size: 1.25rem;
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .stat-label {
       font-size: 0.75rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .stat.pending .stat-value {
-      color: #d97706;
+      color: var(--bayan-warning, #D97706);
     }
 
     .stat.answered .stat-value {
-      color: #16a34a;
+      color: var(--bayan-success, #16A34A);
     }
 
     .filters-row {
@@ -524,7 +524,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
     }
 
     .loading-container p {
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .empty-state {
@@ -539,18 +539,18 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
 
     .empty-state h3 {
       margin: 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .empty-state p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .reference-badge {
       font-family: monospace;
       font-size: 0.875rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-accent, #EEF2FF);
       padding: 0.25rem 0.5rem;
       border-radius: var(--bayan-radius-sm, 0.375rem);
     }
@@ -563,11 +563,12 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
 
     .subject-text {
       font-weight: 500;
+      color: var(--bayan-slate-700, #334155);
     }
 
     .section-link {
       font-size: 0.8rem;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
       display: flex;
       align-items: center;
       gap: 0.25rem;
@@ -578,44 +579,64 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
       align-items: center;
       gap: 0.25rem;
       font-size: 0.875rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .expansion-content {
       padding: 1rem 2rem;
-      background-color: var(--bayan-muted, #f4f4f5);
+      background-color: var(--bayan-slate-50, #F8FAFC);
     }
 
     .qa-section {
       max-width: 800px;
     }
 
-    .question-block,
+    .question-block {
+      padding: 1rem;
+      background-color: white;
+      border-radius: var(--bayan-radius, 0.5rem);
+      border-left: 4px solid var(--bayan-warning, #D97706);
+    }
+
     .answer-block {
       padding: 1rem;
       background-color: white;
       border-radius: var(--bayan-radius, 0.5rem);
+      border-left: 4px solid var(--bayan-success, #16A34A);
+      margin-left: 1.5rem;
     }
 
-    .question-block h5,
+    .question-block h5 {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 0 0 0.5rem;
+      color: var(--bayan-slate-900, #0F172A);
+    }
+
     .answer-block h5 {
       display: flex;
       align-items: center;
       gap: 0.5rem;
       margin: 0 0 0.5rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
-    .question-block p,
+    .question-block p {
+      margin: 0 0 0.5rem;
+      color: var(--bayan-slate-700, #334155);
+      line-height: 1.6;
+    }
+
     .answer-block p {
       margin: 0 0 0.5rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-700, #334155);
       line-height: 1.6;
     }
 
     .meta {
-      font-size: 0.8rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      font-size: 0.75rem;
+      color: var(--bayan-slate-400, #94A3B8);
     }
 
     .action-buttons {
@@ -623,7 +644,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
       gap: 0.5rem;
       margin-top: 1rem;
       padding-top: 1rem;
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     .answer-dialog-content {
@@ -634,18 +655,18 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
 
     .original-question {
       padding: 1rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-slate-50, #F8FAFC);
       border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .original-question h5 {
       margin: 0 0 0.5rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .original-question p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .answer-input {
@@ -655,12 +676,12 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
     }
 
     .answer-input label {
-      font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      font-weight: 600;
+      color: var(--bayan-slate-700, #334155);
     }
 
     .required {
-      color: #ef4444;
+      color: var(--bayan-danger, #DC2626);
     }
 
     .dialog-footer {
@@ -669,7 +690,7 @@ import { PublishBulletinDialogComponent } from './publish-bulletin-dialog.compon
       gap: 0.5rem;
       margin-top: 1rem;
       padding-top: 1rem;
-      border-top: 1px solid var(--bayan-border, #e4e4e7);
+      border-top: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     @media (max-width: 768px) {

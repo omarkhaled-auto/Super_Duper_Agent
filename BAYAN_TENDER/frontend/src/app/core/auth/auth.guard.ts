@@ -32,7 +32,7 @@ export const guestGuard: CanActivateFn = (
   }
 
   // User is already logged in, redirect to dashboard
-  router.navigate(['/dashboard']);
+  router.navigate(['/home']);
   return false;
 };
 

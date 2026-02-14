@@ -14,6 +14,7 @@ using Bayan.Application.Features.Boq.Commands.ValidateBoqImport;
 using Bayan.Application.Features.Boq.DTOs;
 using Bayan.Application.Features.Boq.Queries.GetBoqStructure;
 using Bayan.Application.Features.Boq.Queries.GetUomList;
+using Bayan.API.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -25,7 +26,7 @@ namespace Bayan.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api")]
-[Authorize(Roles = "Admin,TenderManager,CommercialAnalyst")]
+[Authorize(Roles = BayanRoles.BoqManagers)]
 public class BoqController : ControllerBase
 {
     private readonly IMediator _mediator;

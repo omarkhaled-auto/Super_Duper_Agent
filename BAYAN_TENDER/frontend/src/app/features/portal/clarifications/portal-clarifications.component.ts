@@ -342,7 +342,7 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       align-items: center;
       justify-content: center;
       padding: 4rem 2rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .loading-container p {
@@ -357,21 +357,21 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       margin-bottom: 1.5rem;
       padding: 1.5rem;
       background: var(--bayan-card, #ffffff);
-      border-radius: var(--bayan-radius-sm, 0.375rem);
-      border: 1px solid var(--bayan-border, #e4e4e7);
-      box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+      border-radius: var(--bayan-radius-lg, 0.75rem);
+      border: 1px solid var(--bayan-border, #E2E8F0);
+      box-shadow: var(--bayan-shadow-sm, 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1));
     }
 
     .header-info h2 {
       margin: 0 0 0.25rem 0;
       font-size: 1.5rem;
       font-weight: 600;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .header-info p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     /* Empty State */
@@ -381,7 +381,7 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       align-items: center;
       justify-content: center;
       padding: 4rem 2rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       text-align: center;
     }
 
@@ -393,7 +393,7 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
     .empty-state p {
       margin: 0;
       font-size: 1.125rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .empty-state small {
@@ -416,12 +416,12 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
 
     .bulletin-info strong {
       font-size: 1rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .bulletin-date {
       font-size: 0.8rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .bulletin-meta {
@@ -432,18 +432,18 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
 
     .bulletin-intro {
       padding: 1rem;
-      background: var(--bayan-accent, #f4f4f5);
+      background: var(--bayan-accent, #EEF2FF);
       border-radius: var(--bayan-radius-sm, 0.375rem);
     }
 
     .bulletin-intro h4 {
       margin: 0 0 0.5rem 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .bulletin-intro p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     /* Q&A List */
@@ -457,15 +457,15 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       display: flex;
       gap: 1rem;
       padding: 1.25rem;
-      background: var(--bayan-accent, #f4f4f5);
+      background: var(--bayan-accent, #EEF2FF);
       border-radius: var(--bayan-radius-sm, 0.375rem);
-      border-left: 4px solid var(--bayan-primary, #18181b);
+      border-left: 4px solid var(--bayan-info, #2563EB);
     }
 
     .qa-number {
       font-weight: 700;
       font-size: 1.25rem;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
       min-width: 40px;
     }
 
@@ -480,12 +480,12 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
     .qa-question strong {
       display: block;
       margin-bottom: 0.5rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .qa-question p {
       margin: 0;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .boq-ref {
@@ -494,26 +494,26 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       gap: 0.25rem;
       margin-top: 0.5rem;
       font-size: 0.8rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .qa-answer {
       padding: 1rem;
       background: var(--bayan-card, #ffffff);
       border-radius: var(--bayan-radius-sm, 0.375rem);
-      border: 1px solid var(--bayan-border, #e4e4e7);
+      border: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     .answer-label {
       display: block;
       font-weight: 600;
-      color: #16a34a;
+      color: var(--bayan-success, #16A34A);
       margin-bottom: 0.5rem;
     }
 
     .qa-answer p {
       margin: 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     /* Attachments */
@@ -522,7 +522,7 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       padding: 0.75rem;
       background: var(--bayan-card, #ffffff);
       border-radius: var(--bayan-radius-sm, 0.375rem);
-      border: 1px solid var(--bayan-border, #e4e4e7);
+      border: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     .attachments-label {
@@ -531,7 +531,7 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       gap: 0.375rem;
       font-weight: 600;
       font-size: 0.8rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       margin-bottom: 0.5rem;
     }
 
@@ -549,7 +549,7 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
     .reference-code {
       font-family: monospace;
       font-size: 0.875rem;
-      color: var(--bayan-primary, #18181b);
+      color: var(--bayan-primary, #4F46E5);
     }
 
     .subject-text {
@@ -567,7 +567,7 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
+      background: rgba(15, 23, 42, 0.5);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -577,13 +577,13 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
 
     .details-dialog {
       background: var(--bayan-card, #ffffff);
-      border-radius: var(--bayan-radius, 0.5rem);
+      border-radius: var(--bayan-radius-xl, 1rem);
       width: 100%;
       max-width: 600px;
       max-height: 80vh;
       overflow-y: auto;
-      border: 1px solid var(--bayan-border, #e4e4e7);
-      box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+      border: 1px solid var(--bayan-border, #E2E8F0);
+      box-shadow: var(--bayan-shadow-dialog, 0 25px 50px -12px rgba(0,0,0,0.25));
     }
 
     .details-header {
@@ -591,13 +591,13 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       justify-content: space-between;
       align-items: center;
       padding: 1.25rem 1.5rem;
-      border-bottom: 1px solid var(--bayan-border, #e4e4e7);
+      border-bottom: 1px solid var(--bayan-border, #E2E8F0);
     }
 
     .details-header h3 {
       margin: 0;
       font-size: 1.25rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
     }
 
     .details-content {
@@ -613,12 +613,12 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
 
     .detail-label {
       font-weight: 500;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       min-width: 100px;
     }
 
     .detail-value {
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
     }
 
     .detail-section {
@@ -629,35 +629,35 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       margin: 0 0 0.5rem 0;
       font-size: 0.875rem;
       font-weight: 600;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
 
     .detail-section p {
       margin: 0;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-foreground, #020617);
       line-height: 1.6;
     }
 
     .answer-section {
       padding: 1rem;
-      background: #f0fdf4;
+      background: var(--bayan-success-bg, #F0FDF4);
       border-radius: var(--bayan-radius-sm, 0.375rem);
-      border-left: 4px solid #16a34a;
+      border-left: 4px solid var(--bayan-success, #16A34A);
     }
 
     .answer-section h4 {
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      color: #16a34a;
+      color: var(--bayan-success, #16A34A);
     }
 
     .answered-date {
       display: block;
       margin-top: 0.75rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-muted-foreground, #64748B);
     }
 
     .pending-section {
@@ -665,7 +665,7 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
       align-items: flex-start;
       gap: 0.75rem;
       padding: 1rem;
-      background: #fffbeb;
+      background: var(--bayan-warning-bg, #FFFBEB);
       border-radius: var(--bayan-radius-sm, 0.375rem);
       color: #92400e;
     }
@@ -681,15 +681,18 @@ import { SubmitQuestionDialogComponent } from './submit-question-dialog.componen
     }
 
     :host ::ng-deep {
-      .p-tabview .p-tabview-panels {
+      .p-tabview .p-tabview-panels,
+      .p-tabpanels {
         padding: 1.5rem 0 0 0;
       }
 
-      .p-accordion .p-accordion-header .p-accordion-header-link {
+      .p-accordion .p-accordion-header .p-accordion-header-link,
+      .p-accordion .p-accordionheader {
         padding: 1rem 1.25rem;
       }
 
-      .p-accordion .p-accordion-content {
+      .p-accordion .p-accordion-content,
+      .p-accordion .p-accordioncontent-content {
         padding: 1.25rem;
       }
     }

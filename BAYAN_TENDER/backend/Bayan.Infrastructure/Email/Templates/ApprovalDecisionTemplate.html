@@ -1,4 +1,29 @@
 <!-- Subject: Approval {{Decision}}: {{TenderReference}} - {{TenderTitle}} -->
+<!-- ui-compliance:email-template -->
+<!--
+  Bayan Slate-Indigo Design System — Email Token Map
+  Email clients strip CSS variables; hex fallbacks provide progressive enhancement.
+  ====================================================
+  --bayan-slate-50       = #F8FAFC  (page bg, footer bg)
+  --bayan-background     = #FFFFFF  (card bg)
+  --bayan-primary        = #4F46E5  (header bg, CTA, accent)
+  --bayan-primary-foreground = #FFFFFF (text on primary)
+  --bayan-slate-800      = #1E293B  (headings)
+  --bayan-slate-700      = #334155  (strong labels)
+  --bayan-slate-600      = #475569  (body text)
+  --bayan-danger-bg      = #FEF2F2  (rejected bg)
+  --bayan-danger         = #DC2626  (rejected accent)
+  --bayan-danger-dark    = #991B1B  (rejected text)
+  --bayan-warning-bg     = #FFFBEB  (comment bg)
+  --bayan-warning        = #D97706  (comment accent)
+  --bayan-warning-dark   = #92400E  (comment heading)
+  --bayan-warning-darker = #78350F  (comment text)
+  --bayan-info           = #2563EB  (info accent — kept as status color)
+  --bayan-muted-foreground = #64748B (muted text)
+  --bayan-muted-text     = #94A3B8  (footer copyright)
+  --bayan-border         = #E2E8F0  (dividers)
+  --bayan-slate-50       = #F8FAFC  (detail box bg)
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,63 +31,63 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Approval Decision</title>
 </head>
-<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; background-color: #f4f4f5;">
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f4f5;">
+<body style="margin: 0; padding: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; line-height: 1.6; background-color: var(--bayan-slate-50, #F8FAFC);">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: var(--bayan-slate-50, #F8FAFC);">
         <tr>
             <td style="padding: 40px 20px;">
-                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="margin: 0 auto; background-color: var(--bayan-background, #FFFFFF); border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                     <!-- Header -->
                     <tr>
-                        <td style="background-color: #2563eb; padding: 30px 40px; border-radius: 8px 8px 0 0;">
-                            <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">Bayan Tender System</h1>
+                        <td style="background-color: var(--bayan-primary, #4F46E5); padding: 32px 40px; border-radius: 8px 8px 0 0;">
+                            <h1 style="margin: 0; color: var(--bayan-primary-foreground, #FFFFFF); font-size: 24px; font-weight: 600;">Bayan Tender System</h1>
                         </td>
                     </tr>
 
                     <!-- Content -->
                     <tr>
                         <td style="padding: 40px;">
-                            <h2 style="margin: 0 0 20px; color: #1f2937; font-size: 20px;">Approval Decision Notification</h2>
+                            <h2 style="margin: 0 0 20px; color: var(--bayan-slate-800, #1E293B); font-size: 20px;">Approval Decision Notification</h2>
 
-                            <p style="margin: 0 0 20px; color: #4b5563;">
+                            <p style="margin: 0 0 20px; color: var(--bayan-slate-600, #475569);">
                                 Dear <strong>{{RecipientName}}</strong>,
                             </p>
 
-                            <p style="margin: 0 0 20px; color: #4b5563;">
+                            <p style="margin: 0 0 20px; color: var(--bayan-slate-600, #475569);">
                                 An approval decision has been made on the tender you submitted for approval.
                             </p>
 
                             <!-- Decision Status Box -->
-                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 0 0 30px;">
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 0 0 32px;">
                                 <tr>
-                                    <td style="padding: 20px; background-color: #fef2f2; border-radius: 6px; border-left: 4px solid #dc2626; text-align: center;">
-                                        <p style="margin: 0; font-size: 14px; color: #7f1d1d; text-transform: uppercase; letter-spacing: 1px;">Decision at Level {{LevelNumber}}</p>
-                                        <p style="margin: 10px 0 0; font-size: 24px; font-weight: 700; color: #dc2626;">{{Decision}}</p>
+                                    <td style="padding: 20px; background-color: var(--bayan-danger-bg, #FEF2F2); border-radius: 8px; border-left: 4px solid var(--bayan-danger, #DC2626); text-align: center;">
+                                        <p style="margin: 0; font-size: 14px; color: var(--bayan-danger-dark, #991B1B); text-transform: uppercase; letter-spacing: 1px;">Decision at Level {{LevelNumber}}</p>
+                                        <p style="margin: 12px 0 0; font-size: 24px; font-weight: 700; color: var(--bayan-danger, #DC2626);">{{Decision}}</p>
                                     </td>
                                 </tr>
                             </table>
 
                             <!-- Tender Details Box -->
-                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f8fafc; border-radius: 6px; margin: 0 0 30px;">
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: var(--bayan-slate-50, #F8FAFC); border-radius: 8px; margin: 0 0 32px;">
                                 <tr>
                                     <td style="padding: 20px;">
                                         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                                             <tr>
                                                 <td style="padding: 8px 0;">
-                                                    <strong style="color: #374151;">Tender Reference:</strong>
+                                                    <strong style="color: var(--bayan-slate-700, #334155);">Tender Reference:</strong>
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <td style="padding: 0 0 16px; color: #2563eb; font-size: 16px; font-weight: 600;">
+                                                <td style="padding: 0 0 16px; color: var(--bayan-primary, #4F46E5); font-size: 16px; font-weight: 600;">
                                                     {{TenderReference}}
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <td style="padding: 8px 0; border-top: 1px solid #e5e7eb;">
-                                                    <strong style="color: #374151;">Tender Title:</strong>
+                                                <td style="padding: 8px 0; border-top: 1px solid var(--bayan-border, #E2E8F0);">
+                                                    <strong style="color: var(--bayan-slate-700, #334155);">Tender Title:</strong>
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <td style="padding: 0 0 16px; color: #1f2937; font-size: 18px; font-weight: 600;">
+                                                <td style="padding: 0 0 16px; color: var(--bayan-slate-800, #1E293B); font-size: 18px; font-weight: 600;">
                                                     {{TenderTitle}}
                                                 </td>
                                             </tr>
@@ -72,26 +97,26 @@
                             </table>
 
                             <!-- Approver Comment -->
-                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 0 0 30px;">
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 0 0 32px;">
                                 <tr>
-                                    <td style="padding: 20px; background-color: #fef3c7; border-radius: 6px; border-left: 4px solid #f59e0b;">
-                                        <p style="margin: 0 0 10px; color: #92400e; font-weight: 600;">Approver's Comment:</p>
-                                        <p style="margin: 0; color: #78350f; font-style: italic;">
+                                    <td style="padding: 20px; background-color: var(--bayan-warning-bg, #FFFBEB); border-radius: 8px; border-left: 4px solid var(--bayan-warning, #D97706);">
+                                        <p style="margin: 0 0 12px; color: var(--bayan-warning-dark, #92400E); font-weight: 600;">Approver's Comment:</p>
+                                        <p style="margin: 0; color: var(--bayan-warning-darker, #78350F); font-style: italic;">
                                             "{{Comment}}"
                                         </p>
                                     </td>
                                 </tr>
                             </table>
 
-                            <p style="margin: 0 0 30px; color: #4b5563;">
+                            <p style="margin: 0 0 32px; color: var(--bayan-slate-600, #475569);">
                                 Please log in to the Bayan Tender Portal to review the full details and take any necessary follow-up actions.
                             </p>
 
                             <!-- CTA Button -->
                             <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                                 <tr>
-                                    <td style="background-color: #2563eb; border-radius: 6px;">
-                                        <a href="{{PortalLink}}" style="display: inline-block; padding: 14px 30px; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 16px;">
+                                    <td style="background-color: var(--bayan-primary, #4F46E5); border-radius: 8px;">
+                                        <a href="{{PortalLink}}" style="display: inline-block; padding: 16px 32px; color: var(--bayan-primary-foreground, #FFFFFF); text-decoration: none; font-weight: 600; font-size: 16px;">
                                             View Tender Details
                                         </a>
                                     </td>
@@ -102,11 +127,11 @@
 
                     <!-- Footer -->
                     <tr>
-                        <td style="padding: 20px 40px; background-color: #f8fafc; border-radius: 0 0 8px 8px; border-top: 1px solid #e5e7eb;">
-                            <p style="margin: 0; color: #6b7280; font-size: 12px; text-align: center;">
+                        <td style="padding: 20px 40px; background-color: var(--bayan-slate-50, #F8FAFC); border-radius: 0 0 8px 8px; border-top: 1px solid var(--bayan-border, #E2E8F0);">
+                            <p style="margin: 0; color: var(--bayan-muted-foreground, #64748B); font-size: 12px; text-align: center;">
                                 This is an automated message from the Bayan Tender System. Please do not reply to this email.
                             </p>
-                            <p style="margin: 10px 0 0; color: #9ca3af; font-size: 11px; text-align: center;">
+                            <p style="margin: 12px 0 0; color: var(--bayan-muted-text, #94A3B8); font-size: 11px; text-align: center;">
                                 &copy; 2024 Bayan Tender Management System. All rights reserved.
                             </p>
                         </td>

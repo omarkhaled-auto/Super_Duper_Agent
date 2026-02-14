@@ -87,8 +87,8 @@ import { MessageModule } from 'primeng/message';
           <button
             pButton
             label="Confirm Open Bids"
-            icon="pi pi-eye"
-            class="p-button-warning"
+            icon="pi pi-lock-open"
+            class="p-button-primary"
             data-testid="confirm-open-bids-btn"
             [disabled]="!confirmationChecked"
             (click)="onConfirm()"
@@ -111,30 +111,32 @@ import { MessageModule } from 'primeng/message';
     }
 
     .warning-content i {
-      font-size: 1.5rem;
-      color: #d97706;
+      font-size: 3rem;
+      color: var(--bayan-warning, #D97706);
       flex-shrink: 0;
     }
 
     .warning-content span {
       line-height: 1.5;
+      color: var(--bayan-slate-700, #334155);
     }
 
     .info-section {
       padding: 1rem;
-      background-color: var(--bayan-accent, #f4f4f5);
+      background-color: var(--bayan-slate-50, #F8FAFC);
       border-radius: var(--bayan-radius, 0.5rem);
+      border: 1px solid var(--bayan-slate-200, #E2E8F0);
     }
 
     .info-section p {
       margin: 0 0 0.5rem;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-700, #334155);
     }
 
     .info-section ul {
       margin: 0;
       padding-left: 1.5rem;
-      color: var(--bayan-muted-foreground, #71717a);
+      color: var(--bayan-slate-500, #64748B);
     }
 
     .info-section li {
@@ -146,14 +148,14 @@ import { MessageModule } from 'primeng/message';
       align-items: center;
       gap: 0.75rem;
       padding: 1rem;
-      background-color: var(--bayan-warning-bg, #fffbeb);
-      border: 1px solid #ffcc02;
+      background-color: #FFFBEB;
+      border: 1px solid var(--bayan-warning, #D97706);
       border-radius: var(--bayan-radius, 0.5rem);
     }
 
     .confirmation-label {
       font-weight: 500;
-      color: var(--bayan-foreground, #09090b);
+      color: var(--bayan-slate-900, #0F172A);
       cursor: pointer;
     }
 
