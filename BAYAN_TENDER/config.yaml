@@ -1,0 +1,72 @@
+# Agent-Team Configuration for BAYAN_TENDER UI-Only Transformation
+# Tuned for pure visual/style changes — no functionality modifications
+
+orchestrator:
+  max_budget_usd: 30
+
+depth:
+  default: thorough
+  auto_detect: false
+
+# No interview needed — complete PRD + UI_REQUIREMENTS provided
+interview:
+  enabled: false
+
+# Milestone mode for systematic 8-milestone execution
+milestone:
+  enabled: true
+  health_gate: true
+  wiring_check: true
+  review_recovery_retries: 2
+
+# Design reference: UI_REQUIREMENTS.md already exists — skip extraction
+design_reference:
+  require_ui_doc: false
+  ui_requirements_file: UI_REQUIREMENTS.md
+
+# Tech research for Angular 18 + PrimeNG 18 latest APIs
+tech_research:
+  enabled: true
+  max_queries_per_tech: 2
+
+# Verification: build + type-check + lint only (no test runs for pure CSS/template changes)
+verification:
+  enabled: true
+  run_build: true
+  run_type_check: true
+  run_lint: true
+  run_tests: false
+  run_security: false
+
+# Post-orchestration scans — only UI compliance matters for this task
+post_orchestration_scans:
+  mock_data_scan: false
+  ui_compliance_scan: true
+  api_contract_scan: false
+  silent_data_loss_scan: false
+  endpoint_xref_scan: false
+  max_scan_fix_passes: 2
+
+# Disable all non-UI scans to save budget
+integrity_scans:
+  deployment_scan: false
+  asset_scan: false
+  prd_reconciliation: false
+
+database_scans:
+  dual_orm_scan: false
+  default_value_scan: false
+  relationship_scan: false
+
+# Disable E2E and browser testing — pure visual changes don't need runtime tests
+e2e_testing:
+  enabled: false
+
+browser_testing:
+  enabled: false
+
+# Tracking documents — keep handoff for milestone transitions
+tracking_documents:
+  e2e_coverage_matrix: false
+  fix_cycle_log: true
+  milestone_handoff: true

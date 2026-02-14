@@ -1,7 +1,7 @@
 # Bayan Tender — Known Issues & Technical Debt
 
 **Created:** 2026-02-11
-**Updated:** 2026-02-14 (Playwright E2E sessions — 6 bugs found, 5 fixed, ISSUE-14 resolved)
+**Updated:** 2026-02-14 (Playwright E2E session — 6 bugs found, 5 fixed)
 **Status:** All documented, 1 open (per-bid download), rest fixed or non-blocking
 **Source:** Manual E2E testing + Playwright browser automation
 
@@ -385,18 +385,22 @@ Or zip the bid's documents and stream them.
 
 ---
 
-### FIXED-06: Tender list Export button — 404 endpoint missing (was ISSUE-14)
+### ISSUE-14: Tender list Export button — 404 endpoint missing
 
-**Fixed in:** Session #6 (2026-02-14)
-- Created `ExportTendersQuery.cs` and `ExportTendersQueryHandler.cs` — CSV export with UTF-8 BOM (ClosedXML caused Docker exit code 135, switched to StringBuilder CSV)
-- Added `[HttpGet("export")]` endpoint to `TendersController.cs`
-- Frontend `tender.service.ts` `exportToExcel()` already called correct endpoint — no frontend changes needed
-- **Verified:** Playwright confirmed CSV download with 5 tenders, 11 columns
+**Severity:** LOW
+**Effort:** ~2-3 hours
+**Affected areas:** Tender list page — "Export" button
 
-### FIXED-07: mapStatus() bug — Late bids never shown in UI
+**Problem:**
+Frontend `tender.service.ts` `exportToExcel()` calls `GET /api/tenders/export` which returns 404. The backend `TendersController.cs` does not have an export endpoint.
 
-**Fixed in:** Session #6 (2026-02-14)
-- `bid.service.ts` `getBids()` mapping: added `status: (b.isLate && this.mapStatus(b.status) === 'submitted') ? 'late' : this.mapStatus(b.status)`
-- Same fix applied to `mapBidDetailToSubmission()`
-- **Problem:** `mapStatus()` only mapped backend enum values 0-3 (submitted/opened/imported/disqualified). Template checked `bid.status === 'late'` but mapStatus never returned 'late'. Backend tracks lateness via separate `isLate` boolean.
-- **Verified:** Playwright confirmed Late Bids section renders with Accept/Reject buttons when bid has isLate=true
+**Fix:**
+Add an export endpoint to `TendersController.cs`:
+```csharp
+[HttpGet("export")]
+[Authorize(Roles = "Admin,TenderManager")]
+public async Task<IActionResult> ExportToExcel([FromQuery] TenderFilterParams filters, ...)
+```
+Generate an Excel file with tender list data using a library like ClosedXML or EPPlus.
+
+**Workaround:** Users can manually copy data from the tender list table.

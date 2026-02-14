@@ -1,9 +1,9 @@
 # Bayan Tender — Confirmed Functional Features
 
 **Date:** 2026-02-11
-**Updated:** 2026-02-14 (Playwright E2E sessions #3, #4, #5, #6 — 34 new features verified, total 6 sessions)
-**Source:** Manual E2E testing + Playwright browser automation (6 sessions)
-**Total:** 210 confirmed functional features
+**Updated:** 2026-02-14 (Playwright E2E sessions #3, #4, #5 — 30 new features verified, total 5 sessions)
+**Source:** Manual E2E testing + Playwright browser automation (5 sessions)
+**Total:** 206 confirmed functional features
 
 ---
 
@@ -274,17 +274,6 @@
 205. Tender list column sorting — clickable headers (Tender Name, Client, Reference, Deadline, Status) with ascending sort, sort indicator icon [Playwright-verified]
 206. Audit Logs deep view — 7-column table (Timestamp, User, Action, Entity Type, Entity ID, Changes, IP Address), 5 filters (User, Action Type, Entity Type, Date Range, Search), pagination, Export to Excel [Playwright-verified]
 
-## Simulated Scenarios & Bug Fixes (4) [Playwright-verified, Session #6]
-
-207. Open Bids dialog — bid opening ceremony, 2 bids opened, amounts revealed (AED 11,474,690), tender auto-transitions Active → Evaluation, audit log created [Playwright-verified via DB simulation: reset bid statuses to Submitted, tender to Active]
-208. Late Bids section — Late Bids (1) panel with bidder details, submission time, file count, Accept/Reject action buttons visible (mapStatus() bug fix: derives 'late' from isLate boolean) [Playwright-verified via DB simulation: set is_late=true, status=Submitted]
-209. Late Bid Rejection — Reject dialog with reason textarea, backend processes rejection (late_accepted=false, audit log), email notification attempted (backend crash on email template — known Docker memory issue, data persisted correctly) [Playwright-verified]
-210. Export Tenders CSV — GET /api/tenders/export returns CSV with UTF-8 BOM, 11 columns (Reference, Title, Client, Type, Status, Currency, Estimated Value, Submission Deadline, Bidders, Days Remaining, Created), file downloads successfully [Playwright-verified, ISSUE-14 resolved]
-
-### Dead Code Identified
-
-- `exceptions-panel.component.ts` — orphaned component, `<app-exceptions-panel>` selector never used in any template. Cannot be tested via Playwright. Candidate for removal.
-
 ---
 
 ## Coverage by Category
@@ -311,5 +300,4 @@
 | Dialog-Level Verification | 9 | Sensitivity Analysis, Bid Details, BOQ CRUD dialogs, Internal RFI, Invite Bidders, Comments |
 | Dialog & Workflow Deep | 21 | BOQ Import/Export, Bulletin 3-step wizard, Answer Clarification, Upload Document, Duplicate Tender, Search/Filter |
 | Dashboard & Nav Deep | 12 | Home redirect, Manager Dashboard (KPIs, quick actions, activity feed), Overview Dashboard (6 KPIs, charts), Client filter, column sorting, Audit Logs deep |
-| Simulated Scenarios & Fixes | 4 | Open Bids ceremony, Late Bids section + rejection, Export CSV (ISSUE-14 fixed) |
-| **TOTAL** | **210** | **Across 2 tender lifecycles + 6 Playwright E2E sessions** |
+| **TOTAL** | **206** | **Across 2 tender lifecycles + 5 Playwright E2E sessions** |

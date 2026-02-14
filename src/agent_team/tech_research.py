@@ -552,6 +552,227 @@ def build_research_queries(
 
 
 # ---------------------------------------------------------------------------
+# Expanded research queries (best practices, integration, code examples)
+# ---------------------------------------------------------------------------
+
+_EXPANDED_QUERY_TEMPLATES: list[str] = [
+    "{name} {version_str} best practices for production applications",
+    "{name} {version_str} common mistakes and anti-patterns to avoid",
+    "{name} {version_str} code examples for common use cases",
+    "{name} {version_str} error handling and debugging patterns",
+]
+
+# PRD feature keywords that trigger domain-specific research queries
+_PRD_FEATURE_QUERY_MAP: dict[str, str] = {
+    "file upload": "{name} {version_str} file upload implementation",
+    "real-time": "{name} {version_str} WebSocket or real-time updates",
+    "real time": "{name} {version_str} WebSocket or real-time updates",
+    "websocket": "{name} {version_str} WebSocket implementation",
+    "authentication": "{name} {version_str} authentication and JWT patterns",
+    "auth": "{name} {version_str} authentication and authorization patterns",
+    "jwt": "{name} {version_str} JWT token handling",
+    "export": "{name} {version_str} data export to file patterns",
+    "excel": "{name} {version_str} Excel file generation",
+    "pdf": "{name} {version_str} PDF generation patterns",
+    "email": "{name} {version_str} email sending integration",
+    "notification": "{name} {version_str} notification system patterns",
+    "pagination": "{name} {version_str} pagination and infinite scroll",
+    "search": "{name} {version_str} search and filtering patterns",
+    "drag": "{name} {version_str} drag and drop implementation",
+    "chart": "{name} {version_str} data visualization and charts",
+    "dashboard": "{name} {version_str} dashboard layout patterns",
+    "form": "{name} {version_str} form handling and validation",
+    "table": "{name} {version_str} data table with sorting and filtering",
+    "role": "{name} {version_str} role-based access control patterns",
+    "permission": "{name} {version_str} permission and authorization patterns",
+    "cache": "{name} {version_str} caching strategies and patterns",
+    "queue": "{name} {version_str} job queue and background processing",
+    "i18n": "{name} {version_str} internationalization setup",
+    "localization": "{name} {version_str} localization and translation",
+}
+
+# Cross-technology integration query templates.
+# Keys are frozensets of (category_a, category_b) pairs.
+_INTEGRATION_QUERY_TEMPLATES: dict[frozenset[str], list[str]] = {
+    frozenset({"frontend_framework", "backend_framework"}): [
+        "{fe_name} calling {be_name} API endpoints with HTTP client",
+        "CORS configuration between {fe_name} and {be_name}",
+        "{fe_name} proxy setup for {be_name} backend development",
+    ],
+    frozenset({"backend_framework", "orm"}): [
+        "{be_name} integration with {orm_name} ORM setup and configuration",
+        "{orm_name} migration workflow in {be_name} project",
+    ],
+    frozenset({"frontend_framework", "ui_library"}): [
+        "{fe_name} with {ui_name} component library integration",
+        "{ui_name} theming and customization in {fe_name} project",
+    ],
+    frozenset({"backend_framework", "database"}): [
+        "{be_name} connection to {db_name} database setup",
+        "{db_name} connection pooling and optimization in {be_name}",
+    ],
+}
+
+
+def build_expanded_research_queries(
+    stack: list[TechStackEntry],
+    prd_text: str = "",
+    max_expanded_per_tech: int = 4,
+) -> list[tuple[str, str]]:
+    """Generate expanded research queries beyond basic version lookups.
+
+    Produces three types of additional queries:
+    1. Best-practice/anti-pattern queries for each technology
+    2. PRD-feature-aware queries (e.g. file upload, auth, real-time)
+    3. Cross-technology integration queries (e.g. Angular + ASP.NET Core)
+
+    Parameters
+    ----------
+    stack : list[TechStackEntry]
+        Detected tech stack entries.
+    prd_text : str
+        PRD or task text for feature-aware query generation.
+    max_expanded_per_tech : int
+        Maximum expanded queries per technology (excluding integration).
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        (library_name, query) tuples.
+    """
+    results: list[tuple[str, str]] = []
+    prd_lower = prd_text.lower() if prd_text else ""
+
+    # 1. Best-practice queries per technology
+    for entry in stack:
+        version_str = f"v{entry.version}" if entry.version else ""
+        tech_queries: list[str] = []
+
+        for template in _EXPANDED_QUERY_TEMPLATES:
+            if len(tech_queries) >= max_expanded_per_tech:
+                break
+            query = template.format(name=entry.name, version_str=version_str).strip()
+            query = re.sub(r'\s+', ' ', query)
+            tech_queries.append(query)
+
+        # 2. PRD-feature-aware queries
+        if prd_lower:
+            for keyword, template in _PRD_FEATURE_QUERY_MAP.items():
+                if len(tech_queries) >= max_expanded_per_tech:
+                    break
+                if keyword in prd_lower:
+                    query = template.format(name=entry.name, version_str=version_str).strip()
+                    query = re.sub(r'\s+', ' ', query)
+                    if query not in tech_queries:
+                        tech_queries.append(query)
+
+        for q in tech_queries[:max_expanded_per_tech]:
+            results.append((entry.name, q))
+
+    # 3. Cross-technology integration queries
+    category_map: dict[str, TechStackEntry] = {}
+    for entry in stack:
+        if entry.category not in category_map:
+            category_map[entry.category] = entry
+
+    for cat_pair, templates in _INTEGRATION_QUERY_TEMPLATES.items():
+        cats = list(cat_pair)
+        if len(cats) != 2:
+            continue
+        cat_a, cat_b = cats[0], cats[1]
+        entry_a = category_map.get(cat_a)
+        entry_b = category_map.get(cat_b)
+        if not entry_a or not entry_b:
+            continue
+
+        # Build substitution mapping
+        substitutions: dict[str, str] = {}
+        for cat, entry in [(cat_a, entry_a), (cat_b, entry_b)]:
+            if cat == "frontend_framework":
+                substitutions["fe_name"] = entry.name
+            elif cat == "backend_framework":
+                substitutions["be_name"] = entry.name
+            elif cat == "orm":
+                substitutions["orm_name"] = entry.name
+            elif cat == "ui_library":
+                substitutions["ui_name"] = entry.name
+            elif cat == "database":
+                substitutions["db_name"] = entry.name
+
+        for template in templates:
+            try:
+                query = template.format(**substitutions).strip()
+                query = re.sub(r'\s+', ' ', query)
+                # Attribute to the first tech in the pair
+                results.append((entry_a.name, query))
+            except KeyError:
+                continue  # Template placeholder not in substitutions — skip
+
+    return results
+
+
+def build_milestone_research_queries(
+    milestone_title: str,
+    milestone_requirements: str,
+    tech_stack: list[TechStackEntry],
+) -> list[tuple[str, str]]:
+    """Generate Context7 queries specific to a milestone's technology needs.
+
+    Cross-references the milestone requirements text against the detected
+    tech stack to produce targeted queries relevant to this milestone only.
+
+    Parameters
+    ----------
+    milestone_title : str
+        The milestone title (e.g. "Auth & User Management").
+    milestone_requirements : str
+        The milestone's REQUIREMENTS.md content.
+    tech_stack : list[TechStackEntry]
+        Full project tech stack for cross-referencing.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        (library_name, query) tuples specific to this milestone.
+    """
+    results: list[tuple[str, str]] = []
+    if not milestone_requirements and not milestone_title:
+        return results
+
+    combined_text = f"{milestone_title}\n{milestone_requirements}".lower()
+
+    # Find which technologies are mentioned in this milestone
+    relevant_techs: list[TechStackEntry] = []
+    for entry in tech_stack:
+        name_lower = entry.name.lower()
+        if name_lower in combined_text:
+            relevant_techs.append(entry)
+
+    # If no explicit mentions, use framework-level techs (frontend + backend)
+    # since they are always relevant
+    if not relevant_techs:
+        relevant_techs = [
+            e for e in tech_stack
+            if e.category in ("frontend_framework", "backend_framework")
+        ]
+
+    # Generate milestone-scoped queries
+    for entry in relevant_techs:
+        version_str = f"v{entry.version}" if entry.version else ""
+
+        # PRD-feature queries scoped to this milestone
+        for keyword, template in _PRD_FEATURE_QUERY_MAP.items():
+            if keyword in combined_text:
+                query = template.format(name=entry.name, version_str=version_str).strip()
+                query = re.sub(r'\s+', ' ', query)
+                if (entry.name, query) not in results:
+                    results.append((entry.name, query))
+
+    # Cap at reasonable number per milestone
+    return results[:8]
+
+
+# ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
 

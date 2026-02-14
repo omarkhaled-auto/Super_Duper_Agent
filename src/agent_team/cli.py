@@ -742,6 +742,7 @@ async def _run_tech_research(
     from .tech_research import (
         TechResearchResult,
         build_research_queries,
+        build_expanded_research_queries,
         detect_tech_stack,
         extract_research_summary,
         parse_tech_research_file,
@@ -768,8 +769,17 @@ async def _run_tech_research(
     tech_names = [f"{e.name} (v{e.version})" if e.version else e.name for e in stack]
     print_info(f"Phase 1.5: Tech Stack Research — {len(stack)} technologies: {', '.join(tech_names)}")
 
-    # 2. Build queries
+    # 2. Build queries (basic + expanded)
     queries = build_research_queries(stack, max_per_tech=config.tech_research.max_queries_per_tech)
+
+    # Add expanded queries (best practices, integration, PRD-aware) when enabled
+    if config.tech_research.expanded_queries:
+        expanded = build_expanded_research_queries(
+            stack=stack,
+            prd_text=prd_text,
+            max_expanded_per_tech=config.tech_research.max_expanded_queries,
+        )
+        queries.extend(expanded)
 
     # 3. Format prompt
     tech_list = "\n".join(
@@ -1077,6 +1087,7 @@ async def _run_prd_milestones(
     # Phase 1.5: TECH STACK RESEARCH
     # ------------------------------------------------------------------
     tech_research_content = ""
+    _detected_tech_stack: list = []  # Preserved for per-milestone research queries
     if config.tech_research.enabled:
         try:
             prd_text_for_research = ""
@@ -1098,6 +1109,7 @@ async def _run_prd_milestones(
             total_cost += research_cost
 
             if tech_result:
+                _detected_tech_stack = tech_result.stack
                 from .tech_research import extract_research_summary
                 tech_research_content = extract_research_summary(
                     tech_result,
@@ -1234,6 +1246,36 @@ async def _run_prd_milestones(
                 except Exception as exc:
                     print_warning(f"Failed to generate consumption checklist: {exc}")
 
+            # Per-milestone research: generate milestone-specific research content
+            ms_research_content = ""
+            if config.tech_research.enabled and config.tech_research.expanded_queries:
+                try:
+                    from .tech_research import build_milestone_research_queries
+                    # Read this milestone's requirements for targeted queries
+                    _ms_req_path = Path(ms_context.requirements_path) if ms_context else None
+                    _ms_req_text = ""
+                    if _ms_req_path and _ms_req_path.is_file():
+                        try:
+                            _ms_req_text = _ms_req_path.read_text(encoding="utf-8")
+                        except OSError:
+                            pass
+                    _ms_title = milestone.title if milestone else ""
+                    _ms_queries = build_milestone_research_queries(
+                        milestone_title=_ms_title,
+                        milestone_requirements=_ms_req_text,
+                        tech_stack=_detected_tech_stack,
+                    )
+                    if _ms_queries:
+                        _ms_query_lines = []
+                        for lib_name, query in _ms_queries:
+                            _ms_query_lines.append(f"- **{lib_name}**: {query}")
+                        ms_research_content = (
+                            "Milestone-specific research queries (use Context7 to look these up):\n"
+                            + "\n".join(_ms_query_lines)
+                        )
+                except Exception:
+                    pass  # Non-critical: milestone research is best-effort
+
             # Build milestone-specific prompt
             ms_prompt = build_milestone_execution_prompt(
                 task=task,
@@ -1246,6 +1288,7 @@ async def _run_prd_milestones(
                 design_reference_urls=design_reference_urls,
                 ui_requirements_content=ui_requirements_content,
                 tech_research_content=tech_research_content,
+                milestone_research_content=ms_research_content,
             )
 
             # Fresh session for this milestone
@@ -1596,6 +1639,30 @@ async def _run_prd_milestones(
                             f"Proceeding anyway."
                         )
 
+            # Orchestrator direct integration verification (if enabled)
+            if config.milestone.orchestrator_direct_integration:
+                try:
+                    completed_ms_ids = [
+                        m.id for m in plan.milestones
+                        if m.status == "COMPLETE" and m.id != milestone.id
+                    ]
+                    integ_cost = await _run_integration_verification(
+                        milestone_id=milestone.id,
+                        milestone_title=milestone.title,
+                        completed_milestones=completed_ms_ids,
+                        config=config,
+                        cwd=cwd,
+                        depth=depth,
+                        task=task,
+                        constraints=constraints,
+                        intervention=intervention,
+                    )
+                    total_cost += integ_cost
+                except Exception as exc:
+                    print_warning(
+                        f"Integration verification for {milestone.id} failed (non-blocking): {exc}"
+                    )
+
             # Mark complete
             milestone.status = "COMPLETE"
             plan_content = update_master_plan_status(
@@ -1692,6 +1759,114 @@ async def _run_milestone_wiring_fix(
                 cost += await _drain_interventions(client, intervention, config, phase_costs)
     except Exception as exc:
         print_warning(f"Wiring fix for {milestone_id} failed: {exc}")
+
+    return cost
+
+
+async def _run_integration_verification(
+    milestone_id: str,
+    milestone_title: str,
+    completed_milestones: list[str],
+    config: AgentTeamConfig,
+    cwd: str | None,
+    depth: str,
+    task: str,
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+) -> float:
+    """Run orchestrator-direct integration verification after a milestone completes.
+
+    Launches a focused session where the orchestrator reads source files
+    and directly verifies cross-milestone integration: imports, type
+    compatibility, API contract alignment, and wiring completeness.
+    Any issues found are fixed directly by the orchestrator.
+
+    Returns the cost of the integration verification pass.
+    """
+    scope = config.milestone.orchestrator_integration_scope
+    if scope == "none":
+        return 0.0
+
+    print_info(
+        f"Running direct integration verification for milestone {milestone_id} "
+        f"(scope: {scope})"
+    )
+
+    # Build context about completed milestones
+    completed_block = ""
+    if completed_milestones:
+        completed_block = (
+            "\n\nCompleted milestones that this milestone may depend on:\n"
+            + "\n".join(f"  - {mid}" for mid in completed_milestones)
+        )
+
+    # Check for INTEGRATION_NOTES.md in the milestone directory
+    integration_notes_hint = ""
+    if cwd:
+        notes_path = Path(cwd) / config.convergence.requirements_dir / "milestones" / milestone_id / "INTEGRATION_NOTES.md"
+        if notes_path.is_file():
+            try:
+                notes_content = notes_path.read_text(encoding="utf-8")[:3000]
+                integration_notes_hint = (
+                    f"\n\nINTEGRATION_NOTES.md for {milestone_id}:\n"
+                    f"```\n{notes_content}\n```"
+                )
+            except OSError:
+                pass
+
+    scope_instruction = ""
+    if scope == "cross_milestone":
+        scope_instruction = (
+            "Focus on CROSS-MILESTONE integration: verify that code from this milestone "
+            "correctly imports, calls, and uses types/functions from predecessor milestones. "
+            "Also verify that this milestone's exports are importable by future milestones."
+        )
+    elif scope == "full":
+        scope_instruction = (
+            "Verify ALL integration points: both cross-milestone connections and "
+            "intra-milestone wiring between files created by this milestone."
+        )
+
+    fix_prompt = (
+        f"[PHASE: DIRECT INTEGRATION VERIFICATION]\n"
+        f"[MILESTONE: {milestone_id}]\n"
+        f"[MILESTONE TITLE: {milestone_title}]\n"
+        f"\nYou are performing DIRECT integration verification for milestone {milestone_id}.\n"
+        f"{scope_instruction}\n"
+        f"{completed_block}"
+        f"{integration_notes_hint}\n\n"
+        f"INSTRUCTIONS — execute ALL of these checks:\n"
+        f"1. **Import verification**: Read the key source files from this milestone. "
+        f"Verify all imports from other milestones resolve to real, existing files/modules.\n"
+        f"2. **Type compatibility**: Check that shared types/interfaces/DTOs used across "
+        f"milestone boundaries have consistent field names and types.\n"
+        f"3. **API contract alignment**: If this milestone has frontend services calling "
+        f"backend endpoints from another milestone, verify the HTTP paths, methods, "
+        f"and request/response shapes match exactly.\n"
+        f"4. **Orphan detection**: Check that all files created by this milestone are "
+        f"actually imported/used somewhere (no dead code).\n"
+        f"5. **Configuration consistency**: Verify that environment variables, ports, "
+        f"and API base URLs are consistent.\n\n"
+        f"For EACH issue found:\n"
+        f"- Read both the source and target files\n"
+        f"- Fix the issue DIRECTLY using the Edit tool\n"
+        f"- Verify the fix by reading the modified file\n\n"
+        f"If no issues are found, report 'Integration verification: CLEAN'.\n"
+        f"\n[ORIGINAL USER REQUEST]\n{task}"
+    )
+
+    options = _build_options(config, cwd, constraints=constraints, task_text=task, depth=depth, backend=_backend)
+    phase_costs: dict[str, float] = {}
+    cost = 0.0
+
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(fix_prompt)
+            cost = await _process_response(client, config, phase_costs)
+            if intervention:
+                cost += await _drain_interventions(client, intervention, config, phase_costs)
+    except Exception as exc:
+        print_warning(f"Integration verification for {milestone_id} failed: {exc}")
 
     return cost
 

@@ -2168,6 +2168,7 @@ def build_milestone_execution_prompt(
     design_reference_urls: list[str] | None = None,
     ui_requirements_content: str | None = None,
     tech_research_content: str = "",
+    milestone_research_content: str = "",
 ) -> str:
     """Build a prompt for executing a single milestone.
 
@@ -2246,6 +2247,40 @@ def build_milestone_execution_prompt(
             "via Context7. Follow these patterns and avoid the listed pitfalls."
         )
         parts.append(tech_research_content)
+
+    # Milestone-specific research injection (per-milestone targeted queries)
+    if milestone_research_content:
+        parts.append("\n[MILESTONE-SPECIFIC TECH RESEARCH -- TARGETED FOR THIS MILESTONE]")
+        parts.append(
+            "The following documentation was researched specifically for THIS milestone's\n"
+            "technology needs. Prioritize these patterns over generic research above."
+        )
+        parts.append(milestone_research_content)
+
+    # Context7 live research instructions for milestone executor
+    parts.append("")
+    parts.append("[CONTEXT7 RESEARCH DURING EXECUTION]")
+    parts.append("You have access to Context7 MCP tools for looking up current library documentation.")
+    parts.append("USE THEM proactively during this milestone execution:")
+    parts.append("")
+    parts.append("When to use Context7:")
+    parts.append("1. Before implementing ANY library API call — verify the correct method signature")
+    parts.append("2. When encountering an unfamiliar library pattern — look up the documentation")
+    parts.append("3. When writing configuration files — verify the correct config format and options")
+    parts.append("4. When writing tests — look up the testing framework's current API")
+    parts.append("5. When a code-writer reports an error related to a library — research the fix")
+    parts.append("")
+    parts.append("How to use Context7:")
+    parts.append("1. Call `mcp__context7__resolve-library-id` with the library name")
+    parts.append("2. Call `mcp__context7__query-docs` with the resolved ID and your specific question")
+    parts.append("3. Use the results to write CORRECT code or inject into sub-agent task context")
+    parts.append("")
+    parts.append("DO NOT:")
+    parts.append("- Guess at API signatures from training data when Context7 can verify them")
+    parts.append("- Use deprecated patterns when current documentation is available")
+    parts.append("- Skip the lookup because you think you already know the answer")
+    parts.append("Every external library call should be verified against current documentation.")
+    parts.append("")
 
     # Design reference injection for milestone execution
     if ui_requirements_content:
@@ -2364,6 +2399,27 @@ def build_milestone_execution_prompt(
         "This is mandatory — the system uses these markers for convergence health checks."
     )
 
+    # Integration awareness for milestone handoff (gated by config)
+    if config.milestone.orchestrator_direct_integration:
+        parts.append("")
+        parts.append("[INTEGRATION AWARENESS]")
+        parts.append(
+            "You are executing a milestone within a larger system. "
+            "The orchestrator will verify cross-milestone integration AFTER your work is complete. "
+            "To help this process:"
+        )
+        parts.append("1. List all external dependencies your code relies on (imports from other milestones)")
+        parts.append("2. List all exports your code provides (functions, classes, types that other milestones will use)")
+        parts.append(
+            "3. Write a brief INTEGRATION_NOTES.md in the milestone directory listing "
+            "these dependencies and exports"
+        )
+        parts.append(
+            "4. If you modify any shared types or interfaces, note the change in INTEGRATION_NOTES.md "
+            "so the orchestrator can verify downstream consumers are updated"
+        )
+        parts.append("")
+
     # Integration verification for milestones with predecessors
     if milestone_context and predecessor_context:
         parts.append("\n[INTEGRATION VERIFICATION — MANDATORY for milestones with predecessors]")
@@ -2462,6 +2518,22 @@ def build_orchestrator_prompt(
             "via Context7. Follow these patterns and avoid the listed pitfalls."
         )
         parts.append(tech_research_content)
+
+    # Context7 live research instructions for orchestrator
+    parts.append("")
+    parts.append("[CONTEXT7 — LIVE DOCUMENTATION ACCESS]")
+    parts.append("You have access to Context7 MCP tools for querying library documentation:")
+    parts.append("1. `mcp__context7__resolve-library-id` — resolve a library name to Context7 ID")
+    parts.append("2. `mcp__context7__query-docs` — query documentation for a resolved library")
+    parts.append("")
+    parts.append("USE THESE TOOLS when:")
+    parts.append("- A code-writer reports an error related to a library API")
+    parts.append("- You need to verify the correct API signature for a specific library version")
+    parts.append("- Integration between two technologies needs clarification")
+    parts.append("- A reviewer flags a pattern that may be outdated or incorrect")
+    parts.append("")
+    parts.append("INJECT results into sub-agent task context when delegating implementation.")
+    parts.append("")
 
     # Interview document injection
     if interview_doc:
@@ -2611,6 +2683,57 @@ def build_orchestrator_prompt(
         parts.append(f"Self-marking (orchestrator marking its own requirements as complete) is a rubber-stamp anti-pattern.")
         parts.append(f"It produces 100% convergence ratios that do not reflect actual code review verification.")
         parts.append(f"If you mark a requirement [x] yourself, the convergence health check will show a ratio that was never validated by a reviewer.")
+
+    # Direct integration verification (gated by config)
+    if config.milestone.orchestrator_direct_integration:
+        scope = config.milestone.orchestrator_integration_scope
+        parts.append("")
+        parts.append("[DIRECT INTEGRATION VERIFICATION — ORCHESTRATOR RESPONSIBILITY]")
+        parts.append(
+            "After completing each milestone (or after the convergence loop in non-milestone mode), "
+            "you MUST perform direct integration verification YOURSELF. "
+            "Do NOT delegate this to a sub-agent — you have the full project context "
+            "and will produce better results."
+        )
+        parts.append("")
+        parts.append("### What to verify directly:")
+        parts.append("1. **Import paths** — Verify all cross-module imports resolve correctly")
+        parts.append("2. **Type compatibility** — Verify shared types/interfaces are used consistently across modules")
+        parts.append("3. **API contract alignment** — Verify backend endpoints match frontend service calls (field names, types, paths)")
+        parts.append("4. **Wiring completeness** — Verify all WIRE-xxx and SVC-xxx requirements are satisfied end-to-end")
+        parts.append("5. **Configuration consistency** — Verify config values (ports, URLs, env vars) are consistent across modules")
+        parts.append("")
+        parts.append("### How to verify:")
+        parts.append("- Read the relevant source files YOURSELF using the Read tool")
+        parts.append("- Check that imports point to real modules that exist")
+        parts.append("- Check that function signatures match between caller and callee")
+        parts.append("- Check that DTO/model field names match between frontend and backend")
+        parts.append("- If you find issues, FIX THEM DIRECTLY using the Edit tool — do not create a sub-task")
+        if scope == "cross_milestone":
+            parts.append("")
+            parts.append("### Scope: CROSS-MILESTONE")
+            parts.append(
+                "Focus on verifying integration BETWEEN milestones — "
+                "where modules from different milestones connect. "
+                "Read INTEGRATION_NOTES.md from each milestone directory (if it exists) "
+                "to understand dependencies and exports."
+            )
+        elif scope == "full":
+            parts.append("")
+            parts.append("### Scope: FULL")
+            parts.append(
+                "Verify ALL integration points across the entire project, "
+                "including intra-milestone and cross-milestone connections."
+            )
+        parts.append("")
+        parts.append("### Integration verification checklist (execute after each milestone or convergence loop):")
+        parts.append("- [ ] All new files import from existing modules correctly")
+        parts.append("- [ ] All new functions/methods are called from the right places")
+        parts.append("- [ ] All new types/interfaces are used consistently")
+        parts.append("- [ ] All new API endpoints have matching frontend service calls")
+        parts.append("- [ ] No orphan files (created but never imported/used)")
+        parts.append("- [ ] Environment variables and configuration values are consistent")
+        parts.append("")
 
     if constraints:
         from .config import format_constraints_block
