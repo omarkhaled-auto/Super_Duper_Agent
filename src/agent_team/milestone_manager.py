@@ -170,13 +170,29 @@ def _parse_deps(raw: str) -> list[str]:
     ``milestone-2 (server-side setup can parallel with milestone-3, milestone-4)``
     is correctly parsed as ``["milestone-2"]`` rather than choking on the commas
     inside the parentheses.
+
+    Also normalises short-form IDs such as ``M1``, ``m2`` to the canonical
+    ``milestone-1``, ``milestone-2`` format so that dependency look-ups against
+    ``MasterPlanMilestone.id`` never silently fail.
     """
     if not raw or raw.strip().lower() in ("none", "n/a", "-", ""):
         return []
     # Strip parenthetical comments: "(anything)" → ""
     import re
     cleaned = re.sub(r"\([^)]*\)", "", raw)
-    return [tok.strip() for tok in cleaned.split(",") if tok.strip()]
+    # Also handle "and" as a separator: "M1 and M2" → "M1, M2"
+    cleaned = re.sub(r"\band\b", ",", cleaned, flags=re.IGNORECASE)
+    tokens = [tok.strip() for tok in cleaned.split(",") if tok.strip()]
+    # Normalise short-form IDs: "M1" / "m2" → "milestone-1" / "milestone-2"
+    _short_form = re.compile(r"^[Mm](\d+)$")
+    result: list[str] = []
+    for tok in tokens:
+        m = _short_form.match(tok)
+        if m:
+            result.append(f"milestone-{m.group(1)}")
+        else:
+            result.append(tok)
+    return result
 
 
 # ---------------------------------------------------------------------------

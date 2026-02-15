@@ -318,7 +318,7 @@ class PRDChunkingConfig:
     """
 
     enabled: bool = True
-    threshold: int = 50000  # bytes - PRDs larger trigger chunking
+    threshold: int = 80000  # bytes - PRDs larger trigger chunking
     max_chunk_size: int = 20000  # bytes - target size per chunk
 
 

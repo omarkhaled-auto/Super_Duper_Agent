@@ -2,7 +2,7 @@
 
 When a PRD exceeds the size threshold, it is split into focused section chunks
 before the PRD Analyzer Fleet is deployed. This prevents context overflow for
-very large PRDs (e.g., 50KB+).
+very large PRDs (e.g., 80KB+).
 """
 
 from __future__ import annotations
@@ -46,12 +46,12 @@ class PRDChunk:
         return asdict(self)
 
 
-def detect_large_prd(content: str, threshold: int = 50000) -> bool:
+def detect_large_prd(content: str, threshold: int = 80000) -> bool:
     """Check if PRD exceeds size threshold for chunking.
 
     Args:
         content: PRD content as string
-        threshold: Size threshold in bytes (default 50KB)
+        threshold: Size threshold in bytes (default 80KB)
 
     Returns:
         True if PRD size exceeds threshold

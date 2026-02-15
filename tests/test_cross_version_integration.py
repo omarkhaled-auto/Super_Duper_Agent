@@ -387,7 +387,7 @@ class TestPRDChunkingIntegration:
 
     def test_detect_large_prd_true_for_large(self):
         from agent_team.prd_chunking import detect_large_prd
-        content = "# Large PRD\n" + "x" * 60000
+        content = "# Large PRD\n" + "x" * 90000
         assert detect_large_prd(content) is True
 
 

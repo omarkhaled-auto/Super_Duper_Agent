@@ -105,6 +105,23 @@ _TEXT_TECH_PATTERNS: list[tuple[str, str, str]] = [
     (r"\bPytest\b\s*(?:v?(\d+(?:\.\d+)*))?", "Pytest", "testing"),
     (r"\bPlaywright\b\s*(?:v?(\d+(?:\.\d+)*))?", "Playwright", "testing"),
     (r"\bCypress\b\s*(?:v?(\d+(?:\.\d+)*))?", "Cypress", "testing"),
+    (r"\bPact\b\s*(?:v?(\d+(?:\.\d+)*))?", "Pact", "testing"),
+    (r"\bSchemathesis\b\s*(?:v?(\d+(?:\.\d+)*))?", "Schemathesis", "testing"),
+    (r"\bTestcontainers\b\s*(?:v?(\d+(?:\.\d+)*))?", "Testcontainers", "testing"),
+    (r"\bdetect[- ]?secrets\b", "detect-secrets", "testing"),
+    # AI / ML / MCP
+    (r"\bModel\s*Context\s*Protocol\b|\bMCP\s+(?:server|client|SDK)\b", "MCP SDK", "other"),
+    (r"\bAnthropic\b\s*(?:SDK)?\s*(?:v?(\d+(?:\.\d+)*))?", "Anthropic SDK", "other"),
+    (r"\bonnxruntime\b|\bONNX\s*Runtime\b\s*(?:v?(\d+(?:\.\d+)*))?", "ONNX Runtime", "other"),
+    (r"\bChromaDB\b|\bchroma\s+(?:db|database)\b\s*(?:v?(\d+(?:\.\d+)*))?", "ChromaDB", "database"),
+    # Libraries / Tools
+    (r"\btree[- ]?sitter\b\s*(?:v?(\d+(?:\.\d+)*))?", "tree-sitter", "other"),
+    (r"\bNetworkX\b\s*(?:v?(\d+(?:\.\d+)*))?", "NetworkX", "other"),
+    (r"\btransitions\b\s+(?:state\s*machine|library)", "transitions", "other"),
+    (r"\bTyper\b\s*(?:v?(\d+(?:\.\d+)*))?", "Typer", "other"),
+    (r"\bpydantic[- ]?settings\b\s*(?:v?(\d+(?:\.\d+)*))?", "pydantic-settings", "other"),
+    (r"\bPrance\b\s*(?:v?(\d+(?:\.\d+)*))?", "Prance", "other"),
+    (r"\bTraefik\b\s*(?:v?(\d+(?:\.\d+)*))?", "Traefik", "other"),
     # Languages (only detect from text if not already detected from files)
     (r"\bTypeScript\b\s*(?:v?(\d+(?:\.\d+)*))?", "TypeScript", "language"),
     (r"\bPython\b\s*(?:v?(\d+(?:\.\d+)*))?", "Python", "language"),
@@ -146,6 +163,9 @@ _NPM_PACKAGE_MAP: dict[str, tuple[str, str]] = {
     "better-sqlite3": ("SQLite", "database"),
     "@supabase/supabase-js": ("Supabase", "database"),
     "firebase": ("Firebase", "database"),
+    # AI / MCP SDKs
+    "@anthropic-ai/sdk": ("Anthropic SDK", "other"),
+    "@modelcontextprotocol/sdk": ("MCP SDK", "other"),
 }
 
 # Map Python package names to canonical tech names + categories
@@ -161,6 +181,27 @@ _PYTHON_PACKAGE_MAP: dict[str, tuple[str, str]] = {
     "pymongo": ("MongoDB", "database"),
     "redis": ("Redis", "database"),
     "celery": ("Celery", "other"),
+    # AST / ML / Graph
+    "tree-sitter": ("tree-sitter", "other"),
+    "tree_sitter": ("tree-sitter", "other"),
+    "chromadb": ("ChromaDB", "database"),
+    "networkx": ("NetworkX", "other"),
+    "onnxruntime": ("ONNX Runtime", "other"),
+    # MCP / CLI / Settings
+    "mcp": ("MCP SDK", "other"),
+    "typer": ("Typer", "other"),
+    "pydantic-settings": ("pydantic-settings", "other"),
+    "pydantic_settings": ("pydantic-settings", "other"),
+    # Testing / Quality
+    "pact-python": ("Pact", "testing"),
+    "pact_python": ("Pact", "testing"),
+    "schemathesis": ("Schemathesis", "testing"),
+    "testcontainers": ("Testcontainers", "testing"),
+    "detect-secrets": ("detect-secrets", "testing"),
+    "detect_secrets": ("detect-secrets", "testing"),
+    # State machine / API parsing
+    "transitions": ("transitions", "other"),
+    "prance": ("Prance", "other"),
 }
 
 
@@ -397,6 +438,65 @@ def _detect_from_cargo(root: Path) -> list[TechStackEntry]:
     return entries
 
 
+_DOCKER_IMAGE_MAP: dict[str, tuple[str, str]] = {
+    "traefik": ("Traefik", "other"),
+    "redis": ("Redis", "database"),
+    "postgres": ("PostgreSQL", "database"),
+    "mysql": ("MySQL", "database"),
+    "mongo": ("MongoDB", "database"),
+    "nginx": ("Nginx", "other"),
+}
+
+
+def _detect_from_docker_compose(root: Path) -> list[TechStackEntry]:
+    """Detect technologies from docker-compose image references."""
+    entries: list[TechStackEntry] = []
+    seen_names: set[str] = set()
+
+    # Check common docker-compose file names
+    compose_names = [
+        "docker-compose.yml", "docker-compose.yaml",
+        "compose.yml", "compose.yaml",
+        "docker-compose.dev.yml", "docker-compose.prod.yml",
+    ]
+
+    for name in compose_names:
+        compose_path = root / name
+        if not compose_path.is_file():
+            continue
+
+        try:
+            content = compose_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+
+        # Match image: lines like "image: traefik:v2.10" or "image: postgres:16"
+        for match in re.finditer(
+            r'image:\s*["\']?([a-zA-Z0-9_./-]+?)(?::([a-zA-Z0-9._-]+))?["\']?\s*$',
+            content,
+            re.MULTILINE,
+        ):
+            image_name = match.group(1).split("/")[-1].lower()  # strip registry prefix
+            version_tag = match.group(2)
+
+            for key, (canonical, category) in _DOCKER_IMAGE_MAP.items():
+                if image_name == key and canonical not in seen_names:
+                    # Extract numeric version from tag (e.g. "v2.10" -> "2.10")
+                    version = None
+                    if version_tag:
+                        v_match = re.search(r'(\d+(?:\.\d+)*)', version_tag)
+                        version = v_match.group(1) if v_match else None
+                    entries.append(TechStackEntry(
+                        name=canonical,
+                        version=version,
+                        category=category,
+                        source=name,
+                    ))
+                    seen_names.add(canonical)
+
+    return entries
+
+
 def _detect_from_text(text: str, source: str) -> list[TechStackEntry]:
     """Detect technologies mentioned in free-form text (PRD, MASTER_PLAN)."""
     entries: list[TechStackEntry] = []
@@ -445,6 +545,7 @@ def detect_tech_stack(
         _detect_from_go_mod,
         _detect_from_csproj,
         _detect_from_cargo,
+        _detect_from_docker_compose,
     ):
         for entry in detector(root):
             if entry.name not in seen:

@@ -434,7 +434,7 @@ class TestPRDChunkingConfig:
 
         config = PRDChunkingConfig()
         assert config.enabled is True
-        assert config.threshold == 50000
+        assert config.threshold == 80000
         assert config.max_chunk_size == 20000
 
     def test_config_in_agent_team_config(self) -> None:
@@ -452,4 +452,4 @@ class TestPRDChunkingConfig:
         # Test with defaults (no yaml file)
         config, _ = load_config()
         assert config.prd_chunking.enabled is True
-        assert config.prd_chunking.threshold == 50000
+        assert config.prd_chunking.threshold == 80000

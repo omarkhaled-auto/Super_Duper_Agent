@@ -4075,10 +4075,12 @@ def main() -> None:
     from .state import RunState
     if _resume_ctx:
         # Resume mode: load the existing state from disk to preserve
-        # milestone_progress, completed_milestones, milestone_order, etc.
+        # completed_phases, milestone_progress, completed_milestones, etc.
+        # We restore ANY loaded state — not just milestone runs — so that
+        # standard-mode resumes also retain completed_phases and total_cost.
         from .state import load_state as _load_state_resume
         _loaded = _load_state_resume(str(Path(cwd) / ".agent-team"))
-        if _loaded and _loaded.milestone_progress:
+        if _loaded:
             _current_state = _loaded
             _current_state.task = args.task or _loaded.task
             _current_state.depth = args.depth or _loaded.depth
@@ -4566,6 +4568,7 @@ def main() -> None:
 
         run_cost = 0.0
         _use_milestones = False
+        _is_prd_mode = False
         milestone_convergence_report: ConvergenceReport | None = None
         depth = depth_override or "standard"
         try:

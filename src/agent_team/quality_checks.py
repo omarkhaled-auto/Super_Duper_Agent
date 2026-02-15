@@ -1523,6 +1523,11 @@ _BUILTIN_ENV_VARS: frozenset[str] = frozenset({
     "NODE_ENV", "PATH", "HOME", "USER", "SHELL", "TERM", "PWD",
     "HOSTNAME", "LANG", "LC_ALL", "TMPDIR", "TEMP", "TMP",
     "CI", "DEBUG", "VERBOSE", "LOG_LEVEL",
+    # AI/LLM provider API keys — always host-provided secrets, never in docker-compose
+    "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "CLAUDE_API_KEY",
+    "GOOGLE_API_KEY", "AZURE_OPENAI_API_KEY", "TOGETHER_API_KEY",
+    "GROQ_API_KEY", "MISTRAL_API_KEY", "COHERE_API_KEY",
+    "HUGGING_FACE_TOKEN", "HF_TOKEN",
 })
 _RE_CORS_ORIGIN = re.compile(
     r'cors\s*\(\s*\{[^}]*origin\s*:\s*[\'"]([^\'"\s]+)[\'"]'
