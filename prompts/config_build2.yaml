@@ -1,0 +1,112 @@
+# =============================================================================
+# Agent Team Configuration — BUILD 2: Builder Fleet Upgrade
+# =============================================================================
+# Build 2 creates: Agent Teams with MCP client wrappers, depth gating,
+# Claude Code hooks. Upgrades the current agent-team itself.
+# 8 milestones (M1-M8). TypeScript/Python hybrid.
+# Meta-circular: the tool builds its own upgrade.
+# Estimated: 10-15K LOC, $20-35 cost.
+# =============================================================================
+
+orchestrator:
+  model: opus
+  max_turns: 500
+  permission_mode: bypassPermissions
+  max_budget_usd: 50.0
+
+depth:
+  default: exhaustive
+  auto_detect: false
+  scan_scope_mode: full
+
+convergence:
+  max_cycles: 12
+  escalation_threshold: 4
+  min_convergence_ratio: 0.9
+  recovery_threshold: 0.8
+
+interview:
+  enabled: false       # PRD provides all context
+
+milestone:
+  enabled: true
+  max_parallel_milestones: 1
+  health_gate: true
+  wiring_check: true
+  review_recovery_retries: 2
+  orchestrator_direct_integration: true
+  orchestrator_integration_scope: cross_milestone
+
+prd_chunking:
+  enabled: true
+  threshold: 80000
+  max_chunk_size: 20000
+
+e2e_testing:
+  enabled: true
+  backend_api_tests: true
+  frontend_playwright_tests: false   # Mostly backend/CLI — no traditional frontend
+  max_fix_retries: 3
+  test_port: 9876
+  skip_if_no_api: true
+  skip_if_no_frontend: true
+
+browser_testing:
+  enabled: false       # CLI-focused build — no browser testing
+
+integrity_scans:
+  deployment_scan: true
+  asset_scan: false
+  prd_reconciliation: true
+
+tracking_documents:
+  e2e_coverage_matrix: true
+  fix_cycle_log: true
+  milestone_handoff: true
+  coverage_completeness_gate: 0.8
+  wiring_completeness_gate: 1.0
+
+database_scans:
+  dual_orm_scan: false    # No database layer in Build 2
+  default_value_scan: true
+  relationship_scan: false
+
+post_orchestration_scans:
+  mock_data_scan: true
+  ui_compliance_scan: false   # No UI in Build 2
+  api_contract_scan: true
+  silent_data_loss_scan: false
+  endpoint_xref_scan: false
+  max_scan_fix_passes: 2
+
+tech_research:
+  enabled: true
+  max_techs: 10
+  max_queries_per_tech: 4
+  expanded_queries: true
+  max_expanded_queries: 4
+
+verification:
+  enabled: true
+  blocking: true
+  run_lint: true
+  run_type_check: true
+  run_tests: true
+  run_build: true
+  run_security: true
+
+quality:
+  production_defaults: true
+  craft_review: true
+  quality_triggers_reloop: true
+
+scheduler:
+  enabled: true
+  max_parallel_tasks: 5
+  enable_critical_path: true
+
+display:
+  show_cost: true
+  show_tools: true
+  show_fleet_composition: true
+  show_convergence_status: true

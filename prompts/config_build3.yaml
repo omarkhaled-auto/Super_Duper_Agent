@@ -1,0 +1,112 @@
+# =============================================================================
+# Agent Team Configuration — BUILD 3: Integrator + Quality Gate + Super Orchestrator
+# =============================================================================
+# Build 3 creates: Integration layer, Quality Gate (40 scan codes), Super
+# Orchestrator (async state machine), CLI. Pact contract testing, Schemathesis
+# API fuzzing, Docker Compose orchestration. LARGEST BUILD (~106KB PRD).
+# 6 milestones (M1-M6). Python with pact-python v3, transitions, Typer.
+# Estimated: 20-25K LOC, $35-50 cost.
+# =============================================================================
+
+orchestrator:
+  model: opus
+  max_turns: 600       # Largest build — needs more headroom
+  permission_mode: bypassPermissions
+  max_budget_usd: 60.0
+
+depth:
+  default: exhaustive
+  auto_detect: false
+  scan_scope_mode: full
+
+convergence:
+  max_cycles: 15       # More cycles for largest build
+  escalation_threshold: 5
+  min_convergence_ratio: 0.9
+  recovery_threshold: 0.8
+
+interview:
+  enabled: false       # PRD provides all context
+
+milestone:
+  enabled: true
+  max_parallel_milestones: 1
+  health_gate: true
+  wiring_check: true
+  review_recovery_retries: 3   # Extra retries for complex build
+  orchestrator_direct_integration: true
+  orchestrator_integration_scope: cross_milestone
+
+prd_chunking:
+  enabled: true        # BUILD3_PRD.md is ~106KB — WILL be chunked
+  threshold: 80000
+  max_chunk_size: 25000   # Slightly larger chunks for better context
+
+e2e_testing:
+  enabled: true
+  backend_api_tests: true
+  frontend_playwright_tests: false   # CLI-based — no traditional frontend
+  max_fix_retries: 4
+  test_port: 9876
+  skip_if_no_api: true
+  skip_if_no_frontend: true
+
+browser_testing:
+  enabled: false       # CLI-focused build
+
+integrity_scans:
+  deployment_scan: true    # Docker Compose is core to Build 3
+  asset_scan: false
+  prd_reconciliation: true
+
+tracking_documents:
+  e2e_coverage_matrix: true
+  fix_cycle_log: true
+  milestone_handoff: true
+  coverage_completeness_gate: 0.8
+  wiring_completeness_gate: 1.0
+
+database_scans:
+  dual_orm_scan: false    # No traditional database
+  default_value_scan: true
+  relationship_scan: false
+
+post_orchestration_scans:
+  mock_data_scan: true
+  ui_compliance_scan: false   # No UI
+  api_contract_scan: true     # Critical for cross-build API contracts
+  silent_data_loss_scan: false
+  endpoint_xref_scan: false
+  max_scan_fix_passes: 2
+
+tech_research:
+  enabled: true
+  max_techs: 12             # Many libraries: pact-python, schemathesis, transitions, traefik...
+  max_queries_per_tech: 4
+  expanded_queries: true
+  max_expanded_queries: 4
+
+verification:
+  enabled: true
+  blocking: true
+  run_lint: true
+  run_type_check: true
+  run_tests: true
+  run_build: true
+  run_security: true
+
+quality:
+  production_defaults: true
+  craft_review: true
+  quality_triggers_reloop: true
+
+scheduler:
+  enabled: true
+  max_parallel_tasks: 5
+  enable_critical_path: true
+
+display:
+  show_cost: true
+  show_tools: true
+  show_fleet_composition: true
+  show_convergence_status: true
