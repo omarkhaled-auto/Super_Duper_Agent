@@ -96,7 +96,7 @@ import { PortalBidReceipt, PORTAL_BID_DOCUMENT_TYPE_CONFIG } from '../../../core
                   <span class="receipt-number">{{ receipt()!.receiptNumber }}</span>
                 </div>
                 <div class="receipt-logo">
-                  <img src="assets/images/logo.svg" alt="Bayan" />
+                  <img src="assets/images/logo.png" alt="Bayan" />
                 </div>
               </div>
             </ng-template>

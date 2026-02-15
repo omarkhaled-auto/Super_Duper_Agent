@@ -30,10 +30,7 @@ import { AuthService } from '../../../core/auth/auth.service';
     <div class="login-container">
       <div class="login-card">
         <div class="login-header">
-          <div class="logo-icon">
-            <i class="pi pi-building"></i>
-          </div>
-          <h1>Bayan Tender</h1>
+          <img src="assets/images/logo.png" alt="Bayan Tender" class="login-logo" />
           <p>Sign in to your account</p>
         </div>
 
@@ -138,17 +135,30 @@ import { AuthService } from '../../../core/auth/auth.service';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, var(--bayan-slate-50, #F8FAFC) 0%, var(--bayan-slate-100, #F1F5F9) 100%);
+      background: url('/assets/images/login-bg.jpg') center center / cover no-repeat fixed;
       padding: 2rem;
+      position: relative;
+    }
+
+    .login-container::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(79, 70, 229, 0.08);
+      backdrop-filter: blur(1px);
     }
 
     .login-card {
-      background: var(--bayan-card, #ffffff);
+      position: relative;
+      z-index: 1;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.6);
       border-radius: var(--bayan-radius-xl, 1rem);
       padding: 2.5rem;
       width: 100%;
       max-width: 420px;
-      box-shadow: var(--bayan-shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1));
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15), 0 4px 20px rgba(79, 70, 229, 0.08);
     }
 
     .login-header {
@@ -156,24 +166,11 @@ import { AuthService } from '../../../core/auth/auth.service';
       margin-bottom: 2rem;
     }
 
-    .logo-icon {
-      width: 56px;
-      height: 56px;
-      border-radius: var(--bayan-radius-lg, 0.75rem);
-      background: var(--bayan-primary-light, #EEF2FF);
-      color: var(--bayan-primary, #4F46E5);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+    .login-logo {
+      height: 52px;
+      width: auto;
+      object-fit: contain;
       margin-bottom: 1rem;
-      font-size: 1.5rem;
-    }
-
-    .login-header h1 {
-      margin: 0;
-      font-size: 1.5rem;
-      font-weight: 600;
-      color: var(--bayan-slate-900, #0F172A);
     }
 
     .login-header p {

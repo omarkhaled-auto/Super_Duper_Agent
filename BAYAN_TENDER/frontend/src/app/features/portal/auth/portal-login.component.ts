@@ -32,7 +32,7 @@ import { PortalService } from '../../../core/services/portal.service';
         <!-- Left Panel - Branding -->
         <div class="branding-panel">
           <div class="branding-content">
-            <i class="pi pi-briefcase" style="font-size: 2.5rem; margin-bottom: 1rem;"></i>
+            <img src="assets/images/logo-white.png" alt="Bayan" class="brand-logo" />
             <h1 class="brand-title">Bidder Portal</h1>
             <p class="brand-subtitle">
               Access tender documents, submit clarifications, and submit your bid through our secure portal.
@@ -179,18 +179,31 @@ import { PortalService } from '../../../core/services/portal.service';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, var(--bayan-slate-50, #F8FAFC) 0%, var(--bayan-slate-100, #F1F5F9) 100%);
+      background: url('/assets/images/login-bg.jpg') center center / cover no-repeat fixed;
       padding: 1rem;
+      position: relative;
+    }
+
+    .portal-login-container::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(79, 70, 229, 0.08);
+      backdrop-filter: blur(1px);
     }
 
     .login-wrapper {
+      position: relative;
+      z-index: 1;
       display: flex;
       max-width: 1000px;
       width: 100%;
-      background: var(--bayan-card, #ffffff);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.6);
       border-radius: var(--bayan-radius-xl, 1rem);
       overflow: hidden;
-      box-shadow: var(--bayan-shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1));
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15), 0 4px 20px rgba(79, 70, 229, 0.08);
     }
 
     /* Branding Panel */
@@ -209,8 +222,10 @@ import { PortalService } from '../../../core/services/portal.service';
     }
 
     .brand-logo {
-      height: 50px;
-      margin-bottom: 2rem;
+      height: 44px;
+      width: auto;
+      object-fit: contain;
+      margin-bottom: 1.5rem;
     }
 
     .brand-title {

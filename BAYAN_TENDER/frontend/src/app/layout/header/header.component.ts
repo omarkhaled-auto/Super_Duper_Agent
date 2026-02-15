@@ -35,9 +35,8 @@ import { UserRole } from '../../core/models/user.model';
           data-testid="sidebar-toggle"
           (click)="toggleSidebar.emit()"
         ></button>
-        <div class="logo">
-          <i class="pi pi-briefcase logo-icon" *ngIf="!collapsed"></i>
-          <span class="logo-text" *ngIf="!collapsed">Bayan Tender</span>
+        <div class="logo" *ngIf="!collapsed">
+          <img src="assets/images/logo.png" alt="Bayan Tender" class="header-logo" />
         </div>
       </div>
 
@@ -95,19 +94,12 @@ import { UserRole } from '../../core/models/user.model';
     .logo {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
     }
 
-    .logo-icon {
-      font-size: 1.5rem;
-      color: var(--bayan-primary, #4F46E5);
-    }
-
-    .logo-text {
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: var(--bayan-foreground, #020617);
-      letter-spacing: -0.025em;
+    .header-logo {
+      height: 36px;
+      width: auto;
+      object-fit: contain;
     }
 
     .header-right {

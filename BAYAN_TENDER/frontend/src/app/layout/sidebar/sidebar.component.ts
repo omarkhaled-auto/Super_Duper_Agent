@@ -25,9 +25,10 @@ import { RoleGroups } from '../../core/auth/role-groups';
     .sidebar-container {
       width: 280px;
       height: calc(100vh - 64px);
-      background: var(--bayan-sidebar-bg, #0F172A);
+      background: linear-gradient(180deg, #0F172A 0%, #0C1322 100%);
       color: var(--bayan-sidebar-foreground, #F8FAFC);
-      border-right: 1px solid var(--bayan-sidebar-border, #1E293B);
+      border-right: 1px solid rgba(148, 163, 184, 0.08);
+      box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12);
       position: fixed;
       left: 0;
       top: 64px;
@@ -46,12 +47,12 @@ import { RoleGroups } from '../../core/auth/role-groups';
       flex: 1;
       overflow-y: auto;
       overflow-x: hidden;
-      padding: 1rem 0;
+      padding: 0.75rem 0;
     }
 
     /* Dark-themed scrollbar for sidebar */
     .sidebar-content::-webkit-scrollbar {
-      width: 6px;
+      width: 4px;
     }
 
     .sidebar-content::-webkit-scrollbar-track {
@@ -59,23 +60,27 @@ import { RoleGroups } from '../../core/auth/role-groups';
     }
 
     .sidebar-content::-webkit-scrollbar-thumb {
-      background: rgba(248, 250, 252, 0.15);
-      border-radius: 3px;
+      background: rgba(148, 163, 184, 0.2);
+      border-radius: 4px;
     }
 
     .sidebar-content::-webkit-scrollbar-thumb:hover {
-      background: rgba(248, 250, 252, 0.25);
+      background: rgba(148, 163, 184, 0.35);
     }
 
     .sidebar-footer {
-      padding: 1rem;
-      border-top: 1px solid var(--bayan-sidebar-border, #1E293B);
-      text-align: center;
+      padding: 0.75rem 1rem;
+      border-top: 1px solid rgba(148, 163, 184, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .version {
-      font-size: 0.75rem;
-      color: var(--bayan-slate-500, #64748B);
+      font-size: 0.6875rem;
+      color: rgba(148, 163, 184, 0.4);
+      letter-spacing: 0.04em;
+      font-weight: 500;
     }
 
     :host ::ng-deep {
@@ -99,26 +104,27 @@ import { RoleGroups } from '../../core/auth/role-groups';
         .p-panelmenu-header-content {
           border: none !important;
           background: transparent !important;
-          border-radius: var(--bayan-radius-sm, 0.375rem);
-          margin: 0 0.5rem;
+          border-radius: var(--bayan-radius-md, 0.5rem);
+          margin: 0 0.625rem;
           padding: 0 !important;
-          transition: background-color 150ms ease;
+          transition: background-color 200ms ease, box-shadow 200ms ease;
         }
 
         .p-panelmenu-header-content:hover {
-          background-color: rgba(248, 250, 252, 0.08) !important;
+          background-color: rgba(148, 163, 184, 0.08) !important;
         }
 
         .p-panelmenu-header-link {
           display: flex;
           align-items: center;
-          gap: 0.75rem;
-          padding: 0.625rem 0.75rem;
+          gap: 0.875rem;
+          padding: 0.6875rem 0.875rem;
           color: var(--bayan-sidebar-foreground, #F8FAFC) !important;
           font-size: 0.875rem;
           font-weight: 500;
           text-decoration: none;
           cursor: pointer;
+          letter-spacing: 0.01em;
         }
 
         .p-panelmenu-header-label {
@@ -127,16 +133,35 @@ import { RoleGroups } from '../../core/auth/role-groups';
           font-weight: 500;
         }
 
-        .p-panelmenu-header-link .pi {
-          color: var(--bayan-sidebar-muted, #94A3B8);
-          font-size: 1.125rem;
+        /* ── Item icon (pi-home, pi-file, etc. — PrimeNG names it "submenu-icon") ── */
+        .p-panelmenu-submenu-icon {
+          color: rgba(148, 163, 184, 0.7);
+          font-size: 1.125rem !important;
+          width: 22px;
+          text-align: center;
+          transition: color 200ms ease;
+          order: 0;
         }
 
-        /* ── Submenu chevron icon ── */
-        .p-panelmenu-submenu-icon {
-          color: var(--bayan-sidebar-muted, #94A3B8) !important;
-          font-size: 0.75rem !important;
+        .p-panelmenu-header-content:hover .p-panelmenu-submenu-icon {
+          color: rgba(165, 180, 252, 0.8);
+        }
+
+        /* ── Expand/collapse chevron (PrimeNG renders this FIRST in DOM — move to end) ── */
+        .p-panelmenu-header-link > .p-iconwrapper,
+        .p-panelmenu-header-link > chevronrighticon,
+        .p-panelmenu-header-link > chevrondownicon {
+          order: 99;
           margin-left: auto;
+          color: rgba(148, 163, 184, 0.35);
+          font-size: 0.75rem;
+          transition: color 200ms ease, transform 200ms ease;
+        }
+
+        .p-panelmenu-header-content:hover > .p-panelmenu-header-link > .p-iconwrapper,
+        .p-panelmenu-header-content:hover > .p-panelmenu-header-link > chevronrighticon,
+        .p-panelmenu-header-content:hover > .p-panelmenu-header-link > chevrondownicon {
+          color: rgba(148, 163, 184, 0.6);
         }
 
         /* ── Expanded submenu content ── */
@@ -151,9 +176,22 @@ import { RoleGroups } from '../../core/auth/role-groups';
         }
 
         .p-panelmenu-submenu {
-          padding: 0.25rem 0;
+          padding: 0.25rem 0 0.375rem 0;
           list-style: none;
           margin: 0;
+          position: relative;
+        }
+
+        /* Subtle vertical line connector for submenu */
+        .p-panelmenu-submenu::before {
+          content: '';
+          position: absolute;
+          left: 2.125rem;
+          top: 0.25rem;
+          bottom: 0.375rem;
+          width: 1px;
+          background: rgba(148, 163, 184, 0.1);
+          border-radius: 1px;
         }
 
         /* ── Sub-items (All Tenders, Users, etc.) ── */
@@ -164,25 +202,27 @@ import { RoleGroups } from '../../core/auth/role-groups';
         .p-panelmenu-item-content {
           border: none !important;
           background: transparent !important;
-          border-radius: var(--bayan-radius-sm, 0.375rem);
-          margin: 0 0.5rem;
-          transition: background-color 150ms ease;
+          border-radius: var(--bayan-radius-md, 0.5rem);
+          margin: 0 0.625rem;
+          transition: background-color 200ms ease;
         }
 
         .p-panelmenu-item-content:hover {
-          background-color: rgba(248, 250, 252, 0.08) !important;
+          background-color: rgba(148, 163, 184, 0.08) !important;
         }
 
         .p-panelmenu-item-link {
           display: flex;
           align-items: center;
           gap: 0.75rem;
-          padding: 0.5rem 0.75rem 0.5rem 2.75rem;
-          color: var(--bayan-sidebar-muted, #94A3B8) !important;
-          font-size: 0.875rem;
+          padding: 0.5rem 0.875rem 0.5rem 2.875rem;
+          color: rgba(148, 163, 184, 0.65) !important;
+          font-size: 0.8125rem;
+          font-weight: 450;
           text-decoration: none;
           cursor: pointer;
-          transition: color 150ms ease;
+          transition: color 200ms ease;
+          letter-spacing: 0.01em;
         }
 
         .p-panelmenu-item-link:hover {
@@ -191,24 +231,27 @@ import { RoleGroups } from '../../core/auth/role-groups';
 
         .p-panelmenu-item-label {
           color: inherit !important;
-          font-size: 0.875rem;
+          font-size: 0.8125rem;
         }
 
         .p-panelmenu-item-link .pi {
           color: inherit;
-          font-size: 1rem;
+          font-size: 0.9375rem;
+          width: 18px;
+          text-align: center;
         }
 
         /* ── Active/Highlight state for sub-items ── */
         .p-panelmenu-item.p-focus > .p-panelmenu-item-content,
         .p-panelmenu-item.p-highlight > .p-panelmenu-item-content {
-          background-color: rgba(79, 70, 229, 0.12) !important;
-          border-left: 3px solid var(--bayan-sidebar-active-border, #4F46E5);
+          background-color: rgba(79, 70, 229, 0.15) !important;
+          border-left: 2px solid var(--bayan-sidebar-active-border, #818CF8);
         }
 
         .p-panelmenu-item.p-focus > .p-panelmenu-item-content .p-panelmenu-item-link,
         .p-panelmenu-item.p-highlight > .p-panelmenu-item-content .p-panelmenu-item-link {
-          color: #ffffff !important;
+          color: #E0E7FF !important;
+          font-weight: 500;
         }
 
         .p-panelmenu-item.p-focus > .p-panelmenu-item-content .p-panelmenu-item-link .pi,
@@ -219,12 +262,24 @@ import { RoleGroups } from '../../core/auth/role-groups';
         /* ── Active/Highlight state for header items ── */
         .p-panelmenu-header.p-highlight .p-panelmenu-header-content,
         .p-panelmenu-header.p-panelmenu-header-active .p-panelmenu-header-content {
-          background-color: rgba(79, 70, 229, 0.12) !important;
+          background-color: rgba(79, 70, 229, 0.15) !important;
+          border-left: 2px solid #818CF8;
+        }
+
+        .p-panelmenu-header.p-highlight .p-panelmenu-header-link,
+        .p-panelmenu-header.p-panelmenu-header-active .p-panelmenu-header-link {
+          color: #E0E7FF !important;
         }
 
         .p-panelmenu-header.p-highlight .p-panelmenu-header-link .pi,
         .p-panelmenu-header.p-panelmenu-header-active .p-panelmenu-header-link .pi {
           color: #A5B4FC;
+        }
+
+        .p-panelmenu-header.p-highlight .p-panelmenu-header-label,
+        .p-panelmenu-header.p-panelmenu-header-active .p-panelmenu-header-label {
+          color: #E0E7FF !important;
+          font-weight: 600;
         }
       }
     }

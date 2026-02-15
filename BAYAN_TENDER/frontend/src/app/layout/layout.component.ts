@@ -43,7 +43,15 @@ import { SidebarComponent } from './sidebar/sidebar.component';
       margin-top: 64px;
       min-height: calc(100vh - 64px);
       transition: margin-left 0.2s ease;
-      background-color: var(--bayan-muted, #F1F5F9);
+      background:
+        linear-gradient(rgba(241, 245, 249, 0.85), rgba(241, 245, 249, 0.85)),
+        url('/assets/images/login-bg.jpg') center center / cover no-repeat fixed;
+      position: relative;
+    }
+
+    .content-wrapper {
+      position: relative;
+      z-index: 1;
     }
 
     .layout-wrapper.sidebar-collapsed .main-content {

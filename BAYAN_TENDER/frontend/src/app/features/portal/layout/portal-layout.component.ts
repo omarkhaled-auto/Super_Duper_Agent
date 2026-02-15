@@ -27,7 +27,7 @@ import { PortalService } from '../../../core/services/portal.service';
             <a routerLink="/portal/tenders" class="back-link" pTooltip="Back to Your Tenders" tooltipPosition="bottom">
               <i class="pi pi-arrow-left"></i>
             </a>
-            <img src="assets/images/logo-white.svg" alt="Bayan" class="portal-logo" />
+            <img src="assets/images/logo-white.png" alt="Bayan" class="portal-logo" />
             <div class="tender-info" *ngIf="tender()">
               <h1 class="tender-title">{{ tender()?.title }}</h1>
               <span class="tender-reference">{{ tender()?.reference }}</span>
@@ -290,8 +290,21 @@ import { PortalService } from '../../../core/services/portal.service';
     }
 
     /* Main Content */
-    .portal-main { flex: 1; padding: 2rem; }
-    .portal-content { max-width: var(--bayan-container-max, 1400px); margin: 0 auto; }
+    .portal-main {
+      flex: 1;
+      padding: 2rem;
+      position: relative;
+      background:
+        linear-gradient(rgba(248, 250, 252, 0.85), rgba(248, 250, 252, 0.85)),
+        url('/assets/images/login-bg.jpg') center center / cover no-repeat fixed;
+    }
+
+    .portal-content {
+      max-width: var(--bayan-container-max, 1400px);
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
 
     /* Footer */
     .portal-footer {
