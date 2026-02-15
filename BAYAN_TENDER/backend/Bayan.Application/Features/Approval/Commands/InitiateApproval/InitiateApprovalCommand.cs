@@ -19,8 +19,14 @@ public record InitiateApprovalCommand : IRequest<InitiateApprovalResult>
     public string? AwardPackPdfPath { get; init; }
 
     /// <summary>
+    /// Number of approval levels. Defaults to 3 if not specified.
+    /// Must be between 1 and 10.
+    /// </summary>
+    public int? NumberOfLevels { get; init; }
+
+    /// <summary>
     /// List of approver user IDs in sequential order.
-    /// Must contain exactly 3 approvers (Level 1, Level 2, Level 3).
+    /// Count must match NumberOfLevels (or default of 3).
     /// </summary>
     public List<Guid> ApproverUserIds { get; init; } = new();
 

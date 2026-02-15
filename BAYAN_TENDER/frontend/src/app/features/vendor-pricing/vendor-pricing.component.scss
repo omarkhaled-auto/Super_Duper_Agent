@@ -1,0 +1,252 @@
+.vendor-pricing-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  color: var(--bayan-slate-900, #0F172A);
+}
+
+.page-header p {
+  margin: 0.25rem 0 0;
+  color: var(--bayan-muted-foreground, #64748B);
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+:host ::ng-deep .filter-card .p-card-body {
+  padding: 1rem;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  gap: 1rem;
+}
+
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+:host ::ng-deep .summary-card .p-card-body {
+  padding: 1rem;
+}
+
+.summary-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.summary-icon {
+  font-size: 2rem;
+  color: var(--bayan-primary, #4F46E5);
+}
+
+.summary-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--bayan-slate-900, #0F172A);
+}
+
+.summary-label {
+  font-size: 0.875rem;
+  color: var(--bayan-muted-foreground, #64748B);
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+}
+
+.full-width {
+  grid-column: 1 / -1;
+}
+
+:host ::ng-deep .chart-card .p-card-content {
+  min-height: 300px;
+}
+
+.no-data {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: var(--bayan-muted-foreground, #64748B);
+}
+
+.trend-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vendor-name {
+  font-weight: 500;
+}
+
+.tender-ref {
+  font-weight: 500;
+  display: block;
+}
+
+.tender-title {
+  font-size: 0.875rem;
+  color: var(--bayan-muted-foreground, #64748B);
+  display: block;
+}
+
+.search-controls {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.search-field {
+  flex: 1;
+  min-width: 300px;
+}
+
+.search-field input {
+  width: 100%;
+}
+
+.vendor-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.company-name {
+  font-weight: 500;
+}
+
+.email {
+  font-size: 0.875rem;
+  color: var(--bayan-muted-foreground, #64748B);
+}
+
+.comparison-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.comparison-header h3 {
+  margin: 0;
+  margin-right: auto;
+}
+
+.selected-vendors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.no-selection {
+  color: var(--bayan-muted-foreground, #64748B);
+  font-style: italic;
+}
+
+.rate-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.rate-value {
+  font-weight: 500;
+}
+
+.rate-diff {
+  font-size: 0.75rem;
+  color: var(--bayan-danger, #DC2626);
+}
+
+.lowest-rate {
+  background-color: var(--bayan-success-bg, #f0fdf4) !important;
+}
+
+.lowest-rate .rate-value {
+  color: var(--bayan-success, #16A34A);
+}
+
+.trends-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.trends-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  padding: 1rem;
+  background: var(--bayan-accent, #EEF2FF);
+  border-radius: var(--bayan-radius-lg, 0.75rem);
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-item .label {
+  font-size: 0.875rem;
+  color: var(--bayan-muted-foreground, #64748B);
+}
+
+.summary-item .value {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.trends-chart {
+  min-height: 300px;
+}
+
+@media (max-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .search-controls {
+    flex-direction: column;
+  }
+
+  .search-field {
+    width: 100%;
+    min-width: unset;
+  }
+}

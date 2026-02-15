@@ -22,16 +22,21 @@ public class InitiateApprovalCommandValidator : AbstractValidator<InitiateApprov
             .MustAsync(TenderInEvaluationStatus).WithMessage("Tender must be in Evaluation status to initiate approval.")
             .MustAsync(NoExistingActiveWorkflow).WithMessage("An active approval workflow already exists for this tender.");
 
+        RuleFor(x => x.NumberOfLevels)
+            .Must(x => x == null || (x >= 1 && x <= 10))
+            .WithMessage("Number of levels must be between 1 and 10.");
+
         RuleFor(x => x.ApproverUserIds)
             .NotNull().WithMessage("Approver list is required.")
-            .Must(x => x.Count == 3).WithMessage("Exactly 3 approvers must be specified (Level 1, Level 2, Level 3).")
+            .Must((cmd, ids) => ids.Count == (cmd.NumberOfLevels ?? 3))
+            .WithMessage(cmd => $"Exactly {cmd.NumberOfLevels ?? 3} approvers must be specified (one per level).")
             .Must(x => x.Distinct().Count() == x.Count).WithMessage("Approver user IDs must be unique.")
             .MustAsync(AllApproversExist).WithMessage("One or more approver users not found.")
             .MustAsync(AllApproversAreActive).WithMessage("One or more approvers are inactive users.");
 
         RuleFor(x => x.LevelDeadlines)
-            .Must(x => x == null || x.Count == 0 || x.Count == 3)
-            .WithMessage("If deadlines are specified, exactly 3 must be provided (one per level).")
+            .Must((cmd, deadlines) => deadlines == null || deadlines.Count == 0 || deadlines.Count == (cmd.NumberOfLevels ?? 3))
+            .WithMessage(cmd => $"If deadlines are specified, exactly {cmd.NumberOfLevels ?? 3} must be provided (one per level).")
             .Must(DeadlinesInFuture)
             .WithMessage("All deadlines must be in the future.");
 
@@ -102,7 +107,8 @@ public class InitiateApprovalCommandValidator : AbstractValidator<InitiateApprov
         InitiateApprovalCommand command,
         CancellationToken cancellationToken)
     {
-        if (command.ApproverUserIds == null || command.ApproverUserIds.Count != 3)
+        var expectedCount = command.NumberOfLevels ?? 3;
+        if (command.ApproverUserIds == null || command.ApproverUserIds.Count != expectedCount)
             return true;
 
         var existingWorkflow = await _context.ApprovalWorkflows
@@ -122,7 +128,7 @@ public class InitiateApprovalCommandValidator : AbstractValidator<InitiateApprov
             .Select(l => l.ApproverUserId)
             .ToList();
 
-        if (previousApproverIds.Count != 3)
+        if (previousApproverIds.Count != expectedCount)
             return true;
 
         var approversChanged = !previousApproverIds.SequenceEqual(command.ApproverUserIds);

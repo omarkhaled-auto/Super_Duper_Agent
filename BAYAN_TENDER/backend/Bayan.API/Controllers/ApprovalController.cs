@@ -77,6 +77,7 @@ public class ApprovalController : ControllerBase
         {
             TenderId = id,
             AwardPackPdfPath = request.AwardPackPdfPath,
+            NumberOfLevels = request.NumberOfLevels,
             ApproverUserIds = request.ApproverUserIds,
             LevelDeadlines = request.LevelDeadlines,
             ApproverChangeReason = request.ApproverChangeReason
@@ -206,14 +207,20 @@ public class InitiateApprovalRequest
     public string? AwardPackPdfPath { get; set; }
 
     /// <summary>
+    /// Number of approval levels. Defaults to 3 if not specified.
+    /// Must be between 1 and 10.
+    /// </summary>
+    public int? NumberOfLevels { get; set; }
+
+    /// <summary>
     /// List of approver user IDs in sequential order.
-    /// Must contain exactly 3 approvers (Level 1, Level 2, Level 3).
+    /// Count must match NumberOfLevels (or default of 3).
     /// </summary>
     public List<Guid> ApproverUserIds { get; set; } = new();
 
     /// <summary>
     /// Optional deadlines for each approval level.
-    /// If provided, must contain exactly 3 dates (one per level).
+    /// If provided, count must match NumberOfLevels (or default of 3).
     /// </summary>
     public List<DateTime?>? LevelDeadlines { get; set; }
 

@@ -1,0 +1,386 @@
+.approval-tab-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  gap: 1rem;
+}
+
+.loading-container p {
+  color: var(--bayan-muted-foreground, #64748B);
+}
+
+.no-workflow-state {
+  display: flex;
+  justify-content: center;
+  padding: 3rem;
+}
+
+.empty-state-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1rem;
+  max-width: 400px;
+}
+
+.empty-icon {
+  font-size: 4rem;
+  color: var(--bayan-muted-foreground, #64748B);
+  opacity: 0.5;
+}
+
+.empty-state-content h3 {
+  margin: 0;
+  color: var(--bayan-foreground, #0F172A);
+}
+
+.empty-state-content p {
+  margin: 0;
+  color: var(--bayan-muted-foreground, #64748B);
+}
+
+.workflow-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.workflow-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.header-left h3 {
+  margin: 0;
+  color: var(--bayan-foreground, #0F172A);
+}
+
+.initiator-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--bayan-accent, #F1F5F9);
+  border-radius: var(--bayan-radius, 0.5rem);
+  font-size: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.info-label {
+  color: var(--bayan-muted-foreground, #64748B);
+}
+
+.info-value {
+  color: var(--bayan-foreground, #0F172A);
+  font-weight: 500;
+}
+
+.info-separator {
+  color: var(--bayan-border, #E2E8F0);
+}
+
+.stepper-container {
+  padding: 1rem 0;
+}
+
+:host ::ng-deep .approval-steps .p-steps-item {
+  flex: 1;
+}
+
+:host ::ng-deep .approval-steps .p-steps-item .p-steps-item-link,
+:host ::ng-deep .approval-steps .p-steps-item .p-menuitem-link {
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+:host ::ng-deep .approval-steps .p-steps-item.p-steps-current .p-steps-item-link .p-steps-item-number,
+:host ::ng-deep .approval-steps .p-steps-item.p-steps-current .p-menuitem-link .p-steps-number,
+:host ::ng-deep .approval-steps .p-steps-item-active .p-steps-item-link .p-steps-item-number {
+  background-color: var(--bayan-primary, #4F46E5);
+  color: white;
+  border-color: var(--bayan-primary, #4F46E5);
+  box-shadow: 0 0 0 3px var(--bayan-primary-ring, rgba(79,70,229,0.15));
+}
+
+:host ::ng-deep .approval-steps .p-steps-item.p-highlight .p-steps-item-link .p-steps-item-number,
+:host ::ng-deep .approval-steps .p-steps-item.p-highlight .p-menuitem-link .p-steps-number {
+  background-color: var(--bayan-success, #16A34A);
+  color: white;
+  border-color: var(--bayan-success, #16A34A);
+}
+
+:host ::ng-deep .approval-steps .p-steps-item .p-steps-item-link .p-steps-item-number,
+:host ::ng-deep .approval-steps .p-steps-item .p-menuitem-link .p-steps-number {
+  border-color: var(--bayan-border, #E2E8F0);
+  color: var(--bayan-muted-foreground, #64748B);
+}
+
+.levels-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+:host ::ng-deep .level-card {
+  border: 2px solid var(--bayan-border, #E2E8F0);
+  transition: border-color 0.2s;
+}
+
+:host ::ng-deep .level-card.active {
+  border-color: var(--bayan-primary, #4F46E5);
+  box-shadow: 0 0 0 3px var(--bayan-primary-ring, rgba(79,70,229,0.15));
+}
+
+:host ::ng-deep .level-card.approved {
+  border-color: var(--bayan-success, #16A34A);
+}
+
+:host ::ng-deep .level-card.rejected {
+  border-color: var(--bayan-danger, #DC2626);
+}
+
+:host ::ng-deep .level-card.returned {
+  border-color: var(--bayan-warning, #D97706);
+}
+
+:host ::ng-deep .level-card .p-card-header {
+  padding: 1rem;
+  background-color: var(--bayan-accent, #F1F5F9);
+  border-bottom: 1px solid var(--bayan-border, #E2E8F0);
+}
+
+.level-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.level-number {
+  font-weight: 600;
+  color: var(--bayan-foreground, #0F172A);
+}
+
+.level-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.approver-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.approver-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.approver-name {
+  font-weight: 600;
+  color: var(--bayan-foreground, #0F172A);
+}
+
+.approver-email {
+  font-size: 0.875rem;
+  color: var(--bayan-muted-foreground, #64748B);
+}
+
+.level-deadline,
+.level-decision,
+.level-comment {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--bayan-muted-foreground, #64748B);
+}
+
+.level-deadline i,
+.level-decision i,
+.level-comment i {
+  margin-top: 2px;
+}
+
+.level-comment {
+  background-color: var(--bayan-accent, #F1F5F9);
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-style: italic;
+}
+
+/* Decision Form Styles */
+:host ::ng-deep .decision-card {
+  background-color: var(--bayan-accent, #F1F5F9);
+  border: 2px solid var(--bayan-primary, #4F46E5);
+}
+
+.decision-options {
+  margin-bottom: 1.5rem;
+}
+
+.option-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.decision-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.option-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.comment-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.comment-section label {
+  font-weight: 500;
+  color: var(--bayan-foreground, #0F172A);
+}
+
+.required {
+  color: var(--bayan-danger, #DC2626);
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Timeline Styles */
+.timeline-section {
+  padding: 1rem;
+}
+
+.timeline-section h4 {
+  margin: 0 0 1rem 0;
+  color: var(--bayan-foreground, #0F172A);
+}
+
+.timeline-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--bayan-border, #E2E8F0);
+  color: var(--bayan-muted-foreground, #64748B);
+}
+
+.timeline-marker.approved {
+  background-color: var(--bayan-success, #16A34A);
+  color: white;
+}
+
+.timeline-marker.rejected {
+  background-color: var(--bayan-danger, #DC2626);
+  color: white;
+}
+
+.timeline-marker.returned {
+  background-color: var(--bayan-warning, #D97706);
+  color: white;
+}
+
+.timeline-event {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+
+.event-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.event-approver {
+  font-weight: 600;
+  color: var(--bayan-foreground, #0F172A);
+}
+
+.event-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.875rem;
+  color: var(--bayan-muted-foreground, #64748B);
+}
+
+.event-comment {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background-color: var(--bayan-accent, #F1F5F9);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: var(--bayan-muted-foreground, #64748B);
+}
+
+.event-comment i {
+  margin-top: 2px;
+  color: var(--bayan-muted-foreground, #64748B);
+}
+
+.w-full {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .workflow-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-right {
+    display: flex;
+    justify-content: center;
+  }
+
+  .option-group {
+    flex-direction: column;
+  }
+
+  .initiator-info {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .info-separator {
+    display: none;
+  }
+}

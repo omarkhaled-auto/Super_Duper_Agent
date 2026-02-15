@@ -61,7 +61,7 @@ public class InitiateApprovalCommandHandler : IRequestHandler<InitiateApprovalCo
                 .Select(l => l.ApproverUserId)
                 .ToList();
 
-            approversChangedOnReinit = previousApproverIds.Count == request.ApproverUserIds.Count &&
+            approversChangedOnReinit = previousApproverIds.Count != request.ApproverUserIds.Count ||
                 !previousApproverIds.SequenceEqual(request.ApproverUserIds);
 
             _context.ApprovalLevels.RemoveRange(existingWorkflow.Levels);
@@ -83,13 +83,14 @@ public class InitiateApprovalCommandHandler : IRequestHandler<InitiateApprovalCo
 
         _context.ApprovalWorkflows.Add(workflow);
 
-        // Create approval levels (sequential, 3 levels)
+        // Create approval levels (sequential, configurable number of levels)
+        var numberOfLevels = request.NumberOfLevels ?? 3;
         var approverUsers = await _context.Users
             .Where(u => request.ApproverUserIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, cancellationToken);
 
         var levels = new List<ApprovalLevel>();
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < numberOfLevels; i++)
         {
             var level = new ApprovalLevel
             {
@@ -109,8 +110,8 @@ public class InitiateApprovalCommandHandler : IRequestHandler<InitiateApprovalCo
         await _context.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "Created approval workflow {WorkflowId} for tender {TenderId} with 3 levels. Initiated by user {UserId}",
-            workflow.Id, request.TenderId, currentUserId);
+            "Created approval workflow {WorkflowId} for tender {TenderId} with {LevelCount} levels. Initiated by user {UserId}",
+            workflow.Id, request.TenderId, numberOfLevels, currentUserId);
 
         // Send notification to Level 1 approver
         var level1NotificationSent = false;
@@ -181,7 +182,7 @@ public class InitiateApprovalCommandHandler : IRequestHandler<InitiateApprovalCo
             CompletedAt = workflow.CompletedAt,
             AwardPackPdfPath = workflow.AwardPackPdfPath,
             CurrentLevel = 1,
-            TotalLevels = 3,
+            TotalLevels = numberOfLevels,
             Levels = levels.Select(l => new ApprovalLevelDto
             {
                 Id = l.Id,
