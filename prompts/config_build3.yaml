@@ -34,8 +34,6 @@ milestone:
   health_gate: true
   wiring_check: true
   review_recovery_retries: 3   # Extra retries for complex build
-  orchestrator_direct_integration: true
-  orchestrator_integration_scope: cross_milestone
 
 prd_chunking:
   enabled: true        # BUILD3_PRD.md is ~106KB — WILL be chunked

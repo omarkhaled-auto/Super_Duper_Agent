@@ -152,7 +152,7 @@ async def run_design_extraction(
     DesignExtractionError
         If extraction fails or output file is not written.
     """
-    from .mcp_servers import get_firecrawl_only_servers
+    from .mcp_servers import get_firecrawl_only_servers, get_research_tools
 
     req_dir = config.convergence.requirements_dir
     ui_file = config.design_reference.ui_requirements_file
@@ -188,7 +188,7 @@ async def run_design_extraction(
         "system_prompt": system_prompt,
         "permission_mode": config.orchestrator.permission_mode,
         "max_turns": 30,  # Extraction shouldn't need many turns
-        "allowed_tools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
+        "allowed_tools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep"] + get_research_tools(mcp_servers),
         "mcp_servers": mcp_servers,
         "cwd": Path(cwd),
     }

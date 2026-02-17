@@ -14,7 +14,6 @@ from .config import AgentConfig, AgentTeamConfig, get_agent_counts
 
 if TYPE_CHECKING:
     from .milestone_manager import MilestoneContext
-from .mcp_servers import get_research_tools
 from .code_quality_standards import get_standards_for_agent
 from .investigation_protocol import build_investigation_protocol
 from .orchestrator_reasoning import build_orchestrator_st_instructions
@@ -778,9 +777,9 @@ Your job is to gather external knowledge and add it to the Requirements Document
 ## Your Tasks
 1. Read `.agent-team/REQUIREMENTS.md` to understand the task context
 2. Research relevant libraries, APIs, and best practices:
-   - Use Context7 (resolve-library-id + query-docs) for library documentation
-   - Use Firecrawl (firecrawl_search, firecrawl_scrape) for web research
-   - Use WebSearch and WebFetch for additional information
+   - Library documentation will be provided by the orchestrator via Context7 lookups
+   - Web research results will be provided by the orchestrator via Firecrawl scraping
+   - Use WebSearch and WebFetch for additional information when needed
 3. Add your findings to the **Research Findings** section of REQUIREMENTS.md
 4. If your research reveals additional requirements, ADD them to the checklist
 
@@ -1847,8 +1846,6 @@ def build_agent_definitions(
     Returns a dict of agent name → AgentDefinition kwargs.
     Each agent's model is read from the per-agent config (defaults to 'opus').
     """
-    research_tools = get_research_tools(mcp_servers)
-
     agents: dict[str, dict[str, Any]] = {}
 
     if config.agents.get("planner", AgentConfig()).enabled:
@@ -2399,26 +2396,6 @@ def build_milestone_execution_prompt(
         "This is mandatory — the system uses these markers for convergence health checks."
     )
 
-    # Integration awareness for milestone handoff (gated by config)
-    if config.milestone.orchestrator_direct_integration:
-        parts.append("")
-        parts.append("[INTEGRATION AWARENESS]")
-        parts.append(
-            "You are executing a milestone within a larger system. "
-            "The orchestrator will verify cross-milestone integration AFTER your work is complete. "
-            "To help this process:"
-        )
-        parts.append("1. List all external dependencies your code relies on (imports from other milestones)")
-        parts.append("2. List all exports your code provides (functions, classes, types that other milestones will use)")
-        parts.append(
-            "3. Write a brief INTEGRATION_NOTES.md in the milestone directory listing "
-            "these dependencies and exports"
-        )
-        parts.append(
-            "4. If you modify any shared types or interfaces, note the change in INTEGRATION_NOTES.md "
-            "so the orchestrator can verify downstream consumers are updated"
-        )
-        parts.append("")
 
     # Integration verification for milestones with predecessors
     if milestone_context and predecessor_context:
@@ -2683,57 +2660,6 @@ def build_orchestrator_prompt(
         parts.append(f"Self-marking (orchestrator marking its own requirements as complete) is a rubber-stamp anti-pattern.")
         parts.append(f"It produces 100% convergence ratios that do not reflect actual code review verification.")
         parts.append(f"If you mark a requirement [x] yourself, the convergence health check will show a ratio that was never validated by a reviewer.")
-
-    # Direct integration verification (gated by config)
-    if config.milestone.orchestrator_direct_integration:
-        scope = config.milestone.orchestrator_integration_scope
-        parts.append("")
-        parts.append("[DIRECT INTEGRATION VERIFICATION — ORCHESTRATOR RESPONSIBILITY]")
-        parts.append(
-            "After completing each milestone (or after the convergence loop in non-milestone mode), "
-            "you MUST perform direct integration verification YOURSELF. "
-            "Do NOT delegate this to a sub-agent — you have the full project context "
-            "and will produce better results."
-        )
-        parts.append("")
-        parts.append("### What to verify directly:")
-        parts.append("1. **Import paths** — Verify all cross-module imports resolve correctly")
-        parts.append("2. **Type compatibility** — Verify shared types/interfaces are used consistently across modules")
-        parts.append("3. **API contract alignment** — Verify backend endpoints match frontend service calls (field names, types, paths)")
-        parts.append("4. **Wiring completeness** — Verify all WIRE-xxx and SVC-xxx requirements are satisfied end-to-end")
-        parts.append("5. **Configuration consistency** — Verify config values (ports, URLs, env vars) are consistent across modules")
-        parts.append("")
-        parts.append("### How to verify:")
-        parts.append("- Read the relevant source files YOURSELF using the Read tool")
-        parts.append("- Check that imports point to real modules that exist")
-        parts.append("- Check that function signatures match between caller and callee")
-        parts.append("- Check that DTO/model field names match between frontend and backend")
-        parts.append("- If you find issues, FIX THEM DIRECTLY using the Edit tool — do not create a sub-task")
-        if scope == "cross_milestone":
-            parts.append("")
-            parts.append("### Scope: CROSS-MILESTONE")
-            parts.append(
-                "Focus on verifying integration BETWEEN milestones — "
-                "where modules from different milestones connect. "
-                "Read INTEGRATION_NOTES.md from each milestone directory (if it exists) "
-                "to understand dependencies and exports."
-            )
-        elif scope == "full":
-            parts.append("")
-            parts.append("### Scope: FULL")
-            parts.append(
-                "Verify ALL integration points across the entire project, "
-                "including intra-milestone and cross-milestone connections."
-            )
-        parts.append("")
-        parts.append("### Integration verification checklist (execute after each milestone or convergence loop):")
-        parts.append("- [ ] All new files import from existing modules correctly")
-        parts.append("- [ ] All new functions/methods are called from the right places")
-        parts.append("- [ ] All new types/interfaces are used consistently")
-        parts.append("- [ ] All new API endpoints have matching frontend service calls")
-        parts.append("- [ ] No orphan files (created but never imported/used)")
-        parts.append("- [ ] Environment variables and configuration values are consistent")
-        parts.append("")
 
     if constraints:
         from .config import format_constraints_block

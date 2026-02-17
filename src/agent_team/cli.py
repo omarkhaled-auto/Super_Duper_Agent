@@ -79,7 +79,7 @@ from .display import (
     print_warning,
 )
 from .interviewer import _detect_scope, run_interview
-from .mcp_servers import get_mcp_servers
+from .mcp_servers import get_mcp_servers, get_orchestrator_st_tool_name, get_research_tools
 from .prd_chunking import (
     build_prd_index,
     create_prd_chunks,
@@ -310,7 +310,9 @@ def _build_options(
         "allowed_tools": [
             "Read", "Write", "Edit", "Bash", "Glob", "Grep",
             "Task", "WebSearch", "WebFetch",
-        ],
+        ] + get_research_tools(mcp_servers) + (
+            [get_orchestrator_st_tool_name()] if "sequential_thinking" in mcp_servers else []
+        ),
     }
 
     if config.orchestrator.max_thinking_tokens is not None:
@@ -1639,30 +1641,6 @@ async def _run_prd_milestones(
                             f"Proceeding anyway."
                         )
 
-            # Orchestrator direct integration verification (if enabled)
-            if config.milestone.orchestrator_direct_integration:
-                try:
-                    completed_ms_ids = [
-                        m.id for m in plan.milestones
-                        if m.status == "COMPLETE" and m.id != milestone.id
-                    ]
-                    integ_cost = await _run_integration_verification(
-                        milestone_id=milestone.id,
-                        milestone_title=milestone.title,
-                        completed_milestones=completed_ms_ids,
-                        config=config,
-                        cwd=cwd,
-                        depth=depth,
-                        task=task,
-                        constraints=constraints,
-                        intervention=intervention,
-                    )
-                    total_cost += integ_cost
-                except Exception as exc:
-                    print_warning(
-                        f"Integration verification for {milestone.id} failed (non-blocking): {exc}"
-                    )
-
             # Mark complete
             milestone.status = "COMPLETE"
             plan_content = update_master_plan_status(
@@ -1759,114 +1737,6 @@ async def _run_milestone_wiring_fix(
                 cost += await _drain_interventions(client, intervention, config, phase_costs)
     except Exception as exc:
         print_warning(f"Wiring fix for {milestone_id} failed: {exc}")
-
-    return cost
-
-
-async def _run_integration_verification(
-    milestone_id: str,
-    milestone_title: str,
-    completed_milestones: list[str],
-    config: AgentTeamConfig,
-    cwd: str | None,
-    depth: str,
-    task: str,
-    constraints: list | None = None,
-    intervention: "InterventionQueue | None" = None,
-) -> float:
-    """Run orchestrator-direct integration verification after a milestone completes.
-
-    Launches a focused session where the orchestrator reads source files
-    and directly verifies cross-milestone integration: imports, type
-    compatibility, API contract alignment, and wiring completeness.
-    Any issues found are fixed directly by the orchestrator.
-
-    Returns the cost of the integration verification pass.
-    """
-    scope = config.milestone.orchestrator_integration_scope
-    if scope == "none":
-        return 0.0
-
-    print_info(
-        f"Running direct integration verification for milestone {milestone_id} "
-        f"(scope: {scope})"
-    )
-
-    # Build context about completed milestones
-    completed_block = ""
-    if completed_milestones:
-        completed_block = (
-            "\n\nCompleted milestones that this milestone may depend on:\n"
-            + "\n".join(f"  - {mid}" for mid in completed_milestones)
-        )
-
-    # Check for INTEGRATION_NOTES.md in the milestone directory
-    integration_notes_hint = ""
-    if cwd:
-        notes_path = Path(cwd) / config.convergence.requirements_dir / "milestones" / milestone_id / "INTEGRATION_NOTES.md"
-        if notes_path.is_file():
-            try:
-                notes_content = notes_path.read_text(encoding="utf-8")[:3000]
-                integration_notes_hint = (
-                    f"\n\nINTEGRATION_NOTES.md for {milestone_id}:\n"
-                    f"```\n{notes_content}\n```"
-                )
-            except OSError:
-                pass
-
-    scope_instruction = ""
-    if scope == "cross_milestone":
-        scope_instruction = (
-            "Focus on CROSS-MILESTONE integration: verify that code from this milestone "
-            "correctly imports, calls, and uses types/functions from predecessor milestones. "
-            "Also verify that this milestone's exports are importable by future milestones."
-        )
-    elif scope == "full":
-        scope_instruction = (
-            "Verify ALL integration points: both cross-milestone connections and "
-            "intra-milestone wiring between files created by this milestone."
-        )
-
-    fix_prompt = (
-        f"[PHASE: DIRECT INTEGRATION VERIFICATION]\n"
-        f"[MILESTONE: {milestone_id}]\n"
-        f"[MILESTONE TITLE: {milestone_title}]\n"
-        f"\nYou are performing DIRECT integration verification for milestone {milestone_id}.\n"
-        f"{scope_instruction}\n"
-        f"{completed_block}"
-        f"{integration_notes_hint}\n\n"
-        f"INSTRUCTIONS — execute ALL of these checks:\n"
-        f"1. **Import verification**: Read the key source files from this milestone. "
-        f"Verify all imports from other milestones resolve to real, existing files/modules.\n"
-        f"2. **Type compatibility**: Check that shared types/interfaces/DTOs used across "
-        f"milestone boundaries have consistent field names and types.\n"
-        f"3. **API contract alignment**: If this milestone has frontend services calling "
-        f"backend endpoints from another milestone, verify the HTTP paths, methods, "
-        f"and request/response shapes match exactly.\n"
-        f"4. **Orphan detection**: Check that all files created by this milestone are "
-        f"actually imported/used somewhere (no dead code).\n"
-        f"5. **Configuration consistency**: Verify that environment variables, ports, "
-        f"and API base URLs are consistent.\n\n"
-        f"For EACH issue found:\n"
-        f"- Read both the source and target files\n"
-        f"- Fix the issue DIRECTLY using the Edit tool\n"
-        f"- Verify the fix by reading the modified file\n\n"
-        f"If no issues are found, report 'Integration verification: CLEAN'.\n"
-        f"\n[ORIGINAL USER REQUEST]\n{task}"
-    )
-
-    options = _build_options(config, cwd, constraints=constraints, task_text=task, depth=depth, backend=_backend)
-    phase_costs: dict[str, float] = {}
-    cost = 0.0
-
-    try:
-        async with ClaudeSDKClient(options=options) as client:
-            await client.query(fix_prompt)
-            cost = await _process_response(client, config, phase_costs)
-            if intervention:
-                cost += await _drain_interventions(client, intervention, config, phase_costs)
-    except Exception as exc:
-        print_warning(f"Integration verification for {milestone_id} failed: {exc}")
 
     return cost
 

@@ -288,8 +288,6 @@ class MilestoneConfig:
     review_recovery_retries: int = 1  # Max review recovery attempts per milestone
     mock_data_scan: bool = True       # Scan for mock data after each milestone
     ui_compliance_scan: bool = True      # scan for UI compliance after each milestone
-    orchestrator_direct_integration: bool = True   # Orchestrator verifies cross-milestone integration directly
-    orchestrator_integration_scope: str = "cross_milestone"  # "cross_milestone", "full", "none"
 
 
 @dataclass
@@ -563,8 +561,6 @@ def apply_depth_quality_gating(
         _gate("browser_testing.enabled", False, config.browser_testing, "enabled")
         # Multi-pass fix cycles
         _gate("post_orchestration_scans.max_scan_fix_passes", 0, config.post_orchestration_scans, "max_scan_fix_passes")
-        # Orchestrator direct integration
-        _gate("milestone.orchestrator_direct_integration", False, config.milestone, "orchestrator_direct_integration")
 
     elif depth == "standard":
         # Standard: tech research enabled with reduced queries
@@ -1046,7 +1042,7 @@ def _dict_to_config(data: dict[str, Any]) -> tuple[AgentTeamConfig, set[str]]:
 
     if "milestone" in data and isinstance(data["milestone"], dict):
         ms = data["milestone"]
-        for key in ("mock_data_scan", "ui_compliance_scan", "review_recovery_retries", "orchestrator_direct_integration"):
+        for key in ("mock_data_scan", "ui_compliance_scan", "review_recovery_retries"):
             if key in ms:
                 user_overrides.add(f"milestone.{key}")
         resume_val = ms.get("resume_from_milestone", cfg.milestone.resume_from_milestone)
@@ -1073,26 +1069,12 @@ def _dict_to_config(data: dict[str, Any]) -> tuple[AgentTeamConfig, set[str]]:
             ui_compliance_scan=ms.get(
                 "ui_compliance_scan", cfg.milestone.ui_compliance_scan,
             ),
-            orchestrator_direct_integration=ms.get(
-                "orchestrator_direct_integration", cfg.milestone.orchestrator_direct_integration,
-            ),
-            orchestrator_integration_scope=ms.get(
-                "orchestrator_integration_scope", cfg.milestone.orchestrator_integration_scope,
-            ),
         )
         # Validate: review_recovery_retries >= 0
         if cfg.milestone.review_recovery_retries < 0:
             raise ValueError(
                 f"Invalid milestone.review_recovery_retries: "
                 f"{cfg.milestone.review_recovery_retries}. Must be >= 0"
-            )
-        # Validate: orchestrator_integration_scope enum
-        _valid_scopes = ("cross_milestone", "full", "none")
-        if cfg.milestone.orchestrator_integration_scope not in _valid_scopes:
-            raise ValueError(
-                f"Invalid milestone.orchestrator_integration_scope: "
-                f"{cfg.milestone.orchestrator_integration_scope!r}. "
-                f"Must be one of: {', '.join(_valid_scopes)}"
             )
 
     if "prd_chunking" in data and isinstance(data["prd_chunking"], dict):

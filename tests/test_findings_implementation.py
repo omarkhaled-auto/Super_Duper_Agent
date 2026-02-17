@@ -1,6 +1,5 @@
-"""Tests for Finding 1 (Orchestrator Direct Integration) and Finding 2 (Context7 Research Enhancement).
+"""Tests for Finding 2 (Context7 Research Enhancement).
 
-Finding 1: Orchestrator direct execution for complex integration tasks.
 Finding 2: Expanded Context7 research queries + per-milestone research injection.
 """
 from __future__ import annotations
@@ -14,10 +13,8 @@ import pytest
 
 from agent_team.config import (
     AgentTeamConfig,
-    MilestoneConfig,
     TechResearchConfig,
     _dict_to_config,
-    apply_depth_quality_gating,
 )
 from agent_team.agents import (
     build_milestone_execution_prompt,
@@ -56,215 +53,6 @@ def _make_stack(techs: list[tuple[str, str | None, str]]) -> list[TechStackEntry
         TechStackEntry(name=n, version=v, category=c, source="test")
         for n, v, c in techs
     ]
-
-
-# ============================================================
-# FINDING 1: Orchestrator Direct Integration
-# ============================================================
-
-class TestFinding1Config:
-    """Test config fields for orchestrator direct integration."""
-
-    def test_default_values(self):
-        cfg = AgentTeamConfig()
-        assert cfg.milestone.orchestrator_direct_integration is True
-        assert cfg.milestone.orchestrator_integration_scope == "cross_milestone"
-
-    def test_yaml_loading(self):
-        data = {
-            "milestone": {
-                "orchestrator_direct_integration": False,
-                "orchestrator_integration_scope": "full",
-            }
-        }
-        cfg, overrides = _dict_to_config(data)
-        assert cfg.milestone.orchestrator_direct_integration is False
-        assert cfg.milestone.orchestrator_integration_scope == "full"
-        assert "milestone.orchestrator_direct_integration" in overrides
-
-    def test_scope_validation_valid_values(self):
-        for scope in ("cross_milestone", "full", "none"):
-            data = {"milestone": {"orchestrator_integration_scope": scope}}
-            cfg, _ = _dict_to_config(data)
-            assert cfg.milestone.orchestrator_integration_scope == scope
-
-    def test_scope_validation_invalid_value(self):
-        data = {"milestone": {"orchestrator_integration_scope": "invalid"}}
-        with pytest.raises(ValueError, match="orchestrator_integration_scope"):
-            _dict_to_config(data)
-
-    def test_scope_validation_empty_string(self):
-        data = {"milestone": {"orchestrator_integration_scope": ""}}
-        with pytest.raises(ValueError, match="orchestrator_integration_scope"):
-            _dict_to_config(data)
-
-
-class TestFinding1DepthGating:
-    """Test depth gating for orchestrator direct integration."""
-
-    def test_quick_disables_integration(self):
-        cfg = AgentTeamConfig()
-        assert cfg.milestone.orchestrator_direct_integration is True
-        apply_depth_quality_gating("quick", cfg, set())
-        assert cfg.milestone.orchestrator_direct_integration is False
-
-    def test_standard_preserves_integration(self):
-        cfg = AgentTeamConfig()
-        apply_depth_quality_gating("standard", cfg, set())
-        assert cfg.milestone.orchestrator_direct_integration is True
-
-    def test_thorough_preserves_integration(self):
-        cfg = AgentTeamConfig()
-        apply_depth_quality_gating("thorough", cfg, set())
-        assert cfg.milestone.orchestrator_direct_integration is True
-
-    def test_exhaustive_preserves_integration(self):
-        cfg = AgentTeamConfig()
-        apply_depth_quality_gating("exhaustive", cfg, set())
-        assert cfg.milestone.orchestrator_direct_integration is True
-
-    def test_user_override_survives_gating(self):
-        cfg = AgentTeamConfig()
-        cfg.milestone.orchestrator_direct_integration = True
-        user_overrides = {"milestone.orchestrator_direct_integration"}
-        apply_depth_quality_gating("quick", cfg, user_overrides)
-        # User override should preserve the value
-        assert cfg.milestone.orchestrator_direct_integration is True
-
-
-class TestFinding1OrchestratorPrompt:
-    """Test DIRECT INTEGRATION VERIFICATION section in orchestrator prompt."""
-
-    def test_integration_section_present_when_enabled(self):
-        cfg = _default_config(**{"milestone.orchestrator_direct_integration": True})
-        prompt = build_orchestrator_prompt(
-            task="Build a web app", depth="thorough", config=cfg,
-        )
-        assert "[DIRECT INTEGRATION VERIFICATION" in prompt
-        assert "ORCHESTRATOR RESPONSIBILITY" in prompt
-
-    def test_integration_section_absent_when_disabled(self):
-        cfg = _default_config(**{"milestone.orchestrator_direct_integration": False})
-        prompt = build_orchestrator_prompt(
-            task="Build a web app", depth="thorough", config=cfg,
-        )
-        assert "[DIRECT INTEGRATION VERIFICATION" not in prompt
-
-    def test_cross_milestone_scope_in_prompt(self):
-        cfg = _default_config(
-            **{
-                "milestone.orchestrator_direct_integration": True,
-                "milestone.orchestrator_integration_scope": "cross_milestone",
-            }
-        )
-        prompt = build_orchestrator_prompt(
-            task="Build a web app", depth="thorough", config=cfg,
-        )
-        assert "Scope: CROSS-MILESTONE" in prompt
-
-    def test_full_scope_in_prompt(self):
-        cfg = _default_config(
-            **{
-                "milestone.orchestrator_direct_integration": True,
-                "milestone.orchestrator_integration_scope": "full",
-            }
-        )
-        prompt = build_orchestrator_prompt(
-            task="Build a web app", depth="thorough", config=cfg,
-        )
-        assert "Scope: FULL" in prompt
-
-    def test_checklist_items_present(self):
-        cfg = _default_config(**{"milestone.orchestrator_direct_integration": True})
-        prompt = build_orchestrator_prompt(
-            task="Build a web app", depth="thorough", config=cfg,
-        )
-        assert "Import paths" in prompt
-        assert "Type compatibility" in prompt
-        assert "API contract alignment" in prompt
-        assert "Wiring completeness" in prompt
-        assert "Configuration consistency" in prompt
-
-    def test_verification_method_instructions(self):
-        cfg = _default_config(**{"milestone.orchestrator_direct_integration": True})
-        prompt = build_orchestrator_prompt(
-            task="Build a web app", depth="thorough", config=cfg,
-        )
-        assert "Read the relevant source files YOURSELF" in prompt
-        assert "FIX THEM DIRECTLY" in prompt
-        assert "do not create a sub-task" in prompt
-
-
-class TestFinding1MilestonePrompt:
-    """Test INTEGRATION AWARENESS section in milestone execution prompt."""
-
-    def test_integration_awareness_present_when_enabled(self):
-        cfg = _default_config(**{"milestone.orchestrator_direct_integration": True})
-        prompt = build_milestone_execution_prompt(
-            task="Build a web app", depth="thorough", config=cfg,
-        )
-        assert "[INTEGRATION AWARENESS]" in prompt
-
-    def test_integration_awareness_absent_when_disabled(self):
-        cfg = _default_config(**{"milestone.orchestrator_direct_integration": False})
-        prompt = build_milestone_execution_prompt(
-            task="Build a web app", depth="thorough", config=cfg,
-        )
-        assert "[INTEGRATION AWARENESS]" not in prompt
-
-    def test_integration_notes_instruction(self):
-        cfg = _default_config(**{"milestone.orchestrator_direct_integration": True})
-        prompt = build_milestone_execution_prompt(
-            task="Build a web app", depth="thorough", config=cfg,
-        )
-        assert "INTEGRATION_NOTES.md" in prompt
-        assert "dependencies and exports" in prompt
-
-    def test_external_dependencies_instruction(self):
-        cfg = _default_config(**{"milestone.orchestrator_direct_integration": True})
-        prompt = build_milestone_execution_prompt(
-            task="Build a web app", depth="thorough", config=cfg,
-        )
-        assert "external dependencies" in prompt
-        assert "exports your code provides" in prompt
-
-
-class TestFinding1IntegrationVerification:
-    """Test _run_integration_verification function in cli.py."""
-
-    def test_function_exists(self):
-        from agent_team.cli import _run_integration_verification
-        assert callable(_run_integration_verification)
-
-    def test_function_signature(self):
-        import inspect
-        from agent_team.cli import _run_integration_verification
-        sig = inspect.signature(_run_integration_verification)
-        params = list(sig.parameters.keys())
-        assert "milestone_id" in params
-        assert "milestone_title" in params
-        assert "completed_milestones" in params
-        assert "config" in params
-        assert "cwd" in params
-        assert "depth" in params
-        assert "task" in params
-
-    def test_scope_none_returns_zero(self):
-        """When scope is 'none', should return 0.0 cost immediately."""
-        import asyncio
-        from agent_team.cli import _run_integration_verification
-
-        cfg = _default_config(**{"milestone.orchestrator_integration_scope": "none"})
-        result = asyncio.run(_run_integration_verification(
-            milestone_id="milestone-1",
-            milestone_title="Test",
-            completed_milestones=[],
-            config=cfg,
-            cwd=None,
-            depth="standard",
-            task="test",
-        ))
-        assert result == 0.0
 
 
 # ============================================================
@@ -733,31 +521,6 @@ class TestFinding2CliWiring:
         content = cli_path.read_text(encoding="utf-8")
         assert "config.tech_research.expanded_queries" in content
 
-    def test_run_integration_verification_wired(self):
-        """Verify _run_integration_verification is called in milestone loop."""
-        cli_path = Path(__file__).resolve().parent.parent / "src" / "agent_team" / "cli.py"
-        content = cli_path.read_text(encoding="utf-8")
-        assert "config.milestone.orchestrator_direct_integration" in content
-        assert "_run_integration_verification(" in content
-
-    def test_integration_verification_gated_by_config(self):
-        """Verify integration verification is gated by config flag."""
-        cli_path = Path(__file__).resolve().parent.parent / "src" / "agent_team" / "cli.py"
-        content = cli_path.read_text(encoding="utf-8")
-        # The config check should appear before the function call
-        idx_check = content.index("config.milestone.orchestrator_direct_integration")
-        idx_call = content.index("_run_integration_verification(")
-        assert idx_check < idx_call
-
-    def test_integration_verification_in_try_except(self):
-        """Verify integration verification is crash-isolated."""
-        cli_path = Path(__file__).resolve().parent.parent / "src" / "agent_team" / "cli.py"
-        content = cli_path.read_text(encoding="utf-8")
-        # Find the block containing the call
-        idx = content.index("_run_integration_verification(")
-        # Look backwards for 'try:' within 500 chars (the call is nested in a list comprehension)
-        block = content[max(0, idx - 500):idx]
-        assert "try:" in block
 
 
 # ============================================================
