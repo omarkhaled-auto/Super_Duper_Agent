@@ -35,6 +35,9 @@ public static class DependencyInjection
         services.AddScoped<IBoqColumnMappingService, BoqColumnMappingService>();
         services.AddScoped<IBoqSectionDetectionService, BoqSectionDetectionService>();
 
+        // Register BOQ roll-up service
+        services.AddScoped<IBoqRollUpService, BoqRollUpService>();
+
         return services;
     }
 }

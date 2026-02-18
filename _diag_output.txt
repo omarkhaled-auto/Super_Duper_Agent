@@ -1,0 +1,52 @@
+=== DIAGNOSTIC REPORT ===
+Date: Wed Feb 18 14:34:01 +04 2026
+PWD: /mnt/c/Projects/claude-agent-team
+
+=== Python ===
+/bin/bash: line 1: python: command not found
+python: NOT FOUND
+Python 3.12.3
+
+=== which/where ===
+which python: not found
+/usr/bin/python3
+
+=== PATH ===
+/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/mnt/c/WINDOWS/system32:/mnt/c/WINDOWS:/mnt/c/WINDOWS/System32/Wbem:/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/c/WINDOWS/System32/OpenSSH/:/mnt/c/Program Files/dotnet/:/mnt/c/Program Files (x86)/Microsoft VS Code/bin:/mnt/c/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/:/mnt/c/Program Files/Common Files/Autodesk Shared/:/mnt/c/Program Files/Microsoft SQL Server/150/Tools/Binn/:/mnt/c/E20-II/Enviro:/mnt/c/Program Files/cursor/resources/app/bin:/mnt/c/Program Files/nodejs/:/mnt/c/Program Files/Git/cmd:/mnt/c/Program Files/DeepAgent/bin:/mnt/c/Program Files/GitHub CLI/:/mnt/c/Program Files/Docker/Docker/resources/bin:/mnt/c/Users/Omar Khaled/AppData/Local/Programs/Python/Python311/Scripts/:/mnt/c/Users/Omar Khaled/AppData/Local/Programs/Python/Python311/:/mnt/c/Users/Omar Khaled/AppData/Local/Programs/Python/Python313/Scripts/:/mnt/c/Users/Omar Khaled/AppData/Local/Programs/Python/Python313/:/mnt/c/Users/Omar Khaled/AppData/Local/Microsoft/WindowsApps:/mnt/c/Users/Omar Khaled/AppData/Local/Pandoc/:/mnt/c/Users/Omar Khaled/AppData/Local/Programs/MiKTeX/miktex/bin/x64/:/mnt/c/Users/Omar Khaled/AppData/Roaming/npm:/mnt/c/Users/Omar K:/mnt/c/Users/Omar Khaled/.local/bin:/mnt/c/Users/Omar Khaled/AppData/Local/Programs/Ollama
+
+=== Python paths ===
+ls: cannot access '/c/Python*/': No such file or directory
+No /c/Python*/
+ls: cannot access '/c/Users/Omar Khaled/AppData/Local/Programs/Python/': No such file or directory
+No AppData Python
+
+=== Project ===
+total 3632
+drwxrwxrwx 1 mar_haled mar_haled   4096 Feb 18 14:34 .
+drwxrwxrwx 1 mar_haled mar_haled   4096 Feb 18 14:16 ..
+drwxrwxrwx 1 mar_haled mar_haled   4096 Feb  3 11:36 .claude
+-rwxrwxrwx 1 mar_haled mar_haled    117 Feb 18 00:57 .env
+-rwxrwxrwx 1 mar_haled mar_haled     85 Feb 18 00:57 .env.example
+drwxrwxrwx 1 mar_haled mar_haled   4096 Feb 18 14:25 .git
+-rwxrwxrwx 1 mar_haled mar_haled    135 Feb  5 00:46 .gitignore
+drwxrwxrwx 1 mar_haled mar_haled   4096 Feb 17 14:46 .hypothesis
+-rwxrwxrwx 1 mar_haled mar_haled  14270 Feb  5 16:52 AGENT_TEAM_OBSERVATION_LOG.md
+-rwxrwxrwx 1 mar_haled mar_haled  24609 Feb 11 11:36 ARCHITECTURE_REPORT.md
+-rwxrwxrwx 1 mar_haled mar_haled  23176 Feb 15 12:42 AUDIT_CLI.md
+-rwxrwxrwx 1 mar_haled mar_haled  13914 Feb 15 12:06 AUDIT_FIX_FINAL_REVIEW.md
+-rwxrwxrwx 1 mar_haled mar_haled  16704 Feb 15 12:43 AUDIT_INFRASTRUCTURE.md
+-rwxrwxrwx 1 mar_haled mar_haled  27219 Feb 15 12:43 AUDIT_PROMPTS.md
+-rwxrwxrwx 1 mar_haled mar_haled  27675 Feb 15 12:44 AUDIT_SCANS.md
+-rwxrwxrwx 1 mar_haled mar_haled  42473 Feb 18 00:11 AUDIT_TEAM_DESIGN.md
+-rwxrwxrwx 1 mar_haled mar_haled  22634 Feb 18 01:03 AUDIT_TEAM_REVIEW.md
+-rwxrwxrwx 1 mar_haled mar_haled 151147 Feb 11 15:51 Agent-team_New_Upgrades.md
+-rwxrwxrwx 1 mar_haled mar_haled  18718 Feb 12 13:31 Agent-team_New_Upgrades_V2.md
+
+=== super-team ===
+ls: cannot access 'C:/Projects/super-team/src/': No such file or directory
+super-team not found
+
+=== API Key ===
+...
+
+=== DONE ===

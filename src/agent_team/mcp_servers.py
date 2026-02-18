@@ -28,12 +28,24 @@ def _firecrawl_server() -> dict[str, Any] | None:
 
 
 def _context7_server() -> dict[str, Any]:
-    """Return Context7 MCP server config (no API key required)."""
-    return {
+    """Return Context7 MCP server config.
+
+    Passes CONTEXT7_API_KEY from the environment if available, which raises
+    the rate limit from the free tier.  The server works without the key
+    but may hit quota limits on large builds.
+    """
+    env: dict[str, str] = {}
+    api_key = os.environ.get("CONTEXT7_API_KEY")
+    if api_key:
+        env["CONTEXT7_API_KEY"] = api_key
+    server: dict[str, Any] = {
         "type": "stdio",
         "command": "npx",
         "args": ["-y", "@anthropic-ai/context7-mcp@latest"],
     }
+    if env:
+        server["env"] = env
+    return server
 
 
 def _sequential_thinking_server() -> dict[str, Any]:
@@ -92,6 +104,67 @@ def get_research_tools(servers: dict[str, Any]) -> list[str]:
             "mcp__context7__resolve-library-id",
             "mcp__context7__query-docs",
         ])
+    return tools
+
+
+# Base tools shared by all orchestrator sessions.
+_BASE_TOOLS: list[str] = [
+    "Read", "Write", "Edit", "Bash", "Glob", "Grep",
+    "Task", "WebSearch", "WebFetch",
+]
+
+
+def get_playwright_tools() -> list[str]:
+    """Return the list of allowed MCP tool names for Playwright browser interaction."""
+    _PLAYWRIGHT_TOOL_NAMES = [
+        "browser_navigate",
+        "browser_navigate_back",
+        "browser_snapshot",
+        "browser_click",
+        "browser_hover",
+        "browser_type",
+        "browser_press_key",
+        "browser_select_option",
+        "browser_drag",
+        "browser_take_screenshot",
+        "browser_console_messages",
+        "browser_network_requests",
+        "browser_evaluate",
+        "browser_run_code",
+        "browser_fill_form",
+        "browser_file_upload",
+        "browser_handle_dialog",
+        "browser_wait_for",
+        "browser_tabs",
+        "browser_close",
+        "browser_resize",
+        "browser_install",
+    ]
+    return [f"mcp__playwright__{name}" for name in _PLAYWRIGHT_TOOL_NAMES]
+
+
+def recompute_allowed_tools(
+    base_tools: list[str], servers: dict[str, Any]
+) -> list[str]:
+    """Recompute allowed_tools based on the current set of MCP servers.
+
+    Call this whenever ``options.mcp_servers`` is replaced after
+    ``_build_options()`` so that the tool allowlist stays in sync.
+
+    Args:
+        base_tools: The base tool names (Read, Write, etc.).
+        servers: The MCP servers dict that will be used for the session.
+
+    Returns:
+        A new list combining base tools with research, ST, and Playwright
+        tool names based on which servers are present.
+    """
+    tools = list(base_tools)
+    tools.extend(get_research_tools(servers))
+    if "sequential_thinking" in servers:
+        tools.append(get_orchestrator_st_tool_name())
+    if "playwright" in servers:
+        tools.extend(get_playwright_tools())
     return tools
 
 

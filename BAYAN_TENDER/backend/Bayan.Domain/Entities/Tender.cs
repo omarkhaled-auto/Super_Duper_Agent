@@ -79,6 +79,12 @@ public class Tender : BaseEntity, IAuditableEntity
     public int CommercialWeight { get; set; } = 60;
 
     /// <summary>
+    /// Pricing level for the BOQ hierarchy.
+    /// Determines at which level bidders must provide prices.
+    /// </summary>
+    public PricingLevel PricingLevel { get; set; } = PricingLevel.SubItem;
+
+    /// <summary>
     /// Current status of the tender.
     /// </summary>
     public TenderStatus Status { get; set; } = TenderStatus.Draft;

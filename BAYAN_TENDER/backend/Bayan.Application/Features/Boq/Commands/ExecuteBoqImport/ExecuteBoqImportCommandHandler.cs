@@ -266,6 +266,10 @@ public class ExecuteBoqImportCommandHandler : IRequestHandler<ExecuteBoqImportCo
         var itemsPerSection = new Dictionary<string, int>();
         var sortOrderBySection = new Dictionary<string, int>();
 
+        // Check if BillNumber or SubItemLabel columns are mapped
+        var hasBillNumberMapping = mappings.ContainsKey(BoqField.BillNumber);
+        var hasSubItemLabelMapping = mappings.ContainsKey(BoqField.SubItemLabel);
+
         // Get row numbers with errors or warnings
         var errorRows = issues
             .Where(i => i.Severity == ValidationSeverity.Error)
@@ -287,6 +291,94 @@ public class ExecuteBoqImportCommandHandler : IRequestHandler<ExecuteBoqImportCo
         // Build set of known section numbers for best-section lookup
         var knownSectionNumbers = new HashSet<string>(sections.Keys, StringComparer.OrdinalIgnoreCase);
 
+        // ── Pre-scan: Create sections from BillNumber column if mapped ──
+        if (hasBillNumberMapping)
+        {
+            var billSortOrder = sections.Count;
+            for (var rowIndex = 0; rowIndex < sheet.Rows.Count; rowIndex++)
+            {
+                var row = sheet.Rows[rowIndex];
+                var billNumber = GetMappedValue(row, mappings, BoqField.BillNumber);
+                var itemNumber = GetMappedValue(row, mappings, BoqField.ItemNumber);
+                var description = GetMappedValue(row, mappings, BoqField.Description);
+
+                if (string.IsNullOrWhiteSpace(billNumber))
+                    continue;
+
+                // Only create a section from a bill row if it doesn't have a regular item number
+                // (rows with both BillNumber and ItemNumber are items that belong to a bill)
+                var isItemRow = !string.IsNullOrWhiteSpace(itemNumber);
+                var sectionKey = $"BILL-{billNumber.Trim()}";
+
+                if (!sections.ContainsKey(sectionKey))
+                {
+                    var billTitle = !string.IsNullOrWhiteSpace(description) && !isItemRow
+                        ? description
+                        : $"Bill No. {billNumber.Trim()}";
+
+                    var billSection = new BoqSection
+                    {
+                        Id = Guid.NewGuid(),
+                        TenderId = tenderId,
+                        SectionNumber = sectionKey,
+                        Title = billTitle,
+                        SortOrder = billSortOrder++
+                    };
+
+                    _context.BoqSections.Add(billSection);
+                    sections[sectionKey] = billSection;
+                    knownSectionNumbers.Add(sectionKey);
+
+                    _logger.LogInformation(
+                        "Created bill section '{SectionKey}' with title '{Title}' from BillNumber column",
+                        sectionKey, billTitle);
+                }
+            }
+        }
+
+        // ── Hierarchy detection ──
+        // Build BoqRowContext list from sheet rows for hierarchy analysis
+        var rowContexts = new List<BoqRowContext>(sheet.Rows.Count);
+        for (var rowIndex = 0; rowIndex < sheet.Rows.Count; rowIndex++)
+        {
+            var row = sheet.Rows[rowIndex];
+            rowContexts.Add(new BoqRowContext
+            {
+                ItemNumber = GetMappedValue(row, mappings, BoqField.ItemNumber) ?? string.Empty,
+                Description = GetMappedValue(row, mappings, BoqField.Description),
+                Quantity = GetMappedValue(row, mappings, BoqField.Quantity),
+                Uom = GetMappedValue(row, mappings, BoqField.Uom)
+            });
+        }
+
+        var hierarchyInfos = _sectionDetectionService.DetectItemHierarchy(rowContexts);
+
+        // Build a lookup from item number → hierarchy role for quick access
+        var hierarchyByIndex = new Dictionary<int, ItemHierarchyInfo>();
+        foreach (var hi in hierarchyInfos)
+        {
+            hierarchyByIndex[hi.RowIndex] = hi;
+        }
+
+        // ── Two-pass item creation ──
+        // Pass 1: Create groups and standalone items (ParentItemId = null)
+        // Pass 2: Create sub-items with ParentItemId pointing to their group
+
+        // Dictionary: item number → created BoqItem ID (for parent lookup in Pass 2)
+        var createdItemsByNumber = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+
+        // Collect sub-item row indices for Pass 2
+        var subItemRows = new List<int>();
+
+        // Track the last created group item ID (for SubItemLabel-based parenting)
+        Guid? lastGroupItemId = null;
+        string? lastGroupItemNumber = null;
+        string? lastGroupSectionNumber = null;
+
+        // Map sub-item row index → parent group info captured at deferral time
+        var subItemParentMap = new Dictionary<int, (Guid GroupId, string GroupNumber, string SectionNumber)>();
+
+        // ── Pass 1: Groups + Standalone items ──
         for (var rowIndex = 0; rowIndex < sheet.Rows.Count; rowIndex++)
         {
             var row = sheet.Rows[rowIndex];
@@ -306,51 +398,90 @@ public class ExecuteBoqImportCommandHandler : IRequestHandler<ExecuteBoqImportCo
                 continue;
             }
 
+            // Get hierarchy info for this row
+            var hasHierarchy = hierarchyByIndex.TryGetValue(rowIndex, out var hi);
+
             // Get mapped values
             var itemNumber = GetMappedValue(row, mappings, BoqField.ItemNumber);
             var description = GetMappedValue(row, mappings, BoqField.Description);
             var quantityStr = GetMappedValue(row, mappings, BoqField.Quantity);
             var uom = GetMappedValue(row, mappings, BoqField.Uom);
             var notes = GetMappedValue(row, mappings, BoqField.Notes);
+            var billNumber = GetMappedValue(row, mappings, BoqField.BillNumber);
+            var subItemLabel = GetMappedValue(row, mappings, BoqField.SubItemLabel);
+
+            // Check if this row is a bill-only row (BillNumber mapped, has value, no item number)
+            var isBillOnlyRow = hasBillNumberMapping &&
+                                !string.IsNullOrWhiteSpace(billNumber) &&
+                                string.IsNullOrWhiteSpace(itemNumber);
+            if (isBillOnlyRow)
+            {
+                // Bill-only rows were already handled by section creation above
+                skippedRows++;
+                continue;
+            }
+
+            // Check if this row should be treated as a sub-item via SubItemLabel column
+            var isExplicitSubItem = hasSubItemLabelMapping && !string.IsNullOrWhiteSpace(subItemLabel);
 
             // Skip empty rows
-            if (string.IsNullOrWhiteSpace(itemNumber) && string.IsNullOrWhiteSpace(description))
+            if (string.IsNullOrWhiteSpace(itemNumber) && string.IsNullOrWhiteSpace(description) && !isExplicitSubItem)
+            {
+                skippedRows++;
+                continue;
+            }
+
+            // Skip bill header rows (detected by hierarchy analysis)
+            if (hasHierarchy && hi!.Role == ItemHierarchyRole.BillHeader)
             {
                 skippedRows++;
                 continue;
             }
 
             // Skip section header rows (they were already created as sections)
-            if (_sectionDetectionService.IsSectionHeaderRow(itemNumber, quantityStr, uom))
+            if (_sectionDetectionService.IsSectionHeaderRow(itemNumber, quantityStr, uom) && !isExplicitSubItem)
             {
-                skippedRows++;
+                // But not if it was detected as a Group — groups should be created as items
+                var isDetectedGroup = hasHierarchy && hi!.Role == ItemHierarchyRole.Group;
+
+                // When SubItemLabel mapping is present, items with ItemNumber but no qty/uom
+                // should be treated as group items (parents of sub-items), not section headers
+                var isImpliedGroup = hasSubItemLabelMapping && !string.IsNullOrWhiteSpace(itemNumber);
+
+                if (!isDetectedGroup && !isImpliedGroup)
+                {
+                    skippedRows++;
+                    continue;
+                }
+            }
+
+            // Defer sub-items to Pass 2 (both hierarchy-detected and explicit SubItemLabel)
+            if (hasHierarchy && hi!.Role == ItemHierarchyRole.SubItem)
+            {
+                subItemRows.Add(rowIndex);
+                if (lastGroupItemId != null && lastGroupItemNumber != null && lastGroupSectionNumber != null)
+                    subItemParentMap[rowIndex] = (lastGroupItemId.Value, lastGroupItemNumber, lastGroupSectionNumber);
+                continue;
+            }
+            if (isExplicitSubItem && !(hasHierarchy && hi!.Role == ItemHierarchyRole.Group))
+            {
+                // Explicit sub-item (has SubItemLabel value) — defer to Pass 2
+                subItemRows.Add(rowIndex);
+                if (lastGroupItemId != null && lastGroupItemNumber != null && lastGroupSectionNumber != null)
+                    subItemParentMap[rowIndex] = (lastGroupItemId.Value, lastGroupItemNumber, lastGroupSectionNumber);
                 continue;
             }
 
-            // Determine best section for this item using context-aware lookup
+            // Determine section — use bill section if BillNumber is mapped and present
             BoqSection section;
-            if (!string.IsNullOrWhiteSpace(itemNumber))
+            if (hasBillNumberMapping && !string.IsNullOrWhiteSpace(billNumber))
             {
-                var sectionNumber = _sectionDetectionService.FindBestSection(itemNumber, knownSectionNumbers);
-                if (!sections.TryGetValue(sectionNumber, out section!))
-                {
-                    // Try parent sections
-                    var parentNumber = _sectionDetectionService.GetParentSectionNumber(sectionNumber);
-                    while (!string.IsNullOrEmpty(parentNumber))
-                    {
-                        if (sections.TryGetValue(parentNumber, out section!))
-                        {
-                            break;
-                        }
-                        parentNumber = _sectionDetectionService.GetParentSectionNumber(parentNumber);
-                    }
-
-                    section ??= defaultSection;
-                }
+                var billSectionKey = $"BILL-{billNumber.Trim()}";
+                section = sections.GetValueOrDefault(billSectionKey) ?? defaultSection;
             }
             else
             {
-                section = defaultSection;
+                section = ResolveSection(itemNumber, knownSectionNumbers, sections, defaultSection);
             }
 
             // Parse quantity
@@ -360,40 +491,233 @@ public class ExecuteBoqImportCommandHandler : IRequestHandler<ExecuteBoqImportCo
                 quantity = parsedQty;
             }
 
-            // Get sort order for this section
+            // Get sort order
             if (!sortOrderBySection.ContainsKey(section.SectionNumber))
-            {
                 sortOrderBySection[section.SectionNumber] = 0;
-            }
             var sortOrder = sortOrderBySection[section.SectionNumber]++;
 
-            // Create BOQ item
+            var isGroup = hasHierarchy && hi!.Role == ItemHierarchyRole.Group;
+
+            // If an item has ItemNumber but no Quantity and no UOM, mark as group
+            // (applies when hierarchy detection didn't explicitly classify it)
+            if (!isGroup && !string.IsNullOrWhiteSpace(itemNumber))
+            {
+                var hasQty = !string.IsNullOrWhiteSpace(quantityStr) &&
+                             decimal.TryParse(quantityStr, out var q) && q != 0;
+                var hasUom = !string.IsNullOrWhiteSpace(uom);
+                if (!hasQty && !hasUom)
+                {
+                    isGroup = true;
+                }
+            }
+
             var boqItem = new BoqItem
             {
                 Id = Guid.NewGuid(),
                 TenderId = tenderId,
                 SectionId = section.Id,
-                ItemNumber = itemNumber ?? $"ITEM-{rowNumber}",
+                ItemNumber = itemNumber,
                 Description = description ?? string.Empty,
                 Quantity = quantity,
                 Uom = uom ?? string.Empty,
                 ItemType = BoqItemType.Base,
                 Notes = notes,
-                SortOrder = sortOrder
+                SortOrder = sortOrder,
+                IsGroup = isGroup,
+                ParentItemId = null
             };
 
             _context.BoqItems.Add(boqItem);
             itemCount++;
 
+            // Store for sub-item parent lookup
+            if (!string.IsNullOrWhiteSpace(itemNumber))
+            {
+                createdItemsByNumber[itemNumber] = boqItem.Id;
+            }
+
+            // Track last group for SubItemLabel-based parenting
+            if (isGroup)
+            {
+                lastGroupItemId = boqItem.Id;
+                lastGroupItemNumber = boqItem.ItemNumber;
+                lastGroupSectionNumber = section.SectionNumber;
+            }
+
             // Track items per section
             if (!itemsPerSection.ContainsKey(section.SectionNumber))
-            {
                 itemsPerSection[section.SectionNumber] = 0;
-            }
             itemsPerSection[section.SectionNumber]++;
         }
 
+        // ── Pass 2: Sub-items (with ParentItemId) ──
+        foreach (var rowIndex in subItemRows)
+        {
+            var row = sheet.Rows[rowIndex];
+            var rowNumber = rowIndex + sheet.HeaderRowIndex + 2;
+            var hasHi = hierarchyByIndex.TryGetValue(rowIndex, out var hi);
+
+            var itemNumber = GetMappedValue(row, mappings, BoqField.ItemNumber);
+            var description = GetMappedValue(row, mappings, BoqField.Description);
+            var quantityStr = GetMappedValue(row, mappings, BoqField.Quantity);
+            var uom = GetMappedValue(row, mappings, BoqField.Uom);
+            var notes = GetMappedValue(row, mappings, BoqField.Notes);
+            var billNumber = GetMappedValue(row, mappings, BoqField.BillNumber);
+            var subItemLabel = GetMappedValue(row, mappings, BoqField.SubItemLabel);
+
+            // Resolve parent item ID
+            Guid? parentItemId = null;
+            string? parentSectionNumber = null;
+
+            if (hasHi && hi!.ParentItemNumber != null &&
+                createdItemsByNumber.TryGetValue(hi.ParentItemNumber, out var parentId))
+            {
+                // Hierarchy-detected parent
+                parentItemId = parentId;
+                parentSectionNumber = hi.ParentItemNumber;
+            }
+            else if (hasSubItemLabelMapping && !string.IsNullOrWhiteSpace(subItemLabel) &&
+                     subItemParentMap.TryGetValue(rowIndex, out var capturedParent))
+            {
+                // SubItemLabel-based parent: use the group item captured at deferral time
+                parentItemId = capturedParent.GroupId;
+                parentSectionNumber = capturedParent.SectionNumber;
+            }
+            else if (hasHi && hi!.ParentItemNumber != null)
+            {
+                // Parent wasn't created (possibly filtered) — create as standalone instead
+                _logger.LogWarning(
+                    "Sub-item '{ItemNumber}' at row {RowNumber} has parent '{ParentItemNumber}' which was not found. Creating as standalone.",
+                    itemNumber, rowNumber, hi.ParentItemNumber);
+            }
+
+            // Determine section — use bill section, parent's section, or resolve from item number
+            BoqSection section;
+            if (hasBillNumberMapping && !string.IsNullOrWhiteSpace(billNumber))
+            {
+                var billSectionKey = $"BILL-{billNumber.Trim()}";
+                section = sections.GetValueOrDefault(billSectionKey) ?? defaultSection;
+            }
+            else if (parentItemId != null && parentSectionNumber != null)
+            {
+                // Find parent's section by looking up the parent item number
+                section = ResolveSection(parentSectionNumber, knownSectionNumbers, sections, defaultSection);
+            }
+            else
+            {
+                section = ResolveSection(itemNumber, knownSectionNumbers, sections, defaultSection);
+            }
+
+            // Parse quantity
+            decimal quantity = 0;
+            if (!string.IsNullOrWhiteSpace(quantityStr) && decimal.TryParse(quantityStr, out var parsedQty))
+            {
+                quantity = parsedQty;
+            }
+
+            // Get sort order
+            if (!sortOrderBySection.ContainsKey(section.SectionNumber))
+                sortOrderBySection[section.SectionNumber] = 0;
+            var sortOrder = sortOrderBySection[section.SectionNumber]++;
+
+            // Use SubItemLabel as the item number if no explicit item number is provided
+            // Prefix with parent item number to ensure uniqueness across groups (e.g., "1.01.a" instead of just "a")
+            var effectiveItemNumber = itemNumber;
+            if (string.IsNullOrWhiteSpace(effectiveItemNumber) && !string.IsNullOrWhiteSpace(subItemLabel))
+            {
+                // Try to get parent's item number for composite key
+                string? parentNum = null;
+                if (hasHi && hi?.ParentItemNumber != null)
+                    parentNum = hi.ParentItemNumber;
+                else if (subItemParentMap.TryGetValue(rowIndex, out var pInfo))
+                    parentNum = pInfo.GroupNumber;
+
+                effectiveItemNumber = !string.IsNullOrWhiteSpace(parentNum)
+                    ? $"{parentNum}.{subItemLabel.Trim()}"
+                    : subItemLabel;
+            }
+
+            var boqItem = new BoqItem
+            {
+                Id = Guid.NewGuid(),
+                TenderId = tenderId,
+                SectionId = section.Id,
+                ItemNumber = effectiveItemNumber ?? $"ITEM-{rowNumber}",
+                Description = description ?? string.Empty,
+                Quantity = quantity,
+                Uom = uom ?? string.Empty,
+                ItemType = BoqItemType.Base,
+                Notes = notes,
+                SortOrder = sortOrder,
+                IsGroup = false,
+                ParentItemId = parentItemId
+            };
+
+            _context.BoqItems.Add(boqItem);
+            itemCount++;
+
+            // Store in lookup (sub-items can theoretically be parents too)
+            if (!string.IsNullOrWhiteSpace(effectiveItemNumber))
+            {
+                createdItemsByNumber[effectiveItemNumber] = boqItem.Id;
+            }
+
+            // Track items per section
+            if (!itemsPerSection.ContainsKey(section.SectionNumber))
+                itemsPerSection[section.SectionNumber] = 0;
+            itemsPerSection[section.SectionNumber]++;
+        }
+
+        var groupCount = hierarchyInfos.Count(h => h.Role == ItemHierarchyRole.Group);
+        var subItemCount = subItemRows.Count;
+        if (groupCount > 0 || subItemCount > 0)
+        {
+            _logger.LogInformation(
+                "Hierarchy detection: {GroupCount} group items, {SubItemCount} sub-items, {StandaloneCount} standalone items",
+                groupCount, subItemCount, itemCount - groupCount - subItemCount);
+        }
+
+        if (hasBillNumberMapping)
+        {
+            var billSectionCount = sections.Keys.Count(k => k.StartsWith("BILL-", StringComparison.OrdinalIgnoreCase));
+            _logger.LogInformation(
+                "BillNumber column mapping: created {BillSectionCount} bill sections",
+                billSectionCount);
+        }
+
         return Task.FromResult((itemCount, skippedRows, itemsPerSection));
+    }
+
+    /// <summary>
+    /// Resolves the best section for an item number using section detection service.
+    /// </summary>
+    private BoqSection ResolveSection(
+        string? itemNumber,
+        HashSet<string> knownSectionNumbers,
+        Dictionary<string, BoqSection> sections,
+        BoqSection defaultSection)
+    {
+        if (!string.IsNullOrWhiteSpace(itemNumber))
+        {
+            var sectionNumber = _sectionDetectionService.FindBestSection(itemNumber, knownSectionNumbers);
+            if (sections.TryGetValue(sectionNumber, out var section))
+            {
+                return section;
+            }
+
+            // Try parent sections
+            var parentNumber = _sectionDetectionService.GetParentSectionNumber(sectionNumber);
+            while (!string.IsNullOrEmpty(parentNumber))
+            {
+                if (sections.TryGetValue(parentNumber, out section))
+                {
+                    return section;
+                }
+                parentNumber = _sectionDetectionService.GetParentSectionNumber(parentNumber);
+            }
+        }
+
+        return defaultSection;
     }
 
     private static string? GetMappedValue(

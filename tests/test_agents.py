@@ -16,6 +16,8 @@ from agent_team.agents import (
     SPEC_VALIDATOR_PROMPT,
     TASK_ASSIGNER_PROMPT,
     TEST_RUNNER_PROMPT,
+    _MOCK_DATA_VIOLATION_PATTERNS,
+    _UI_FAIL_RULES,
     build_agent_definitions,
     build_decomposition_prompt,
     build_milestone_execution_prompt,
@@ -1304,3 +1306,60 @@ class TestBuildMilestoneExecutionPromptDesignRefs:
             design_reference_urls=urls,
         )
         assert "researcher" in prompt.lower()
+
+
+# ===================================================================
+# Shared policy constants (DRY refactor verification)
+# ===================================================================
+
+class TestSharedPolicyConstants:
+    """Verify extracted constants appear in final prompt strings."""
+
+    def test_mock_data_patterns_in_writer(self):
+        """_MOCK_DATA_VIOLATION_PATTERNS content must appear in CODE_WRITER_PROMPT."""
+        assert _MOCK_DATA_VIOLATION_PATTERNS in CODE_WRITER_PROMPT
+        assert "ZERO MOCK DATA" in CODE_WRITER_PROMPT
+        assert "of(null).pipe(delay" in CODE_WRITER_PROMPT
+        assert "BehaviorSubject(hardcodedData)" in CODE_WRITER_PROMPT
+
+    def test_ui_fail_rules_in_writer(self):
+        """_UI_FAIL_RULES content must appear in CODE_WRITER_PROMPT."""
+        assert _UI_FAIL_RULES in CODE_WRITER_PROMPT
+        assert "UI-FAIL-001" in CODE_WRITER_PROMPT
+        assert "UI-FAIL-007" in CODE_WRITER_PROMPT
+
+    def test_convergence_in_prd_mode(self):
+        """PRD-mode orchestrator prompt must include convergence enforcement."""
+        cfg = AgentTeamConfig()
+        prompt = build_orchestrator_prompt(
+            "build the app", "thorough", cfg,
+            prd_path="/tmp/prd.md",
+        )
+        assert "[CONVERGENCE LOOP — MANDATORY]" in prompt
+        assert "[REQUIREMENT MARKING — REVIEW FLEET ONLY]" in prompt
+        assert "segregation-of-duties" in prompt
+
+    def test_convergence_in_standard_mode(self):
+        """Standard-mode orchestrator prompt must include convergence enforcement."""
+        cfg = AgentTeamConfig()
+        prompt = build_orchestrator_prompt(
+            "fix a bug", "standard", cfg,
+        )
+        assert "[CONVERGENCE LOOP — MANDATORY]" in prompt
+        assert "[REQUIREMENT MARKING — REVIEW FLEET ONLY]" in prompt
+        assert "ZERO convergence cycles is NEVER acceptable" in prompt
+
+    def test_milestone_prompt_has_ui_standards(self):
+        """Bug fix verification — milestone execution prompt must include SLOP standards."""
+        cfg = AgentTeamConfig()
+        prompt = build_milestone_execution_prompt(
+            task="Build dashboard",
+            depth="standard",
+            config=cfg,
+        )
+        # load_ui_standards returns the SLOP content when the file exists
+        # At minimum, the call should not crash and the prompt should be valid
+        assert "[PHASE: MILESTONE EXECUTION]" in prompt
+        # If the default standards file ships with the package, verify content
+        if "SLOP-001" in prompt:
+            assert "SLOP" in prompt

@@ -168,6 +168,28 @@
   font-weight: 600;
 }
 
+:host ::ng-deep .bill-header-row {
+  background-color: #F0F4FA !important;
+  font-weight: 700;
+  border-left: 4px solid #1F3864;
+}
+
+:host ::ng-deep .item-group-header-row {
+  background-color: #F8F9FA !important;
+  font-weight: 500;
+  font-style: italic;
+}
+
+:host ::ng-deep .bill-subtotal-row {
+  background-color: #E8EEF7 !important;
+  font-weight: 700;
+}
+
+:host ::ng-deep .item-subtotal-row {
+  background-color: #F0F4FA !important;
+  font-weight: 600;
+}
+
 :host ::ng-deep .grand-total-row {
   background-color: var(--bayan-success-bg, #f0fdf4) !important;
   font-weight: 700;

@@ -27,6 +27,7 @@ describe('TenderWizardComponent', () => {
     type: 'open',
     status: 'draft',
     currency: 'AED',
+    pricingLevel: 'SubItem',
     estimatedValue: 2500000,
     bidValidityPeriod: 90,
     dates: {

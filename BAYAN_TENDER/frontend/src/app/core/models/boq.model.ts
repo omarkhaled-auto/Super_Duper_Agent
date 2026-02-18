@@ -5,10 +5,12 @@
 
 export type BoqItemType = 'base' | 'alternate' | 'provisional_sum' | 'daywork';
 
+export type PricingLevel = 'Bill' | 'Item' | 'SubItem';
+
 export interface BoqSection {
-  id: number;
-  tenderId: number;
-  parentSectionId?: number | null;
+  id: string;
+  tenderId: string | number;
+  parentSectionId?: string | null;
   sectionNumber: string;
   title: string;
   description?: string;
@@ -21,9 +23,9 @@ export interface BoqSection {
 }
 
 export interface BoqItem {
-  id: number;
-  tenderId: number;
-  sectionId: number;
+  id: string;
+  tenderId: string | number;
+  sectionId: string;
   itemNumber: string;
   description: string;
   quantity: number;
@@ -35,6 +37,9 @@ export interface BoqItem {
   sortOrder: number;
   createdAt: Date | string;
   updatedAt: Date | string;
+  parentItemId?: string | null;
+  isGroup?: boolean;
+  childItems?: BoqItem[];
 }
 
 export interface BoqTreeNode {
@@ -49,11 +54,13 @@ export interface BoqTreeNode {
   quantity?: number | null;
   uom?: string;
   itemType?: BoqItemType | null;
+  level?: 'bill' | 'item' | 'sub_item';
+  amount?: number;
 }
 
 export interface CreateBoqSectionDto {
-  tenderId: number;
-  parentSectionId?: number | null;
+  tenderId: string | number;
+  parentSectionId?: string | null;
   sectionNumber: string;
   title: string;
   description?: string;
@@ -62,8 +69,8 @@ export interface CreateBoqSectionDto {
 export interface UpdateBoqSectionDto extends Partial<Omit<CreateBoqSectionDto, 'tenderId'>> {}
 
 export interface CreateBoqItemDto {
-  tenderId: number;
-  sectionId: number;
+  tenderId: string | number;
+  sectionId: string;
   itemNumber: string;
   description: string;
   quantity: number;
@@ -83,6 +90,10 @@ export interface BoqImportMapping {
   notes?: string;
   sectionNumber?: string;
   sectionTitle?: string;
+  billNumber?: string;
+  subItemLabel?: string;
+  unitRate?: string;
+  totalAmount?: string;
 }
 
 export interface BoqImportRow {
@@ -117,13 +128,17 @@ export interface BoqExportOptions {
   lockColumns: boolean;
   includeInstructions: boolean;
   language: 'en' | 'ar' | 'both';
+  pricingLevel?: PricingLevel;
 }
 
 export interface BoqSummary {
   totalSections: number;
   totalSubsections: number;
   totalItems: number;
+  totalBills: number;
+  totalSubItems: number;
   itemsByType: Record<BoqItemType, number>;
+  grandTotal?: number;
 }
 
 // Dropdown options

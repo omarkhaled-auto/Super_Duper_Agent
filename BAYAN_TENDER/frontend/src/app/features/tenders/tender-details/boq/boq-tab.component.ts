@@ -22,6 +22,7 @@ import { ToastModule } from 'primeng/toast';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { MessageModule } from 'primeng/message';
+import { SelectButtonModule } from 'primeng/selectbutton';
 import { MenuItem, MessageService, ConfirmationService, TreeNode } from 'primeng/api';
 import { Menu } from 'primeng/menu';
 
@@ -32,7 +33,8 @@ import {
   BoqItem,
   BoqSummary,
   BOQ_ITEM_TYPE_CONFIG,
-  BoqItemType
+  BoqItemType,
+  PricingLevel
 } from '../../../../core/models/boq.model';
 import { BoqSectionDialogComponent } from './boq-section-dialog.component';
 import { BoqItemDialogComponent } from './boq-item-dialog.component';
@@ -56,6 +58,7 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
     ConfirmDialogModule,
     ProgressSpinnerModule,
     MessageModule,
+    SelectButtonModule,
     BoqSectionDialogComponent,
     BoqItemDialogComponent,
     BoqImportDialogComponent,
@@ -86,6 +89,17 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
             data-testid="export-boq-btn"
             (click)="showExportDialog = true"
           ></button>
+        </div>
+        <div class="toolbar-center">
+          <label class="pricing-level-label">Pricing Level:</label>
+          <p-selectButton
+            [options]="pricingLevelOptions"
+            [(ngModel)]="pricingLevel"
+            optionLabel="label"
+            optionValue="value"
+            (onChange)="onPricingLevelChange($event.value)"
+            data-testid="pricing-level-selector"
+          ></p-selectButton>
         </div>
         <div class="toolbar-right">
           <button
@@ -158,43 +172,68 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
         >
           <ng-template pTemplate="header">
             <tr>
-              <th style="width: 15%">Item #</th>
-              <th style="width: 40%">Description</th>
-              <th style="width: 12%">Qty</th>
-              <th style="width: 10%">UOM</th>
-              <th style="width: 13%">Type</th>
+              <th style="width: 14%">Item #</th>
+              <th style="width: 34%">Description</th>
+              <th style="width: 10%">Qty</th>
+              <th style="width: 8%">UOM</th>
+              <th style="width: 12%">Amount</th>
+              <th style="width: 12%">Type</th>
               <th style="width: 10%">Actions</th>
             </tr>
           </ng-template>
 
           <ng-template pTemplate="body" let-rowNode let-rowData="rowData">
-            <tr [ttRow]="rowNode" [class.section-row]="rowData.type === 'section'">
+            <tr [ttRow]="rowNode"
+                [class.section-row]="rowData.type === 'section'"
+                [class.boq-bill-row]="rowData.level === 'bill'"
+                [class.boq-item-row]="rowData.level === 'item' && !rowData.isGroup"
+                [class.boq-sub-item-row]="rowData.level === 'sub_item'"
+                [class.boq-group-row]="rowData.isGroup">
               <td>
                 <p-treeTableToggler [rowNode]="rowNode"></p-treeTableToggler>
-                <span [class.section-number]="rowData.type === 'section'">
+                <span [class.section-number]="rowData.type === 'section'"
+                      [class.bill-number]="rowData.level === 'bill'">
                   {{ rowData.itemNumber }}
                 </span>
               </td>
               <td>
                 <span
                   [class.section-title]="rowData.type === 'section'"
+                  [class.bill-title]="rowData.level === 'bill'"
                   [pTooltip]="rowData.description"
                   tooltipPosition="top"
                 >
-                  {{ rowData.description | slice:0:80 }}{{ rowData.description.length > 80 ? '...' : '' }}
+                  {{ rowData.description | slice:0:80 }}{{ rowData.description?.length > 80 ? '...' : '' }}
+                  @if (rowData.isGroup) {
+                    <span class="group-indicator">(group)</span>
+                  }
                 </span>
               </td>
               <td>
-                @if (rowData.type === 'item') {
+                @if (rowData.type === 'item' && !rowData.isGroup) {
                   {{ rowData.quantity | number:'1.0-2' }}
                 }
               </td>
-              <td>{{ rowData.uom }}</td>
+              <td>{{ rowData.type === 'item' && !rowData.isGroup ? rowData.uom : '' }}</td>
+              <td class="amount-cell">
+                @if (rowData.amount != null && rowData.amount > 0) {
+                  <span [class.amount-rollup]="rowData.type === 'section' || rowData.isGroup">
+                    {{ rowData.amount | number:'1.0-2' }}
+                  </span>
+                }
+              </td>
               <td>
-                @if (rowData.type === 'item' && rowData.itemType) {
+                @if (rowData.type === 'item' && rowData.itemType && !rowData.isGroup) {
                   <p-tag
                     [value]="getItemTypeLabel(rowData.itemType)"
                     [severity]="getItemTypeSeverity(rowData.itemType)"
+                  ></p-tag>
+                }
+                @if (rowData.level) {
+                  <p-tag
+                    [value]="getLevelLabel(rowData.level)"
+                    [severity]="getLevelSeverity(rowData.level)"
+                    styleClass="ml-1"
                   ></p-tag>
                 }
               </td>
@@ -213,7 +252,7 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
 
           <ng-template pTemplate="emptymessage">
             <tr>
-              <td colspan="6" class="text-center p-4">
+              <td colspan="7" class="text-center p-4">
                 No BOQ items found.
               </td>
             </tr>
@@ -223,27 +262,23 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
         <!-- Summary Footer -->
         <div class="boq-summary">
           <div class="summary-item">
-            <span class="summary-label">Total Sections:</span>
-            <span class="summary-value">{{ summary()?.totalSections || 0 }}</span>
+            <span class="summary-label">Bills:</span>
+            <span class="summary-value">{{ summary()?.totalBills || 0 }}</span>
           </div>
           <div class="summary-divider"></div>
           <div class="summary-item">
-            <span class="summary-label">Subsections:</span>
-            <span class="summary-value">{{ summary()?.totalSubsections || 0 }}</span>
-          </div>
-          <div class="summary-divider"></div>
-          <div class="summary-item">
-            <span class="summary-label">Total Items:</span>
+            <span class="summary-label">Items:</span>
             <span class="summary-value">{{ summary()?.totalItems || 0 }}</span>
           </div>
           <div class="summary-divider"></div>
           <div class="summary-item">
-            <span class="summary-label">Base Items:</span>
-            <span class="summary-value">{{ summary()?.itemsByType?.base || 0 }}</span>
+            <span class="summary-label">Sub-Items:</span>
+            <span class="summary-value">{{ summary()?.totalSubItems || 0 }}</span>
           </div>
-          <div class="summary-item">
-            <span class="summary-label">Alternates:</span>
-            <span class="summary-value">{{ summary()?.itemsByType?.alternate || 0 }}</span>
+          <div class="summary-divider"></div>
+          <div class="summary-item grand-total">
+            <span class="summary-label">Grand Total:</span>
+            <span class="summary-value">AED {{ summary()?.grandTotal | number:'1.0-2' }}</span>
           </div>
         </div>
       }
@@ -308,10 +343,18 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
     }
 
     .toolbar-left,
+    .toolbar-center,
     .toolbar-right {
       display: flex;
       gap: 0.5rem;
       flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .pricing-level-label {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--bayan-slate-700, #334155);
     }
 
     .loading-container {
@@ -363,6 +406,67 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
       background-color: var(--bayan-accent, #EEF2FF) !important;
     }
 
+    /* 3-Level Hierarchy Styles */
+    :host ::ng-deep .p-treetable .boq-bill-row {
+      background-color: #F0F4FA !important;
+      border-left: 4px solid #1F3864;
+      font-weight: 700;
+    }
+
+    :host ::ng-deep .p-treetable .boq-bill-row:hover {
+      background-color: #E3EAF4 !important;
+    }
+
+    :host ::ng-deep .p-treetable .boq-item-row {
+      background-color: #F8F9FA !important;
+      font-weight: 500;
+      padding-left: 20px;
+    }
+
+    :host ::ng-deep .p-treetable .boq-item-row td:first-child {
+      padding-left: 20px;
+    }
+
+    :host ::ng-deep .p-treetable .boq-sub-item-row {
+      font-weight: 400;
+    }
+
+    :host ::ng-deep .p-treetable .boq-sub-item-row td:first-child {
+      padding-left: 40px;
+    }
+
+    :host ::ng-deep .p-treetable .boq-group-row {
+      font-weight: 500;
+      font-style: italic;
+    }
+
+    .bill-number {
+      font-weight: 700;
+      color: #1F3864;
+    }
+
+    .bill-title {
+      font-weight: 700;
+      color: #1F3864;
+    }
+
+    .group-indicator {
+      font-size: 0.75rem;
+      color: var(--bayan-muted-foreground, #64748B);
+      margin-left: 0.25rem;
+      font-style: italic;
+    }
+
+    .amount-cell {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .amount-rollup {
+      font-weight: 600;
+      color: var(--bayan-primary, #4F46E5);
+    }
+
     .section-number {
       font-weight: 600;
       color: var(--bayan-primary, #4F46E5);
@@ -411,6 +515,21 @@ import { BoqExportDialogComponent } from './boq-export-dialog.component';
       background-color: var(--bayan-border, #E2E8F0);
     }
 
+    .grand-total .summary-label {
+      font-weight: 600;
+      color: #1F3864;
+    }
+
+    .grand-total .summary-value {
+      font-weight: 700;
+      color: #1F3864;
+      font-size: 1rem;
+    }
+
+    :host ::ng-deep .ml-1 {
+      margin-left: 0.25rem;
+    }
+
     :host ::ng-deep .p-treetable-scrollable .p-treetable-wrapper {
       overflow: auto;
     }
@@ -451,6 +570,14 @@ export class BoqTabComponent implements OnInit, OnDestroy {
   boqTree = signal<BoqTreeNode[]>([]);
   sections = signal<BoqSection[]>([]);
   summary = signal<BoqSummary | null>(null);
+
+  // Pricing level
+  pricingLevel: PricingLevel = 'Item';
+  pricingLevelOptions = [
+    { label: 'Bill', value: 'Bill' as PricingLevel },
+    { label: 'Item', value: 'Item' as PricingLevel },
+    { label: 'Sub-Item', value: 'SubItem' as PricingLevel }
+  ];
 
   // Dialog states
   showSectionDialog = false;
@@ -495,12 +622,14 @@ export class BoqTabComponent implements OnInit, OnDestroy {
     forkJoin({
       tree: this.boqService.getBoqTree(this.tenderId),
       sections: this.boqService.getSections(this.tenderId),
-      summary: this.boqService.getSummary(this.tenderId)
+      summary: this.boqService.getSummary(this.tenderId),
+      pricingLevel: this.boqService.getPricingLevel(this.tenderId)
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: (result) => {
         this.boqTree.set(result.tree);
         this.sections.set(result.sections);
         this.summary.set(result.summary);
+        this.pricingLevel = result.pricingLevel;
       },
       error: (error) => {
         this.messageService.add({
@@ -522,6 +651,9 @@ export class BoqTabComponent implements OnInit, OnDestroy {
         quantity: node.quantity,
         uom: node.uom,
         itemType: node.itemType,
+        level: node.level,
+        amount: node.amount,
+        isGroup: (node.data as BoqItem)?.isGroup ?? false,
         originalData: node.data
       },
       children: node.children ? this.convertToTreeNodes(node.children) : undefined,
@@ -727,6 +859,45 @@ export class BoqTabComponent implements OnInit, OnDestroy {
       detail: `${result.imported} items imported successfully${result.failed > 0 ? `, ${result.failed} failed` : ''}`
     });
     this.loadData();
+  }
+
+  onPricingLevelChange(level: PricingLevel): void {
+    this.boqService.setPricingLevel(this.tenderId, level)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Updated',
+            detail: `Pricing level set to ${level}`
+          });
+        },
+        error: (error) => {
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: error.message || 'Failed to update pricing level'
+          });
+        }
+      });
+  }
+
+  getLevelLabel(level: 'bill' | 'item' | 'sub_item'): string {
+    switch (level) {
+      case 'bill': return 'Bill';
+      case 'item': return 'Item';
+      case 'sub_item': return 'Sub-Item';
+      default: return '';
+    }
+  }
+
+  getLevelSeverity(level: 'bill' | 'item' | 'sub_item'): 'info' | 'success' | 'secondary' {
+    switch (level) {
+      case 'bill': return 'info';
+      case 'item': return 'success';
+      case 'sub_item': return 'secondary';
+      default: return 'secondary';
+    }
   }
 
   getItemTypeLabel(type: BoqItemType): string {

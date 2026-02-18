@@ -306,7 +306,7 @@ export class InternalRfiDialogComponent implements OnInit, OnChanges {
   selectedFiles: File[] = [];
   minDate = new Date();
 
-  sectionOptions: { label: string; value: number }[] = [];
+  sectionOptions: { label: string; value: string | number }[] = [];
   priorityOptions = CLARIFICATION_PRIORITY_OPTIONS;
 
   ngOnInit(): void {

@@ -161,6 +161,25 @@ public class ComparableSheetItemDto
     public int SortOrder { get; set; }
 
     /// <summary>
+    /// Row type discriminator for display purposes.
+    /// Values: "item" (normal priceable row), "bill_header" (section header row),
+    /// "item_group_header" (group parent header row), "item_subtotal" (group subtotal),
+    /// "bill_subtotal" (section/bill subtotal).
+    /// </summary>
+    public string RowType { get; set; } = "item";
+
+    /// <summary>
+    /// Parent item ID for sub-items in a hierarchical BOQ.
+    /// Null for top-level items and standalone items.
+    /// </summary>
+    public Guid? ParentItemId { get; set; }
+
+    /// <summary>
+    /// Whether this item is a group header that contains child sub-items.
+    /// </summary>
+    public bool IsGroup { get; set; }
+
+    /// <summary>
     /// Average rate across all bidders (excluding NoBid and NonComparable).
     /// </summary>
     public decimal? AverageRate { get; set; }
@@ -243,6 +262,12 @@ public class ComparableSheetDto
     /// Tender name/title.
     /// </summary>
     public string TenderName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The pricing level for this tender (Bill, Item, SubItem).
+    /// Determines which hierarchy level the comparable sheet displays.
+    /// </summary>
+    public PricingLevel PricingLevel { get; set; }
 
     /// <summary>
     /// Summary statistics.

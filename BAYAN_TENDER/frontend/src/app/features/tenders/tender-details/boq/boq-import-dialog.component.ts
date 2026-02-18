@@ -6,7 +6,8 @@ import {
   OnChanges,
   SimpleChanges,
   inject,
-  signal
+  signal,
+  computed
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -18,6 +19,7 @@ import { DropdownModule } from 'primeng/dropdown';
 import { ButtonModule } from 'primeng/button';
 import { TagModule } from 'primeng/tag';
 import { MessageModule } from 'primeng/message';
+import { MessagesModule } from 'primeng/messages';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { CheckboxModule } from 'primeng/checkbox';
@@ -25,6 +27,14 @@ import { MenuItem } from 'primeng/api';
 
 import { BoqService } from '../../../../core/services/boq.service';
 import { BoqImportRow } from '../../../../core/models/boq.model';
+
+/** Hierarchy level types for BOQ rows */
+type HierarchyLevel = 'Bill' | 'Item Group' | 'Item' | 'Sub-Item';
+
+/** Regex patterns for hierarchy detection (mirrors backend logic) */
+const BILL_PATTERN = /^bill\s*(no\.?\s*)?(\d+)/i;
+const ITEM_NUMBER_PATTERN = /^\d+(\.\d+)+$/;
+const SUB_ITEM_LABEL_PATTERN = /^[a-zA-Z][\.\)\-]?\s|^[ivxIVX]+[\.\)]\s|^[a-z]\)/;
 
 /** Backend BoqField enum values */
 const BOQ_FIELD: Record<string, number> = {
@@ -35,7 +45,10 @@ const BOQ_FIELD: Record<string, number> = {
   sectionTitle: 5,
   notes: 6,
   unitRate: 7,
-  totalAmount: 8
+  amount: 8,  // Backend enum is "Amount", not "TotalAmount"
+  specification: 9,
+  billNumber: 10,
+  subItemLabel: 11
 };
 
 /** Reverse map: BoqField numeric value → frontend field key */
@@ -58,6 +71,7 @@ for (const [key, val] of Object.entries(BOQ_FIELD)) {
     ButtonModule,
     TagModule,
     MessageModule,
+    MessagesModule,
     ProgressBarModule,
     TooltipModule,
     CheckboxModule
@@ -223,6 +237,31 @@ for (const [key, val] of Object.entries(BOQ_FIELD)) {
                 <p>Validating data...</p>
               </div>
             } @else if (validationResult()) {
+              <!-- Hierarchy Summary -->
+              @if (hierarchySummary(); as summary) {
+                <div class="hierarchy-summary">
+                  <i class="pi pi-sitemap"></i>
+                  <span class="hierarchy-label">Hierarchy:</span>
+                  <p-tag [value]="summary.bills + ' Bills'" severity="info"></p-tag>
+                  <p-tag [value]="summary.itemGroups + ' Item Groups'" severity="success"></p-tag>
+                  <p-tag [value]="summary.items + ' Items'" severity="success"></p-tag>
+                  <p-tag [value]="summary.subItems + ' Sub-Items'" severity="secondary"></p-tag>
+                </div>
+              }
+
+              <!-- Hierarchy Integrity Warnings -->
+              @if (hierarchyWarnings().length > 0) {
+                <div class="hierarchy-warnings">
+                  @for (warning of hierarchyWarnings(); track warning) {
+                    <p-message
+                      severity="warn"
+                      [text]="warning"
+                      styleClass="w-full"
+                    ></p-message>
+                  }
+                </div>
+              }
+
               <!-- Detected Sections -->
               @if (validationResult()!.detectedSections?.length) {
                 <div class="detected-sections">
@@ -256,14 +295,15 @@ for (const [key, val] of Object.entries(BOQ_FIELD)) {
               >
                 <ng-template pTemplate="header">
                   <tr>
-                    <th style="width: 80px">Row</th>
-                    <th style="width: 100px">Status</th>
+                    <th style="width: 60px">Row</th>
+                    <th style="width: 80px">Status</th>
+                    <th style="width: 100px">Level</th>
                     <th>Data Preview</th>
                     <th>Issues</th>
                   </tr>
                 </ng-template>
                 <ng-template pTemplate="body" let-row>
-                  <tr [class]="'status-' + row.status">
+                  <tr [class]="getRowCssClasses(row)">
                     <td>{{ row.rowNumber }}</td>
                     <td>
                       <p-tag
@@ -272,6 +312,12 @@ for (const [key, val] of Object.entries(BOQ_FIELD)) {
                       ></p-tag>
                     </td>
                     <td>
+                      <p-tag
+                        [value]="inferRowLevel(row)"
+                        [severity]="inferRowLevelSeverity(row)"
+                      ></p-tag>
+                    </td>
+                    <td [style.padding-left]="getRowIndent(row)">
                       <span class="data-preview" [pTooltip]="getRowPreview(row)">
                         {{ getRowPreview(row) | slice:0:50 }}{{ getRowPreview(row).length > 50 ? '...' : '' }}
                       </span>
@@ -542,6 +588,33 @@ for (const [key, val] of Object.entries(BOQ_FIELD)) {
       color: var(--bayan-muted-foreground, #64748B);
     }
 
+    .hierarchy-summary {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      background-color: var(--bayan-accent, #EEF2FF);
+      border-radius: var(--bayan-radius, 0.5rem);
+      border: 1px solid var(--bayan-primary-light, #C7D2FE);
+    }
+
+    .hierarchy-summary .pi-sitemap {
+      color: var(--bayan-primary, #4F46E5);
+      font-size: 1.1rem;
+    }
+
+    .hierarchy-label {
+      font-weight: 600;
+      color: var(--bayan-foreground, #020617);
+      font-size: 0.875rem;
+    }
+
+    .hierarchy-warnings {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
     .detected-sections {
       padding: 1rem;
       background-color: var(--bayan-accent, #EEF2FF);
@@ -566,6 +639,20 @@ for (const [key, val] of Object.entries(BOQ_FIELD)) {
 
       .status-warning {
         background-color: var(--bayan-warning-bg, #fffbeb) !important;
+      }
+
+      .level-bill {
+        font-weight: 700;
+        background-color: var(--bayan-primary-light, #EEF2FF) !important;
+      }
+
+      .level-item-group {
+        font-weight: 600;
+        background-color: var(--bayan-accent, #F1F5F9) !important;
+      }
+
+      .level-sub-item {
+        color: var(--bayan-muted-foreground, #64748B);
       }
     }
 
@@ -653,10 +740,13 @@ export class BoqImportDialogComponent implements OnChanges {
     { label: 'Description', value: 'description' },
     { label: 'Quantity', value: 'quantity' },
     { label: 'UOM', value: 'uom' },
+    { label: 'Section Title', value: 'sectionTitle' },
     { label: 'Notes', value: 'notes' },
     { label: 'Unit Rate', value: 'unitRate' },
-    { label: 'Total Amount', value: 'totalAmount' },
-    { label: 'Section Title', value: 'sectionTitle' }
+    { label: 'Amount', value: 'amount' },
+    { label: 'Specification', value: 'specification' },
+    { label: 'Bill Number', value: 'billNumber' },
+    { label: 'Sub-Item Label', value: 'subItemLabel' }
   ];
 
   // Step 3: Validation
@@ -665,6 +755,102 @@ export class BoqImportDialogComponent implements OnChanges {
   validationRows = signal<BoqImportRow[]>([]);
   isImporting = signal<boolean>(false);
   clearExisting = true;
+
+  /** Cached hierarchy level per row number (computed after validation) */
+  private rowLevelCache = new Map<number, HierarchyLevel>();
+
+  /** Hierarchy summary computed from validated rows */
+  hierarchySummary = computed(() => {
+    const rows = this.validationRows();
+    if (rows.length === 0) return null;
+
+    let bills = 0;
+    let itemGroups = 0;
+    let items = 0;
+    let subItems = 0;
+
+    for (const row of rows) {
+      const level = this.inferRowLevel(row);
+      switch (level) {
+        case 'Bill': bills++; break;
+        case 'Item Group': itemGroups++; break;
+        case 'Item': items++; break;
+        case 'Sub-Item': subItems++; break;
+      }
+    }
+
+    return { bills, itemGroups, items, subItems };
+  });
+
+  /** Hierarchy integrity warnings computed from validated rows */
+  hierarchyWarnings = computed(() => {
+    const rows = this.validationRows();
+    if (rows.length === 0) return [];
+
+    const warnings: string[] = [];
+    let lastBillRow: number | null = null;
+    let lastItemGroupRow: number | null = null;
+    let hasAnyBill = false;
+    let hasAnyItemGroup = false;
+    let orphanSubItems = 0;
+    let orphanItems = 0;
+
+    for (const row of rows) {
+      const level = this.inferRowLevel(row);
+
+      if (level === 'Bill') {
+        hasAnyBill = true;
+        lastBillRow = row.rowNumber;
+        lastItemGroupRow = null; // reset within new bill
+      } else if (level === 'Item Group') {
+        hasAnyItemGroup = true;
+        lastItemGroupRow = row.rowNumber;
+        if (hasAnyBill && lastBillRow === null) {
+          orphanItems++;
+        }
+      } else if (level === 'Item') {
+        // Standalone items without a bill when bills exist
+        if (hasAnyBill && lastBillRow === null) {
+          orphanItems++;
+        }
+      } else if (level === 'Sub-Item') {
+        if (lastItemGroupRow === null && !hasAnyItemGroup) {
+          orphanSubItems++;
+        } else if (hasAnyItemGroup && lastItemGroupRow === null) {
+          orphanSubItems++;
+        }
+      }
+    }
+
+    if (orphanSubItems > 0) {
+      warnings.push(
+        `${orphanSubItems} sub-item(s) found without a preceding item group parent. ` +
+        `These rows may not be correctly associated in the hierarchy.`
+      );
+    }
+    if (orphanItems > 0) {
+      warnings.push(
+        `${orphanItems} item(s) found without a preceding bill. ` +
+        `Consider mapping the Bill Number column for proper hierarchy detection.`
+      );
+    }
+
+    // Check for empty bills (bills with no items after them)
+    const levelSequence = rows.map(r => this.inferRowLevel(r));
+    for (let i = 0; i < levelSequence.length; i++) {
+      if (levelSequence[i] === 'Bill') {
+        const nextLevel = i + 1 < levelSequence.length ? levelSequence[i + 1] : null;
+        if (nextLevel === 'Bill' || nextLevel === null) {
+          warnings.push(
+            `Bill at row ${rows[i].rowNumber} has no items. ` +
+            `Empty bills will be imported as section headers only.`
+          );
+        }
+      }
+    }
+
+    return warnings;
+  });
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['visible'] && this.visible) {
@@ -687,6 +873,7 @@ export class BoqImportDialogComponent implements OnChanges {
     this.uploadPreview = null;
     this.excelColumns = [];
     this.previewRows = [];
+    this.rowLevelCache.clear();
   }
 
   onFileSelect(event: FileSelectEvent): void {
@@ -724,16 +911,30 @@ export class BoqImportDialogComponent implements OnChanges {
    * or fall back to header-name matching.
    */
   autoMapColumns(): void {
+    console.log('🔍 [AUTO-MAP] Button clicked');
+    console.log('🔍 [AUTO-MAP] uploadPreview:', this.uploadPreview);
+    console.log('🔍 [AUTO-MAP] suggestedMappings:', this.uploadPreview?.suggestedMappings);
+
     this.columnMappings = {};
 
     // Use backend suggestedMappings if available
     if (this.uploadPreview?.suggestedMappings?.length) {
+      console.log('✅ [AUTO-MAP] Found', this.uploadPreview.suggestedMappings.length, 'suggested mappings');
+
       for (const mapping of this.uploadPreview.suggestedMappings) {
         const fieldKey = BOQ_FIELD_REVERSE[mapping.boqField];
+        console.log(`   Mapping: "${mapping.excelColumn}" (BoqField=${mapping.boqField}) → fieldKey="${fieldKey}"`);
+
         if (fieldKey && mapping.excelColumn) {
           this.columnMappings[mapping.excelColumn] = fieldKey;
         }
       }
+
+      console.log('✅ [AUTO-MAP] Final columnMappings:', this.columnMappings);
+      console.log('✅ [AUTO-MAP] hasRequiredMappings:', this.hasRequiredMappings());
+    } else {
+      console.warn('⚠️ [AUTO-MAP] No suggested mappings available!');
+      console.log('   uploadPreview:', this.uploadPreview);
     }
   }
 
@@ -831,6 +1032,7 @@ export class BoqImportDialogComponent implements OnChanges {
     this.isValidating.set(true);
     this.validationResult.set(null);
     this.validationRows.set([]);
+    this.rowLevelCache.clear();
 
     const sessionId = this.uploadPreview?.importSessionId;
     if (!sessionId) {
@@ -930,6 +1132,138 @@ export class BoqImportDialogComponent implements OnChanges {
       case 'error': return 'danger';
       default: return 'warn';
     }
+  }
+
+  /**
+   * Infer the hierarchy level of a validation row based on mapped data.
+   * Detection logic mirrors the backend's hierarchy detection:
+   *   - Row with a bill pattern (BILL NO. X) or explicit billNumber mapping → Bill
+   *   - Row with X.XX item number + no qty/uom → Item Group
+   *   - Row with X.XX item number + has qty/uom → Item (standalone)
+   *   - Row with letter/code sub-item label following a group → Sub-Item
+   *   - Row with explicit subItemLabel mapping → Sub-Item
+   */
+  inferRowLevel(row: BoqImportRow): HierarchyLevel {
+    // Check cache first
+    const cached = this.rowLevelCache.get(row.rowNumber);
+    if (cached) return cached;
+
+    const level = this.detectRowLevel(row);
+    this.rowLevelCache.set(row.rowNumber, level);
+    return level;
+  }
+
+  private detectRowLevel(row: BoqImportRow): HierarchyLevel {
+    const data = row.data;
+    if (!data) return 'Item';
+
+    const billCol = this.getMappedColumnForField('billNumber');
+    const subItemCol = this.getMappedColumnForField('subItemLabel');
+    const sectionCol = this.getMappedColumnForField('sectionTitle');
+    const itemNumCol = this.getMappedColumnForField('itemNumber');
+    const qtyCol = this.getMappedColumnForField('quantity');
+    const uomCol = this.getMappedColumnForField('uom');
+    const descCol = this.getMappedColumnForField('description');
+
+    // 1. Explicit billNumber mapped and has value → Bill
+    if (billCol && data[billCol]) {
+      const billVal = String(data[billCol]).trim();
+      if (billVal.length > 0) {
+        return 'Bill';
+      }
+    }
+
+    // 2. Check description or section title for bill pattern (BILL NO. X)
+    const descVal = descCol ? String(data[descCol] ?? '').trim() : '';
+    const sectionVal = sectionCol ? String(data[sectionCol] ?? '').trim() : '';
+    if (BILL_PATTERN.test(descVal) || BILL_PATTERN.test(sectionVal)) {
+      return 'Bill';
+    }
+
+    // 3. Section title present without item number data → Bill
+    if (sectionCol && sectionVal && (!itemNumCol || !data[itemNumCol])) {
+      return 'Bill';
+    }
+
+    // 4. Explicit subItemLabel mapped and has value → Sub-Item
+    if (subItemCol && data[subItemCol]) {
+      const subVal = String(data[subItemCol]).trim();
+      if (subVal.length > 0) {
+        return 'Sub-Item';
+      }
+    }
+
+    // 5. Item number pattern analysis
+    const itemNumVal = itemNumCol ? String(data[itemNumCol] ?? '').trim() : '';
+    const hasQty = qtyCol && data[qtyCol] != null && data[qtyCol] !== '' && Number(data[qtyCol]) !== 0;
+    const hasUom = uomCol && data[uomCol] != null && String(data[uomCol]).trim() !== '';
+
+    if (itemNumVal && ITEM_NUMBER_PATTERN.test(itemNumVal)) {
+      // Has item number pattern (X.XX)
+      if (!hasQty && !hasUom) {
+        // No qty/uom → this is an Item Group header
+        return 'Item Group';
+      }
+      // Has qty/uom → standalone item
+      return 'Item';
+    }
+
+    // 6. Check for sub-item label pattern (a., b., i., ii., etc.)
+    if (itemNumVal && SUB_ITEM_LABEL_PATTERN.test(itemNumVal)) {
+      return 'Sub-Item';
+    }
+
+    // 7. Check description for sub-item label pattern as fallback
+    if (descVal && SUB_ITEM_LABEL_PATTERN.test(descVal) && !itemNumVal) {
+      return 'Sub-Item';
+    }
+
+    // Default: treat as Item
+    return 'Item';
+  }
+
+  inferRowLevelSeverity(row: BoqImportRow): 'info' | 'success' | 'secondary' | 'warn' {
+    const level = this.inferRowLevel(row);
+    switch (level) {
+      case 'Bill': return 'info';
+      case 'Item Group': return 'warn';
+      case 'Item': return 'success';
+      case 'Sub-Item': return 'secondary';
+      default: return 'secondary';
+    }
+  }
+
+  getRowIndent(row: BoqImportRow): string {
+    const level = this.inferRowLevel(row);
+    switch (level) {
+      case 'Bill': return '0';
+      case 'Item Group': return '1rem';
+      case 'Item': return '1.5rem';
+      case 'Sub-Item': return '2.5rem';
+      default: return '0';
+    }
+  }
+
+  /** Returns CSS classes for the row based on status and hierarchy level */
+  getRowCssClasses(row: BoqImportRow): string {
+    const classes: string[] = [];
+    classes.push('status-' + row.status);
+
+    const level = this.inferRowLevel(row);
+    switch (level) {
+      case 'Bill': classes.push('level-bill'); break;
+      case 'Item Group': classes.push('level-item-group'); break;
+      case 'Sub-Item': classes.push('level-sub-item'); break;
+    }
+
+    return classes.join(' ');
+  }
+
+  private getMappedColumnForField(field: string): string | null {
+    for (const [col, mappedField] of Object.entries(this.columnMappings)) {
+      if (mappedField === field) return col;
+    }
+    return null;
   }
 
   getRowPreview(row: BoqImportRow): string {

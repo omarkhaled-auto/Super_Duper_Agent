@@ -329,7 +329,7 @@ export class BoqItemDialogComponent implements OnInit, OnChanges {
   isLoading = false;
   errorMessage: string | null = null;
 
-  sectionOptions: { label: string; value: number }[] = [];
+  sectionOptions: { label: string; value: string | number }[] = [];
   uomOptions = UOM_OPTIONS;
   itemTypeOptions = BOQ_ITEM_TYPE_OPTIONS;
 

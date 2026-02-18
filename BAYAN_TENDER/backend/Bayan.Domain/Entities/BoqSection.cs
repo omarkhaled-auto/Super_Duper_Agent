@@ -52,4 +52,10 @@ public class BoqSection : BaseEntity
     /// Items in this section.
     /// </summary>
     public virtual ICollection<BoqItem> Items { get; set; } = new List<BoqItem>();
+
+    /// <summary>
+    /// Bill-level bid pricing entries for this section.
+    /// Used when pricing level is Bill.
+    /// </summary>
+    public virtual ICollection<BidPricing> BidPricings { get; set; } = new List<BidPricing>();
 }

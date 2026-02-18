@@ -1,0 +1,19 @@
+=== Python ===
+Version: 3.12.3 (main, Jan 22 2026, 20:57:42) [GCC 13.3.0]
+Exec: /usr/bin/python3
+
+=== API Key ===
+NOT SET!
+.env file exists at /mnt/c/Projects/claude-agent-team/.env
+
+=== Super-team ===
+src/ directories: ['architect', 'build3_shared', 'codebase_intelligence', 'contract_engine', 'integrator', 'quality_gate', 'shared', 'super_orchestrator']
+
+=== Agent-team-v15 ===
+agent_team files: ['__init__.py', '__main__.py', '_lang.py', 'agent_teams_backend.py', 'agents.py', 'audit_models.py', 'audit_prompts.py', 'audit_team.py', 'browser_testing.py', 'claude_md_generator.py', 'cli.py', 'code_quality_standards.py', 'codebase_client.py', 'codebase_map.py', 'config.py']...
+
+=== .agent-team stale state ===
+Exists: False
+
+=== agent-team module ===
+Import error: No module named 'agent_team'

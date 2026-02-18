@@ -88,6 +88,11 @@ public class TenderDetailDto
     public int CommercialWeight { get; set; }
 
     /// <summary>
+    /// Pricing level for the BOQ hierarchy.
+    /// </summary>
+    public PricingLevel PricingLevel { get; set; }
+
+    /// <summary>
     /// Current status of the tender.
     /// </summary>
     public TenderStatus Status { get; set; }

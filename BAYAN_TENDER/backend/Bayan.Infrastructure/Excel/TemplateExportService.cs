@@ -1,5 +1,6 @@
 using Bayan.Application.Common.Interfaces;
 using Bayan.Application.Features.Boq.DTOs;
+using Bayan.Domain.Enums;
 using ClosedXML.Excel;
 using Microsoft.Extensions.Logging;
 
@@ -28,6 +29,7 @@ public class TemplateExportService : ITemplateExportService
     private static readonly Dictionary<string, (string English, string Arabic)> ColumnHeaders = new()
     {
         ["Section"] = ("Section", "القسم"),
+        ["Level"] = ("Level", "المستوى"),
         ["ItemNumber"] = ("Item #", "رقم البند"),
         ["Description"] = ("Description", "الوصف"),
         ["Quantity"] = ("Qty", "الكمية"),
@@ -43,6 +45,11 @@ public class TemplateExportService : ITemplateExportService
     private static readonly XLColor SectionBackgroundColor = XLColor.FromHtml("#E8F4FD"); // Light blue
     private static readonly XLColor LockedCellColor = XLColor.FromHtml("#F5F5F5"); // Light gray
     private static readonly XLColor HighlightColor = XLColor.FromHtml("#FFEB3B"); // Yellow
+
+    // Hierarchy-specific colors
+    private static readonly XLColor BillBackgroundColor = XLColor.FromHtml("#DBEAFE"); // Blue-100
+    private static readonly XLColor ItemGroupBackgroundColor = XLColor.FromHtml("#F1F5F9"); // Slate-100
+    private static readonly XLColor NonPriceableBackgroundColor = XLColor.FromHtml("#E5E7EB"); // Gray-200
 
     public TemplateExportService(ILogger<TemplateExportService> logger)
     {
@@ -191,6 +198,21 @@ public class TemplateExportService : ITemplateExportService
         worksheet.Cell(row, 1).Value = $"{currencyLabel} {request.Currency}";
         row++;
 
+        // Pricing level
+        var pricingLevelLabel = request.Language == TemplateLanguage.Arabic ? "مستوى التسعير:" : "Pricing Level:";
+        var pricingLevelValue = request.PricingLevel switch
+        {
+            PricingLevel.Bill => request.Language == TemplateLanguage.Arabic ? "مستوى الفاتورة" : "Bill Level",
+            PricingLevel.Item => request.Language == TemplateLanguage.Arabic ? "مستوى البند" : "Item Level",
+            PricingLevel.SubItem => request.Language == TemplateLanguage.Arabic ? "مستوى البند الفرعي" : "Sub-Item Level",
+            _ => "Sub-Item Level"
+        };
+        var pricingCell = worksheet.Cell(row, 1);
+        pricingCell.Value = $"{pricingLevelLabel} {pricingLevelValue}";
+        pricingCell.Style.Font.Bold = true;
+        pricingCell.Style.Font.FontColor = XLColor.FromHtml("#1E3A5F");
+        row++;
+
         return row;
     }
 
@@ -236,21 +258,25 @@ public class TemplateExportService : ITemplateExportService
         bool hasSectionColumn = request.IncludeColumns.Contains("Section");
         string sectionTitle = $"{section.SectionNumber} - {section.Title}";
 
-        // Only add merged section header row if there is no Section column
+        // Add a bill-level section header row (bold, colored background)
         if (!hasSectionColumn)
         {
             var sectionCell = worksheet.Cell(row, 1);
             sectionCell.Value = sectionTitle;
             sectionCell.Style.Font.Bold = true;
-            sectionCell.Style.Fill.BackgroundColor = SectionBackgroundColor;
+            sectionCell.Style.Font.FontSize = 11;
+            sectionCell.Style.Fill.BackgroundColor = BillBackgroundColor;
 
             var sectionRange = worksheet.Range(row, 1, row, request.IncludeColumns.Count);
             sectionRange.Merge();
             sectionRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+
+            // Add "Level" value if that column exists in an unmerged context
+            // (Merged row — level is implied as "Bill")
             row++;
         }
 
-        // Add items
+        // Add items with hierarchy-aware formatting
         foreach (var item in section.Items)
         {
             row = AddItem(worksheet, item, request, row, dataStartRow, sectionTitle);
@@ -267,7 +293,9 @@ public class TemplateExportService : ITemplateExportService
         int dataStartRow,
         string sectionTitle = "")
     {
+        bool isPriceable = IsItemPriceable(item, request.PricingLevel);
         int col = 1;
+
         foreach (var column in request.IncludeColumns)
         {
             var cell = worksheet.Cell(row, col);
@@ -278,43 +306,90 @@ public class TemplateExportService : ITemplateExportService
                     cell.Value = sectionTitle;
                     break;
 
+                case "Level":
+                    cell.Value = item.HierarchyLevel;
+                    cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    break;
+
                 case "ItemNumber":
                     cell.Value = item.ItemNumber;
                     cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    // Indent based on hierarchy level
+                    if (item.IsGroup)
+                    {
+                        cell.Style.Alignment.Indent = 1;
+                    }
+                    else if (item.HasParent)
+                    {
+                        cell.Style.Alignment.Indent = 2;
+                    }
                     break;
 
                 case "Description":
                     cell.Value = item.Description;
                     cell.Style.Alignment.WrapText = true;
+                    // Indent description based on hierarchy level
+                    if (item.IsGroup)
+                    {
+                        cell.Style.Alignment.Indent = 1;
+                    }
+                    else if (item.HasParent)
+                    {
+                        cell.Style.Alignment.Indent = 2;
+                    }
                     break;
 
                 case "Quantity":
-                    cell.Value = item.Quantity;
-                    cell.Style.NumberFormat.Format = "#,##0.00";
+                    if (!item.IsGroup)
+                    {
+                        cell.Value = item.Quantity;
+                        cell.Style.NumberFormat.Format = "#,##0.00";
+                    }
                     cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
                     break;
 
                 case "Uom":
-                    cell.Value = item.Uom;
+                    if (!item.IsGroup)
+                    {
+                        cell.Value = item.Uom;
+                    }
                     cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
                     break;
 
                 case "UnitRate":
-                    // Leave blank for bidder to fill
-                    cell.Style.NumberFormat.Format = "#,##0.00";
+                    if (isPriceable)
+                    {
+                        // Leave blank for bidder to fill — this is a priceable row
+                        cell.Style.NumberFormat.Format = "#,##0.00";
+                    }
+                    else
+                    {
+                        // Non-priceable: grey out and lock
+                        cell.Style.Fill.BackgroundColor = NonPriceableBackgroundColor;
+                        cell.Style.Protection.Locked = true;
+                    }
                     cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
                     break;
 
                 case "Amount":
-                    // Formula: Quantity × Unit Rate
-                    int qtyColIndex = request.IncludeColumns.IndexOf("Quantity") + 1;
-                    int rateColIndex = request.IncludeColumns.IndexOf("UnitRate") + 1;
-
-                    if (qtyColIndex > 0 && rateColIndex > 0)
+                    if (isPriceable)
                     {
-                        string qtyCol = GetColumnLetter(qtyColIndex);
-                        string rateCol = GetColumnLetter(rateColIndex);
-                        cell.FormulaA1 = $"={qtyCol}{row}*{rateCol}{row}";
+                        // Formula: Quantity x Unit Rate
+                        int qtyColIndex = request.IncludeColumns.IndexOf("Quantity") + 1;
+                        int rateColIndex = request.IncludeColumns.IndexOf("UnitRate") + 1;
+
+                        if (qtyColIndex > 0 && rateColIndex > 0)
+                        {
+                            string qtyCol = GetColumnLetter(qtyColIndex);
+                            string rateCol = GetColumnLetter(rateColIndex);
+                            cell.FormulaA1 = $"={qtyCol}{row}*{rateCol}{row}";
+                        }
+                    }
+                    else
+                    {
+                        // Non-priceable: grey out and lock
+                        cell.Style.Fill.BackgroundColor = NonPriceableBackgroundColor;
+                        cell.Style.Protection.Locked = true;
                     }
                     cell.Style.NumberFormat.Format = "#,##0.00";
                     cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
@@ -332,7 +407,64 @@ public class TemplateExportService : ITemplateExportService
             col++;
         }
 
+        // Apply hierarchy-level row formatting
+        ApplyHierarchyRowFormatting(worksheet, row, request.IncludeColumns.Count, item, isPriceable);
+
         return row + 1;
+    }
+
+    /// <summary>
+    /// Determines whether a given item is priceable at the specified PricingLevel.
+    /// - SubItem level: all non-group items are priceable (most granular)
+    /// - Item level: only standalone items (not sub-items) are priceable
+    /// - Bill level: no individual items are priceable (pricing is at bill/section level)
+    /// </summary>
+    private static bool IsItemPriceable(BoqItemExportDto item, PricingLevel pricingLevel)
+    {
+        // Group headers are never directly priceable
+        if (item.IsGroup) return false;
+
+        return pricingLevel switch
+        {
+            PricingLevel.SubItem => true, // All leaf items are priceable
+            PricingLevel.Item => !item.HasParent, // Only top-level items (not sub-items)
+            PricingLevel.Bill => false, // No individual items — priced at bill level
+            _ => true
+        };
+    }
+
+    /// <summary>
+    /// Applies visual formatting to a row based on its hierarchy level.
+    /// </summary>
+    private static void ApplyHierarchyRowFormatting(
+        IXLWorksheet worksheet,
+        int row,
+        int columnCount,
+        BoqItemExportDto item,
+        bool isPriceable)
+    {
+        var rowRange = worksheet.Range(row, 1, row, columnCount);
+
+        if (item.IsGroup)
+        {
+            // Item group rows: semi-bold, light background
+            rowRange.Style.Font.Bold = true;
+            rowRange.Style.Fill.BackgroundColor = ItemGroupBackgroundColor;
+        }
+        else if (item.HasParent)
+        {
+            // Sub-item rows: normal weight, slightly muted if non-priceable
+            if (!isPriceable)
+            {
+                rowRange.Style.Font.FontColor = XLColor.FromHtml("#6B7280"); // Gray-500
+            }
+        }
+
+        // Non-priceable rows get a distinct visual treatment
+        if (!isPriceable && !item.IsGroup)
+        {
+            rowRange.Style.Font.Italic = true;
+        }
     }
 
     private void AddSummaryRow(
@@ -457,6 +589,7 @@ public class TemplateExportService : ITemplateExportService
         // Set column widths
         var columnWidths = new Dictionary<string, double>
         {
+            ["Level"] = 12,
             ["ItemNumber"] = 12,
             ["Description"] = 50,
             ["Quantity"] = 12,
@@ -532,6 +665,23 @@ public class TemplateExportService : ITemplateExportService
             row++;
         }
 
+        // Pricing level guidance
+        row += 1;
+        var pricingTitle = isArabic ? "مستوى التسعير:" : "Pricing Level:";
+        worksheet.Cell(row, 1).Value = pricingTitle;
+        worksheet.Cell(row, 1).Style.Font.Bold = true;
+        worksheet.Cell(row, 1).Style.Font.FontSize = 12;
+        row++;
+
+        var pricingInstructions = GetPricingLevelInstructions(request.PricingLevel, isArabic);
+        foreach (var instruction in pricingInstructions)
+        {
+            var cell = worksheet.Cell(row, 1);
+            cell.Value = instruction;
+            cell.Style.Alignment.WrapText = true;
+            row++;
+        }
+
         // Color legend
         row += 2;
         worksheet.Cell(row, 1).Value = isArabic ? "دليل الألوان:" : "Color Legend:";
@@ -550,6 +700,24 @@ public class TemplateExportService : ITemplateExportService
         worksheet.Cell(row, 2).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
         row++;
 
+        // Bill/section rows
+        worksheet.Cell(row, 1).Value = isArabic ? "صفوف الأقسام (الفواتير)" : "Bill/Section header rows";
+        worksheet.Cell(row, 2).Style.Fill.BackgroundColor = BillBackgroundColor;
+        worksheet.Cell(row, 2).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        row++;
+
+        // Item group rows
+        worksheet.Cell(row, 1).Value = isArabic ? "صفوف مجموعات البنود" : "Item group rows";
+        worksheet.Cell(row, 2).Style.Fill.BackgroundColor = ItemGroupBackgroundColor;
+        worksheet.Cell(row, 2).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        row++;
+
+        // Non-priceable rows
+        worksheet.Cell(row, 1).Value = isArabic ? "صفوف غير قابلة للتسعير (للعرض فقط)" : "Non-priceable rows (reference only)";
+        worksheet.Cell(row, 2).Style.Fill.BackgroundColor = NonPriceableBackgroundColor;
+        worksheet.Cell(row, 2).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        row++;
+
         // Format
         worksheet.Column(1).Width = 60;
         worksheet.Column(2).Width = 20;
@@ -558,6 +726,65 @@ public class TemplateExportService : ITemplateExportService
         {
             worksheet.RightToLeft = true;
         }
+    }
+
+    /// <summary>
+    /// Returns pricing level-specific instructions for the instructions sheet.
+    /// </summary>
+    private static List<string> GetPricingLevelInstructions(PricingLevel pricingLevel, bool isArabic)
+    {
+        if (isArabic)
+        {
+            return pricingLevel switch
+            {
+                PricingLevel.Bill => new List<string>
+                {
+                    "• هذا المناقصة تستخدم تسعير على مستوى الفاتورة.",
+                    "• يجب تقديم مبلغ إجمالي واحد لكل قسم/فاتورة.",
+                    "• البنود الفردية مدرجة كمرجع فقط ولا تحتاج إلى تسعير.",
+                    "• الصفوف الرمادية هي بنود مرجعية للقراءة فقط."
+                },
+                PricingLevel.Item => new List<string>
+                {
+                    "• هذا المناقصة تستخدم تسعير على مستوى البند.",
+                    "• يجب إدخال سعر الوحدة لكل بند رئيسي.",
+                    "• البنود الفرعية مدرجة كتفاصيل للقراءة فقط.",
+                    "• الصفوف الرمادية هي بنود فرعية مرجعية ولا تحتاج إلى تسعير."
+                },
+                PricingLevel.SubItem => new List<string>
+                {
+                    "• هذا المناقصة تستخدم تسعير على مستوى البند الفرعي (الأكثر تفصيلاً).",
+                    "• يجب إدخال سعر الوحدة لكل بند فرعي.",
+                    "• مجموعات البنود هي عناوين ولا تحتاج إلى تسعير مباشر."
+                },
+                _ => new List<string>()
+            };
+        }
+
+        return pricingLevel switch
+        {
+            PricingLevel.Bill => new List<string>
+            {
+                "- This tender uses BILL-LEVEL pricing.",
+                "- You must provide a single lump-sum amount per bill/section.",
+                "- Individual items are listed for reference only and do not require pricing.",
+                "- Greyed-out rows are reference items (read-only)."
+            },
+            PricingLevel.Item => new List<string>
+            {
+                "- This tender uses ITEM-LEVEL pricing.",
+                "- You must enter a unit rate for each main item.",
+                "- Sub-items are listed as read-only detail for reference.",
+                "- Greyed-out rows are sub-item details that do not require pricing."
+            },
+            PricingLevel.SubItem => new List<string>
+            {
+                "- This tender uses SUB-ITEM-LEVEL pricing (most granular).",
+                "- You must enter a unit rate for each sub-item.",
+                "- Item group headers do not require direct pricing."
+            },
+            _ => new List<string>()
+        };
     }
 
     private static List<string> GetEnglishInstructions()

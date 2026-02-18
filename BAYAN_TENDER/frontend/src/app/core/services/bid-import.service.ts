@@ -128,76 +128,94 @@ export class BidImportService {
   }
 
   /**
-   * Auto-map columns based on common patterns
+   * Auto-map columns based on header names first, then data patterns as fallback.
+   * Priority: Header names > Data patterns > Positional defaults
    */
   autoMapColumns(columns: string[], previewRows: ParsedExcelRow[]): ColumnMapping[] {
     const mappings: ColumnMapping[] = [];
+    const usedFields = new Set<BidImportColumnType>();
 
-    // Analyze first row to detect patterns
-    const firstRow = previewRows[0];
-    if (!firstRow) {
-      return columns.map(col => ({ excelColumn: col, targetField: null }));
-    }
+    // Header-based detection patterns (PRIORITY 1)
+    const headerPatterns: Partial<Record<BidImportColumnType, RegExp[]>> = {
+      'bill_number': [/^bill\s*no\.?$/i, /^bill\s*#$/i, /^bill$/i],
+      'item_number': [/^item\s*no\.?$/i, /^item\s*#$/i, /^item$/i, /^no\.?$/i],
+      'sub_item': [/^sub[-\s]?item$/i, /^sub[-\s]?item\s*label$/i, /^sub$/i],
+      'description': [/^description$/i, /^desc\.?$/i, /^particulars$/i],
+      'quantity': [/^qty\.?$/i, /^quantity$/i, /^quantities$/i],
+      'uom': [/^uom$/i, /^unit$/i, /^units$/i],
+      'unit_rate': [/^unit\s*rate$/i, /^rate$/i, /^unit\s*price$/i, /^price$/i],
+      'amount': [/^amount$/i, /^total$/i, /^total\s*amount$/i, /^value$/i],
+      'currency': [/^currency$/i, /^curr\.?$/i, /^ccy$/i]
+    };
 
+    // Step 1: Try header-based detection
     columns.forEach(col => {
-      const value = firstRow.cells[col];
       let detectedField: BidImportColumnType | null = null;
+      const normalizedHeader = col.toLowerCase().trim();
 
-      if (typeof value === 'string') {
-        const lowerValue = value.toLowerCase();
+      for (const [field, patterns] of Object.entries(headerPatterns)) {
+        if (usedFields.has(field as BidImportColumnType)) continue;
 
-        // Detect item number patterns
-        if (/^\d+\.\d+\.\d+$/.test(value) || /^[a-z]{2,3}-\d+$/i.test(value)) {
-          detectedField = 'item_number';
+        for (const pattern of patterns) {
+          if (pattern.test(normalizedHeader)) {
+            detectedField = field as BidImportColumnType;
+            usedFields.add(detectedField);
+            break;
+          }
         }
-        // Detect currency
-        else if (['sar', 'aed', 'usd', 'eur', 'gbp'].includes(lowerValue)) {
-          detectedField = 'currency';
-        }
-        // Detect UOM
-        else if (['ls', 'ea', 'm2', 'm3', 'lm', 'kg', 'mt', 'hr', 'mth'].includes(lowerValue)) {
-          detectedField = 'uom';
-        }
-        // Long text = description
-        else if (value.length > 20) {
-          detectedField = 'description';
-        }
-      } else if (typeof value === 'number') {
-        // Heuristic: larger numbers in later columns tend to be amounts
-        // Smaller numbers earlier tend to be quantities
-        const colIndex = columns.indexOf(col);
-        if (colIndex <= 2) {
-          detectedField = 'quantity';
-        } else if (colIndex === columns.length - 2) {
-          detectedField = 'unit_rate';
-        } else if (colIndex === columns.length - 1) {
-          detectedField = 'amount';
-        }
+        if (detectedField) break;
       }
 
       mappings.push({ excelColumn: col, targetField: detectedField });
     });
 
-    // Apply default mappings for common column positions
-    const defaultMappings: Record<number, BidImportColumnType> = {
-      0: 'item_number',
-      1: 'description',
-      2: 'quantity',
-      3: 'uom',
-      4: 'unit_rate',
-      5: 'amount',
-      6: 'currency'
-    };
+    // Step 2: For unmapped columns, try data-based detection
+    const firstRow = previewRows[0];
+    if (firstRow) {
+      mappings.forEach(mapping => {
+        if (mapping.targetField) return; // Already mapped by header
 
-    mappings.forEach((mapping, index) => {
-      if (!mapping.targetField && defaultMappings[index]) {
-        const defaultField = defaultMappings[index];
-        // Only apply if not already mapped
-        if (!mappings.some(m => m.targetField === defaultField)) {
-          mapping.targetField = defaultField;
+        const col = mapping.excelColumn;
+        const value = firstRow.cells[col];
+        let detectedField: BidImportColumnType | null = null;
+
+        if (typeof value === 'string') {
+          const lowerValue = value.toLowerCase();
+
+          // Detect item number patterns
+          if (/^\d+\.\d+/.test(value) || /^[a-z]{2,3}-\d+$/i.test(value)) {
+            detectedField = 'item_number';
+          }
+          // Detect currency
+          else if (['sar', 'aed', 'usd', 'eur', 'gbp'].includes(lowerValue)) {
+            detectedField = 'currency';
+          }
+          // Detect UOM
+          else if (['ls', 'ea', 'm2', 'm3', 'lm', 'kg', 'mt', 'hr', 'mth', 'nos'].includes(lowerValue)) {
+            detectedField = 'uom';
+          }
+          // Long text = description
+          else if (value.length > 20) {
+            detectedField = 'description';
+          }
+        } else if (typeof value === 'number') {
+          // Heuristic: larger numbers in later columns tend to be amounts
+          const colIndex = columns.indexOf(col);
+          if (value < 1000 && colIndex <= 4) {
+            detectedField = 'quantity';
+          } else if (colIndex === columns.length - 2) {
+            detectedField = 'unit_rate';
+          } else if (colIndex === columns.length - 1) {
+            detectedField = 'amount';
+          }
         }
-      }
-    });
+
+        if (detectedField && !usedFields.has(detectedField)) {
+          mapping.targetField = detectedField;
+          usedFields.add(detectedField);
+        }
+      });
+    }
 
     return mappings;
   }
@@ -222,7 +240,9 @@ export class BidImportService {
       if (m.targetField && m.targetField !== 'ignore') {
         // Map frontend field names to backend ColumnMappingsDto property names
         const fieldToProperty: Record<string, string> = {
+          'bill_number': 'billNumberColumn',
           'item_number': 'itemNumberColumn',
+          'sub_item': 'subItemColumn',
           'description': 'descriptionColumn',
           'quantity': 'quantityColumn',
           'uom': 'uomColumn',

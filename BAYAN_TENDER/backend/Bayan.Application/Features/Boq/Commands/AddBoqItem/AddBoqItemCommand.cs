@@ -53,4 +53,15 @@ public class AddBoqItemCommand : IRequest<BoqItemDto>
     /// Sort order for display.
     /// </summary>
     public int SortOrder { get; set; }
+
+    /// <summary>
+    /// Parent item ID for sub-items in a hierarchical BOQ.
+    /// Null for top-level items.
+    /// </summary>
+    public Guid? ParentItemId { get; set; }
+
+    /// <summary>
+    /// Whether this item is a group header that contains child sub-items.
+    /// </summary>
+    public bool IsGroup { get; set; } = false;
 }

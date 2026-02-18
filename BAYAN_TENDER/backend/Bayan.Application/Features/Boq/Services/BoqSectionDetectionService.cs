@@ -4,6 +4,51 @@ using Bayan.Application.Features.Boq.DTOs;
 namespace Bayan.Application.Features.Boq.Services;
 
 /// <summary>
+/// Classification of a BOQ row for hierarchy detection.
+/// </summary>
+public enum ItemHierarchyRole
+{
+    /// <summary>Row is a bill header (e.g., "BILL NO. 1").</summary>
+    BillHeader,
+
+    /// <summary>Row is a group item (has item number, no quantity/UOM — contains sub-items).</summary>
+    Group,
+
+    /// <summary>Row is a sub-item under a group (letter label, alphanumeric code, or child number).</summary>
+    SubItem,
+
+    /// <summary>Row is a standalone item (has item number, quantity, and UOM).</summary>
+    Standalone,
+
+    /// <summary>Row could not be classified (empty or unparseable).</summary>
+    Unknown
+}
+
+/// <summary>
+/// Result of hierarchy detection for a single BOQ row.
+/// </summary>
+public class ItemHierarchyInfo
+{
+    /// <summary>Row index in the sheet.</summary>
+    public int RowIndex { get; set; }
+
+    /// <summary>The item number value from this row.</summary>
+    public string ItemNumber { get; set; } = string.Empty;
+
+    /// <summary>Detected hierarchy role.</summary>
+    public ItemHierarchyRole Role { get; set; } = ItemHierarchyRole.Unknown;
+
+    /// <summary>
+    /// For sub-items: the item number of the parent group row.
+    /// Null for groups, standalone items, and bill headers.
+    /// </summary>
+    public string? ParentItemNumber { get; set; }
+
+    /// <summary>Description text from the row.</summary>
+    public string? Description { get; set; }
+}
+
+/// <summary>
 /// Row context for section detection with full row data.
 /// </summary>
 public class BoqRowContext
@@ -50,6 +95,12 @@ public interface IBoqSectionDetectionService
     /// Gets the parent section number for a given section number.
     /// </summary>
     string? GetParentSectionNumber(string sectionNumber);
+
+    /// <summary>
+    /// Detects item hierarchy from a list of BOQ rows, classifying each as
+    /// BillHeader, Group, SubItem, or Standalone. Sub-items are linked to their parent group.
+    /// </summary>
+    List<ItemHierarchyInfo> DetectItemHierarchy(IReadOnlyList<BoqRowContext> rows);
 }
 
 /// <summary>
@@ -386,6 +437,237 @@ public class BoqSectionDetectionService : IBoqSectionDetectionService
         }
 
         return string.Join(".", parts.Take(parts.Length - 1));
+    }
+
+    // ── Bill header pattern: "BILL NO. X" or "BILL NO.X" ──
+    private static readonly Regex BillHeaderPattern = new(
+        @"^\s*BILL\s+NO\.?\s*\d+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    // ── Bill total row: "Total Bill No. X Carried To Collection" ──
+    private static readonly Regex BillTotalPattern = new(
+        @"^\s*Total\s+Bill\s+No\.?\s*\d+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    // ── Sub-item patterns ──
+    // Single letter: a, b, c, A, B, C
+    private static readonly Regex SingleLetterPattern = new(
+        @"^[A-Za-z]$",
+        RegexOptions.Compiled);
+
+    // Alphanumeric code: F1, S2, W3, FC1, EFS-14
+    private static readonly Regex AlphanumericCodePattern = new(
+        @"^[A-Za-z]{1,4}[-]?\d{1,3}$",
+        RegexOptions.Compiled);
+
+    public List<ItemHierarchyInfo> DetectItemHierarchy(IReadOnlyList<BoqRowContext> rows)
+    {
+        var results = new List<ItemHierarchyInfo>(rows.Count);
+
+        // First pass: classify each row
+        string? currentGroupItemNumber = null;
+        int currentGroupIndex = -1;
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var row = rows[i];
+            var info = new ItemHierarchyInfo
+            {
+                RowIndex = i,
+                ItemNumber = row.ItemNumber?.Trim() ?? string.Empty,
+                Description = row.Description
+            };
+
+            var itemNum = info.ItemNumber;
+            var desc = (row.Description ?? string.Empty).Trim();
+
+            // 1. Check for bill header rows
+            if (IsBillHeaderRow(itemNum, desc))
+            {
+                info.Role = ItemHierarchyRole.BillHeader;
+                currentGroupItemNumber = null;
+                currentGroupIndex = -1;
+                results.Add(info);
+                continue;
+            }
+
+            // 2. Check for bill total rows
+            if (IsBillTotalRow(desc))
+            {
+                info.Role = ItemHierarchyRole.BillHeader;
+                currentGroupItemNumber = null;
+                currentGroupIndex = -1;
+                results.Add(info);
+                continue;
+            }
+
+            // Skip rows with no item number — they can't be classified
+            if (string.IsNullOrWhiteSpace(itemNum))
+            {
+                info.Role = ItemHierarchyRole.Unknown;
+                results.Add(info);
+                continue;
+            }
+
+            var hasQuantity = !string.IsNullOrWhiteSpace(row.Quantity) &&
+                              decimal.TryParse(row.Quantity, out var qty) && qty != 0;
+            var hasUom = !string.IsNullOrWhiteSpace(row.Uom);
+
+            // 3. If currently inside a group context, check if this row is a sub-item
+            if (currentGroupItemNumber != null)
+            {
+                if (IsSubItemOf(itemNum, currentGroupItemNumber))
+                {
+                    info.Role = ItemHierarchyRole.SubItem;
+                    info.ParentItemNumber = currentGroupItemNumber;
+                    results.Add(info);
+                    continue;
+                }
+                else
+                {
+                    // Exited the group context
+                    currentGroupItemNumber = null;
+                    currentGroupIndex = -1;
+                }
+            }
+
+            // 4. Row with item number but no quantity and no UOM → potential group
+            if (!hasQuantity && !hasUom)
+            {
+                // Parse to see if it looks like a structured item number (X.XX or just a number)
+                var parseResult = ParseItemNumber(itemNum);
+                if (parseResult.Success)
+                {
+                    // Check if the next non-empty row could be a sub-item
+                    if (HasPotentialSubItems(rows, i, itemNum))
+                    {
+                        info.Role = ItemHierarchyRole.Group;
+                        currentGroupItemNumber = itemNum;
+                        currentGroupIndex = i;
+                        results.Add(info);
+                        continue;
+                    }
+                }
+
+                // No sub-items detected — treat as section header or standalone
+                // (Section headers are already filtered in the import handler)
+                info.Role = ItemHierarchyRole.Standalone;
+                results.Add(info);
+                continue;
+            }
+
+            // 5. Row with item number + quantity + UOM → standalone item
+            info.Role = ItemHierarchyRole.Standalone;
+            results.Add(info);
+        }
+
+        // Second pass: retroactively fix groups that ended up with no sub-items
+        // (edge case where HasPotentialSubItems was wrong due to lookahead limits)
+        var groupIndices = new HashSet<int>();
+        var subItemParents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var r in results)
+        {
+            if (r.Role == ItemHierarchyRole.Group)
+                groupIndices.Add(r.RowIndex);
+            if (r.Role == ItemHierarchyRole.SubItem && r.ParentItemNumber != null)
+                subItemParents.Add(r.ParentItemNumber);
+        }
+
+        foreach (var r in results)
+        {
+            if (r.Role == ItemHierarchyRole.Group && !subItemParents.Contains(r.ItemNumber))
+            {
+                // This group has no actual sub-items — downgrade to Standalone
+                r.Role = ItemHierarchyRole.Standalone;
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Checks if a row is a bill header (e.g., "BILL NO. 1 : GENERAL REQUIREMENTS").
+    /// The bill text can appear in the item number column or description column.
+    /// </summary>
+    private static bool IsBillHeaderRow(string itemNumber, string description)
+    {
+        return BillHeaderPattern.IsMatch(itemNumber) ||
+               BillHeaderPattern.IsMatch(description);
+    }
+
+    /// <summary>
+    /// Checks if a row is a bill total row (e.g., "Total Bill No. 1 Carried To Collection").
+    /// </summary>
+    private static bool IsBillTotalRow(string description)
+    {
+        return BillTotalPattern.IsMatch(description);
+    }
+
+    /// <summary>
+    /// Determines if itemNumber is a sub-item of parentItemNumber.
+    /// Handles: letter labels (a,b,c), alphanumeric codes (F1, S2, EFS-14),
+    /// and numbered sub-items (9.11, 9.12 under 9.1).
+    /// </summary>
+    private bool IsSubItemOf(string itemNumber, string parentItemNumber)
+    {
+        // Pattern 1: Single letter (a, b, c, A, B, C)
+        if (SingleLetterPattern.IsMatch(itemNumber))
+            return true;
+
+        // Pattern 2: Alphanumeric code (F1, S2, W3, FC1, EFS-14)
+        if (AlphanumericCodePattern.IsMatch(itemNumber))
+            return true;
+
+        // Pattern 3: Numbered sub-item — child's item number starts with parent's + separator
+        // e.g., "9.11" is a sub-item of "9.1", "3.2.1" is a sub-item of "3.2"
+        var normalizedParent = parentItemNumber.Trim().Replace("-", ".").Replace("/", ".");
+        var normalizedChild = itemNumber.Trim().Replace("-", ".").Replace("/", ".");
+
+        if (normalizedChild.StartsWith(normalizedParent + ".", StringComparison.OrdinalIgnoreCase) &&
+            normalizedChild.Length > normalizedParent.Length + 1)
+        {
+            // Ensure the remaining part is a simple number (no further nesting)
+            var remainder = normalizedChild[(normalizedParent.Length + 1)..];
+            if (int.TryParse(remainder, out _))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Looks ahead from the current group row to see if subsequent rows look like sub-items.
+    /// Scans up to 15 rows ahead to find at least one sub-item candidate.
+    /// </summary>
+    private bool HasPotentialSubItems(IReadOnlyList<BoqRowContext> rows, int groupIndex, string groupItemNumber)
+    {
+        const int lookahead = 15;
+        var limit = Math.Min(groupIndex + lookahead + 1, rows.Count);
+
+        for (var j = groupIndex + 1; j < limit; j++)
+        {
+            var nextRow = rows[j];
+            var nextItemNum = nextRow.ItemNumber?.Trim() ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(nextItemNum))
+                continue;
+
+            // If we hit another structured item number that ISN'T a sub-item, stop looking
+            var nextParse = ParseItemNumber(nextItemNum);
+            if (nextParse.Success && !IsSubItemOf(nextItemNum, groupItemNumber))
+            {
+                // Check if this could be a section header — if so, keep scanning
+                if (IsSectionHeaderRow(nextItemNum, nextRow.Quantity, nextRow.Uom))
+                    continue;
+                return false;
+            }
+
+            if (IsSubItemOf(nextItemNum, groupItemNumber))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>

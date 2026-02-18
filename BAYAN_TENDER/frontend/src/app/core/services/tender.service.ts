@@ -10,7 +10,8 @@ import {
   TenderInvitedBidder,
   TenderActivity,
   TenderStatus,
-  TenderType
+  TenderType,
+  PricingLevel
 } from '../models/tender.model';
 import { PaginatedResponse, PaginationParams } from '../models';
 
@@ -47,6 +48,23 @@ function mapTenderType(type: number | string): TenderType {
   const lower = String(type).toLowerCase();
   const valid: TenderType[] = ['open', 'selective', 'negotiated'];
   return valid.includes(lower as TenderType) ? lower as TenderType : 'open';
+}
+
+function mapPricingLevel(level: number | string | null | undefined): PricingLevel {
+  if (level === null || level === undefined) return 'SubItem';
+
+  // Backend enum: Bill=0, Item=1, SubItem=2
+  if (typeof level === 'number') {
+    const map: Record<number, PricingLevel> = { 0: 'Bill', 1: 'Item', 2: 'SubItem' };
+    return map[level] ?? 'SubItem';
+  }
+
+  // String matching
+  const str = String(level);
+  if (/^sub/i.test(str)) return 'SubItem';
+  if (/^item/i.test(str)) return 'Item';
+  if (/^bill/i.test(str)) return 'Bill';
+  return 'SubItem';
 }
 
 export interface TenderQueryParams extends PaginationParams, TenderFilterParams {}
@@ -269,6 +287,7 @@ export class TenderService {
       type: mapTenderType(data.tenderType),
       status: mapTenderStatus(data.status),
       currency: data.baseCurrency || 'AED',
+      pricingLevel: mapPricingLevel(data.pricingLevel),
       estimatedValue: data.estimatedValue,
       bidValidityPeriod: data.bidValidityDays,
       dates: {
@@ -305,6 +324,7 @@ export class TenderService {
       type: mapTenderType(data.tenderType),
       status: mapTenderStatus(data.status),
       currency: data.baseCurrency || 'AED',
+      pricingLevel: mapPricingLevel(data.pricingLevel),
       estimatedValue: data.estimatedValue,
       bidValidityPeriod: data.bidValidityDays,
       dates: {

@@ -39,8 +39,8 @@ class DesignExtractionError(Exception):
 DESIGN_EXTRACTION_SYSTEM_PROMPT = r"""You are a DESIGN REFERENCE ANALYZER. Your SOLE job is to scrape the provided URLs using Firecrawl MCP tools and produce a comprehensive UI_REQUIREMENTS.md document.
 
 ## TOOLS AVAILABLE
-You have Firecrawl MCP tools: firecrawl_scrape, firecrawl_search, firecrawl_map, firecrawl_extract.
-Use firecrawl_scrape on each URL to extract visual design information.
+You have Firecrawl MCP tools: mcp__firecrawl__firecrawl_scrape, mcp__firecrawl__firecrawl_search, mcp__firecrawl__firecrawl_map, mcp__firecrawl__firecrawl_extract.
+Use mcp__firecrawl__firecrawl_scrape on each URL to extract visual design information.
 
 ## OUTPUT REQUIREMENTS
 You MUST write a file called `{ui_requirements_path}` with the following MANDATORY sections:

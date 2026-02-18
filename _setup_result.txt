@@ -1,0 +1,17 @@
+=== Claude CLI ===
+claude in PATH: None
+claude --version failed: [Errno 2] No such file or directory: 'claude'
+
+=== Windows ANTHROPIC_API_KEY ===
+Windows env: NOT SET
+
+=== agent_team install ===
+Import via sys.path: No module named 'claude_agent_sdk'
+pip installed: NO
+
+=== Module run test ===
+python3 -m agent_team --help: exit 1
+  stderr (first 200): /usr/bin/python3: No module named agent_team
+
+
+=== DONE ===

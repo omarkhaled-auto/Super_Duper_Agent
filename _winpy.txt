@@ -1,0 +1,9 @@
+Python 3.13.7
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from agent_team.cli import main; print('OK')
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'agent_team'
+Python 3.11.9
+OK
+DONE

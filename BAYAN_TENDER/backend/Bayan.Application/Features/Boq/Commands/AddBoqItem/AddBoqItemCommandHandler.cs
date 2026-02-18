@@ -36,6 +36,8 @@ public class AddBoqItemCommandHandler : IRequestHandler<AddBoqItemCommand, BoqIt
             ItemType = request.ItemType,
             Notes = request.Notes,
             SortOrder = request.SortOrder,
+            ParentItemId = request.ParentItemId,
+            IsGroup = request.IsGroup,
             CreatedAt = DateTime.UtcNow
         };
 

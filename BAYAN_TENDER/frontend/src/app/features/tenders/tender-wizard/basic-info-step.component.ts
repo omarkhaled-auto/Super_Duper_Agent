@@ -15,7 +15,7 @@ import { DialogModule } from 'primeng/dialog';
 import { ClientService } from '../../../core/services/client.service';
 import { TenderService } from '../../../core/services/tender.service';
 import { Client } from '../../../core/models/client.model';
-import { TENDER_TYPE_OPTIONS, CURRENCY_OPTIONS } from '../../../core/models/tender.model';
+import { TENDER_TYPE_OPTIONS, CURRENCY_OPTIONS, PRICING_LEVEL_OPTIONS } from '../../../core/models/tender.model';
 
 @Component({
   selector: 'app-basic-info-step',
@@ -216,6 +216,36 @@ import { TENDER_TYPE_OPTIONS, CURRENCY_OPTIONS } from '../../../core/models/tend
             [showButtons]="true"
           ></p-inputNumber>
           <small class="field-hint">Number of days bids remain valid after submission deadline</small>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-field full-width">
+          <label>BOQ Pricing Level *</label>
+          <small class="field-hint" style="margin-bottom: 0.5rem; display: block;">
+            Determines at which hierarchy level bidders must provide their prices
+          </small>
+          <div class="tender-type-options">
+            @for (level of pricingLevels; track level.value) {
+              <div class="type-option" [class.selected]="form.get('pricingLevel')?.value === level.value">
+                <p-radioButton
+                  [inputId]="'pricing-' + level.value"
+                  [value]="level.value"
+                  [formControl]="pricingLevelControl"
+                ></p-radioButton>
+                <label [for]="'pricing-' + level.value" class="type-label">
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <i [class]="'pi ' + level.icon"></i>
+                    <span class="type-name">{{ level.label }}</span>
+                  </div>
+                  <span class="type-description">{{ level.description }}</span>
+                </label>
+              </div>
+            }
+          </div>
+          @if (form.get('pricingLevel')?.invalid && form.get('pricingLevel')?.touched) {
+            <small class="p-error">Pricing level is required</small>
+          }
         </div>
       </div>
 
@@ -447,6 +477,7 @@ export class BasicInfoStepComponent implements OnInit {
 
   tenderTypes = TENDER_TYPE_OPTIONS;
   currencies = CURRENCY_OPTIONS;
+  pricingLevels = PRICING_LEVEL_OPTIONS;
 
   showAddClientDialog = false;
   newClientName = '';
@@ -460,6 +491,7 @@ export class BasicInfoStepComponent implements OnInit {
   get descriptionControl(): FormControl { return this.form.get('description') as FormControl; }
   get typeControl(): FormControl { return this.form.get('type') as FormControl; }
   get currencyControl(): FormControl { return this.form.get('currency') as FormControl; }
+  get pricingLevelControl(): FormControl { return this.form.get('pricingLevel') as FormControl; }
   get bidValidityPeriodControl(): FormControl { return this.form.get('bidValidityPeriod') as FormControl; }
   get estimatedValueControl(): FormControl { return this.form.get('estimatedValue') as FormControl; }
 

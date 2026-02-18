@@ -1,0 +1,24 @@
+Claude CLI version: 2.1.45 (Claude Code) (exit 0)
+
+claude api-key: exit 1
+  stdout: 
+  stderr: Error: Claude Code cannot be launched inside another Claude Code session.
+Nested sessions share runtime resources and will crash all active sessions.
+To bypass this check, unset the CLAUDECODE environ
+
+WSL claude: C:\Users\Omar Khaled\AppData\Roaming\npm\claude.CMD
+
+.claude dir (Python home): C:\Users\Omar Khaled\.claude, exists: True
+.claude dir (Windows): C:\Users\Omar Khaled\.claude, exists: True
+  .credentials.json (645 bytes)
+  CLAUDE.md (11764 bytes)
+  history.jsonl (2294734 bytes)
+  mcp.json (155 bytes)
+  settings.json (1679 bytes)
+  settings.local.json (145 bytes)
+  stats-cache.json (11905 bytes)
+
+=== Test agent-team module ===
+agent-team --version: exit 0
+  stdout: agent-team 0.1.0
+  stderr: 

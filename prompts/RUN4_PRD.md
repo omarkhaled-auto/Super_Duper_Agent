@@ -79,9 +79,9 @@ A minimal task/order tracking system exercising all integration points:
 depth: thorough
 
 run4:
-  build1_project_root: "../super-team"
-  build2_project_root: "../agent-team"
-  build3_project_root: "../super-team"
+  build1_project_root: "C:/Projects/super-team"
+  build2_project_root: "C:/Projects/agent-team-v15"
+  build3_project_root: "C:/Projects/super-team"
   output_dir: ".run4"
   compose_project_name: "super-team-run4"
   docker_compose_files:

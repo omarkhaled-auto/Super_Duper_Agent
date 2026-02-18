@@ -1,0 +1,62 @@
+Obtaining file:///C:/Projects/claude-agent-team
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Requirement already satisfied: claude-agent-sdk>=0.1.26 in c:\users\omar khaled\appdata\local\programs\python\python311\lib\site-packages (from agent-team==0.1.0) (0.1.27)
+Requirement already satisfied: pyyaml>=6.0 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from agent-team==0.1.0) (6.0.3)
+Requirement already satisfied: rich>=13.0 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from agent-team==0.1.0) (14.1.0)
+Requirement already satisfied: anyio>=4.0.0 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from claude-agent-sdk>=0.1.26->agent-team==0.1.0) (4.11.0)
+Requirement already satisfied: mcp>=0.1.0 in c:\users\omar khaled\appdata\local\programs\python\python311\lib\site-packages (from claude-agent-sdk>=0.1.26->agent-team==0.1.0) (1.26.0)
+Requirement already satisfied: idna>=2.8 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from anyio>=4.0.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (3.10)
+Requirement already satisfied: sniffio>=1.1 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from anyio>=4.0.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (1.3.1)
+Requirement already satisfied: typing_extensions>=4.5 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from anyio>=4.0.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (4.15.0)
+Requirement already satisfied: httpx-sse>=0.4 in c:\users\omar khaled\appdata\local\programs\python\python311\lib\site-packages (from mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (0.4.0)
+Requirement already satisfied: httpx>=0.27.1 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (0.28.1)
+Requirement already satisfied: jsonschema>=4.20.0 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (4.25.1)
+Requirement already satisfied: pydantic-settings>=2.5.2 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (2.11.0)
+Requirement already satisfied: pydantic<3.0.0,>=2.11.0 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (2.11.9)
+Requirement already satisfied: pyjwt>=2.10.1 in c:\users\omar khaled\appdata\local\programs\python\python311\lib\site-packages (from pyjwt[crypto]>=2.10.1->mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (2.10.1)
+Requirement already satisfied: python-multipart>=0.0.9 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (0.0.20)
+Requirement already satisfied: pywin32>=310 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (311)
+Requirement already satisfied: sse-starlette>=1.6.1 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (3.0.2)
+Requirement already satisfied: starlette>=0.27 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (0.48.0)
+Requirement already satisfied: typing-inspection>=0.4.1 in c:\users\omar khaled\appdata\local\programs\python\python311\lib\site-packages (from mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (0.4.2)
+Requirement already satisfied: uvicorn>=0.31.1 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (0.37.0)
+Requirement already satisfied: annotated-types>=0.6.0 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from pydantic<3.0.0,>=2.11.0->mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (0.7.0)
+Requirement already satisfied: pydantic-core==2.33.2 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from pydantic<3.0.0,>=2.11.0->mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (2.33.2)
+Requirement already satisfied: certifi in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from httpx>=0.27.1->mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (2025.8.3)
+Requirement already satisfied: httpcore==1.* in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from httpx>=0.27.1->mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (1.0.9)
+Requirement already satisfied: h11>=0.16 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from httpcore==1.*->httpx>=0.27.1->mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (0.16.0)
+Requirement already satisfied: attrs>=22.2.0 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from jsonschema>=4.20.0->mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (25.3.0)
+Requirement already satisfied: jsonschema-specifications>=2023.03.6 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from jsonschema>=4.20.0->mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (2025.9.1)
+Requirement already satisfied: referencing>=0.28.4 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from jsonschema>=4.20.0->mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (0.36.2)
+Requirement already satisfied: rpds-py>=0.7.1 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from jsonschema>=4.20.0->mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (0.27.1)
+Requirement already satisfied: python-dotenv>=0.21.0 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from pydantic-settings>=2.5.2->mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (1.1.1)
+Requirement already satisfied: cryptography>=3.4.0 in c:\users\omar khaled\appdata\local\programs\python\python311\lib\site-packages (from pyjwt[crypto]>=2.10.1->mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (46.0.5)
+Requirement already satisfied: cffi>=2.0.0 in c:\users\omar khaled\appdata\local\programs\python\python311\lib\site-packages (from cryptography>=3.4.0->pyjwt[crypto]>=2.10.1->mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (2.0.0)
+Requirement already satisfied: pycparser in c:\users\omar khaled\appdata\local\programs\python\python311\lib\site-packages (from cffi>=2.0.0->cryptography>=3.4.0->pyjwt[crypto]>=2.10.1->mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (3.0)
+Requirement already satisfied: markdown-it-py>=2.2.0 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from rich>=13.0->agent-team==0.1.0) (4.0.0)
+Requirement already satisfied: pygments<3.0.0,>=2.13.0 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from rich>=13.0->agent-team==0.1.0) (2.19.2)
+Requirement already satisfied: mdurl~=0.1 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from markdown-it-py>=2.2.0->rich>=13.0->agent-team==0.1.0) (0.1.2)
+Requirement already satisfied: click>=7.0 in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from uvicorn>=0.31.1->mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (8.3.0)
+Requirement already satisfied: colorama in c:\users\omar khaled\appdata\roaming\python\python311\site-packages (from click>=7.0->uvicorn>=0.31.1->mcp>=0.1.0->claude-agent-sdk>=0.1.26->agent-team==0.1.0) (0.4.6)
+Building wheels for collected packages: agent-team
+  Building editable for agent-team (pyproject.toml): started
+  Building editable for agent-team (pyproject.toml): finished with status 'done'
+  Created wheel for agent-team: filename=agent_team-0.1.0-0.editable-py3-none-any.whl size=32514 sha256=2138fb922967e9ed5c6a2be749eea15a20296db8f81852b9e8e56e70ca5677dc
+  Stored in directory: C:\Users\Omar Khaled\AppData\Local\Temp\pip-ephem-wheel-cache-jl7e6gsc\wheels\18\c9\1f\03472482d05c0cf013230b82c438af7dd26536e445a2b9a16a
+Successfully built agent-team
+Installing collected packages: agent-team
+  Attempting uninstall: agent-team
+    Found existing installation: agent-team 0.1.0
+    Uninstalling agent-team-0.1.0:
+      Successfully uninstalled agent-team-0.1.0
+Successfully installed agent-team-0.1.0
+
+[notice] A new release of pip is available: 25.3 -> 26.0.1
+[notice] To update, run: python.exe -m pip install --upgrade pip

@@ -1,0 +1,31 @@
+/mnt/c/Users/Omar Khaled/.cache/claude
+/mnt/c/Users/Omar Khaled/.cursor/extensions/.827b6946-9193-49c6-8a11-ef51d38f62fd/resources/native-binary/claude.exe
+/mnt/c/Users/Omar Khaled/.cursor/extensions/anthropic.claude-code-2.1.42-win32-x64/resources/native-binary/claude.exe
+/mnt/c/Users/Omar Khaled/.local/bin/claude.exe
+/mnt/c/Users/Omar Khaled/.local/share/claude
+find: ‘/usr/lib/modules/6.6.87.2-microsoft-standard-WSL2/lost+found’: Permission denied
+find: ‘/mnt/c/Program Files/Windows Defender Advanced Threat Protection/Classification/Configuration’: Permission denied
+find: ‘/mnt/c/Program Files/WindowsApps’: Permission denied
+CLAUDE.md
+cache
+debug
+downloads
+file-history
+history.jsonl
+ide
+mcp.json
+paste-cache
+plans
+plugins
+projects
+session-env
+settings.json
+settings.local.json
+shell-snapshots
+stats-cache.json
+statsig
+tasks
+teams
+telemetry
+todos
+SEARCH_DONE

@@ -58,16 +58,16 @@ export class EvaluationService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    return this.api.get<any[]>(`${this.evalUrl(tenderId)}/panelists`).pipe(
-      map((panelists: any[]) => panelists.map(p => ({
-        id: p.id,
-        userId: p.userId,
-        firstName: (p.fullName || '').split(' ')[0] || '',
-        lastName: (p.fullName || '').split(' ').slice(1).join(' ') || '',
-        email: p.email || '',
-        fullName: p.fullName || '',
-        department: p.department,
-        isAvailable: !p.isComplete
+    return this.api.get<any[]>(`${this.evalUrl(tenderId)}/available-panelists`).pipe(
+      map((users: any[]) => (users || []).map(u => ({
+        id: u.id,
+        userId: u.userId || u.id,
+        firstName: (u.fullName || '').split(' ')[0] || '',
+        lastName: (u.fullName || '').split(' ').slice(1).join(' ') || '',
+        email: u.email || '',
+        fullName: u.fullName || '',
+        department: u.department,
+        isAvailable: true
       } as PanelMemberOption))),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
@@ -117,6 +117,9 @@ export class EvaluationService {
       map((dto: any) => {
         if (!dto) return null;
 
+        // If evaluation hasn't been set up yet, return null so the setup form shows
+        if (!dto.isSetupComplete) return null;
+
         const panelMembers: PanelMember[] = (dto.panelists || []).map((p: any) => ({
           id: p.id,
           userId: p.userId,
@@ -141,8 +144,7 @@ export class EvaluationService {
         }));
 
         const status = dto.technicalScoresLocked ? 'locked'
-          : dto.isSetupComplete ? 'in_progress'
-          : 'pending';
+          : 'in_progress';
 
         return {
           id: dto.tenderId,

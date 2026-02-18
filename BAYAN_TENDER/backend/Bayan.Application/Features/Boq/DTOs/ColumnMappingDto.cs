@@ -80,7 +80,17 @@ public enum BoqField
     /// <summary>
     /// Specification reference.
     /// </summary>
-    Specification = 9
+    Specification = 9,
+
+    /// <summary>
+    /// Bill number (identifies which bill/section a row belongs to, e.g., "Bill No. 1").
+    /// </summary>
+    BillNumber = 10,
+
+    /// <summary>
+    /// Sub-item label (identifies sub-item labels like a, b, c within a group item).
+    /// </summary>
+    SubItemLabel = 11
 }
 
 /// <summary>

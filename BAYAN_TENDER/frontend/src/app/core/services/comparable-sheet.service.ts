@@ -229,8 +229,94 @@ export class ComparableSheetService {
     let nonComparableItems = 0;
 
     (dto.items || []).forEach((item: any) => {
-      // Add section header if not already added
       const sectionKey = item.sectionId || item.sectionName;
+      const backendRowType: string = item.rowType || 'item';
+
+      // Map backend row types to frontend row types
+      // Backend sends: 'item', 'item_group_header', 'item_subtotal', 'bill_subtotal'
+      // The first item of each section triggers a section_header insertion
+      if (backendRowType === 'item_group_header') {
+        // Add section header (bill header) before the first group of each section
+        if (sectionKey && !sectionMap.has(sectionKey)) {
+          sectionMap.set(sectionKey, true);
+          rows.push({
+            rowId: `section-${sectionKey}`,
+            rowType: 'section_header',
+            sectionId: sectionKey,
+            sectionNumber: '',
+            sectionTitle: item.sectionName || '',
+            itemNumber: '',
+            description: item.sectionName || '',
+            quantity: null,
+            uom: '',
+            bidderData: {},
+            averageRate: null,
+            medianRate: null,
+            lowestRate: null,
+            highestRate: null,
+            standardDeviation: null,
+            isExpanded: true
+          });
+        }
+
+        // Render item_group_header as its own row
+        rows.push({
+          rowId: `group-${item.boqItemId}`,
+          rowType: 'item_group_header',
+          sectionId: sectionKey,
+          itemNumber: item.itemNumber || '',
+          description: item.description || '',
+          quantity: null,
+          uom: '',
+          bidderData: {},
+          averageRate: null,
+          medianRate: null,
+          lowestRate: null,
+          highestRate: null,
+          standardDeviation: null
+        });
+        return; // Skip further processing for group headers
+      }
+
+      if (backendRowType === 'item_subtotal' || backendRowType === 'bill_subtotal') {
+        // For subtotal/bill subtotal rows, extract bidder amounts
+        const bidderData: Record<number, BidderCellData> = {};
+        (item.bidderRates || []).forEach((rate: any) => {
+          bidderData[rate.bidderId] = {
+            bidderId: rate.bidderId,
+            unitRate: null,
+            amount: rate.amount ?? null,
+            normalizedRate: null,
+            normalizedAmount: rate.amount ?? null,
+            originalCurrency: 'SAR',
+            hasDeviation: false,
+            deviationPercent: null,
+            outlierSeverity: 'normal',
+            isLowest: false,
+            isHighest: false
+          };
+        });
+
+        rows.push({
+          rowId: `${backendRowType}-${item.boqItemId}`,
+          rowType: backendRowType as any,
+          sectionId: sectionKey,
+          itemNumber: item.itemNumber || '',
+          description: item.description || '',
+          quantity: item.quantity || null,
+          uom: '',
+          bidderData,
+          averageRate: item.averageRate ?? null,
+          medianRate: null,
+          lowestRate: null,
+          highestRate: null,
+          standardDeviation: null
+        });
+        return; // Skip further processing for subtotal rows
+      }
+
+      // Regular item row (backendRowType === 'item')
+      // Add section header if not already added (for standalone items before any group)
       if (sectionKey && !sectionMap.has(sectionKey)) {
         sectionMap.set(sectionKey, true);
         rows.push({
@@ -347,46 +433,8 @@ export class ComparableSheetService {
       });
     });
 
-    // Build section subtotal rows from backend sectionTotals
-    (dto.sectionTotals || []).forEach((st: any) => {
-      const bidderData: Record<number, BidderCellData> = {};
-      const totals = (st.bidderTotals || []).map((bt: any) => bt.total);
-      const stLowest = totals.length > 0 ? Math.min(...totals) : 0;
-      const stHighest = totals.length > 0 ? Math.max(...totals) : 0;
-
-      (st.bidderTotals || []).forEach((bt: any) => {
-        bidderData[bt.bidderId] = {
-          bidderId: bt.bidderId,
-          unitRate: null,
-          amount: bt.total,
-          normalizedRate: null,
-          normalizedAmount: bt.total,
-          originalCurrency: 'SAR',
-          hasDeviation: false,
-          deviationPercent: null,
-          outlierSeverity: 'normal',
-          isLowest: bt.total === stLowest,
-          isHighest: bt.total === stHighest
-        };
-      });
-
-      rows.push({
-        rowId: `subtotal-${st.sectionId}`,
-        rowType: 'section_subtotal',
-        sectionId: st.sectionId,
-        sectionTitle: st.sectionName,
-        itemNumber: '',
-        description: `Subtotal - ${st.sectionName}`,
-        quantity: null,
-        uom: '',
-        bidderData,
-        averageRate: null,
-        medianRate: null,
-        lowestRate: null,
-        highestRate: null,
-        standardDeviation: null
-      });
-    });
+    // NOTE: sectionTotals from backend are skipped — inline item_subtotal and
+    // bill_subtotal rows in dto.items already provide complete bidder amounts.
 
     // Build grand total row
     const grandTotals: Record<number, number> = {};

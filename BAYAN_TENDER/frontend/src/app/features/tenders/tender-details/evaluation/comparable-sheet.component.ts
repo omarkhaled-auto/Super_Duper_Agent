@@ -538,6 +538,13 @@ export class ComparableSheetComponent implements OnInit, OnDestroy {
     return cols;
   });
 
+  // Row types that represent structural rows (headers, subtotals, totals)
+  private readonly structuralRowTypes: Set<string> = new Set([
+    'section_header', 'bill_header', 'item_group_header',
+    'section_subtotal', 'bill_subtotal', 'item_subtotal',
+    'grand_total', 'rank'
+  ]);
+
   // Computed: Filtered grid data
   filteredGridData = computed((): GridRowData[] => {
     let data = this.gridData();
@@ -555,10 +562,7 @@ export class ComparableSheetComponent implements OnInit, OnDestroy {
     if (this.selectedOutlierFilter === 'outliers_only') {
       data = data.filter(row =>
         row.hasOutliers ||
-        row.rowType === 'section_header' ||
-        row.rowType === 'section_subtotal' ||
-        row.rowType === 'grand_total' ||
-        row.rowType === 'rank'
+        this.structuralRowTypes.has(row.rowType)
       );
     } else if (this.selectedOutlierFilter === 'hide_outliers') {
       data = data.filter(row =>
@@ -647,10 +651,16 @@ export class ComparableSheetComponent implements OnInit, OnDestroy {
         if (cellData) {
           if (row.rowType === 'rank') {
             gridRow[`bidder_${bidder.bidderId}`] = cellData.unitRate; // Rank value
-          } else if (row.rowType === 'section_subtotal' || row.rowType === 'grand_total') {
+          } else if (
+            row.rowType === 'section_subtotal' ||
+            row.rowType === 'bill_subtotal' ||
+            row.rowType === 'item_subtotal' ||
+            row.rowType === 'grand_total'
+          ) {
             gridRow[`bidder_${bidder.bidderId}`] = cellData.amount; // Subtotal/Total amount
           } else if (row.rowType === 'item') {
-            gridRow[`bidder_${bidder.bidderId}`] = cellData.normalizedRate ?? cellData.unitRate;
+            // Show amount (rate * qty) for proper comparison; fall back to rate for LS items
+            gridRow[`bidder_${bidder.bidderId}`] = cellData.amount ?? cellData.normalizedRate ?? cellData.unitRate;
           } else {
             gridRow[`bidder_${bidder.bidderId}`] = null;
           }
@@ -676,8 +686,16 @@ export class ComparableSheetComponent implements OnInit, OnDestroy {
     switch (rowType) {
       case 'section_header':
         return 'section-header-row';
+      case 'bill_header':
+        return 'bill-header-row';
+      case 'item_group_header':
+        return 'item-group-header-row';
       case 'section_subtotal':
         return 'section-subtotal-row';
+      case 'bill_subtotal':
+        return 'bill-subtotal-row';
+      case 'item_subtotal':
+        return 'item-subtotal-row';
       case 'grand_total':
         return 'grand-total-row';
       case 'rank':

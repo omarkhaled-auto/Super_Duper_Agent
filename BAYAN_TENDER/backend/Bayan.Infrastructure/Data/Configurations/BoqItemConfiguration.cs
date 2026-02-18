@@ -15,6 +15,7 @@ public class BoqItemConfiguration : IEntityTypeConfiguration<BoqItem>
         builder.HasIndex(e => new { e.TenderId, e.ItemNumber }).IsUnique();
         builder.HasIndex(e => e.TenderId);
         builder.HasIndex(e => e.SectionId);
+        builder.HasIndex(e => e.ParentItemId);
 
         builder.Property(e => e.Id)
             .HasColumnName("id");
@@ -62,6 +63,14 @@ public class BoqItemConfiguration : IEntityTypeConfiguration<BoqItem>
             .HasDefaultValue(0)
             .IsRequired();
 
+        builder.Property(e => e.ParentItemId)
+            .HasColumnName("parent_item_id");
+
+        builder.Property(e => e.IsGroup)
+            .HasColumnName("is_group")
+            .HasDefaultValue(false)
+            .IsRequired();
+
         builder.Property(e => e.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();
@@ -79,5 +88,11 @@ public class BoqItemConfiguration : IEntityTypeConfiguration<BoqItem>
             .WithMany(s => s.Items)
             .HasForeignKey(e => e.SectionId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // Self-referencing hierarchy: group items → child sub-items
+        builder.HasOne(e => e.ParentItem)
+            .WithMany(e => e.ChildItems)
+            .HasForeignKey(e => e.ParentItemId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

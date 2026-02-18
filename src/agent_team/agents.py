@@ -21,6 +21,39 @@ from .sequential_thinking import build_sequential_thinking_protocol
 from .ui_standards import load_ui_standards
 
 # ---------------------------------------------------------------------------
+# Shared policy constants  (extracted to DRY up prompt definitions)
+# ---------------------------------------------------------------------------
+
+_MOCK_DATA_VIOLATION_PATTERNS = (
+    "  You MUST NEVER create service methods that return fake/mock/stub data. This includes:\n"
+    "  - `of(null).pipe(delay(...), map(() => fakeData))` patterns (RxJS)\n"
+    "  - Hardcoded arrays or objects returned from service methods\n"
+    "  - `Promise.resolve(mockData)` or `new Observable(sub => sub.next(fake))`\n"
+    "  - Any `delay()` used to simulate network latency\n"
+    "  - Variables named mockTenders, fakeData, dummyResponse, sampleItems, etc.\n"
+    "  EVERY service method MUST make a REAL HTTP call to a REAL backend API endpoint.\n"
+    "  - Angular: `this.http.get<T>('/api/endpoint')`\n"
+    "  - React: `fetch('/api/endpoint')` or `axios.get('/api/endpoint')`\n"
+    "  - Vue/Nuxt: `$fetch('/api/endpoint')` or `useFetch('/api/endpoint')` or `axios.get()`\n"
+    "  - Python: `requests.get('/api/endpoint')` or `httpx.get('/api/endpoint')`\n"
+    "  - `new BehaviorSubject(hardcodedData)` is mock data — use BehaviorSubject(null) + HTTP populate\n"
+    "  - Hardcoded counts for badges, notifications, or summaries (e.g., `notificationCount = '3'`,\n"
+    "    `badgeCount = 5`, `unreadMessages = 12`) — display counts MUST come from API responses\n"
+    "    or reactive state, NEVER hardcoded numeric values in components\n"
+    "  - Use proper DTO mapping between backend response shape and frontend model."
+)
+
+_UI_FAIL_RULES = (
+    "  - UI-FAIL-001: Using a color hex code NOT defined in UI_REQUIREMENTS.md color system → REJECTION\n"
+    "  - UI-FAIL-002: Using Inter/Roboto/Arial/system-ui when UI_REQUIREMENTS.md specifies custom fonts → REJECTION\n"
+    "  - UI-FAIL-003: Using arbitrary spacing values (13px, 17px) not on the defined spacing grid → REJECTION\n"
+    "  - UI-FAIL-004: Interactive component with ONLY default state (missing hover/focus/active/disabled) → REJECTION\n"
+    "  - UI-FAIL-005: Using SLOP-001 defaults (bg-indigo-500, bg-blue-600) when a custom palette exists → REJECTION\n"
+    "  - UI-FAIL-006: Center-aligning ALL text (SLOP-004) — body text must be left-aligned → REJECTION\n"
+    "  - UI-FAIL-007: Using 3 identical cards layout (SLOP-003) when design shows different pattern → REJECTION"
+)
+
+# ---------------------------------------------------------------------------
 # Orchestrator system prompt
 # ---------------------------------------------------------------------------
 
@@ -431,11 +464,25 @@ Agent returns: PASS or FAIL with list of discrepancies.
 If FAIL: re-deploy planner with the spec-validator's discrepancies as constraints.
 Repeat spec validation until PASS. This is MANDATORY and BLOCKING.
 
+### CRITICAL: Orchestrator MCP Usage Protocol
+YOU (the orchestrator) are the ONLY agent with MCP tool access. Sub-agents do NOT have MCP servers.
+This means YOU MUST use these tools PROACTIVELY — do not delegate library research to sub-agents.
+
+BEFORE deploying any coding fleet:
+1. Use mcp__context7__resolve-library-id for EVERY library in the tech stack
+2. Use mcp__context7__query-docs to get current API signatures and best practices
+3. Include the Context7 results in each code-writer's task context
+
+DURING the convergence loop:
+- When a code-writer reports a library API error → look it up with Context7 YOURSELF
+- When a reviewer flags incorrect API usage → verify with Context7 before deploying fix agents
+- NEVER delegate Context7 lookups to sub-agents — they cannot access MCP tools
+
 ### Research Fleet — MCP Tool Usage
 The orchestrator (YOU) has direct access to Firecrawl MCP tools. Sub-agents do NOT have
 MCP server access — MCP servers are only available at the orchestrator level.
 When the research fleet needs web scraping or design reference analysis:
-1. Call firecrawl_scrape / firecrawl_search YOURSELF before deploying researchers
+1. Call mcp__firecrawl__firecrawl_scrape / mcp__firecrawl__firecrawl_search YOURSELF before deploying researchers
 2. Include the scraped content in each researcher agent's task context
 3. For design references: scrape with format "branding", include results in researcher context
 
@@ -445,8 +492,12 @@ Available Firecrawl tools (call directly as orchestrator):
 - mcp__firecrawl__firecrawl_map — discover URLs on a site
 - mcp__firecrawl__firecrawl_extract — extract structured data
 
-Context7 tools also require orchestrator-level access. Call resolve-library-id and
-query-docs YOURSELF, then pass the documentation content to researchers.
+Available Context7 tools (call directly as orchestrator):
+- mcp__context7__resolve-library-id — resolve a library name to Context7 ID
+- mcp__context7__query-docs — query documentation for a resolved library
+
+Context7 tools also require orchestrator-level access. Call mcp__context7__resolve-library-id and
+mcp__context7__query-docs YOURSELF, then pass the documentation content to researchers.
 
 ### Research Fleet
 Use the `researcher` agent. Each researcher investigates:
@@ -455,10 +506,10 @@ Use the `researcher` agent. Each researcher investigates:
 - Similar implementations and examples
 - **Design reference analysis** (when reference URLs are provided):
   - The orchestrator scrapes reference sites using Firecrawl tools BEFORE deploying researchers:
-    - firecrawl_scrape with formats: ["branding"] for design tokens (colors, fonts, spacing)
-    - firecrawl_scrape with formats: ["screenshot"] for visual reference (returns cloud URLs)
-    - firecrawl_extract or firecrawl_agent for component pattern analysis
-    - firecrawl_map to discover key pages on reference site(s)
+    - mcp__firecrawl__firecrawl_scrape with formats: ["branding"] for design tokens (colors, fonts, spacing)
+    - mcp__firecrawl__firecrawl_scrape with formats: ["screenshot"] for visual reference (returns cloud URLs)
+    - mcp__firecrawl__firecrawl_extract or mcp__firecrawl__firecrawl_agent for component pattern analysis
+    - mcp__firecrawl__firecrawl_map to discover key pages on reference site(s)
   - The orchestrator passes ALL scraped content to researchers in their task context
   - Researchers write ALL findings (including screenshot URLs) to the Design Reference section of REQUIREMENTS.md
   - Researchers add DESIGN-xxx requirements to the ### Design Requirements subsection
@@ -796,8 +847,8 @@ If your orchestrator message or REQUIREMENTS.md mentions design reference URLs:
 The orchestrator message will specify "Extraction depth" and "Max pages per site" — use those values.
 
 The orchestrator message will also specify "Cache TTL (maxAge)" — pass this value
-as the maxAge parameter on ALL firecrawl_scrape and firecrawl_map calls.
-Example: firecrawl_scrape(url, formats=["branding"], maxAge=7200000)
+as the maxAge parameter on ALL mcp__firecrawl__firecrawl_scrape and mcp__firecrawl__firecrawl_map calls.
+Example: mcp__firecrawl__firecrawl_scrape(url, formats=["branding"], maxAge=7200000)
 
 ### Workflow by extraction depth:
 - **"branding"**: Only perform step 1c below (branding extraction). Skip screenshots and component analysis.
@@ -806,18 +857,18 @@ Example: firecrawl_scrape(url, formats=["branding"], maxAge=7200000)
 
 ### Steps:
 1. For each reference URL:
-   a. firecrawl_map(url, limit=<max_pages_per_site from orchestrator>) — discover pages on the site
+   a. mcp__firecrawl__firecrawl_map(url, limit=<max_pages_per_site from orchestrator>) — discover pages on the site
    b. Select key pages: homepage + pricing/about/dashboard/features pages
-   c. firecrawl_scrape(homepage, formats=["branding"]) — extract:
+   c. mcp__firecrawl__firecrawl_scrape(homepage, formats=["branding"]) — extract:
       - Color palette (primary, secondary, accent, background, text — hex values)
       - Typography (font families, sizes, weights)
       - Spacing patterns (base unit, border radius, padding)
       - Component styles (buttons, inputs)
-   d. firecrawl_scrape(each key page, formats=["screenshot"]) — returns cloud-hosted screenshot URLs
+   d. mcp__firecrawl__firecrawl_scrape(each key page, formats=["screenshot"]) — returns cloud-hosted screenshot URLs
    e. Component analysis — choose the right tool:
-      - firecrawl_extract(urls=[page_url], prompt="...", schema={...}) — for extracting structured data
+      - mcp__firecrawl__firecrawl_extract(urls=[page_url], prompt="...", schema={...}) — for extracting structured data
         from a KNOWN page using a JSON schema (e.g., extracting nav items, card layouts)
-      - firecrawl_agent(prompt="...") — for AUTONOMOUS discovery when you don't know which pages
+      - mcp__firecrawl__firecrawl_agent(prompt="...") — for AUTONOMOUS discovery when you don't know which pages
         contain the components you need (e.g., "find all form patterns on this site")
       - In both cases, extract: navigation style, card layouts, button/CTA styles, form inputs, footer
 2. Write ALL findings to the **Design Reference** section of REQUIREMENTS.md:
@@ -1001,7 +1052,7 @@ For EVERY SVC-xxx row in the wiring table:
   - Any frontend service method calling an API path that has no backend controller action = ARCHITECTURE BUG
 """.strip()
 
-CODE_WRITER_PROMPT = r"""You are a CODE WRITER agent in the Agent Team system.
+CODE_WRITER_PROMPT = (r"""You are a CODE WRITER agent in the Agent Team system.
 
 Your job is to implement requirements from the Requirements Document, guided by your task assignment.
 
@@ -1029,22 +1080,7 @@ Your job is to implement requirements from the Requirements Document, guided by 
 - Follow the project's existing code style, conventions, and patterns
 - Implement COMPLETE solutions — no TODOs, no placeholders, no shortcuts
 - **ZERO MOCK DATA POLICY** (ABSOLUTE — NO EXCEPTIONS):
-  You MUST NEVER create service methods that return fake/mock/stub data. This includes:
-  - `of(null).pipe(delay(...), map(() => fakeData))` patterns (RxJS)
-  - Hardcoded arrays or objects returned from service methods
-  - `Promise.resolve(mockData)` or `new Observable(sub => sub.next(fake))`
-  - Any `delay()` used to simulate network latency
-  - Variables named mockTenders, fakeData, dummyResponse, sampleItems, etc.
-  EVERY service method MUST make a REAL HTTP call to a REAL backend API endpoint.
-  - Angular: `this.http.get<T>('/api/endpoint')`
-  - React: `fetch('/api/endpoint')` or `axios.get('/api/endpoint')`
-  - Vue/Nuxt: `$fetch('/api/endpoint')` or `useFetch('/api/endpoint')` or `axios.get()`
-  - Python: `requests.get('/api/endpoint')` or `httpx.get('/api/endpoint')`
-  - `new BehaviorSubject(hardcodedData)` is mock data — use BehaviorSubject(null) + HTTP populate
-  - Hardcoded counts for badges, notifications, or summaries (e.g., `notificationCount = '3'`,
-    `badgeCount = 5`, `unreadMessages = 12`) — display counts MUST come from API responses
-    or reactive state, NEVER hardcoded numeric values in components
-  - Use proper DTO mapping between backend response shape and frontend model.
+""" + _MOCK_DATA_VIOLATION_PATTERNS + r"""
 
   ## API CONTRACT COMPLIANCE (MANDATORY for SVC-xxx items)
   When implementing ANY service method that corresponds to an SVC-xxx requirement:
@@ -1094,13 +1130,7 @@ Your job is to implement requirements from the Requirements Document, guided by 
   Read UI_REQUIREMENTS.md FIRST before writing ANY file that produces UI output.
 
   REJECTION RULES — any of these = AUTOMATIC REVIEW FAILURE:
-  - UI-FAIL-001: Using a color hex code NOT defined in UI_REQUIREMENTS.md color system → REJECTION
-  - UI-FAIL-002: Using Inter/Roboto/Arial/system-ui when UI_REQUIREMENTS.md specifies custom fonts → REJECTION
-  - UI-FAIL-003: Using arbitrary spacing values (13px, 17px) not on the defined spacing grid → REJECTION
-  - UI-FAIL-004: Interactive component with ONLY default state (missing hover/focus/active/disabled) → REJECTION
-  - UI-FAIL-005: Using SLOP-001 defaults (bg-indigo-500, bg-blue-600) when a custom palette exists → REJECTION
-  - UI-FAIL-006: Center-aligning ALL text (SLOP-004) — body text must be left-aligned → REJECTION
-  - UI-FAIL-007: Using 3 identical cards layout (SLOP-003) when design shows different pattern → REJECTION
+""" + _UI_FAIL_RULES + r"""
 
   VIOLATION = AUTOMATIC REVIEW FAILURE = SAME SEVERITY AS MOCK DATA.
   These rules have the SAME enforcement level as the ZERO MOCK DATA POLICY above.
@@ -1183,7 +1213,7 @@ Your job is to implement requirements from the Requirements Document, guided by 
 For shared files (files touched by multiple tasks), write INTEGRATION DECLARATIONS instead of editing directly. Format:
 ## Integration Declarations
 - `<path>`: ACTION `<symbol>`
-""".strip()
+""").strip()
 
 CODE_REVIEWER_PROMPT = r"""You are an ADVERSARIAL CODE REVIEWER agent in the Agent Team system.
 
@@ -1831,6 +1861,84 @@ Your job is to read the architecture decision from REQUIREMENTS.md and generate 
 
 
 # ---------------------------------------------------------------------------
+# Prompt-builder helpers  (extracted to DRY up builder functions)
+# ---------------------------------------------------------------------------
+
+
+def _append_convergence_enforcement(
+    parts: list[str], req_dir: str, req_file: str,
+) -> None:
+    """Append the convergence-loop enforcement + requirement-marking policy."""
+    parts.append(f"\n[CONVERGENCE LOOP — MANDATORY]")
+    parts.append(f"After each coding wave (implementing a batch of tasks), you MUST execute a convergence cycle:")
+    parts.append(f"1. Deploy the CODE REVIEWER fleet — reviewers read the generated code against {req_dir}/{req_file}.")
+    parts.append(f"2. Reviewers mark each requirement: [x] if PASS (code implements it correctly), [ ] if FAIL (not yet implemented or buggy).")
+    parts.append(f"3. Calculate convergence ratio = (marked [x]) / (total requirements). Log this ratio explicitly.")
+    parts.append(f"4. If ratio < 0.9, identify failing requirements, assign fix tasks, and start another coding wave → repeat from step 1.")
+    parts.append(f"5. ZERO convergence cycles is NEVER acceptable. You MUST run at least ONE full review cycle before post-orchestration.")
+    parts.append(f"6. The convergence loop is what populates the [x]/[ ] marks in {req_dir}/{req_file} that the post-orchestration health check reads.")
+    parts.append(f"7. If you skip this loop, the health check returns 'unknown' with 0 cycles and the review recovery fleet never fires.")
+    parts.append(f"Do NOT proceed to post-orchestration until at least one convergence cycle completes with ratio >= 0.9.")
+    # v10: Requirement marking ownership policy
+    parts.append(f"\n[REQUIREMENT MARKING — REVIEW FLEET ONLY]")
+    parts.append(f"CRITICAL POLICY: Only the CODE REVIEWER fleet is authorized to mark requirements [x] or [ ] in {req_dir}/{req_file}.")
+    parts.append(f"YOU (the orchestrator) MUST NOT mark requirements yourself. This is a segregation-of-duties control:")
+    parts.append(f"- The orchestrator ASSIGNS tasks and READS the convergence ratio.")
+    parts.append(f"- The code reviewer fleet EXECUTES reviews and WRITES requirement marks.")
+    parts.append(f"- The code writer fleet IMPLEMENTS features but NEVER marks requirements.")
+    parts.append(f"Self-marking (orchestrator marking its own requirements as complete) is a rubber-stamp anti-pattern.")
+    parts.append(f"It produces 100% convergence ratios that do not reflect actual code review verification.")
+    parts.append(f"If you mark a requirement [x] yourself, the convergence health check will show a ratio that was never validated by a reviewer.")
+
+
+def _append_tech_research(parts: list[str], tech_research_content: str) -> None:
+    """Append the tech-stack best-practices research block."""
+    parts.append("\n[TECH STACK BEST PRACTICES -- FROM DOCUMENTATION]")
+    parts.append(
+        "The following best practices were researched from official documentation\n"
+        "via Context7. Follow these patterns and avoid the listed pitfalls."
+    )
+    parts.append(tech_research_content)
+
+
+def _append_design_reference_urls(
+    parts: list[str],
+    urls: list[str],
+    config: "AgentTeamConfig",
+    context_msg: str,
+    *,
+    include_cache_ttl: bool = False,
+    include_url_assignment: bool = False,
+) -> None:
+    """Append the design-reference URL fallback block.
+
+    Parameters
+    ----------
+    context_msg : str
+        Context-specific instruction line (differs per builder).
+    include_cache_ttl : bool
+        Whether to append the ``Cache TTL`` line.
+    include_url_assignment : bool
+        Whether to append the ``URL ASSIGNMENT`` dedup block for multi-URL cases.
+    """
+    parts.append("\n[DESIGN REFERENCE — UI inspiration from reference website(s)]")
+    parts.append("The user provided reference website(s) for design inspiration.")
+    parts.append(context_msg)
+    parts.append("Reference URLs:")
+    for url in urls:
+        parts.append(f"  - {url}")
+    dr_config = config.design_reference
+    parts.append(f"Extraction depth: {dr_config.depth}")
+    parts.append(f"Max pages per site: {dr_config.max_pages_per_site}")
+    if include_cache_ttl:
+        parts.append(f"Cache TTL (maxAge): {dr_config.cache_ttl_seconds * 1000} milliseconds")
+    if include_url_assignment and len(urls) > 1:
+        parts.append("\n[DESIGN REFERENCE — URL ASSIGNMENT]")
+        parts.append("Assign each design reference URL to EXACTLY ONE researcher.")
+        parts.append("Do NOT assign the same URL to multiple researchers.")
+
+
+# ---------------------------------------------------------------------------
 # Agent definitions builder
 # ---------------------------------------------------------------------------
 
@@ -2062,16 +2170,10 @@ def build_decomposition_prompt(
         from .design_reference import format_ui_requirements_block
         parts.append(format_ui_requirements_block(ui_requirements_content))
     elif design_reference_urls:
-        # Fallback: original URL injection for require_ui_doc=false case
-        parts.append("\n[DESIGN REFERENCE — UI inspiration from reference website(s)]")
-        parts.append("The user provided reference website(s) for design inspiration.")
-        parts.append("Include design reference analysis in milestone planning.")
-        parts.append("Reference URLs:")
-        for url in design_reference_urls:
-            parts.append(f"  - {url}")
-        dr_config = config.design_reference
-        parts.append(f"Extraction depth: {dr_config.depth}")
-        parts.append(f"Max pages per site: {dr_config.max_pages_per_site}")
+        _append_design_reference_urls(
+            parts, design_reference_urls, config,
+            "Include design reference analysis in milestone planning.",
+        )
 
     parts.append(f"\n[ORIGINAL USER REQUEST]\n{task}")
     parts.append(f"\n[TASK]\n{task}")
@@ -2197,6 +2299,18 @@ def build_milestone_execution_prompt(
         parts.append("\n[CODEBASE MAP — Pre-computed project structure analysis]")
         parts.append(codebase_map_summary)
 
+    # UI Design Standards injection (ALWAYS — baseline quality)
+    standards_content = load_ui_standards(config.design_reference.standards_file)
+    if standards_content:
+        parts.append(f"\n{standards_content}")
+        if design_reference_urls:
+            parts.append(
+                "\n[NOTE: Design Reference URLs are also provided below. "
+                "The extracted branding (colors, fonts, spacing values) OVERRIDES "
+                "the generic tokens above, but the structural principles, anti-patterns, "
+                "and quality standards STILL APPLY as the baseline framework.]"
+            )
+
     if predecessor_context:
         parts.append(f"\n{predecessor_context}")
 
@@ -2238,12 +2352,7 @@ def build_milestone_execution_prompt(
 
     # Tech stack research injection (Phase 1.5)
     if tech_research_content:
-        parts.append("\n[TECH STACK BEST PRACTICES -- FROM DOCUMENTATION]")
-        parts.append(
-            "The following best practices were researched from official documentation\n"
-            "via Context7. Follow these patterns and avoid the listed pitfalls."
-        )
-        parts.append(tech_research_content)
+        _append_tech_research(parts, tech_research_content)
 
     # Milestone-specific research injection (per-milestone targeted queries)
     if milestone_research_content:
@@ -2284,17 +2393,11 @@ def build_milestone_execution_prompt(
         from .design_reference import format_ui_requirements_block
         parts.append(format_ui_requirements_block(ui_requirements_content))
     elif design_reference_urls:
-        # Fallback: original URL injection for require_ui_doc=false case
-        parts.append("\n[DESIGN REFERENCE — UI inspiration from reference website(s)]")
-        parts.append("The user provided reference website(s) for design inspiration.")
-        parts.append("During RESEARCH phase, assign researcher(s) to design reference analysis.")
-        parts.append("Reference URLs:")
-        for url in design_reference_urls:
-            parts.append(f"  - {url}")
-        dr_config = config.design_reference
-        parts.append(f"Extraction depth: {dr_config.depth}")
-        parts.append(f"Max pages per site: {dr_config.max_pages_per_site}")
-        parts.append(f"Cache TTL (maxAge): {dr_config.cache_ttl_seconds * 1000} milliseconds")
+        _append_design_reference_urls(
+            parts, design_reference_urls, config,
+            "During RESEARCH phase, assign researcher(s) to design reference analysis.",
+            include_cache_ttl=True,
+        )
 
     parts.append(f"\n[ORIGINAL USER REQUEST]\n{task}")
     parts.append(f"\n[TASK]\n{task}")
@@ -2489,12 +2592,7 @@ def build_orchestrator_prompt(
 
     # Tech stack research injection (Phase 1.5)
     if tech_research_content:
-        parts.append("\n[TECH STACK BEST PRACTICES -- FROM DOCUMENTATION]")
-        parts.append(
-            "The following best practices were researched from official documentation\n"
-            "via Context7. Follow these patterns and avoid the listed pitfalls."
-        )
-        parts.append(tech_research_content)
+        _append_tech_research(parts, tech_research_content)
 
     # Context7 live research instructions for orchestrator
     parts.append("")
@@ -2536,22 +2634,12 @@ def build_orchestrator_prompt(
         from .design_reference import format_ui_requirements_block
         parts.append(format_ui_requirements_block(ui_requirements_content))
     elif design_reference_urls:
-        # Fallback: original URL injection for require_ui_doc=false case
-        parts.append("\n[DESIGN REFERENCE — UI inspiration from reference website(s)]")
-        parts.append("The user provided reference website(s) for design inspiration.")
-        parts.append("During RESEARCH phase, assign researcher(s) to design reference analysis.")
-        parts.append("Reference URLs:")
-        for url in design_reference_urls:
-            parts.append(f"  - {url}")
-        dr_config = config.design_reference
-        parts.append(f"Extraction depth: {dr_config.depth}")
-        parts.append(f"Max pages per site: {dr_config.max_pages_per_site}")
-        parts.append(f"Cache TTL (maxAge): {dr_config.cache_ttl_seconds * 1000} milliseconds")
-
-        if len(design_reference_urls) > 1:
-            parts.append("\n[DESIGN REFERENCE — URL ASSIGNMENT]")
-            parts.append("Assign each design reference URL to EXACTLY ONE researcher.")
-            parts.append("Do NOT assign the same URL to multiple researchers.")
+        _append_design_reference_urls(
+            parts, design_reference_urls, config,
+            "During RESEARCH phase, assign researcher(s) to design reference analysis.",
+            include_cache_ttl=True,
+            include_url_assignment=True,
+        )
 
     if prd_path:
         parts.append(f"\n[PRD MODE ACTIVE — PRD file: {prd_path}]")
@@ -2610,26 +2698,7 @@ def build_orchestrator_prompt(
         parts.append(f"These root-level files are REQUIRED for the convergence loop, code review fleet, and post-orchestration scans.")
         parts.append(f"The convergence loop reads {req_dir}/{req_file} to track progress. Without it, convergence health is 'unknown'.")
         # v10: Convergence loop enforcement for PRD mode
-        parts.append(f"\n[CONVERGENCE LOOP — MANDATORY]")
-        parts.append(f"After each coding wave (implementing a batch of tasks), you MUST execute a convergence cycle:")
-        parts.append(f"1. Deploy the CODE REVIEWER fleet — reviewers read the generated code against {req_dir}/{req_file}.")
-        parts.append(f"2. Reviewers mark each requirement: [x] if PASS (code implements it correctly), [ ] if FAIL (not yet implemented or buggy).")
-        parts.append(f"3. Calculate convergence ratio = (marked [x]) / (total requirements). Log this ratio explicitly.")
-        parts.append(f"4. If ratio < 0.9, identify failing requirements, assign fix tasks, and start another coding wave → repeat from step 1.")
-        parts.append(f"5. ZERO convergence cycles is NEVER acceptable. You MUST run at least ONE full review cycle before post-orchestration.")
-        parts.append(f"6. The convergence loop is what populates the [x]/[ ] marks in {req_dir}/{req_file} that the post-orchestration health check reads.")
-        parts.append(f"7. If you skip this loop, the health check returns 'unknown' with 0 cycles and the review recovery fleet never fires.")
-        parts.append(f"Do NOT proceed to post-orchestration until at least one convergence cycle completes with ratio >= 0.9.")
-        # v10: Requirement marking ownership policy
-        parts.append(f"\n[REQUIREMENT MARKING — REVIEW FLEET ONLY]")
-        parts.append(f"CRITICAL POLICY: Only the CODE REVIEWER fleet is authorized to mark requirements [x] or [ ] in {req_dir}/{req_file}.")
-        parts.append(f"YOU (the orchestrator) MUST NOT mark requirements yourself. This is a segregation-of-duties control:")
-        parts.append(f"- The orchestrator ASSIGNS tasks and READS the convergence ratio.")
-        parts.append(f"- The code reviewer fleet EXECUTES reviews and WRITES requirement marks.")
-        parts.append(f"- The code writer fleet IMPLEMENTS features but NEVER marks requirements.")
-        parts.append(f"Self-marking (orchestrator marking its own requirements as complete) is a rubber-stamp anti-pattern.")
-        parts.append(f"It produces 100% convergence ratios that do not reflect actual code review verification.")
-        parts.append(f"If you mark a requirement [x] yourself, the convergence health check will show a ratio that was never validated by a reviewer.")
+        _append_convergence_enforcement(parts, req_dir, req_file)
     else:
         parts.append("Start by deploying the PLANNING FLEET to create REQUIREMENTS.md.")
         parts.append("Then deploy the SPEC FIDELITY VALIDATOR to verify REQUIREMENTS.md against the original request.")
@@ -2640,26 +2709,7 @@ def build_orchestrator_prompt(
         parts.append("Assign code-writer tasks from TASKS.md (by dependency graph).")
         parts.append("Do NOT stop until ALL items in REQUIREMENTS.md are marked [x] AND all tasks in TASKS.md are COMPLETE.")
         # v10: Convergence loop enforcement for standard mode
-        parts.append(f"\n[CONVERGENCE LOOP — MANDATORY]")
-        parts.append(f"After each coding wave (implementing a batch of tasks), you MUST execute a convergence cycle:")
-        parts.append(f"1. Deploy the CODE REVIEWER fleet — reviewers read the generated code against {req_dir}/{req_file}.")
-        parts.append(f"2. Reviewers mark each requirement: [x] if PASS (code implements it correctly), [ ] if FAIL (not yet implemented or buggy).")
-        parts.append(f"3. Calculate convergence ratio = (marked [x]) / (total requirements). Log this ratio explicitly.")
-        parts.append(f"4. If ratio < 0.9, identify failing requirements, assign fix tasks, and start another coding wave → repeat from step 1.")
-        parts.append(f"5. ZERO convergence cycles is NEVER acceptable. You MUST run at least ONE full review cycle before post-orchestration.")
-        parts.append(f"6. The convergence loop is what populates the [x]/[ ] marks in {req_dir}/{req_file} that the post-orchestration health check reads.")
-        parts.append(f"7. If you skip this loop, the health check returns 'unknown' with 0 cycles and the review recovery fleet never fires.")
-        parts.append(f"Do NOT proceed to post-orchestration until at least one convergence cycle completes with ratio >= 0.9.")
-        # v10: Requirement marking ownership policy
-        parts.append(f"\n[REQUIREMENT MARKING — REVIEW FLEET ONLY]")
-        parts.append(f"CRITICAL POLICY: Only the CODE REVIEWER fleet is authorized to mark requirements [x] or [ ] in {req_dir}/{req_file}.")
-        parts.append(f"YOU (the orchestrator) MUST NOT mark requirements yourself. This is a segregation-of-duties control:")
-        parts.append(f"- The orchestrator ASSIGNS tasks and READS the convergence ratio.")
-        parts.append(f"- The code reviewer fleet EXECUTES reviews and WRITES requirement marks.")
-        parts.append(f"- The code writer fleet IMPLEMENTS features but NEVER marks requirements.")
-        parts.append(f"Self-marking (orchestrator marking its own requirements as complete) is a rubber-stamp anti-pattern.")
-        parts.append(f"It produces 100% convergence ratios that do not reflect actual code review verification.")
-        parts.append(f"If you mark a requirement [x] yourself, the convergence health check will show a ratio that was never validated by a reviewer.")
+        _append_convergence_enforcement(parts, req_dir, req_file)
 
     if constraints:
         from .config import format_constraints_block

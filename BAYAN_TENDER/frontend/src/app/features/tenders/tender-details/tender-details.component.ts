@@ -107,63 +107,93 @@ interface CountdownTime {
   template: `
     <p-toast></p-toast>
     <div class="tender-details-container">
-      <!-- Breadcrumb -->
-      <p-breadcrumb [model]="breadcrumbItems" [home]="homeItem"></p-breadcrumb>
+      <!-- Polished Header Section -->
+      <div class="page-header-wrapper">
+        <!-- Breadcrumb Navigation -->
+        <nav class="breadcrumb-nav">
+          <a routerLink="/home" class="breadcrumb-link">
+            <i class="pi pi-home"></i>
+          </a>
+          <i class="pi pi-chevron-right breadcrumb-separator"></i>
+          <a routerLink="/tenders" class="breadcrumb-link">Tenders</a>
+          <i class="pi pi-chevron-right breadcrumb-separator"></i>
+          <span class="breadcrumb-current">{{ tender()?.title || 'Loading...' }}</span>
+        </nav>
 
-      <!-- Header -->
-      <div class="page-header">
-        <div class="header-content">
-          <button pButton icon="pi pi-arrow-left" class="p-button-text" routerLink="/tenders"></button>
-          <div class="tender-title-section">
-            <h1 data-testid="tender-title">{{ tender()?.title }}</h1>
-            <div class="tender-meta">
-              <span class="reference" data-testid="tender-reference">{{ tender()?.referenceNumber }}</span>
-              <p-tag
-                [value]="getStatusLabel(tender()?.status)"
-                [severity]="getStatusSeverity(tender()?.status)"
-                data-testid="tender-status"
-              ></p-tag>
+        <!-- Main Header -->
+        <div class="page-header">
+          <div class="header-content">
+            <div class="tender-title-section">
+              <div class="title-row">
+                <h1 data-testid="tender-title">{{ tender()?.title }}</h1>
+                <p-tag
+                  [value]="getStatusLabel(tender()?.status)"
+                  [severity]="getStatusSeverity(tender()?.status)"
+                  data-testid="tender-status"
+                  styleClass="status-badge"
+                ></p-tag>
+              </div>
+              <div class="tender-meta">
+                <span class="reference" data-testid="tender-reference">
+                  <i class="pi pi-hashtag"></i>
+                  {{ tender()?.referenceNumber }}
+                </span>
+                @if (tender()?.organization) {
+                  <span class="meta-divider">•</span>
+                  <span class="organization">
+                    <i class="pi pi-building"></i>
+                    {{ tender()?.organization }}
+                  </span>
+                }
+                @if (tender()?.deadline) {
+                  <span class="meta-divider">•</span>
+                  <span class="deadline">
+                    <i class="pi pi-calendar"></i>
+                    Due {{ tender()?.deadline | date:'mediumDate' }}
+                  </span>
+                }
+              </div>
             </div>
           </div>
-        </div>
-        <div class="header-actions">
-          @if (canManageTender()) {
-            @if (tender()?.status === 'draft') {
-              <button
-                pButton
-                label="Edit"
-                icon="pi pi-pencil"
-                class="p-button-outlined"
-                data-testid="edit-tender-btn"
-                (click)="editTender()"
-              ></button>
-              <button
-                pButton
-                label="Publish"
-                icon="pi pi-send"
-                data-testid="publish-tender-btn"
-                (click)="publishTender()"
-              ></button>
+          <div class="header-actions">
+            @if (canManageTender()) {
+              @if (tender()?.status === 'draft') {
+                <button
+                  pButton
+                  label="Edit"
+                  icon="pi pi-pencil"
+                  class="p-button-outlined"
+                  data-testid="edit-tender-btn"
+                  (click)="editTender()"
+                ></button>
+                <button
+                  pButton
+                  label="Publish"
+                  icon="pi pi-send"
+                  data-testid="publish-tender-btn"
+                  (click)="publishTender()"
+                ></button>
+              }
+              @if (tender()?.status === 'open') {
+                <button
+                  pButton
+                  label="Close Tender"
+                  icon="pi pi-stop-circle"
+                  class="p-button-outlined p-button-warning"
+                  (click)="closeTender()"
+                ></button>
+              }
+              @if (tender()?.status !== 'cancelled' && tender()?.status !== 'awarded') {
+                <button
+                  pButton
+                  label="Archive"
+                  icon="pi pi-inbox"
+                  class="p-button-outlined p-button-secondary"
+                  (click)="archiveTender()"
+                ></button>
+              }
             }
-            @if (tender()?.status === 'open') {
-              <button
-                pButton
-                label="Close Tender"
-                icon="pi pi-stop-circle"
-                class="p-button-outlined p-button-warning"
-                (click)="closeTender()"
-              ></button>
-            }
-            @if (tender()?.status !== 'cancelled' && tender()?.status !== 'awarded') {
-              <button
-                pButton
-                label="Archive"
-                icon="pi pi-inbox"
-                class="p-button-outlined p-button-secondary"
-                (click)="archiveTender()"
-              ></button>
-            }
-          }
+          </div>
         </div>
       </div>
 

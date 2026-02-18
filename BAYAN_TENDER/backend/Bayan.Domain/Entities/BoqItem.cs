@@ -53,6 +53,18 @@ public class BoqItem : BaseEntity
     /// </summary>
     public int SortOrder { get; set; }
 
+    /// <summary>
+    /// Parent item ID for sub-items in a hierarchical BOQ.
+    /// Null for top-level items and standalone items.
+    /// </summary>
+    public Guid? ParentItemId { get; set; }
+
+    /// <summary>
+    /// Whether this item is a group header that contains child sub-items.
+    /// Group items typically have no quantity/UOM of their own.
+    /// </summary>
+    public bool IsGroup { get; set; } = false;
+
     // Navigation properties
     /// <summary>
     /// Tender associated with this item.
@@ -63,6 +75,16 @@ public class BoqItem : BaseEntity
     /// Section this item belongs to.
     /// </summary>
     public virtual BoqSection Section { get; set; } = null!;
+
+    /// <summary>
+    /// Parent item (for sub-items in hierarchical BOQ).
+    /// </summary>
+    public virtual BoqItem? ParentItem { get; set; }
+
+    /// <summary>
+    /// Child sub-items (for group items in hierarchical BOQ).
+    /// </summary>
+    public virtual ICollection<BoqItem> ChildItems { get; set; } = new List<BoqItem>();
 
     /// <summary>
     /// Bid pricing entries for this item.

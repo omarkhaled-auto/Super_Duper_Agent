@@ -140,7 +140,12 @@ public class ExecuteBidImportCommandHandler : IRequestHandler<ExecuteBidImportCo
             {
                 if (pricing.NativeAmount.HasValue)
                 {
-                    totalNative += pricing.NativeAmount.Value;
+                    // Only include in total if IsIncludedInTotal flag is set
+                    // This respects the tender's pricing level (SubItem/Item/Bill)
+                    if (pricing.IsIncludedInTotal)
+                    {
+                        totalNative += pricing.NativeAmount.Value;
+                    }
                     itemsImported++;
                 }
                 else
@@ -148,7 +153,7 @@ public class ExecuteBidImportCommandHandler : IRequestHandler<ExecuteBidImportCo
                     itemsSkipped++;
                 }
 
-                if (pricing.NormalizedAmount.HasValue)
+                if (pricing.NormalizedAmount.HasValue && pricing.IsIncludedInTotal)
                 {
                     totalNormalized += pricing.NormalizedAmount.Value;
                 }

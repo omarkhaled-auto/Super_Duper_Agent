@@ -55,6 +55,20 @@ public class UpdateTenderCommandHandler : IRequestHandler<UpdateTenderCommand, T
         tender.OpeningDate = request.OpeningDate;
         tender.TechnicalWeight = request.TechnicalWeight;
         tender.CommercialWeight = request.CommercialWeight;
+        // Validate pricing level change — cannot change after bids are submitted
+        if (tender.PricingLevel != request.PricingLevel)
+        {
+            var hasBids = await _context.BidSubmissions
+                .AnyAsync(bs => bs.TenderId == request.Id, cancellationToken);
+
+            if (hasBids)
+            {
+                throw new InvalidOperationException(
+                    "Cannot change pricing level after bids have been submitted.");
+            }
+        }
+
+        tender.PricingLevel = request.PricingLevel;
         tender.LastModifiedBy = _currentUserService.UserId;
         tender.LastModifiedAt = DateTime.UtcNow;
         tender.UpdatedAt = DateTime.UtcNow;
@@ -139,7 +153,8 @@ public class UpdateTenderCommandHandler : IRequestHandler<UpdateTenderCommand, T
             SubmissionDeadline = tender.SubmissionDeadline,
             BidderCount = tender.TenderBidders.Count,
             BidCount = 0, // Would need to load BidSubmissions if needed
-            CreatedAt = tender.CreatedAt
+            CreatedAt = tender.CreatedAt,
+            PricingLevel = tender.PricingLevel
         };
     }
 }

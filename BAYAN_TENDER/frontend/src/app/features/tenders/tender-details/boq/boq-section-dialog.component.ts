@@ -207,7 +207,7 @@ export class BoqSectionDialogComponent implements OnInit, OnChanges {
   isLoading = false;
   errorMessage: string | null = null;
 
-  parentSectionOptions: { label: string; value: number }[] = [];
+  parentSectionOptions: { label: string; value: string | number }[] = [];
 
   ngOnInit(): void {
     this.initForm();
@@ -251,7 +251,7 @@ export class BoqSectionDialogComponent implements OnInit, OnChanges {
     }));
   }
 
-  private getChildSectionIds(parentId: number): number[] {
+  private getChildSectionIds(parentId: string | number): (string | number)[] {
     const children = this.sections.filter(s => s.parentSectionId === parentId);
     return children.flatMap(child => [child.id, ...this.getChildSectionIds(child.id)]);
   }

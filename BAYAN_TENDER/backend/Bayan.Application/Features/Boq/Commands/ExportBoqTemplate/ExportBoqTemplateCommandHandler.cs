@@ -31,7 +31,7 @@ public class ExportBoqTemplateCommandHandler : IRequestHandler<ExportBoqTemplate
     {
         _logger.LogInformation("Exporting BOQ template for tender {TenderId}", request.TenderId);
 
-        // Fetch tender with BOQ data
+        // Fetch tender with BOQ data including child items for hierarchy
         var tender = await _context.Tenders
             .AsNoTracking()
             .Include(t => t.BoqSections.OrderBy(s => s.SortOrder))
@@ -51,8 +51,17 @@ public class ExportBoqTemplateCommandHandler : IRequestHandler<ExportBoqTemplate
             .Select(u => u.Code)
             .ToListAsync(cancellationToken);
 
-        // Build section hierarchy with items
+        // Build section hierarchy with items (now includes hierarchy metadata)
         var sections = BuildSectionHierarchy(tender.BoqSections.ToList(), tender.BoqItems.ToList());
+
+        // Ensure the "Level" column is included for hierarchy-aware exports
+        var includeColumns = new List<string>(request.IncludeColumns);
+        if (!includeColumns.Contains("Level"))
+        {
+            // Insert "Level" column after "Section" if present, otherwise at position 0
+            int sectionIdx = includeColumns.IndexOf("Section");
+            includeColumns.Insert(sectionIdx >= 0 ? sectionIdx + 1 : 0, "Level");
+        }
 
         // Build generation request
         var generationRequest = new BoqTemplateGenerationRequest
@@ -62,9 +71,10 @@ public class ExportBoqTemplateCommandHandler : IRequestHandler<ExportBoqTemplate
             TenderReference = tender.Reference,
             SubmissionDeadline = tender.SubmissionDeadline,
             Currency = tender.BaseCurrency,
+            PricingLevel = tender.PricingLevel,
             Sections = sections,
             AvailableUoms = uoms,
-            IncludeColumns = request.IncludeColumns,
+            IncludeColumns = includeColumns,
             LockColumns = request.LockColumns,
             IncludeInstructions = request.IncludeInstructions,
             Language = request.Language
@@ -74,8 +84,9 @@ public class ExportBoqTemplateCommandHandler : IRequestHandler<ExportBoqTemplate
         var result = await _templateExportService.GenerateBoqTemplateAsync(generationRequest, cancellationToken);
 
         _logger.LogInformation(
-            "BOQ template exported successfully for tender {TenderId}. File size: {FileSize} bytes",
+            "BOQ template exported successfully for tender {TenderId} at pricing level {PricingLevel}. File size: {FileSize} bytes",
             request.TenderId,
+            tender.PricingLevel,
             result.FileSize);
 
         return result;
@@ -92,14 +103,15 @@ public class ExportBoqTemplateCommandHandler : IRequestHandler<ExportBoqTemplate
         return sections
             .Where(s => s.ParentSectionId == null) // Root sections only
             .OrderBy(s => s.SortOrder)
-            .Select(s => MapSection(s, sections, itemsBySection))
+            .Select(s => MapSection(s, sections, itemsBySection, items))
             .ToList();
     }
 
     private static BoqSectionExportDto MapSection(
         Domain.Entities.BoqSection section,
         List<Domain.Entities.BoqSection> allSections,
-        Dictionary<Guid, List<Domain.Entities.BoqItem>> itemsBySection)
+        Dictionary<Guid, List<Domain.Entities.BoqItem>> itemsBySection,
+        List<Domain.Entities.BoqItem> allItems)
     {
         var sectionDto = new BoqSectionExportDto
         {
@@ -108,17 +120,24 @@ public class ExportBoqTemplateCommandHandler : IRequestHandler<ExportBoqTemplate
             Items = new List<BoqItemExportDto>()
         };
 
-        // Add items for this section
+        // Add items for this section with hierarchy metadata
         if (itemsBySection.TryGetValue(section.Id, out var sectionItems))
         {
-            sectionDto.Items.AddRange(sectionItems.Select(i => new BoqItemExportDto
+            foreach (var item in sectionItems)
             {
-                ItemNumber = i.ItemNumber,
-                Description = i.Description,
-                Quantity = i.Quantity,
-                Uom = i.Uom,
-                Notes = i.Notes
-            }));
+                var hierarchyLevel = DetermineHierarchyLevel(item);
+                sectionDto.Items.Add(new BoqItemExportDto
+                {
+                    ItemNumber = item.ItemNumber,
+                    Description = item.Description,
+                    Quantity = item.Quantity,
+                    Uom = item.Uom,
+                    Notes = item.Notes,
+                    IsGroup = item.IsGroup,
+                    HasParent = item.ParentItemId.HasValue,
+                    HierarchyLevel = hierarchyLevel
+                });
+            }
         }
 
         // Recursively add child sections' items
@@ -128,11 +147,28 @@ public class ExportBoqTemplateCommandHandler : IRequestHandler<ExportBoqTemplate
 
         foreach (var child in childSections)
         {
-            var childDto = MapSection(child, allSections, itemsBySection);
+            var childDto = MapSection(child, allSections, itemsBySection, allItems);
             // Flatten child items into parent for simplicity in export
             sectionDto.Items.AddRange(childDto.Items);
         }
 
         return sectionDto;
+    }
+
+    /// <summary>
+    /// Determines the hierarchy level string for an item.
+    /// - Group items (IsGroup=true) → "Item" (item group header)
+    /// - Items with a parent → "Sub-Item"
+    /// - Standalone items → "Item"
+    /// </summary>
+    private static string DetermineHierarchyLevel(Domain.Entities.BoqItem item)
+    {
+        if (item.IsGroup)
+            return "Item";
+
+        if (item.ParentItemId.HasValue)
+            return "Sub-Item";
+
+        return "Item";
     }
 }

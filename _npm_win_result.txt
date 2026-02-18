@@ -1,0 +1,19 @@
+Installing @anthropic-ai/claude-code via npm...
+Using node at: C:\Program Files\nodejs\node.exe
+Using npm-cli at: C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+Exit code: 0
+STDOUT (last 2000):
+
+added 2 packages in 5s
+
+1 package is looking for funding
+  run `npm fund` for details
+
+
+=== Verify claude CLI ===
+claude in PATH: C:\Users\Omar Khaled\AppData\Roaming\npm\claude.CMD
+npm global bin: Unknown command: "bin"
+
+To see a list of supported npm commands, run:
+  npm help
+claude.cmd exists: False

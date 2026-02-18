@@ -75,6 +75,10 @@ public class ValidateBoqImportCommandHandler : IRequestHandler<ValidateBoqImport
         var skippedRowCount = 0;
         var sectionHeaderCount = 0;
 
+        // Check if BillNumber or SubItemLabel columns are mapped
+        var hasBillNumberMapping = mappings.ContainsKey(BoqField.BillNumber);
+        var hasSubItemLabelMapping = mappings.ContainsKey(BoqField.SubItemLabel);
+
         for (var rowIndex = 0; rowIndex < sheet.Rows.Count; rowIndex++)
         {
             var row = sheet.Rows[rowIndex];
@@ -85,9 +89,16 @@ public class ValidateBoqImportCommandHandler : IRequestHandler<ValidateBoqImport
             var description = GetMappedValue(row, mappings, BoqField.Description);
             var quantityStr = GetMappedValue(row, mappings, BoqField.Quantity);
             var uom = GetMappedValue(row, mappings, BoqField.Uom);
+            var billNumber = GetMappedValue(row, mappings, BoqField.BillNumber);
+            var subItemLabel = GetMappedValue(row, mappings, BoqField.SubItemLabel);
 
-            // Check if row is empty
-            if (string.IsNullOrWhiteSpace(itemNumber) && string.IsNullOrWhiteSpace(description))
+            // Determine row role based on mapped columns
+            var isBillRow = hasBillNumberMapping && !string.IsNullOrWhiteSpace(billNumber);
+            var isSubItemRow = hasSubItemLabelMapping && !string.IsNullOrWhiteSpace(subItemLabel);
+
+            // Check if row is empty (consider BillNumber and SubItemLabel as non-empty indicators)
+            if (string.IsNullOrWhiteSpace(itemNumber) && string.IsNullOrWhiteSpace(description) &&
+                !isBillRow && !isSubItemRow)
             {
                 skippedRowCount++;
                 issues.Add(new ImportValidationIssue
@@ -97,6 +108,21 @@ public class ValidateBoqImportCommandHandler : IRequestHandler<ValidateBoqImport
                     IssueCode = ValidationIssueCodes.EmptyRow,
                     Message = "Row is empty and will be skipped."
                 });
+                continue;
+            }
+
+            // Bill rows (explicit BillNumber column mapped and has value) are treated as sections
+            if (isBillRow && string.IsNullOrWhiteSpace(itemNumber))
+            {
+                sectionHeaderCount++;
+                issues.Add(new ImportValidationIssue
+                {
+                    RowNumber = rowNumber,
+                    Severity = ValidationSeverity.Info,
+                    IssueCode = "BILL_HEADER",
+                    Message = $"Bill header detected from BillNumber column: Bill {billNumber} - {description}"
+                });
+                validRowCount++;
                 continue;
             }
 
@@ -114,7 +140,7 @@ public class ValidateBoqImportCommandHandler : IRequestHandler<ValidateBoqImport
 
             // Check if this is a section header row (no quantity, no uom)
             var isSectionHeader = _sectionDetectionService.IsSectionHeaderRow(itemNumber, quantityStr, uom);
-            if (isSectionHeader)
+            if (isSectionHeader && !isSubItemRow)
             {
                 sectionHeaderCount++;
                 issues.Add(new ImportValidationIssue
@@ -129,19 +155,34 @@ public class ValidateBoqImportCommandHandler : IRequestHandler<ValidateBoqImport
 
             var rowHasError = false;
 
-            // Validate item number
+            // Validate item number — relaxed for sub-item rows (they may use labels like a, b, c)
             if (string.IsNullOrWhiteSpace(itemNumber))
             {
-                issues.Add(new ImportValidationIssue
+                if (isSubItemRow)
                 {
-                    RowNumber = rowNumber,
-                    ColumnName = mappings.GetValueOrDefault(BoqField.ItemNumber),
-                    Severity = ValidationSeverity.Error,
-                    IssueCode = ValidationIssueCodes.MissingItemNumber,
-                    Message = "Item number is required.",
-                    SuggestedFix = "Provide an item number for this row."
-                });
-                rowHasError = true;
+                    // Sub-items identified by SubItemLabel column don't strictly need an item number
+                    issues.Add(new ImportValidationIssue
+                    {
+                        RowNumber = rowNumber,
+                        ColumnName = mappings.GetValueOrDefault(BoqField.ItemNumber),
+                        Severity = ValidationSeverity.Info,
+                        IssueCode = "SUB_ITEM_NO_ITEM_NUMBER",
+                        Message = $"Sub-item row (label: {subItemLabel}) has no item number. Will use sub-item label.",
+                    });
+                }
+                else
+                {
+                    issues.Add(new ImportValidationIssue
+                    {
+                        RowNumber = rowNumber,
+                        ColumnName = mappings.GetValueOrDefault(BoqField.ItemNumber),
+                        Severity = ValidationSeverity.Error,
+                        IssueCode = ValidationIssueCodes.MissingItemNumber,
+                        Message = "Item number is required.",
+                        SuggestedFix = "Provide an item number for this row."
+                    });
+                    rowHasError = true;
+                }
             }
             else
             {
@@ -182,8 +223,8 @@ public class ValidateBoqImportCommandHandler : IRequestHandler<ValidateBoqImport
                 }
             }
 
-            // Validate description
-            if (string.IsNullOrWhiteSpace(description))
+            // Validate description — relaxed for bill rows that also have item numbers
+            if (string.IsNullOrWhiteSpace(description) && !isBillRow)
             {
                 issues.Add(new ImportValidationIssue
                 {

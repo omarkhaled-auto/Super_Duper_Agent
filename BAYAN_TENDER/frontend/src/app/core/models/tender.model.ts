@@ -2,6 +2,31 @@ export type TenderStatus = 'draft' | 'active' | 'evaluation' | 'awarded' | 'clos
 export type TenderType = 'open' | 'selective' | 'negotiated';
 export type Currency = 'AED' | 'USD' | 'EUR' | 'GBP' | 'SAR';
 
+// PricingLevel is imported from boq.model.ts
+import type { PricingLevel } from './boq.model';
+export type { PricingLevel };
+
+export const PRICING_LEVEL_OPTIONS = [
+  {
+    value: 'SubItem' as PricingLevel,
+    label: 'Sub-Item Level (Most Detailed)',
+    description: 'Bidders price each sub-item (e.g., 1.01.a, 2.02.b). Provides maximum pricing detail.',
+    icon: 'pi-sitemap'
+  },
+  {
+    value: 'Item' as PricingLevel,
+    label: 'Item/Group Level',
+    description: 'Bidders price at item group level (e.g., 1.01, 2.02). Sub-items are for reference only.',
+    icon: 'pi-list'
+  },
+  {
+    value: 'Bill' as PricingLevel,
+    label: 'Bill Level (Lump Sum)',
+    description: 'Bidders provide lump sum per bill/section (e.g., Bill 1, Bill 2). Simplest pricing.',
+    icon: 'pi-file'
+  }
+];
+
 export interface EvaluationCriterion {
   id?: number;
   name: string;
@@ -33,6 +58,7 @@ export interface Tender {
   technicalWeight: number;
   commercialWeight: number;
   evaluationCriteria: EvaluationCriterion[];
+  pricingLevel: PricingLevel;
   invitedBiddersCount?: number;
   submittedBidsCount?: number;
   createdAt: Date | string;
@@ -68,6 +94,7 @@ export interface CreateTenderDto {
   technicalWeight: number;
   commercialWeight: number;
   evaluationCriteria: Omit<EvaluationCriterion, 'id'>[];
+  pricingLevel?: PricingLevel;
   status?: TenderStatus;
 }
 

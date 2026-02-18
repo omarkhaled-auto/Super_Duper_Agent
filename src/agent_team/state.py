@@ -43,6 +43,9 @@ class RunState:
     milestone_order: list[str] = field(default_factory=list)
     completion_ratio: float = 0.0  # completed_milestones / total_milestones
     completed_browser_workflows: list[int] = field(default_factory=list)
+    audit_score: float = 0.0
+    audit_health: str = ""
+    audit_fix_rounds: int = 0
 
     def __post_init__(self) -> None:
         if not self.run_id:
@@ -265,6 +268,9 @@ def load_state(directory: str = ".agent-team") -> RunState | None:
             milestone_order=_expect(data.get("milestone_order", []), list, []),
             completion_ratio=_expect(data.get("completion_ratio", 0.0), (int, float), 0.0),
             completed_browser_workflows=_expect(data.get("completed_browser_workflows", []), list, []),
+            audit_score=_expect(data.get("audit_score", 0.0), (int, float), 0.0),
+            audit_health=_expect(data.get("audit_health", ""), str, ""),
+            audit_fix_rounds=_expect(data.get("audit_fix_rounds", 0), (int, float), 0),
         )
     except (json.JSONDecodeError, KeyError, TypeError, ValueError, OSError, UnicodeDecodeError):
         return None

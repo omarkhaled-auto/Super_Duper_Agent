@@ -14,10 +14,14 @@ export type BidImportColumnType =
   | 'unit_rate'
   | 'amount'
   | 'currency'
+  | 'bill_number'
+  | 'sub_item'
   | 'ignore';
 
 export const BID_IMPORT_COLUMN_OPTIONS: { label: string; value: BidImportColumnType; required: boolean }[] = [
+  { label: 'Bill Number', value: 'bill_number', required: false },
   { label: 'Item Number', value: 'item_number', required: true },
+  { label: 'Sub-Item', value: 'sub_item', required: false },
   { label: 'Description', value: 'description', required: false },
   { label: 'Quantity', value: 'quantity', required: false },
   { label: 'UOM', value: 'uom', required: false },

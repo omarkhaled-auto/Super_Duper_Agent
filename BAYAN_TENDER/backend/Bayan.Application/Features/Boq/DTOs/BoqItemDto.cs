@@ -51,4 +51,19 @@ public class BoqItemDto
     /// Sort order for display.
     /// </summary>
     public int SortOrder { get; set; }
+
+    /// <summary>
+    /// Parent item ID for sub-items in hierarchical BOQ.
+    /// </summary>
+    public Guid? ParentItemId { get; set; }
+
+    /// <summary>
+    /// Whether this item is a group header containing child sub-items.
+    /// </summary>
+    public bool IsGroup { get; set; }
+
+    /// <summary>
+    /// Child sub-items (populated when IsGroup is true).
+    /// </summary>
+    public List<BoqItemDto> ChildItems { get; set; } = new();
 }

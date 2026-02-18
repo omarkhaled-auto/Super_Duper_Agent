@@ -6,6 +6,11 @@ namespace Bayan.Domain.Enums;
 public enum BidSubmissionStatus
 {
     /// <summary>
+    /// Bid is being drafted (in-app pricing, not yet submitted).
+    /// </summary>
+    Draft = -1,
+
+    /// <summary>
     /// Bid has been submitted.
     /// </summary>
     Submitted = 0,

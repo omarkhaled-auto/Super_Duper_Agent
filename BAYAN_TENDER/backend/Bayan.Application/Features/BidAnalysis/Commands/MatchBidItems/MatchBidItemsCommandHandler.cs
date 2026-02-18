@@ -51,6 +51,15 @@ public class MatchBidItemsCommandHandler : IRequestHandler<MatchBidItemsCommand,
 
         try
         {
+            // Get tender to check pricing level
+            var tender = await _context.Tenders
+                .FirstOrDefaultAsync(t => t.Id == request.TenderId, cancellationToken);
+
+            if (tender == null)
+            {
+                throw new NotFoundException("Tender", request.TenderId);
+            }
+
             // Get BOQ items for the tender
             var boqItems = await _context.BoqItems
                 .Include(b => b.Section)
@@ -66,23 +75,38 @@ public class MatchBidItemsCommandHandler : IRequestHandler<MatchBidItemsCommand,
             var matchedBoqIds = new HashSet<Guid>();
 
             // Step 1: Exact match by item number
+            _logger.LogInformation("Starting exact match for {Count} bid items", request.Items.Count);
+
             foreach (var bidItem in request.Items)
             {
                 if (string.IsNullOrWhiteSpace(bidItem.ItemNumber))
                 {
+                    _logger.LogDebug("Row {Row}: Skipping - no item number", bidItem.RowIndex);
                     continue;
                 }
 
                 var normalizedBidItemNumber = NormalizeItemNumber(bidItem.ItemNumber);
+                _logger.LogDebug("Row {Row}: Bidder item '{Bid}' normalized to '{Norm}'",
+                    bidItem.RowIndex, bidItem.ItemNumber, normalizedBidItemNumber);
+
                 var exactMatch = boqItems.FirstOrDefault(b =>
                     NormalizeItemNumber(b.ItemNumber).Equals(normalizedBidItemNumber, StringComparison.OrdinalIgnoreCase));
 
                 if (exactMatch != null && !matchedBoqIds.Contains(exactMatch.Id))
                 {
+                    _logger.LogInformation("Row {Row}: EXACT MATCH '{Bid}' → BOQ '{Boq}'",
+                        bidItem.RowIndex, bidItem.ItemNumber, exactMatch.ItemNumber);
                     result.ExactMatches.Add(CreateMatchDto(bidItem, exactMatch, MatchType.ExactMatch, 100));
                     matchedBoqIds.Add(exactMatch.Id);
                 }
+                else if (exactMatch == null)
+                {
+                    _logger.LogDebug("Row {Row}: No exact match for '{Bid}' (normalized: '{Norm}')",
+                        bidItem.RowIndex, bidItem.ItemNumber, normalizedBidItemNumber);
+                }
             }
+
+            _logger.LogInformation("Exact matching complete: {Count} exact matches found", result.ExactMatches.Count);
 
             // Get items not yet matched
             var unmatchedBidItems = request.Items
@@ -217,17 +241,17 @@ public class MatchBidItemsCommandHandler : IRequestHandler<MatchBidItemsCommand,
             // Create BidPricing for exact matches
             foreach (var match in result.ExactMatches)
             {
-                _context.BidPricings.Add(CreateBidPricing(bid.Id, match, MatchType.ExactMatch));
+                _context.BidPricings.Add(CreateBidPricing(bid.Id, match, MatchType.ExactMatch, tender.PricingLevel));
             }
             // Create BidPricing for fuzzy matches
             foreach (var match in result.FuzzyMatches)
             {
-                _context.BidPricings.Add(CreateBidPricing(bid.Id, match, MatchType.FuzzyMatch));
+                _context.BidPricings.Add(CreateBidPricing(bid.Id, match, MatchType.FuzzyMatch, tender.PricingLevel));
             }
             // Create BidPricing for extra/unmatched items
             foreach (var match in result.Unmatched)
             {
-                _context.BidPricings.Add(CreateBidPricing(bid.Id, match, MatchType.ExtraItem));
+                _context.BidPricings.Add(CreateBidPricing(bid.Id, match, MatchType.ExtraItem, tender.PricingLevel));
             }
             // Create NoBid BidPricing for BOQ items not covered
             foreach (var noBid in result.NoBidItems)
@@ -271,8 +295,52 @@ public class MatchBidItemsCommandHandler : IRequestHandler<MatchBidItemsCommand,
         }
     }
 
-    private static BidPricing CreateBidPricing(Guid bidSubmissionId, BidItemMatchDto match, MatchType matchType)
+    private static BidPricing CreateBidPricing(
+        Guid bidSubmissionId,
+        BidItemMatchDto match,
+        MatchType matchType,
+        PricingLevel pricingLevel)
     {
+        // Determine if this item should be included in total based on pricing level
+        // This prevents double-counting when hierarchy has multiple levels priced
+        bool shouldIncludeInTotal = matchType != MatchType.ExtraItem;
+
+        if (shouldIncludeInTotal)
+        {
+            switch (pricingLevel)
+            {
+                case PricingLevel.SubItem:
+                    // SubItem level: Only include leaf items with actual unit rates
+                    // Excludes item groups (which show subtotals but no rates)
+                    // Example: Include "1.01.a" (has rate), exclude "1.01" (subtotal)
+                    shouldIncludeInTotal = match.BidUnitRate.HasValue && match.BidUnitRate.Value > 0;
+                    break;
+
+                case PricingLevel.Item:
+                    // Item level: Only include items/groups (not sub-items)
+                    // Contractor prices at group level like "1.01 Mobilization = 346k"
+                    // Example: Include "1.01" (priced), exclude "1.01.a" (child detail)
+                    var itemNumber = match.BidItemNumber ?? string.Empty;
+                    var hasSubItemSuffix = itemNumber.Contains('.') &&
+                        itemNumber.Split('.').Length > 2 &&
+                        itemNumber.Split('.').Last().Length == 1; // Ends with single letter like ".a"
+                    shouldIncludeInTotal = !hasSubItemSuffix;
+                    break;
+
+                case PricingLevel.Bill:
+                    // Bill level: Only include bill-level items
+                    // Contractor prices entire bills like "Bill 1 = 695k"
+                    // Example: Include bills (no dots in item number), exclude items/sub-items
+                    shouldIncludeInTotal = !match.BidItemNumber?.Contains('.') ?? false;
+                    break;
+
+                default:
+                    // Unknown pricing level - include all to be safe
+                    shouldIncludeInTotal = true;
+                    break;
+            }
+        }
+
         return new BidPricing
         {
             Id = Guid.NewGuid(),
@@ -287,7 +355,7 @@ public class MatchBidItemsCommandHandler : IRequestHandler<MatchBidItemsCommand,
             NativeCurrency = match.Currency ?? "AED",
             MatchType = matchType,
             MatchConfidence = match.Confidence,
-            IsIncludedInTotal = matchType != MatchType.ExtraItem
+            IsIncludedInTotal = shouldIncludeInTotal
         };
     }
 

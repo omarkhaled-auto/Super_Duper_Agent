@@ -83,14 +83,27 @@ public class MapBidColumnsCommandHandler : IRequestHandler<MapBidColumnsCommand,
                 throw new InvalidOperationException("No valid sheet found in the file.");
             }
 
-            // Extract items using the mappings
+            // Extract items using the mappings with hierarchical context
             var items = new List<ImportBidItemDto>();
             var startRow = mappings.StartRowIndex;
+            string? currentParentItemNumber = null; // Track parent item number for sub-items
 
             for (var i = startRow; i < sheet.Rows.Count; i++)
             {
                 var row = sheet.Rows[i];
-                var item = ExtractBidItem(row, mappings, i);
+
+                // Check if this row has an item number (parent item/group)
+                var rowItemNumber = !string.IsNullOrEmpty(mappings.ItemNumberColumn)
+                    ? GetStringValue(row, mappings.ItemNumberColumn)
+                    : null;
+
+                if (!string.IsNullOrWhiteSpace(rowItemNumber))
+                {
+                    // This is a parent item - track it for subsequent sub-items
+                    currentParentItemNumber = rowItemNumber;
+                }
+
+                var item = ExtractBidItem(row, mappings, i, currentParentItemNumber);
 
                 // Skip completely empty rows
                 if (IsEmptyItem(item))
@@ -128,7 +141,11 @@ public class MapBidColumnsCommandHandler : IRequestHandler<MapBidColumnsCommand,
         }
     }
 
-    private static ImportBidItemDto ExtractBidItem(Dictionary<string, object?> row, ColumnMappingsDto mappings, int rowIndex)
+    private static ImportBidItemDto ExtractBidItem(
+        Dictionary<string, object?> row,
+        ColumnMappingsDto mappings,
+        int rowIndex,
+        string? parentItemNumber = null)
     {
         var item = new ImportBidItemDto
         {
@@ -136,10 +153,45 @@ public class MapBidColumnsCommandHandler : IRequestHandler<MapBidColumnsCommand,
             RawValues = new Dictionary<string, object?>(row)
         };
 
-        // Extract item number
-        if (!string.IsNullOrEmpty(mappings.ItemNumberColumn))
+        // Extract and construct full item number (supports hierarchical BOQs)
+        var billNumber = !string.IsNullOrEmpty(mappings.BillNumberColumn)
+            ? GetStringValue(row, mappings.BillNumberColumn)
+            : null;
+
+        var itemNumber = !string.IsNullOrEmpty(mappings.ItemNumberColumn)
+            ? GetStringValue(row, mappings.ItemNumberColumn)
+            : null;
+
+        var subItem = !string.IsNullOrEmpty(mappings.SubItemColumn)
+            ? GetStringValue(row, mappings.SubItemColumn)
+            : null;
+
+        // Construct full item number: combine item number + sub-item if present
+        // Hierarchical BOQ logic:
+        // - If row has item number + sub-item: "1.01" + "a" → "1.01.a"
+        // - If row has only sub-item (child): use parent + sub-item → "1.01.a"
+        // - If row has only item number (parent): use as-is → "1.01"
+        if (!string.IsNullOrEmpty(itemNumber))
         {
-            item.ItemNumber = GetStringValue(row, mappings.ItemNumberColumn);
+            // Row has explicit item number (parent item or group header)
+            if (!string.IsNullOrEmpty(subItem))
+            {
+                item.ItemNumber = $"{itemNumber}.{subItem}";
+            }
+            else
+            {
+                item.ItemNumber = itemNumber;
+            }
+        }
+        else if (!string.IsNullOrEmpty(subItem) && !string.IsNullOrEmpty(parentItemNumber))
+        {
+            // Sub-item row without item number - use parent context
+            item.ItemNumber = $"{parentItemNumber}.{subItem}";
+        }
+        else if (!string.IsNullOrEmpty(subItem))
+        {
+            // Edge case: sub-item without parent context
+            item.ItemNumber = subItem;
         }
 
         // Extract description

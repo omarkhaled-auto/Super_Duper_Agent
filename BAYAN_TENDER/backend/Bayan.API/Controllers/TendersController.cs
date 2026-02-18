@@ -12,6 +12,7 @@ using Bayan.Application.Features.Tenders.Commands.InviteBidders;
 using Bayan.Application.Features.Tenders.Commands.PublishTender;
 using Bayan.Application.Features.Tenders.Commands.RemoveTenderBidder;
 using Bayan.Application.Features.Tenders.Commands.UpdateBidderQualification;
+using Bayan.Application.Features.Tenders.Commands.SetPricingLevel;
 using Bayan.Application.Features.Tenders.Commands.UpdateTender;
 using Bayan.Application.Features.Tenders.DTOs;
 using Bayan.Application.Features.Tenders.Queries.ExportTenders;
@@ -175,6 +176,7 @@ public class TendersController : ControllerBase
             OpeningDate = dto.OpeningDate,
             TechnicalWeight = dto.TechnicalWeight,
             CommercialWeight = dto.CommercialWeight,
+            PricingLevel = dto.PricingLevel,
             EvaluationCriteria = dto.EvaluationCriteria
         };
 
@@ -215,6 +217,7 @@ public class TendersController : ControllerBase
             OpeningDate = dto.OpeningDate,
             TechnicalWeight = dto.TechnicalWeight,
             CommercialWeight = dto.CommercialWeight,
+            PricingLevel = dto.PricingLevel,
             EvaluationCriteria = dto.EvaluationCriteria
         };
 
@@ -226,6 +229,47 @@ public class TendersController : ControllerBase
         }
 
         return Ok(ApiResponse<TenderDto>.SuccessResponse(result));
+    }
+
+    /// <summary>
+    /// Sets the pricing level for a tender's BOQ.
+    /// Cannot be changed after bids have been submitted.
+    /// </summary>
+    /// <param name="id">The tender's unique identifier.</param>
+    /// <param name="request">The pricing level to set.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The result with priceable node count.</returns>
+    [HttpPut("{id:guid}/pricing-level")]
+    [Authorize(Roles = BayanRoles.TenderLifecycleManagers)]
+    [ProducesResponseType(typeof(SetPricingLevelResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<SetPricingLevelResult>> SetPricingLevel(
+        Guid id,
+        [FromBody] SetPricingLevelRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var command = new SetPricingLevelCommand
+            {
+                TenderId = id,
+                PricingLevel = request.PricingLevel
+            };
+
+            var result = await _mediator.Send(command, cancellationToken);
+
+            if (result == null)
+            {
+                return NotFound(ApiResponse<object>.FailureResponse("Tender not found"));
+            }
+
+            return Ok(ApiResponse<SetPricingLevelResult>.SuccessResponse(result));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.FailureResponse(ex.Message));
+        }
     }
 
     /// <summary>
@@ -598,6 +642,17 @@ public class CancelTenderRequest
     /// Reason for cancellation.
     /// </summary>
     public string? Reason { get; set; }
+}
+
+/// <summary>
+/// Request model for setting the pricing level.
+/// </summary>
+public class SetPricingLevelRequest
+{
+    /// <summary>
+    /// The pricing level to set (Bill, Item, SubItem).
+    /// </summary>
+    public PricingLevel PricingLevel { get; set; }
 }
 
 /// <summary>

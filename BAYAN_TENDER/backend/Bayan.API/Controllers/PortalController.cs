@@ -8,9 +8,12 @@ using Bayan.Application.Features.Bids.DTOs;
 using Bayan.Application.Features.Bids.Queries.GetBidReceipt;
 using Bayan.Application.Features.Portal.Auth;
 using Bayan.Application.Features.Portal.Clarifications;
+using Bayan.Application.Features.Portal.Commands.SavePricingDraft;
+using Bayan.Application.Features.Portal.Commands.SubmitPricing;
 using Bayan.Application.Features.Portal.Documents;
 using Bayan.Application.Features.Portal.DTOs;
 using Bayan.Application.Features.Portal.Queries;
+using Bayan.Application.Features.Portal.Queries.GetContractorPricingView;
 using Bayan.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -914,6 +917,141 @@ public class PortalController : ControllerBase
     }
 
     #endregion
+
+    #region In-App Pricing
+
+    /// <summary>
+    /// Gets the contractor pricing view for a tender.
+    /// Returns the BOQ tree filtered by pricing level with any existing draft data.
+    /// </summary>
+    /// <param name="tenderId">The tender ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Pricing view with nodes and draft.</returns>
+    [HttpGet("tenders/{tenderId:guid}/boq/pricing-view")]
+    [Authorize(Roles = "Bidder")]
+    [ProducesResponseType(typeof(ContractorPricingViewDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ContractorPricingViewDto>> GetContractorPricingView(
+        Guid tenderId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var bidderId = GetBidderId();
+            var query = new GetContractorPricingViewQuery
+            {
+                TenderId = tenderId,
+                BidderId = bidderId
+            };
+
+            var result = await _mediator.Send(query, cancellationToken);
+            if (result == null)
+            {
+                return NotFound(ApiResponse<object>.FailureResponse("Tender not found."));
+            }
+
+            return Ok(ApiResponse<ContractorPricingViewDto>.SuccessResponse(result));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(ApiResponse<object>.FailureResponse(ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Saves the bidder's pricing draft for a tender.
+    /// Creates a draft BidSubmission if none exists and upserts pricing entries.
+    /// </summary>
+    /// <param name="tenderId">The tender ID.</param>
+    /// <param name="request">The pricing entries to save.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Draft save result with updated totals.</returns>
+    [HttpPut("tenders/{tenderId:guid}/boq/pricing-draft")]
+    [Authorize(Roles = "Bidder")]
+    [ProducesResponseType(typeof(SavePricingDraftResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<SavePricingDraftResult>> SavePricingDraft(
+        Guid tenderId,
+        [FromBody] SavePricingDraftRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var bidderId = GetBidderId();
+            var command = new SavePricingDraftCommand
+            {
+                TenderId = tenderId,
+                BidderId = bidderId,
+                Entries = request.Entries
+            };
+
+            var result = await _mediator.Send(command, cancellationToken);
+            return Ok(ApiResponse<SavePricingDraftResult>.SuccessResponse(result));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(ApiResponse<object>.FailureResponse(ex.Message));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.FailureResponse(ex.Message));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ApiResponse<object>.FailureResponse(ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Submits the bidder's final pricing for a tender.
+    /// Validates completeness and transitions the bid to Submitted status.
+    /// </summary>
+    /// <param name="tenderId">The tender ID.</param>
+    /// <param name="request">The final pricing entries.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Submission result with grand total and receipt.</returns>
+    [HttpPost("tenders/{tenderId:guid}/boq/pricing-submit")]
+    [Authorize(Roles = "Bidder")]
+    [ProducesResponseType(typeof(SubmitPricingResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<SubmitPricingResult>> SubmitPricing(
+        Guid tenderId,
+        [FromBody] SubmitPricingRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var bidderId = GetBidderId();
+            var command = new SubmitPricingCommand
+            {
+                TenderId = tenderId,
+                BidderId = bidderId,
+                Entries = request.Entries
+            };
+
+            var result = await _mediator.Send(command, cancellationToken);
+            return Ok(ApiResponse<SubmitPricingResult>.SuccessResponse(result));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(ApiResponse<object>.FailureResponse(ex.Message));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.FailureResponse(ex.Message));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ApiResponse<object>.FailureResponse(ex.Message));
+        }
+    }
+
+    #endregion
 }
 
 #region Request DTOs
@@ -1047,6 +1185,28 @@ public class ActivateAccountRequest
     /// Confirmation of the new password.
     /// </summary>
     public string ConfirmPassword { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request DTO for saving pricing draft.
+/// </summary>
+public class SavePricingDraftRequest
+{
+    /// <summary>
+    /// The pricing entries to save.
+    /// </summary>
+    public List<PricingEntryDto> Entries { get; set; } = new();
+}
+
+/// <summary>
+/// Request DTO for submitting final pricing.
+/// </summary>
+public class SubmitPricingRequest
+{
+    /// <summary>
+    /// The final pricing entries to submit.
+    /// </summary>
+    public List<PricingEntryDto> Entries { get; set; } = new();
 }
 
 #endregion

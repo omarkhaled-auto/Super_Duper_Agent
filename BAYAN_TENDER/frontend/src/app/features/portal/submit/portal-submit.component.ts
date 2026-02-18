@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, OnDestroy, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, ActivatedRoute } from '@angular/router';
-import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { interval, Subscription } from 'rxjs';
 import { CardModule } from 'primeng/card';
 import { ButtonModule } from 'primeng/button';
@@ -15,7 +15,9 @@ import { MessageModule } from 'primeng/message';
 import { DividerModule } from 'primeng/divider';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ToastModule } from 'primeng/toast';
+import { SelectButtonModule } from 'primeng/selectbutton';
 import { ConfirmationService, MessageService } from 'primeng/api';
+import { BoqPricingComponent } from '../pricing/boq-pricing.component';
 import { PortalService } from '../../../core/services/portal.service';
 import {
   PortalBidDocument,
@@ -37,6 +39,7 @@ interface UploadSection {
   imports: [
     CommonModule,
     ReactiveFormsModule,
+    FormsModule,
     CardModule,
     ButtonModule,
     FileUploadModule,
@@ -48,7 +51,9 @@ interface UploadSection {
     MessageModule,
     DividerModule,
     ConfirmDialogModule,
-    ToastModule
+    ToastModule,
+    SelectButtonModule,
+    BoqPricingComponent
   ],
   providers: [ConfirmationService, MessageService],
   template: `
@@ -136,55 +141,77 @@ interface UploadSection {
             </div>
           </ng-template>
 
-          <div class="upload-zone" *ngIf="getUploadSection('priced_boq') as section">
-            <div class="upload-item">
-              <div class="upload-label">
-                <i class="pi {{ section.config.icon }}"></i>
-                <div class="label-info">
-                  <strong>{{ section.config.label }} *</strong>
-                  <small>{{ section.config.description }}</small>
-                  <span class="file-info">
-                    Accepted: {{ section.config.acceptedFormats.join(', ') }} |
-                    Max: {{ section.config.maxSize }}MB
-                  </span>
-                </div>
-              </div>
-
-              @if (section.uploadedFiles.length > 0) {
-                <div class="uploaded-file">
-                  <div class="file-details">
-                    <i class="pi pi-file-excel"></i>
-                    <span class="file-name">{{ section.uploadedFiles[0].fileName }}</span>
-                    <span class="file-size">{{ formatFileSize(section.uploadedFiles[0].fileSize) }}</span>
-                  </div>
-                  <button
-                    pButton
-                    icon="pi pi-times"
-                    class="p-button-text p-button-danger p-button-sm"
-                    pTooltip="Remove file"
-                    (click)="removeFile(section.uploadedFiles[0])"
-                  ></button>
-                </div>
-              } @else if (section.uploadProgress?.status === 'uploading') {
-                <div class="upload-progress">
-                  <span>{{ section.uploadProgress?.fileName }}</span>
-                  <p-progressBar [value]="section.uploadProgress?.progress ?? 0"></p-progressBar>
-                </div>
-              } @else {
-                <div class="dropzone" (click)="fileInput1.click()">
-                  <i class="pi pi-cloud-upload"></i>
-                  <span>Drag & drop or click to upload</span>
-                  <input
-                    #fileInput1
-                    type="file"
-                    [accept]="section.config.acceptedFormats.join(',')"
-                    (change)="onFileSelect($event, section.type)"
-                    hidden
-                  />
-                </div>
-              }
-            </div>
+          <!-- Pricing Method Toggle -->
+          <div class="pricing-method-toggle">
+            <p-selectButton
+              [options]="pricingMethodOptions"
+              [(ngModel)]="pricingMethod"
+              optionLabel="label"
+              optionValue="value"
+              data-testid="pricing-method-toggle"
+            ></p-selectButton>
           </div>
+
+          <!-- Option A: Price In-App -->
+          @if (pricingMethod === 'in_app') {
+            <app-boq-pricing
+              [tenderId]="tenderId.toString()"
+              (pricingCompleted)="onInAppPricingComplete($event)"
+            ></app-boq-pricing>
+          }
+
+          <!-- Option B: Upload Excel (default) -->
+          @if (pricingMethod === 'upload') {
+            <div class="upload-zone" *ngIf="getUploadSection('priced_boq') as section">
+              <div class="upload-item">
+                <div class="upload-label">
+                  <i class="pi {{ section.config.icon }}"></i>
+                  <div class="label-info">
+                    <strong>{{ section.config.label }} *</strong>
+                    <small>{{ section.config.description }}</small>
+                    <span class="file-info">
+                      Accepted: {{ section.config.acceptedFormats.join(', ') }} |
+                      Max: {{ section.config.maxSize }}MB
+                    </span>
+                  </div>
+                </div>
+
+                @if (section.uploadedFiles.length > 0) {
+                  <div class="uploaded-file">
+                    <div class="file-details">
+                      <i class="pi pi-file-excel"></i>
+                      <span class="file-name">{{ section.uploadedFiles[0].fileName }}</span>
+                      <span class="file-size">{{ formatFileSize(section.uploadedFiles[0].fileSize) }}</span>
+                    </div>
+                    <button
+                      pButton
+                      icon="pi pi-times"
+                      class="p-button-text p-button-danger p-button-sm"
+                      pTooltip="Remove file"
+                      (click)="removeFile(section.uploadedFiles[0])"
+                    ></button>
+                  </div>
+                } @else if (section.uploadProgress?.status === 'uploading') {
+                  <div class="upload-progress">
+                    <span>{{ section.uploadProgress?.fileName }}</span>
+                    <p-progressBar [value]="section.uploadProgress?.progress ?? 0"></p-progressBar>
+                  </div>
+                } @else {
+                  <div class="dropzone" (click)="fileInput1.click()">
+                    <i class="pi pi-cloud-upload"></i>
+                    <span>Drag & drop or click to upload</span>
+                    <input
+                      #fileInput1
+                      type="file"
+                      [accept]="section.config.acceptedFormats.join(',')"
+                      (change)="onFileSelect($event, section.type)"
+                      hidden
+                    />
+                  </div>
+                }
+              </div>
+            </div>
+          }
         </p-card>
 
         <!-- Technical Bid Section -->
@@ -442,11 +469,34 @@ export class PortalSubmitComponent implements OnInit, OnDestroy {
 
   allSections: UploadSection[] = [];
 
-  private tenderId!: string | number;
+  // Pricing method toggle
+  pricingMethod: 'upload' | 'in_app' = 'upload';
+  pricingMethodOptions = [
+    { label: 'Upload Excel', value: 'upload', icon: 'pi pi-upload' },
+    { label: 'Price In-App', value: 'in_app', icon: 'pi pi-pencil' }
+  ];
+  inAppPricingComplete = signal(false);
+
+  tenderId!: string | number;
   private fileInputRefs = new Map<PortalBidDocumentType, HTMLInputElement>();
 
   ngOnInit(): void {
-    this.tenderId = this.route.parent?.snapshot.params['tenderId'] || this.route.snapshot.params['tenderId'];
+    console.log('🔍 [PORTAL-SUBMIT] Route params:', this.route.snapshot.params);
+    console.log('🔍 [PORTAL-SUBMIT] Parent route params:', this.route.parent?.snapshot.params);
+
+    const rawId = this.route.parent?.snapshot.params['tenderId'] || this.route.snapshot.params['tenderId'];
+    console.log('🔍 [PORTAL-SUBMIT] rawId extracted:', rawId, 'type:', typeof rawId);
+
+    // Keep as string (UUID) - don't try to parse as integer
+    this.tenderId = rawId;
+    console.log('🔍 [PORTAL-SUBMIT] Final tenderId:', this.tenderId);
+
+    if (!this.tenderId) {
+      console.error('❌ [PORTAL-SUBMIT] tenderId is missing! Check URL structure.');
+      console.error('   Current URL:', window.location.href);
+      console.error('   Expected format: /portal/tenders/{UUID}/submit');
+    }
+
     this.initForm();
     this.initSections();
     this.checkBidStatus();
@@ -660,7 +710,14 @@ export class PortalSubmitComponent implements OnInit, OnDestroy {
     });
   }
 
+  onInAppPricingComplete(entries: any[]): void {
+    this.inAppPricingComplete.set(entries.length > 0);
+  }
+
   isSectionComplete(type: PortalBidDocumentType): boolean {
+    if (type === 'priced_boq' && this.pricingMethod === 'in_app') {
+      return this.inAppPricingComplete();
+    }
     return this.uploadedDocuments().some(d => d.documentType === type);
   }
 
@@ -671,9 +728,13 @@ export class PortalSubmitComponent implements OnInit, OnDestroy {
   canSubmit(): boolean {
     // Check all required documents are uploaded
     const requiredTypes: PortalBidDocumentType[] = ['priced_boq', 'methodology', 'team_cvs', 'program', 'hse_plan'];
-    const hasAllRequired = requiredTypes.every(type =>
-      this.uploadedDocuments().some(d => d.documentType === type)
-    );
+    const hasAllRequired = requiredTypes.every(type => {
+      // priced_boq can be satisfied by in-app pricing
+      if (type === 'priced_boq' && this.pricingMethod === 'in_app') {
+        return this.inAppPricingComplete();
+      }
+      return this.uploadedDocuments().some(d => d.documentType === type);
+    });
 
     // Check form validity
     const formValid = this.submissionForm.valid;
@@ -683,12 +744,21 @@ export class PortalSubmitComponent implements OnInit, OnDestroy {
 
   getSubmitBlockReason(): string {
     const requiredTypes: PortalBidDocumentType[] = ['priced_boq', 'methodology', 'team_cvs', 'program', 'hse_plan'];
-    const missing = requiredTypes.filter(type =>
-      !this.uploadedDocuments().some(d => d.documentType === type)
-    );
+    const missing = requiredTypes.filter(type => {
+      // In-app pricing satisfies the priced_boq requirement
+      if (type === 'priced_boq' && this.pricingMethod === 'in_app') {
+        return !this.inAppPricingComplete();
+      }
+      return !this.uploadedDocuments().some(d => d.documentType === type);
+    });
 
     if (missing.length > 0) {
-      const labels = missing.map(t => PORTAL_BID_DOCUMENT_TYPE_CONFIG[t].label);
+      const labels = missing.map(t => {
+        if (t === 'priced_boq' && this.pricingMethod === 'in_app') {
+          return 'In-App Pricing (incomplete)';
+        }
+        return PORTAL_BID_DOCUMENT_TYPE_CONFIG[t].label;
+      });
       return `Missing required documents: ${labels.join(', ')}`;
     }
 

@@ -26,10 +26,11 @@ public class GetBoqStructureQueryHandler : IRequestHandler<GetBoqStructureQuery,
         GetBoqStructureQuery request,
         CancellationToken cancellationToken)
     {
-        // Fetch all sections for this tender with their items
+        // Fetch all sections for this tender with their items (including child items)
         var sections = await _context.BoqSections
             .Where(s => s.TenderId == request.TenderId)
             .Include(s => s.Items.OrderBy(i => i.SortOrder))
+                .ThenInclude(i => i.ChildItems.OrderBy(c => c.SortOrder))
             .AsNoTracking()
             .OrderBy(s => s.SortOrder)
             .ToListAsync(cancellationToken);
@@ -51,7 +52,7 @@ public class GetBoqStructureQueryHandler : IRequestHandler<GetBoqStructureQuery,
             Title = s.Title,
             SortOrder = s.SortOrder,
             ParentSectionId = s.ParentSectionId,
-            Items = _mapper.Map<List<BoqItemDto>>(s.Items),
+            Items = MapItemsHierarchically(s.Items),
             Children = new List<BoqTreeNodeDto>()
         });
 
@@ -93,5 +94,43 @@ public class GetBoqStructureQueryHandler : IRequestHandler<GetBoqStructureQuery,
                 SortChildrenRecursive(node.Children);
             }
         }
+    }
+
+    /// <summary>
+    /// Maps items hierarchically — only top-level items (no parent) at root level,
+    /// with child items nested inside their group parents.
+    /// </summary>
+    private List<BoqItemDto> MapItemsHierarchically(ICollection<BoqItem> items)
+    {
+        // Only return top-level items (ParentItemId == null)
+        // Child items are included via the ChildItems navigation property
+        var topLevelItems = items
+            .Where(i => i.ParentItemId == null)
+            .OrderBy(i => i.SortOrder)
+            .ToList();
+
+        return topLevelItems.Select(MapItemRecursive).ToList();
+    }
+
+    /// <summary>
+    /// Recursively maps a BoqItem entity to DTO including its child items.
+    /// </summary>
+    private BoqItemDto MapItemRecursive(BoqItem item)
+    {
+        var dto = _mapper.Map<BoqItemDto>(item);
+
+        if (item.IsGroup && item.ChildItems?.Any() == true)
+        {
+            dto.ChildItems = item.ChildItems
+                .OrderBy(c => c.SortOrder)
+                .Select(MapItemRecursive)
+                .ToList();
+        }
+        else
+        {
+            dto.ChildItems = new List<BoqItemDto>();
+        }
+
+        return dto;
     }
 }

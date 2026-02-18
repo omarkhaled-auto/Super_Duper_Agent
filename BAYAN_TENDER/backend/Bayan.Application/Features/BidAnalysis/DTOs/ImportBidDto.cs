@@ -22,9 +22,19 @@ public class ImportBidDto
 public class ColumnMappingsDto
 {
     /// <summary>
+    /// Excel column name/index for bill number (for hierarchical BOQs).
+    /// </summary>
+    public string? BillNumberColumn { get; set; }
+
+    /// <summary>
     /// Excel column name/index for item number.
     /// </summary>
     public string? ItemNumberColumn { get; set; }
+
+    /// <summary>
+    /// Excel column name/index for sub-item label (for hierarchical BOQs).
+    /// </summary>
+    public string? SubItemColumn { get; set; }
 
     /// <summary>
     /// Excel column name/index for description.

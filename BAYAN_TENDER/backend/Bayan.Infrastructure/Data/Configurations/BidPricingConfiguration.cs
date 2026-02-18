@@ -14,6 +14,7 @@ public class BidPricingConfiguration : IEntityTypeConfiguration<BidPricing>
 
         builder.HasIndex(e => e.BidSubmissionId);
         builder.HasIndex(e => e.BoqItemId);
+        builder.HasIndex(e => e.BoqSectionId);
         builder.HasIndex(e => new { e.BidSubmissionId, e.IsOutlier });
 
         builder.Property(e => e.Id)
@@ -117,6 +118,9 @@ public class BidPricingConfiguration : IEntityTypeConfiguration<BidPricing>
         builder.Property(e => e.Notes)
             .HasColumnName("notes");
 
+        builder.Property(e => e.BoqSectionId)
+            .HasColumnName("boq_section_id");
+
         builder.Property(e => e.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();
@@ -133,6 +137,11 @@ public class BidPricingConfiguration : IEntityTypeConfiguration<BidPricing>
         builder.HasOne(e => e.BoqItem)
             .WithMany(bi => bi.BidPricings)
             .HasForeignKey(e => e.BoqItemId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.BoqSection)
+            .WithMany(bs => bs.BidPricings)
+            .HasForeignKey(e => e.BoqSectionId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

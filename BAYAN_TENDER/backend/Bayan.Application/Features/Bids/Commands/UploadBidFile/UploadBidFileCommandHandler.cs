@@ -155,6 +155,16 @@ public class UploadBidFileCommandHandler : IRequestHandler<UploadBidFileCommand,
         };
 
         _context.BidDocuments.Add(bidDocument);
+
+        // For PricedBOQ documents, set OriginalFilePath/OriginalFileName on the submission
+        // so the bid import pipeline (parse → map → validate → execute) can find the file
+        if (request.DocumentType == BidDocumentType.PricedBOQ)
+        {
+            bidSubmission.OriginalFilePath = filePath;
+            bidSubmission.OriginalFileName = request.FileName;
+            bidSubmission.ImportStatus = BidImportStatus.Uploaded;
+        }
+
         await _context.SaveChangesAsync(cancellationToken);
 
         return new UploadBidFileResultDto

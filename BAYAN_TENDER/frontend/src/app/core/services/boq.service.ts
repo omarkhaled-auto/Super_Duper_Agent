@@ -6,6 +6,7 @@ import {
   BoqItem,
   BoqTreeNode,
   BoqItemType,
+  PricingLevel,
   CreateBoqSectionDto,
   UpdateBoqSectionDto,
   CreateBoqItemDto,
@@ -43,16 +44,47 @@ export class BoqService {
   private readonly _error = signal<string | null>(null);
 
   /** Tracks the current tender context for operations that need tenderId in the URL. */
-  private _currentTenderId: number | null = null;
+  private _currentTenderId: string | number | null = null;
 
   readonly isLoading = this._isLoading.asReadonly();
   readonly error = this._error.asReadonly();
 
   /**
+   * Set pricing level for a tender.
+   */
+  setPricingLevel(tenderId: string | number, level: PricingLevel): Observable<void> {
+    return this.api.put<void>(`/tenders/${tenderId}/pricing-level`, { pricingLevel: level }).pipe(
+      catchError(error => {
+        this._error.set(error.message || 'Failed to set pricing level');
+        return throwError(() => error);
+      })
+    );
+  }
+
+  /**
+   * Get pricing level for a tender.
+   */
+  getPricingLevel(tenderId: string | number): Observable<PricingLevel> {
+    return this.api.get<any>(`/tenders/${tenderId}`).pipe(
+      map(tender => {
+        const level = tender?.pricingLevel;
+        if (typeof level === 'number') {
+          return (['Bill', 'Item', 'SubItem'] as PricingLevel[])[level] ?? 'Item';
+        }
+        return (level as PricingLevel) ?? 'Item';
+      }),
+      catchError(error => {
+        this._error.set(error.message || 'Failed to get pricing level');
+        return throwError(() => error);
+      })
+    );
+  }
+
+  /**
    * Get all BOQ sections for a tender.
    * Derives flat section list from the hierarchical tree endpoint.
    */
-  getSections(tenderId: number): Observable<BoqSection[]> {
+  getSections(tenderId: string | number): Observable<BoqSection[]> {
     this._isLoading.set(true);
     this._error.set(null);
     this._currentTenderId = tenderId;
@@ -72,7 +104,7 @@ export class BoqService {
    * Get all BOQ items for a tender.
    * Derives flat item list from the hierarchical tree endpoint.
    */
-  getItems(tenderId: number): Observable<BoqItem[]> {
+  getItems(tenderId: string | number): Observable<BoqItem[]> {
     this._isLoading.set(true);
     this._error.set(null);
     this._currentTenderId = tenderId;
@@ -91,7 +123,7 @@ export class BoqService {
   /**
    * Get BOQ as tree structure for TreeTable display
    */
-  getBoqTree(tenderId: number): Observable<BoqTreeNode[]> {
+  getBoqTree(tenderId: string | number): Observable<BoqTreeNode[]> {
     this._isLoading.set(true);
     this._error.set(null);
     this._currentTenderId = tenderId;
@@ -110,8 +142,9 @@ export class BoqService {
   /**
    * Maps a backend BoqTreeNodeDto to the frontend BoqTreeNode.
    * Backend returns sections with nested children and items arrays.
+   * depth=0 means top-level section (bill).
    */
-  private mapBackendTreeNode(node: any, tenderId: number): BoqTreeNode {
+  private mapBackendTreeNode(node: any, tenderId: string | number, depth: number = 0): BoqTreeNode {
     const section: BoqSection = {
       id: node.id,
       tenderId,
@@ -126,12 +159,18 @@ export class BoqService {
     };
 
     const childSectionNodes: BoqTreeNode[] = (node.children ?? [])
-      .map((child: any) => this.mapBackendTreeNode(child, tenderId));
+      .map((child: any) => this.mapBackendTreeNode(child, tenderId, depth + 1));
 
     const itemNodes: BoqTreeNode[] = (node.items ?? [])
-      .map((item: any) => this.mapBackendItemToTreeNode(item, tenderId));
+      .map((item: any) => this.mapBackendItemToTreeNode(item, tenderId, depth));
 
     const children = [...childSectionNodes, ...itemNodes];
+
+    // Compute level: depth 0 sections are bills
+    const level: 'bill' | 'item' | 'sub_item' = depth === 0 ? 'bill' : 'item';
+
+    // Compute roll-up amount from children
+    const amount = this.computeRollupAmount(children);
 
     return {
       key: `section-${node.id}`,
@@ -143,31 +182,73 @@ export class BoqService {
       description: node.title,
       quantity: null,
       uom: '',
-      itemType: null
+      itemType: null,
+      level,
+      amount
     };
   }
 
   /**
    * Maps a backend BoqItemDto to a frontend BoqTreeNode of type 'item'.
+   * sectionDepth: depth of the parent section (0 = bill-level).
    */
-  private mapBackendItemToTreeNode(item: any, tenderId: number): BoqTreeNode {
+  private mapBackendItemToTreeNode(item: any, tenderId: string | number, sectionDepth: number = 0): BoqTreeNode {
     const mapped = this.mapBackendItem(item, tenderId);
+
+    // Determine level based on parentItemId and section depth
+    let level: 'bill' | 'item' | 'sub_item';
+    if (item.parentItemId) {
+      level = 'sub_item';
+    } else {
+      level = sectionDepth === 0 ? 'item' : 'sub_item';
+    }
+
+    const itemAmount = (mapped.quantity ?? 0) * (mapped.unitRate ?? 0);
+
+    // Handle group items with children
+    let children: BoqTreeNode[] | undefined;
+    if (item.isGroup && item.childItems?.length) {
+      children = item.childItems.map((child: any) =>
+        this.mapBackendItemToTreeNode(child, tenderId, sectionDepth + 1)
+      );
+    }
+
+    const rollupAmount = children ? this.computeRollupAmount(children) : itemAmount;
+
     return {
       key: `item-${item.id}`,
       data: mapped,
       type: 'item',
+      children,
+      expanded: item.isGroup ? true : undefined,
       itemNumber: mapped.itemNumber,
       description: mapped.description,
       quantity: mapped.quantity,
       uom: mapped.uom,
-      itemType: mapped.type
+      itemType: mapped.type,
+      level,
+      amount: rollupAmount
     };
+  }
+
+  /**
+   * Computes the sum of amounts from child nodes (recursive roll-up).
+   */
+  private computeRollupAmount(children: BoqTreeNode[]): number {
+    return children.reduce((sum, child) => {
+      if (child.amount != null) return sum + child.amount;
+      if (child.type === 'item' && child.data) {
+        const item = child.data as BoqItem;
+        return sum + (item.quantity ?? 0) * (item.unitRate ?? 0);
+      }
+      return sum;
+    }, 0);
   }
 
   /**
    * Maps a backend BoqItemDto to a frontend BoqItem.
    */
-  private mapBackendItem(item: any, tenderId: number): BoqItem {
+  private mapBackendItem(item: any, tenderId: string | number): BoqItem {
     return {
       id: item.id,
       tenderId,
@@ -180,16 +261,21 @@ export class BoqService {
         ? ({ base: 'base', alternate: 'alternate', provisionalsum: 'provisional_sum', daywork: 'daywork' } as Record<string, BoqItemType>)[item.itemType.toLowerCase()] ?? 'base'
         : ITEM_TYPE_FROM_BACKEND[item.itemType] ?? 'base',
       notes: item.notes,
+      unitRate: item.unitRate ?? undefined,
+      totalAmount: item.totalAmount ?? undefined,
       sortOrder: item.sortOrder,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      parentItemId: item.parentItemId ?? null,
+      isGroup: item.isGroup ?? false,
+      childItems: undefined // Children are mapped at tree node level
     };
   }
 
   /**
    * Maps a backend BoqSectionDto to a frontend BoqSection.
    */
-  private mapBackendSection(section: any, tenderId: number): BoqSection {
+  private mapBackendSection(section: any, tenderId: string | number): BoqSection {
     return {
       id: section.id,
       tenderId,
@@ -207,7 +293,7 @@ export class BoqService {
   /**
    * Recursively flattens the backend tree into a flat array of BoqSection.
    */
-  private flattenSectionsFromTree(nodes: any[], tenderId: number): BoqSection[] {
+  private flattenSectionsFromTree(nodes: any[], tenderId: string | number): BoqSection[] {
     const result: BoqSection[] = [];
     for (const node of nodes) {
       result.push(this.mapBackendSection(node, tenderId));
@@ -220,12 +306,19 @@ export class BoqService {
 
   /**
    * Recursively flattens the backend tree into a flat array of BoqItem.
+   * Also flattens child items from group items.
    */
-  private flattenItemsFromTree(nodes: any[], tenderId: number): BoqItem[] {
+  private flattenItemsFromTree(nodes: any[], tenderId: string | number): BoqItem[] {
     const result: BoqItem[] = [];
     for (const node of nodes) {
       if (node.items?.length) {
-        result.push(...node.items.map((item: any) => this.mapBackendItem(item, tenderId)));
+        for (const item of node.items) {
+          result.push(this.mapBackendItem(item, tenderId));
+          // Recurse into child items of group items
+          if (item.isGroup && item.childItems?.length) {
+            result.push(...this.flattenChildItems(item.childItems, tenderId));
+          }
+        }
       }
       if (node.children?.length) {
         result.push(...this.flattenItemsFromTree(node.children, tenderId));
@@ -235,10 +328,24 @@ export class BoqService {
   }
 
   /**
+   * Recursively flattens child items from group items.
+   */
+  private flattenChildItems(items: any[], tenderId: string | number): BoqItem[] {
+    const result: BoqItem[] = [];
+    for (const item of items) {
+      result.push(this.mapBackendItem(item, tenderId));
+      if (item.isGroup && item.childItems?.length) {
+        result.push(...this.flattenChildItems(item.childItems, tenderId));
+      }
+    }
+    return result;
+  }
+
+  /**
    * Get BOQ summary statistics.
    * Computed client-side from the tree endpoint (no dedicated backend summary endpoint).
    */
-  getSummary(tenderId: number): Observable<BoqSummary> {
+  getSummary(tenderId: string | number): Observable<BoqSummary> {
     return this.api.get<any[]>(`/tenders/${tenderId}/boq`).pipe(
       map(tree => {
         const sections = this.flattenSectionsFromTree(tree, tenderId);
@@ -254,15 +361,25 @@ export class BoqService {
           daywork: 0
         };
 
+        // Count sub-items (items with parentItemId) and regular items
+        let subItemCount = 0;
+        let grandTotal = 0;
         items.forEach(item => {
           itemsByType[item.type]++;
+          if (item.parentItemId) {
+            subItemCount++;
+          }
+          grandTotal += (item.quantity ?? 0) * (item.unitRate ?? 0);
         });
 
         return {
           totalSections: rootSections.length,
           totalSubsections: subSections.length,
-          totalItems: items.length,
-          itemsByType
+          totalItems: items.length - subItemCount,
+          totalBills: rootSections.length,
+          totalSubItems: subItemCount,
+          itemsByType,
+          grandTotal
         };
       })
     );
@@ -283,7 +400,7 @@ export class BoqService {
     };
 
     return this.api.post<any>(`/tenders/${data.tenderId}/boq/sections`, body).pipe(
-      map(result => this.mapBackendSection(result, data.tenderId as number)),
+      map(result => this.mapBackendSection(result, data.tenderId)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -296,7 +413,7 @@ export class BoqService {
   /**
    * Update an existing BOQ section
    */
-  updateSection(id: number, data: UpdateBoqSectionDto): Observable<BoqSection> {
+  updateSection(id: string, data: UpdateBoqSectionDto): Observable<BoqSection> {
     this._isLoading.set(true);
     this._error.set(null);
 
@@ -322,7 +439,7 @@ export class BoqService {
   /**
    * Delete a BOQ section
    */
-  deleteSection(id: number): Observable<void> {
+  deleteSection(id: string): Observable<void> {
     this._isLoading.set(true);
     this._error.set(null);
 
@@ -357,7 +474,7 @@ export class BoqService {
     };
 
     return this.api.post<any>(`/tenders/${data.tenderId}/boq/items`, body).pipe(
-      map(result => this.mapBackendItem(result, data.tenderId as number)),
+      map(result => this.mapBackendItem(result, data.tenderId)),
       tap(() => this._isLoading.set(false)),
       catchError(error => {
         this._isLoading.set(false);
@@ -370,7 +487,7 @@ export class BoqService {
   /**
    * Update an existing BOQ item
    */
-  updateItem(id: number, data: UpdateBoqItemDto): Observable<BoqItem> {
+  updateItem(id: string, data: UpdateBoqItemDto): Observable<BoqItem> {
     this._isLoading.set(true);
     this._error.set(null);
 
@@ -400,7 +517,7 @@ export class BoqService {
   /**
    * Delete a BOQ item
    */
-  deleteItem(id: number): Observable<void> {
+  deleteItem(id: string): Observable<void> {
     this._isLoading.set(true);
     this._error.set(null);
 
@@ -419,7 +536,7 @@ export class BoqService {
   /**
    * Duplicate a BOQ item
    */
-  duplicateItem(id: number): Observable<BoqItem> {
+  duplicateItem(id: string): Observable<BoqItem> {
     const tenderId = this._currentTenderId!;
 
     return this.api.post<any>(`/tenders/${tenderId}/boq/items/${id}/duplicate`, {}).pipe(
@@ -431,7 +548,7 @@ export class BoqService {
    * Upload an Excel file for import preview.
    * Returns the parsed preview with columns, sample rows, and suggested mappings.
    */
-  uploadForPreview(tenderId: number, file: File): Observable<any> {
+  uploadForPreview(tenderId: string | number, file: File): Observable<any> {
     this._isLoading.set(true);
     this._error.set(null);
 
@@ -455,7 +572,7 @@ export class BoqService {
    * Validate an already-uploaded import session with column mappings.
    * Returns validation results with row-level issues.
    */
-  validateSession(tenderId: number, sessionId: string, mappings: any[]): Observable<any> {
+  validateSession(tenderId: string | number, sessionId: string, mappings: any[]): Observable<any> {
     this._isLoading.set(true);
     this._error.set(null);
 
@@ -480,7 +597,7 @@ export class BoqService {
    * Validate import data and return preview.
    * Uploads the file first, then validates with the provided column mapping.
    */
-  validateImport(tenderId: number, file: File, mapping: BoqImportMapping): Observable<BoqImportResult> {
+  validateImport(tenderId: string | number, file: File, mapping: BoqImportMapping): Observable<BoqImportResult> {
     this._isLoading.set(true);
     this._error.set(null);
 
@@ -552,7 +669,7 @@ export class BoqService {
   /**
    * Import validated items (executes the import after validation)
    */
-  importItems(tenderId: number, validRows: BoqImportRow[], clearExisting = false): Observable<{ imported: number; failed: number }> {
+  importItems(tenderId: string | number, validRows: BoqImportRow[], clearExisting = false): Observable<{ imported: number; failed: number }> {
     this._isLoading.set(true);
     this._error.set(null);
 
@@ -580,7 +697,7 @@ export class BoqService {
   /**
    * Export BOQ to Excel
    */
-  exportToExcel(tenderId: number, options: BoqExportOptions): Observable<Blob> {
+  exportToExcel(tenderId: string | number, options: BoqExportOptions): Observable<Blob> {
     this._isLoading.set(true);
     this._error.set(null);
 
@@ -645,7 +762,8 @@ export class BoqService {
    */
   private buildColumnMappings(mapping: BoqImportMapping, columns: any[]): any[] {
     // Backend BoqField enum: None=0, ItemNumber=1, Description=2, Quantity=3,
-    // Uom=4, SectionTitle=5, Notes=6, UnitRate=7, Amount=8, Specification=9
+    // Uom=4, SectionTitle=5, Notes=6, UnitRate=7, Amount=8, Specification=9,
+    // BillNumber=10, SubItemLabel=11
     const fieldMap: Record<string, number> = {
       itemNumber: 1,
       description: 2,
@@ -654,6 +772,10 @@ export class BoqService {
       sectionTitle: 5,
       sectionNumber: 5,
       notes: 6,
+      unitRate: 7,
+      totalAmount: 8,
+      billNumber: 10,
+      subItemLabel: 11,
       type: 0 // No direct backend mapping for 'type'
     };
 

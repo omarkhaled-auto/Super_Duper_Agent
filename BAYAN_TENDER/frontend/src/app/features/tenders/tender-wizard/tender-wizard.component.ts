@@ -304,6 +304,7 @@ export class TenderWizardComponent implements OnInit, OnDestroy {
       clientId: [null, Validators.required],
       type: ['open', Validators.required],
       currency: ['AED', Validators.required],
+      pricingLevel: ['SubItem', Validators.required],
       estimatedValue: [null],
       bidValidityPeriod: [90],
       dates: this.fb.group({

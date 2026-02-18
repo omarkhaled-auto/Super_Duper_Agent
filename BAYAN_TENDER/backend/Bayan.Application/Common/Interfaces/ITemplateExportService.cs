@@ -1,4 +1,5 @@
 using Bayan.Application.Features.Boq.DTOs;
+using Bayan.Domain.Enums;
 
 namespace Bayan.Application.Common.Interfaces;
 
@@ -47,6 +48,12 @@ public class BoqTemplateGenerationRequest
     /// Currency code for the tender.
     /// </summary>
     public string Currency { get; set; } = "AED";
+
+    /// <summary>
+    /// Pricing level for the tender's BOQ hierarchy.
+    /// Determines which rows are priceable vs read-only in the export.
+    /// </summary>
+    public PricingLevel PricingLevel { get; set; } = PricingLevel.SubItem;
 
     /// <summary>
     /// BOQ sections with items.
@@ -135,6 +142,21 @@ public class BoqItemExportDto
     /// Optional notes.
     /// </summary>
     public string? Notes { get; set; }
+
+    /// <summary>
+    /// Whether this item is a group header that contains child sub-items.
+    /// </summary>
+    public bool IsGroup { get; set; }
+
+    /// <summary>
+    /// Whether this item has a parent (is a sub-item).
+    /// </summary>
+    public bool HasParent { get; set; }
+
+    /// <summary>
+    /// Hierarchy level for display: "Bill", "Item", or "Sub-Item".
+    /// </summary>
+    public string HierarchyLevel { get; set; } = "Item";
 }
 
 /// <summary>

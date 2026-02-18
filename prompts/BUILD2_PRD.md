@@ -24,13 +24,13 @@ src/agent_team/
   hooks_manager.py          NEW  ~250 lines  Hook config generation
   claude_md_generator.py    NEW  ~350 lines  CLAUDE.md generation for teammates
   contract_scanner.py       NEW  ~300 lines  CONTRACT-001..004 static scans
-  mcp_clients.py             NEW  ~200 lines  MCP session management
+  mcp_clients.py             NEW  ~200 lines  MCP session management + ArchitectClient
   cli.py                    MOD  +300 lines  Pipeline integration
   agents.py                 MOD  +200 lines  Contract awareness in prompts
   config.py                 MOD  +120 lines  4 new config dataclasses
   state.py                  MOD  +50 lines   ContractReport, EndpointTestReport
   mcp_servers.py            MOD  +60 lines   2 new MCP server configs
-  contracts.py              MOD  +150 lines  ServiceContractRegistry
+  contracts.py              MOD  +150 lines  ServiceContractRegistry (note: this is the existing contracts module, not to be confused with Contract Engine service contracts)
   scheduler.py              MOD  +100 lines  ExecutionBackend protocol
   code_quality_standards.py MOD  +40 lines   CONTRACT + INTEGRATION standards
   tracking_documents.py     MOD  +100 lines  Contract compliance matrix
@@ -317,7 +317,7 @@ tests/
 
 - [ ] TECH-029: `ContractReport` dataclass with fields: `total_contracts: int = 0`, `verified_contracts: int = 0`, `violated_contracts: int = 0`, `missing_implementations: int = 0`, `violations: list[dict] = field(default_factory=list)`, `health: str = "unknown"`, `verified_contract_ids: list[str] = field(default_factory=list)`, `violated_contract_ids: list[str] = field(default_factory=list)` — in `state.py`. The ID lists enable granular resume context (review_cycles: 0)
 - [ ] TECH-030: `EndpointTestReport` dataclass (renamed from `IntegrationReport` to avoid name collision with Build 3's IntegrationReport) with fields: `total_endpoints: int = 0`, `tested_endpoints: int = 0`, `passed_endpoints: int = 0`, `failed_endpoints: int = 0`, `untested_contracts: list[str] = field(default_factory=list)`, `health: str = "unknown"` — in `state.py` (review_cycles: 0)
-- [ ] TECH-031: Add `contract_report: ContractReport | None = None`, `endpoint_test_report: EndpointTestReport | None = None`, `registered_artifacts: list[str] = field(default_factory=list)` fields to `RunState` in `state.py`. Update `RunState.to_dict()` to serialize these fields using `dataclasses.asdict()` for ContractReport/EndpointTestReport (or None), and MUST include a top-level `summary` dict with computed fields: `success: bool` (True if health in ("passed","partial")), `test_passed: int`, `test_total: int`, `convergence_ratio: float` — derived from health, e2e_report, and convergence data. This summary enables Build 3 to construct BuilderResult from STATE.json. Update `RunState.from_dict()` to deserialize back into dataclass instances. STATE.json must roundtrip correctly (review_cycles: 0)
+- [ ] TECH-031: Add `contract_report: ContractReport | None = None`, `endpoint_test_report: EndpointTestReport | None = None`, `registered_artifacts: list[str] = field(default_factory=list)` fields to `RunState` in `state.py`. Update `save_state()` in `state.py` to serialize these fields using `dataclasses.asdict()` for ContractReport/EndpointTestReport (or None), and MUST include a top-level `summary` dict with computed fields: `success: bool` (True if health in ("passed","partial")), `test_passed: int`, `test_total: int`, `convergence_ratio: float` — derived from health, e2e_report, and convergence data. This summary is an intentional cross-build coupling point — Build 3 reads STATE.json to construct BuilderResult. Update `load_state()` in `state.py` to deserialize back into dataclass instances. STATE.json must roundtrip correctly (review_cycles: 0)
 - [ ] TECH-032: The `contract_context` parameter injection in `build_orchestrator_prompt()` must be wrapped in `CONTRACT ENGINE CONTEXT` delimiters following the same pattern as `TECH RESEARCH RESULTS` (review_cycles: 0)
 - [ ] TECH-033: The `codebase_index_context` parameter injection in `build_milestone_execution_prompt()` must be wrapped in `CODEBASE INTELLIGENCE CONTEXT` delimiters (review_cycles: 0)
 - [ ] TECH-034: `_generate_role_section(role: str) -> str` private function in `claude_md_generator.py` must produce role-specific instructions for each of the 5 supported roles, returning a generic fallback for unknown roles (review_cycles: 0)

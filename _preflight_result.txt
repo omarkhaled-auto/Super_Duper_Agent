@@ -1,0 +1,30 @@
+_preflight.sh: line 2: cd: $'/mnt/c/Projects/claude-agent-team\r': No such file or directory
+_preflight.sh: line 4: $'\r': command not found
+=== PRE-FLIGHT CHECK ===
+1. Python3:
+_preflight.sh: line 7: 1: ambiguous redirect
+_preflight.sh: line 8: $'\r': command not found
+2. Claude CLI:
+_preflight.sh: line 10: claude: command not found
+NOT FOUND
+_preflight.sh: line 11: $'\r': command not found
+3. Agent-team install check:
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+ModuleNotFoundError: No module named 'agent_team'
+NEEDS INSTALL
+_preflight.sh: line 14: $'\r': command not found
+4. Super-team src dirs:
+_preflight.sh: line 16: 1: ambiguous redirect
+_preflight.sh: line 17: $'\r': command not found
+5. Stale .agent-team:
+CLEAN
+_preflight.sh: line 20: $'\r': command not found
+6. Config run4 has run4 section:
+_preflight.sh: line 22: 1: ambiguous redirect
+_preflight.sh: line 23: $'\r': command not found
+7. PRD paths updated:
+head: invalid trailing option -- 
+Try 'head --help' for more information.
+_preflight.sh: line 26: $'\r': command not found
+=== DONE ===

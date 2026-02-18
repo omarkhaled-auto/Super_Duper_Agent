@@ -48,7 +48,9 @@ public class BoqMappingProfile : Profile
             .ForMember(dest => dest.Tender, opt => opt.Ignore())
             .ForMember(dest => dest.Section, opt => opt.Ignore())
             .ForMember(dest => dest.BidPricings, opt => opt.Ignore())
-            .ForMember(dest => dest.VendorItemRates, opt => opt.Ignore());
+            .ForMember(dest => dest.VendorItemRates, opt => opt.Ignore())
+            .ForMember(dest => dest.ParentItem, opt => opt.Ignore())
+            .ForMember(dest => dest.ChildItems, opt => opt.Ignore());
 
         // UnitOfMeasure mappings
         CreateMap<UnitOfMeasure, UomDto>();

@@ -59,6 +59,7 @@ public class GetTenderByIdQueryHandler : IRequestHandler<GetTenderByIdQuery, Ten
             OpeningDate = tender.OpeningDate,
             TechnicalWeight = tender.TechnicalWeight,
             CommercialWeight = tender.CommercialWeight,
+            PricingLevel = tender.PricingLevel,
             Status = tender.Status,
             PublishedAt = tender.PublishedAt,
             AwardedAt = tender.AwardedAt,

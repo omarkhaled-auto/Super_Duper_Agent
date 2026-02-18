@@ -1,0 +1,22 @@
+Old path exists: False
+New path exists: True
+agent_team.__file__: 
+  stderr: Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+ModuleNotFoundError: No module named 'agent_team'
+
+=== Try python.exe -m agent_team ===
+exit: 1
+stdout: 
+stderr: C:\Users\Omar Khaled\AppData\Local\Programs\Python\Python311\python.exe: No module named agent_team
+
+
+=== Claude CLI search ===
+  FOUND: /mnt/c/Users/Omar Khaled/AppData/Local/AnthropicClaude/claude.exe
+  FOUND: /mnt/c/Users/Omar Khaled/AppData/Local/AnthropicClaude/app-1.1.3189/claude.exe
+  FOUND: /mnt/c/Users/Omar Khaled/AppData/Local/AnthropicClaude/app-1.1.3363/claude.exe
+
+=== npm claude check ===
+node resolve: not found
+
+=== DONE ===

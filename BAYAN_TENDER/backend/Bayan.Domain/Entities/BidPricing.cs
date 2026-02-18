@@ -123,6 +123,12 @@ public class BidPricing : BaseEntity
     /// </summary>
     public string? Notes { get; set; }
 
+    /// <summary>
+    /// BOQ section ID for bill-level pricing.
+    /// Used when pricing level is Bill — bidder provides a lump sum per section (bill).
+    /// </summary>
+    public Guid? BoqSectionId { get; set; }
+
     // Navigation properties
     /// <summary>
     /// Bid submission associated with this pricing.
@@ -133,4 +139,9 @@ public class BidPricing : BaseEntity
     /// Matched BOQ item.
     /// </summary>
     public virtual BoqItem? BoqItem { get; set; }
+
+    /// <summary>
+    /// BOQ section for bill-level pricing.
+    /// </summary>
+    public virtual BoqSection? BoqSection { get; set; }
 }

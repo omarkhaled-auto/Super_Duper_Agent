@@ -13,11 +13,13 @@ import { FormsModule } from '@angular/forms';
 import { DialogModule } from 'primeng/dialog';
 import { CheckboxModule } from 'primeng/checkbox';
 import { DropdownModule } from 'primeng/dropdown';
+import { SelectButtonModule } from 'primeng/selectbutton';
 import { ButtonModule } from 'primeng/button';
 import { DividerModule } from 'primeng/divider';
+import { TagModule } from 'primeng/tag';
 
 import { BoqService } from '../../../../core/services/boq.service';
-import { BoqExportOptions } from '../../../../core/models/boq.model';
+import { BoqExportOptions, PricingLevel } from '../../../../core/models/boq.model';
 
 @Component({
   selector: 'app-boq-export-dialog',
@@ -28,8 +30,10 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
     DialogModule,
     CheckboxModule,
     DropdownModule,
+    SelectButtonModule,
     ButtonModule,
-    DividerModule
+    DividerModule,
+    TagModule
   ],
   template: `
     <p-dialog
@@ -37,12 +41,34 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
       [(visible)]="visible"
       (visibleChange)="visibleChange.emit($event)"
       [modal]="true"
-      [style]="{ width: '500px' }"
+      [style]="{ width: '560px' }"
       [contentStyle]="{ overflow: 'auto' }"
       [draggable]="false"
       [resizable]="false"
     >
       <div class="export-options">
+        <!-- Pricing Level Selection -->
+        <div class="option-section">
+          <h4>Export Mode</h4>
+          <p-selectButton
+            [options]="pricingLevelOptions"
+            [(ngModel)]="selectedPricingLevel"
+            (ngModelChange)="onPricingLevelChange($event)"
+            optionLabel="label"
+            optionValue="value"
+            styleClass="w-full"
+          ></p-selectButton>
+          <div class="export-mode-description">
+            <p-tag
+              [severity]="getModeSeverity()"
+              [value]="getModeDescription()"
+              [style]="{ 'white-space': 'normal', 'text-align': 'left', 'max-width': '100%' }"
+            ></p-tag>
+          </div>
+        </div>
+
+        <p-divider></p-divider>
+
         <!-- Column Selection -->
         <div class="option-section">
           <h4>Columns to Include</h4>
@@ -53,7 +79,7 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
                 [binary]="true"
                 inputId="col-section"
               ></p-checkbox>
-              <label for="col-section">Section</label>
+              <label for="col-section">Section / Bill</label>
             </div>
             <div class="checkbox-item">
               <p-checkbox
@@ -71,7 +97,7 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
               ></p-checkbox>
               <label for="col-description">Description</label>
             </div>
-            <div class="checkbox-item">
+            <div class="checkbox-item" *ngIf="selectedPricingLevel !== 'Bill'">
               <p-checkbox
                 [(ngModel)]="options.columns.quantity"
                 [binary]="true"
@@ -79,7 +105,7 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
               ></p-checkbox>
               <label for="col-quantity">Quantity</label>
             </div>
-            <div class="checkbox-item">
+            <div class="checkbox-item" *ngIf="selectedPricingLevel !== 'Bill'">
               <p-checkbox
                 [(ngModel)]="options.columns.uom"
                 [binary]="true"
@@ -95,7 +121,7 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
               ></p-checkbox>
               <label for="col-notes">Notes</label>
             </div>
-            <div class="checkbox-item">
+            <div class="checkbox-item" *ngIf="selectedPricingLevel === 'SubItem'">
               <p-checkbox
                 [(ngModel)]="options.columns.unitRate"
                 [binary]="true"
@@ -109,7 +135,11 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
                 [binary]="true"
                 inputId="col-totalAmount"
               ></p-checkbox>
-              <label for="col-totalAmount">Total Amount (Formula)</label>
+              <label for="col-totalAmount">
+                {{ selectedPricingLevel === 'Bill' ? 'Amount (Empty)' :
+                   selectedPricingLevel === 'Item' ? 'Rate (Empty)' :
+                   'Total Amount (Formula)' }}
+              </label>
             </div>
           </div>
         </div>
@@ -125,7 +155,11 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
               [binary]="true"
               inputId="opt-lock"
             ></p-checkbox>
-            <label for="opt-lock">Lock read-only columns (Item #, Description, Qty, UOM)</label>
+            <label for="opt-lock">
+              {{ selectedPricingLevel === 'Bill'
+                ? 'Lock read-only columns (Bill #, Description)'
+                : 'Lock read-only columns (Item #, Description, Qty, UOM)' }}
+            </label>
           </div>
         </div>
 
@@ -218,6 +252,20 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
       color: var(--bayan-slate-700, #334155);
     }
 
+    .export-mode-description {
+      margin-top: 0.75rem;
+    }
+
+    .export-mode-description :host ::ng-deep .p-tag {
+      font-size: 0.8125rem;
+      padding: 0.375rem 0.75rem;
+      line-height: 1.4;
+    }
+
+    :host ::ng-deep .p-selectbutton .p-button {
+      flex: 1;
+    }
+
     .dialog-footer {
       display: flex;
       justify-content: flex-end;
@@ -235,12 +283,14 @@ import { BoqExportOptions } from '../../../../core/models/boq.model';
 export class BoqExportDialogComponent implements OnChanges {
   @Input() visible = false;
   @Input() tenderId!: number;
+  @Input() pricingLevel: PricingLevel = 'SubItem';
 
   @Output() visibleChange = new EventEmitter<boolean>();
 
   private readonly boqService = inject(BoqService);
 
   isExporting = signal<boolean>(false);
+  selectedPricingLevel: PricingLevel = 'SubItem';
 
   options: BoqExportOptions = {
     columns: {
@@ -255,8 +305,15 @@ export class BoqExportDialogComponent implements OnChanges {
     },
     lockColumns: true,
     includeInstructions: true,
-    language: 'en'
+    language: 'en',
+    pricingLevel: 'SubItem'
   };
+
+  pricingLevelOptions = [
+    { label: 'Sub-Item', value: 'SubItem' as PricingLevel },
+    { label: 'Item', value: 'Item' as PricingLevel },
+    { label: 'Bill', value: 'Bill' as PricingLevel }
+  ];
 
   languageOptions = [
     { label: 'English', value: 'en' },
@@ -266,7 +323,59 @@ export class BoqExportDialogComponent implements OnChanges {
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['visible'] && this.visible) {
+      this.selectedPricingLevel = this.pricingLevel || 'SubItem';
       this.resetOptions();
+    }
+  }
+
+  onPricingLevelChange(level: PricingLevel): void {
+    this.selectedPricingLevel = level;
+    this.options.pricingLevel = level;
+    this.applyPricingLevelDefaults(level);
+  }
+
+  getModeSeverity(): 'info' | 'success' | 'warn' {
+    switch (this.selectedPricingLevel) {
+      case 'SubItem': return 'info';
+      case 'Item': return 'success';
+      case 'Bill': return 'warn';
+      default: return 'info';
+    }
+  }
+
+  getModeDescription(): string {
+    switch (this.selectedPricingLevel) {
+      case 'SubItem':
+        return 'Full detail: Units, Qty, Rate for each sub-item. Totals roll up to items and bills.';
+      case 'Item':
+        return 'Item-level: Items with rate column. Sub-items shown as read-only detail rows.';
+      case 'Bill':
+        return 'Bill-level: Bills with a single amount column. No item-level breakdown.';
+      default:
+        return '';
+    }
+  }
+
+  private applyPricingLevelDefaults(level: PricingLevel): void {
+    switch (level) {
+      case 'SubItem':
+        this.options.columns.quantity = true;
+        this.options.columns.uom = true;
+        this.options.columns.unitRate = true;
+        this.options.columns.totalAmount = true;
+        break;
+      case 'Item':
+        this.options.columns.quantity = true;
+        this.options.columns.uom = true;
+        this.options.columns.unitRate = false;
+        this.options.columns.totalAmount = true;
+        break;
+      case 'Bill':
+        this.options.columns.quantity = false;
+        this.options.columns.uom = false;
+        this.options.columns.unitRate = false;
+        this.options.columns.totalAmount = true;
+        break;
     }
   }
 
@@ -284,21 +393,25 @@ export class BoqExportDialogComponent implements OnChanges {
       },
       lockColumns: true,
       includeInstructions: true,
-      language: 'en'
+      language: 'en',
+      pricingLevel: this.selectedPricingLevel
     };
+    this.applyPricingLevelDefaults(this.selectedPricingLevel);
   }
 
   exportBoq(): void {
     this.isExporting.set(true);
+    this.options.pricingLevel = this.selectedPricingLevel;
 
-    this.boqService.exportToExcel(this.tenderId, this.options).subscribe({
+    this.boqService.exportToExcel(String(this.tenderId), this.options).subscribe({
       next: (blob) => {
         this.isExporting.set(false);
 
+        const levelSuffix = this.selectedPricingLevel.toLowerCase();
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `boq-template-${this.tenderId}-${new Date().toISOString().split('T')[0]}.xlsx`;
+        link.download = `boq-template-${this.tenderId}-${levelSuffix}-${new Date().toISOString().split('T')[0]}.xlsx`;
         link.click();
         window.URL.revokeObjectURL(url);
 

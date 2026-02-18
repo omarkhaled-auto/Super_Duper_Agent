@@ -1,0 +1,27 @@
+=== Windows Python paths ===
+  /mnt/c/Users/Omar Khaled/AppData/Local/Programs/Python/Python313/python.exe: Python 3.13.7 (exit 0)
+  /mnt/c/Users/Omar Khaled/AppData/Local/Programs/Python/Python311/python.exe: Python 3.11.9 (exit 0)
+
+=== Windows python.exe interop ===
+python.exe: Python 3.11.9 (exit 0)
+
+=== agent-team with Windows Python ===
+  /mnt/c/Users/Omar Khaled/AppData/Local/Programs/Python/Python313/python.exe: exit 1
+    stderr: C:\Users\Omar Khaled\AppData\Local\Programs\Python\Python313\python.exe: No module named agent_team
+
+  /mnt/c/Users/Omar Khaled/AppData/Local/Programs/Python/Python311/python.exe: exit 1
+    stderr: C:\Users\Omar Khaled\AppData\Local\Programs\Python\Python311\python.exe: No module named agent_team
+
+
+=== Claude CLI ===
+  /mnt/c/Users/Omar Khaled/.claude/local/claude.exe: NOT FOUND
+  /mnt/c/Users/Omar Khaled/AppData/Local/Programs/claude/claude.exe: NOT FOUND
+  /mnt/c/Program Files/claude/claude.exe: NOT FOUND
+
+npm check: [Errno 8] Exec format error: 'npm.cmd'
+
+=== API Key deep check ===
+User env: NOT SET
+Machine env: NOT SET
+
+=== DONE ===

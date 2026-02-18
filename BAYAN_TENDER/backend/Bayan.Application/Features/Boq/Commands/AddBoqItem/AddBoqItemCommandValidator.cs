@@ -65,6 +65,16 @@ public class AddBoqItemCommandValidator : AbstractValidator<AddBoqItemCommand>
         RuleFor(x => x.SortOrder)
             .GreaterThanOrEqualTo(0)
             .WithMessage("Sort order must be non-negative.");
+
+        RuleFor(x => x.ParentItemId)
+            .MustAsync(ParentItemExistsAsync)
+            .WithMessage("Parent item not found or does not belong to this tender.")
+            .When(x => x.ParentItemId.HasValue);
+
+        RuleFor(x => x.Quantity)
+            .Equal(0)
+            .WithMessage("Group items should have zero quantity.")
+            .When(x => x.IsGroup);
     }
 
     private async Task<bool> TenderExistsAsync(Guid tenderId, CancellationToken cancellationToken)
@@ -95,5 +105,15 @@ public class AddBoqItemCommandValidator : AbstractValidator<AddBoqItemCommand>
     {
         return await _context.UnitsOfMeasure
             .AnyAsync(u => u.Code == uom && u.IsActive, cancellationToken);
+    }
+
+    private async Task<bool> ParentItemExistsAsync(
+        AddBoqItemCommand command,
+        Guid? parentItemId,
+        CancellationToken cancellationToken)
+    {
+        if (!parentItemId.HasValue) return true;
+        return await _context.BoqItems
+            .AnyAsync(i => i.Id == parentItemId.Value && i.TenderId == command.TenderId, cancellationToken);
     }
 }

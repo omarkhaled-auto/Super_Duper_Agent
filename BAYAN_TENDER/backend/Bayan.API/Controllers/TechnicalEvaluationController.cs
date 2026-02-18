@@ -6,6 +6,7 @@ using Bayan.Application.Features.TechnicalEvaluation.DTOs;
 using Bayan.Application.Features.TechnicalEvaluation.Queries.GetBidderTechnicalDocuments;
 using Bayan.Application.Features.TechnicalEvaluation.Queries.GetEvaluationSetup;
 using Bayan.Application.Features.TechnicalEvaluation.Queries.GetPanelistAssignments;
+using Bayan.Application.Features.TechnicalEvaluation.Queries.GetAvailablePanelists;
 using Bayan.Application.Features.TechnicalEvaluation.Queries.GetPanelists;
 using Bayan.Application.Features.TechnicalEvaluation.Queries.GetPanelistScores;
 using Bayan.Application.Features.TechnicalEvaluation.Queries.GetTechnicalScoresSummary;
@@ -32,6 +33,29 @@ public class TechnicalEvaluationController : ControllerBase
     {
         _mediator = mediator;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Gets active internal users who can be assigned as panelists.
+    /// Excludes Bidder-role users and already-assigned panelists for this tender.
+    /// </summary>
+    /// <param name="tenderId">The tender's unique identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of available panelist candidates.</returns>
+    [HttpGet("available-panelists")]
+    [Authorize(Roles = BayanRoles.TechnicalEvaluationSetup)]
+    [ProducesResponseType(typeof(List<PanelistDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<PanelistDto>>> GetAvailablePanelists(
+        Guid tenderId,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Getting available panelists for tender {TenderId}", tenderId);
+
+        var result = await _mediator.Send(
+            new GetAvailablePanelistsQuery(tenderId),
+            cancellationToken);
+
+        return Ok(ApiResponse<List<PanelistDto>>.SuccessResponse(result));
     }
 
     /// <summary>

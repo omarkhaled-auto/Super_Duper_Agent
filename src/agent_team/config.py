@@ -422,6 +422,29 @@ class TechResearchConfig:
 
 
 @dataclass
+class AuditTeamConfig:
+    """Configuration for the audit-team parallel review system.
+
+    When ``enabled``, a 5-auditor team runs after milestone execution and/or
+    at end-of-run to verify requirements, code quality, wiring, tests, and
+    library API correctness.  Findings are scored and fix agents dispatched
+    for issues above the severity gate.
+    """
+
+    enabled: bool = True
+    requirements_auditor: bool = True
+    technical_auditor: bool = True
+    interface_auditor: bool = True
+    test_auditor: bool = True
+    library_auditor: bool = True
+    pass_threshold: float = 0.9      # 90% pass rate to skip fixes
+    severity_gate: str = "MEDIUM"    # Fix everything >= this severity
+    max_fix_rounds: int = 3          # Max fix-reaudit cycles
+    per_milestone: bool = True       # Run after each milestone (PRD+ mode)
+    end_of_run: bool = True          # Run after orchestration completes
+
+
+@dataclass
 class AgentTeamConfig:
     orchestrator: OrchestratorConfig = field(default_factory=OrchestratorConfig)
     depth: DepthConfig = field(default_factory=DepthConfig)
@@ -443,6 +466,7 @@ class AgentTeamConfig:
     database_scans: DatabaseScanConfig = field(default_factory=DatabaseScanConfig)
     post_orchestration_scans: PostOrchestrationScanConfig = field(default_factory=PostOrchestrationScanConfig)
     tech_research: TechResearchConfig = field(default_factory=TechResearchConfig)
+    audit_team: AuditTeamConfig = field(default_factory=AuditTeamConfig)
     # Agent keys use underscores (Python convention) in config files.
     # The SDK uses hyphens (e.g., "code-writer"). See agents.py for the mapping.
     agents: dict[str, AgentConfig] = field(default_factory=lambda: {
@@ -561,14 +585,22 @@ def apply_depth_quality_gating(
         _gate("browser_testing.enabled", False, config.browser_testing, "enabled")
         # Multi-pass fix cycles
         _gate("post_orchestration_scans.max_scan_fix_passes", 0, config.post_orchestration_scans, "max_scan_fix_passes")
+        # Audit team
+        _gate("audit_team.enabled", False, config.audit_team, "enabled")
 
     elif depth == "standard":
+        # Standard: audit team runs with 3 auditors (req, tech, test) and 2 fix rounds
+        _gate("audit_team.interface_auditor", False, config.audit_team, "interface_auditor")
+        _gate("audit_team.library_auditor", False, config.audit_team, "library_auditor")
+        _gate("audit_team.max_fix_rounds", 2, config.audit_team, "max_fix_rounds")
         # Standard: tech research enabled with reduced queries
         _gate("tech_research.max_queries_per_tech", 2, config.tech_research, "max_queries_per_tech")
         # Standard disables PRD reconciliation (expensive LLM call)
         _gate("integrity_scans.prd_reconciliation", False, config.integrity_scans, "prd_reconciliation")
 
     elif depth == "thorough":
+        # Thorough: all 5 auditors, max 2 fix rounds
+        _gate("audit_team.max_fix_rounds", 2, config.audit_team, "max_fix_rounds")
         # Thorough auto-enables E2E and bumps retries
         _gate("e2e_testing.enabled", True, config.e2e_testing, "enabled")
         _gate("e2e_testing.max_fix_retries", 2, config.e2e_testing, "max_fix_retries")
@@ -579,6 +611,8 @@ def apply_depth_quality_gating(
             _gate("browser_testing.max_fix_retries", 3, config.browser_testing, "max_fix_retries")
 
     elif depth == "exhaustive":
+        # Exhaustive: all 5 auditors, max 3 fix rounds (default)
+        _gate("audit_team.max_fix_rounds", 3, config.audit_team, "max_fix_rounds")
         # Exhaustive: max tech research queries
         _gate("tech_research.max_queries_per_tech", 6, config.tech_research, "max_queries_per_tech")
         # Exhaustive: full E2E + highest retries
@@ -1248,6 +1282,45 @@ def _dict_to_config(data: dict[str, Any]) -> tuple[AgentTeamConfig, set[str]]:
             raise ValueError(
                 f"Invalid tech_research.max_expanded_queries: "
                 f"{cfg.tech_research.max_expanded_queries}. Must be >= 0"
+            )
+
+    if "audit_team" in data and isinstance(data["audit_team"], dict):
+        at = data["audit_team"]
+        for key in ("enabled", "max_fix_rounds", "per_milestone", "end_of_run",
+                    "requirements_auditor", "technical_auditor", "interface_auditor",
+                    "test_auditor", "library_auditor", "pass_threshold", "severity_gate"):
+            if key in at:
+                user_overrides.add(f"audit_team.{key}")
+        severity_gate = at.get("severity_gate", cfg.audit_team.severity_gate)
+        if severity_gate not in ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"):
+            raise ValueError(
+                f"Invalid audit_team.severity_gate: {severity_gate!r}. "
+                f"Must be one of: CRITICAL, HIGH, MEDIUM, LOW, INFO"
+            )
+        cfg.audit_team = AuditTeamConfig(
+            enabled=at.get("enabled", cfg.audit_team.enabled),
+            requirements_auditor=at.get("requirements_auditor", cfg.audit_team.requirements_auditor),
+            technical_auditor=at.get("technical_auditor", cfg.audit_team.technical_auditor),
+            interface_auditor=at.get("interface_auditor", cfg.audit_team.interface_auditor),
+            test_auditor=at.get("test_auditor", cfg.audit_team.test_auditor),
+            library_auditor=at.get("library_auditor", cfg.audit_team.library_auditor),
+            pass_threshold=float(at.get("pass_threshold", cfg.audit_team.pass_threshold)),
+            severity_gate=severity_gate,
+            max_fix_rounds=at.get("max_fix_rounds", cfg.audit_team.max_fix_rounds),
+            per_milestone=at.get("per_milestone", cfg.audit_team.per_milestone),
+            end_of_run=at.get("end_of_run", cfg.audit_team.end_of_run),
+        )
+        # Validate: pass_threshold in [0.0, 1.0]
+        if not (0.0 <= cfg.audit_team.pass_threshold <= 1.0):
+            raise ValueError(
+                f"Invalid audit_team.pass_threshold: {cfg.audit_team.pass_threshold}. "
+                f"Must be between 0.0 and 1.0"
+            )
+        # Validate: max_fix_rounds >= 0
+        if cfg.audit_team.max_fix_rounds < 0:
+            raise ValueError(
+                f"Invalid audit_team.max_fix_rounds: {cfg.audit_team.max_fix_rounds}. "
+                f"Must be >= 0"
             )
 
     if "agents" in data:

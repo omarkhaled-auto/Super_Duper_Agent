@@ -107,3 +107,28 @@ display:
   show_tools: true
   show_fleet_composition: true
   show_convergence_status: true
+
+# Run4-specific configuration (parsed by Run4Config, ignored by AgentTeamConfig)
+run4:
+  build1_project_root: "C:/Projects/super-team"
+  build2_project_root: "C:/Projects/agent-team-v15"
+  build3_project_root: "C:/Projects/super-team"
+  output_dir: ".run4"
+  compose_project_name: "super-team-run4"
+  docker_compose_files:
+    - "docker/docker-compose.infra.yml"
+    - "docker/docker-compose.build1.yml"
+    - "docker/docker-compose.traefik.yml"
+  health_check_timeout_s: 120
+  health_check_interval_s: 3.0
+  mcp_startup_timeout_ms: 30000
+  mcp_tool_timeout_ms: 60000
+  mcp_first_start_timeout_ms: 120000
+  max_concurrent_builders: 3
+  builder_timeout_s: 1800
+  builder_depth: "thorough"
+  max_fix_passes: 5
+  fix_effectiveness_floor: 0.30
+  regression_rate_ceiling: 0.25
+  max_budget_usd: 100.0
+  sample_prd_path: "tests/run4/fixtures/sample_prd.md"

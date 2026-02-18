@@ -86,6 +86,13 @@ public class TenderConfiguration : IEntityTypeConfiguration<Tender>
             .HasDefaultValue(60)
             .IsRequired();
 
+        builder.Property(e => e.PricingLevel)
+            .HasColumnName("pricing_level")
+            .HasMaxLength(20)
+            .HasConversion<string>()
+            .HasDefaultValueSql("'SubItem'")
+            .IsRequired();
+
         builder.Property(e => e.Status)
             .HasColumnName("status")
             .HasMaxLength(50)

@@ -1,0 +1,28 @@
+=== Search for claude executable ===
+npm global: []
+node_modules: []
+node resolve: 
+
+=== Virtual environments ===
+  /mnt/c/Projects/claude-agent-team/.venv: NOT FOUND
+  /mnt/c/Projects/claude-agent-team/venv: NOT FOUND
+  /mnt/c/Projects/claude-agent-team/.env: NOT FOUND
+  /mnt/c/Users/Omar Khaled/OneDrive/Desktop/claude-agent-team/.venv: NOT FOUND
+  /mnt/c/Users/Omar Khaled/OneDrive/Desktop/claude-agent-team/venv: NOT FOUND
+
+=== pip packages (Python 3.11) ===
+  Total packages: 213
+  Relevant: ['agent-team                               0.1.0           C:\\Users\\Omar Khaled\\OneDrive\\Desktop\\claude-agent-team', 'claude-agent-sdk                         0.1.27', 'opentelemetry-sdk                        1.37.0']
+
+=== pip packages (Python 3.13) ===
+  Total packages: 3
+  Relevant: []
+
+=== pip packages (WSL Python 3.12) ===
+  Total packages: 1
+  Relevant: []
+
+=== DeepAgent (from PATH) ===
+  Contents: ['deepagent-app', 'deepagent-app.cmd', 'deepagent.cmd']
+
+=== DONE ===

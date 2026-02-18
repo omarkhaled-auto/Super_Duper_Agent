@@ -68,6 +68,16 @@ public class BoqColumnMappingService : IBoqColumnMappingService
         {
             @"^spec\.?$", @"^specification$", @"^spec\s*ref\.?$",
             @"^technical\s*spec\.?$", @"^standard$"
+        },
+        [BoqField.BillNumber] = new[]
+        {
+            @"^bill\s*no\.?$", @"^bill\s*number$", @"^bill\s*#$", @"^bill$",
+            @"^bill\s*ref\.?$"
+        },
+        [BoqField.SubItemLabel] = new[]
+        {
+            @"^sub[-\s]?item$", @"^sub[-\s]?item\s*label$", @"^sub[-\s]?item\s*no\.?$",
+            @"^sub[-\s]?label$", @"^sub[-\s]?item\s*ref\.?$"
         }
     };
 

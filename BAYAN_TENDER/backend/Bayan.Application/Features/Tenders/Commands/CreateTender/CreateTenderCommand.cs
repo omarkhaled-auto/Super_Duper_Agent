@@ -75,6 +75,11 @@ public class CreateTenderCommand : IRequest<TenderDto>
     public int CommercialWeight { get; set; } = 60;
 
     /// <summary>
+    /// Pricing level for the BOQ hierarchy.
+    /// </summary>
+    public PricingLevel PricingLevel { get; set; } = PricingLevel.SubItem;
+
+    /// <summary>
     /// Evaluation criteria for this tender.
     /// </summary>
     public List<CreateEvaluationCriterionDto> EvaluationCriteria { get; set; } = new();

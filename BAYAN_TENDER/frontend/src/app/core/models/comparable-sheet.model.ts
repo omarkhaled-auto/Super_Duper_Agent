@@ -89,7 +89,8 @@ export interface BidderCellData {
 /**
  * Row types in the comparable sheet
  */
-export type RowType = 'section_header' | 'item' | 'section_subtotal' | 'grand_total' | 'rank';
+export type RowType = 'section_header' | 'item' | 'section_subtotal' | 'grand_total' | 'rank'
+  | 'bill_header' | 'item_group_header' | 'item_subtotal' | 'bill_subtotal';
 
 /**
  * Item row in the comparable sheet
@@ -145,6 +146,7 @@ export interface ComparableSheet {
   tenderReference: string;
   baseCurrency: string;
   generatedAt: Date | string;
+  pricingLevel?: 'Bill' | 'Item' | 'SubItem';
 
   // Bidders (columns)
   bidders: BidderColumn[];

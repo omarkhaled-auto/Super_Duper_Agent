@@ -74,6 +74,12 @@ public class UpdateTenderDto
     public int CommercialWeight { get; set; }
 
     /// <summary>
+    /// Pricing level for the BOQ hierarchy.
+    /// Determines at which level bidders must provide prices.
+    /// </summary>
+    public PricingLevel PricingLevel { get; set; } = PricingLevel.SubItem;
+
+    /// <summary>
     /// Evaluation criteria for this tender.
     /// </summary>
     public List<UpdateEvaluationCriterionDto> EvaluationCriteria { get; set; } = new();

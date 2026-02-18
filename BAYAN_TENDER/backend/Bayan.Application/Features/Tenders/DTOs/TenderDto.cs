@@ -53,6 +53,11 @@ public class TenderDto
     public TenderStatus Status { get; set; }
 
     /// <summary>
+    /// Pricing level for the BOQ hierarchy.
+    /// </summary>
+    public PricingLevel PricingLevel { get; set; }
+
+    /// <summary>
     /// Deadline for bid submissions.
     /// </summary>
     public DateTime SubmissionDeadline { get; set; }

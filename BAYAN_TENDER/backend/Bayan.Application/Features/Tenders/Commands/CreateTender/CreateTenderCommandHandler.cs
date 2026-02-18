@@ -56,6 +56,7 @@ public class CreateTenderCommandHandler : IRequestHandler<CreateTenderCommand, T
             OpeningDate = request.OpeningDate,
             TechnicalWeight = request.TechnicalWeight,
             CommercialWeight = request.CommercialWeight,
+            PricingLevel = request.PricingLevel,
             Status = TenderStatus.Draft,
             CreatedBy = _currentUserService.UserId,
             CreatedAt = DateTime.UtcNow
@@ -103,7 +104,8 @@ public class CreateTenderCommandHandler : IRequestHandler<CreateTenderCommand, T
             SubmissionDeadline = tender.SubmissionDeadline,
             BidderCount = 0,
             BidCount = 0,
-            CreatedAt = tender.CreatedAt
+            CreatedAt = tender.CreatedAt,
+            PricingLevel = tender.PricingLevel
         };
     }
 }

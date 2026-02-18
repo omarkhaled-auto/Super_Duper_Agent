@@ -79,7 +79,24 @@ from .display import (
     print_warning,
 )
 from .interviewer import _detect_scope, run_interview
-from .mcp_servers import get_mcp_servers, get_orchestrator_st_tool_name, get_research_tools
+from .mcp_servers import (
+    _BASE_TOOLS,
+    get_mcp_servers,
+    get_orchestrator_st_tool_name,
+    get_research_tools,
+    recompute_allowed_tools,
+)
+from .audit_team import (
+    AuditFinding,
+    AuditTeamReport,
+    build_audit_fix_prompt,
+    filter_findings_for_fix,
+    get_active_auditors,
+    get_auditor_prompt,
+    group_findings_by_file,
+    parse_all_audit_reports,
+    score_audit_findings,
+)
 from .prd_chunking import (
     build_prd_index,
     create_prd_chunks,
@@ -307,12 +324,7 @@ def _build_options(
         "permission_mode": config.orchestrator.permission_mode,
         "max_turns": config.orchestrator.max_turns,
         "agents": agent_defs,
-        "allowed_tools": [
-            "Read", "Write", "Edit", "Bash", "Glob", "Grep",
-            "Task", "WebSearch", "WebFetch",
-        ] + get_research_tools(mcp_servers) + (
-            [get_orchestrator_st_tool_name()] if "sequential_thinking" in mcp_servers else []
-        ),
+        "allowed_tools": recompute_allowed_tools(_BASE_TOOLS, mcp_servers),
     }
 
     if config.orchestrator.max_thinking_tokens is not None:
@@ -1433,6 +1445,38 @@ async def _run_prd_milestones(
                             f"ratio: {health_report.convergence_ratio:.2f}."
                         )
 
+            # Per-milestone audit-team review (after review recovery, before handoff)
+            if config.audit_team.enabled and config.audit_team.per_milestone:
+                try:
+                    ms_req_path_audit = str(
+                        milestones_dir / milestone.id / config.convergence.requirements_file
+                    )
+                    audit_cost, audit_report = await _run_audit_team(
+                        cwd=cwd,
+                        config=config,
+                        depth=depth,
+                        constraints=constraints,
+                        intervention=intervention,
+                        task_text=task,
+                        requirements_path=ms_req_path_audit,
+                        scope_label=f"milestone:{milestone.id}",
+                    )
+                    total_cost += audit_cost
+                    if _current_state:
+                        _current_state.artifacts[f"audit_{milestone.id}_health"] = audit_report.health
+                        _current_state.artifacts[f"audit_{milestone.id}_score"] = f"{audit_report.overall_score:.2f}"
+                    if audit_report.health == "critical":
+                        print_warning(
+                            f"Milestone {milestone.id} audit-team health: critical "
+                            f"(score={audit_report.overall_score:.2f}). "
+                            f"FAIL={audit_report.total_fail}, PARTIAL={audit_report.total_partial}."
+                        )
+                except Exception as exc:
+                    print_warning(
+                        f"Milestone {milestone.id} audit-team failed: {exc}\n"
+                        f"{traceback.format_exc()}"
+                    )
+
             # Generate/update MILESTONE_HANDOFF.md (after review recovery, before wiring check)
             if config.tracking_documents.milestone_handoff:
                 try:
@@ -2369,8 +2413,9 @@ async def _run_browser_workflow_executor(
     # Build options with Playwright MCP servers
     browser_servers = get_browser_testing_servers(config)
     options = _build_options(config, cwd, constraints=constraints, task_text=task_text, depth=depth, backend=_backend)
-    # Override MCP servers with browser testing servers
+    # Override MCP servers with browser testing servers and recompute allowed tools
     options.mcp_servers = browser_servers
+    options.allowed_tools = recompute_allowed_tools(_BASE_TOOLS, browser_servers)
 
     phase_costs: dict[str, float] = {}
     cost = 0.0
@@ -2492,7 +2537,9 @@ async def _run_browser_regression_sweep(
 
     browser_servers = get_browser_testing_servers(config)
     options = _build_options(config, cwd, constraints=constraints, task_text=task_text, depth=depth, backend=_backend)
+    # Override MCP servers with browser testing servers and recompute allowed tools
     options.mcp_servers = browser_servers
+    options.allowed_tools = recompute_allowed_tools(_BASE_TOOLS, browser_servers)
 
     phase_costs: dict[str, float] = {}
     cost = 0.0
@@ -3593,6 +3640,255 @@ async def _run_review_only(
         cost = await _process_response(client, config, phase_costs, current_phase="review_recovery")
         cost += await _drain_interventions(client, intervention, config, phase_costs)
     return cost
+
+
+async def _run_audit_team(
+    cwd: str,
+    config: AgentTeamConfig,
+    depth: str = "standard",
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    task_text: str | None = None,
+    requirements_path: str | None = None,
+    scope_label: str = "end-of-run",
+) -> tuple[float, AuditTeamReport]:
+    """Run the 5-auditor parallel audit team and return (cost, report).
+
+    Deploys up to 5 specialized auditors in parallel, each writing findings
+    to a separate file.  A scorer aggregates findings.  If the health is
+    "needs-fixes" or "critical", fix agents are dispatched, then relevant
+    auditors re-run (up to ``config.audit_team.max_fix_rounds`` cycles).
+
+    Parameters
+    ----------
+    scope_label : str
+        Label for logging: "end-of-run" or "milestone:<id>".
+    requirements_path : str | None
+        Explicit path to REQUIREMENTS.md.  ``None`` uses top-level default.
+    """
+    total_cost = 0.0
+    auditors = get_active_auditors(config, depth)
+    if not auditors:
+        return 0.0, AuditTeamReport(health="passed")
+
+    req_path = requirements_path or str(
+        Path(cwd) / config.convergence.requirements_dir / config.convergence.requirements_file
+    )
+
+    # Create audit output directory — scope-aware to prevent cross-milestone overwriting
+    if scope_label.startswith("milestone:"):
+        ms_id = scope_label.split(":", 1)[1]
+        audit_dir = Path(cwd) / config.convergence.requirements_dir / "milestones" / ms_id / "audit-reports"
+    else:
+        audit_dir = Path(cwd) / config.convergence.requirements_dir / "audit-reports"
+    audit_dir.mkdir(parents=True, exist_ok=True)
+
+    print_info(
+        f"[Audit-Team {scope_label}] Deploying {len(auditors)} auditors: {', '.join(auditors)}"
+    )
+
+    report = AuditTeamReport(auditors_deployed=list(auditors))
+
+    # Nested function defined once outside the loop (avoids per-iteration recreation)
+    async def _run_single_auditor(auditor_name: str) -> float:
+        """Run a single auditor session. Returns cost."""
+        output_file = str(audit_dir / f"{auditor_name}_audit.md")
+        prompt = get_auditor_prompt(auditor_name, req_path, output_file)
+
+        # Library auditor needs Context7 MCP
+        if auditor_name == "library":
+            from .mcp_servers import get_context7_only_servers
+            lib_servers = get_context7_only_servers(config)
+            if not lib_servers:
+                print_warning(
+                    f"[Audit-Team] Library auditor skipped — Context7 MCP not available."
+                )
+                return 0.0
+            opts = _build_options(
+                config, cwd, constraints=constraints,
+                task_text=task_text, depth=depth, backend=_backend,
+            )
+            if lib_servers:
+                opts.mcp_servers = lib_servers
+                opts.allowed_tools = recompute_allowed_tools(_BASE_TOOLS, lib_servers)
+        else:
+            opts = _build_options(
+                config, cwd, constraints=constraints,
+                task_text=task_text, depth=depth, backend=_backend,
+            )
+
+        phase_costs: dict[str, float] = {}
+        cost = 0.0
+        try:
+            async with ClaudeSDKClient(options=opts) as client:
+                await client.query(prompt)
+                cost = await _process_response(
+                    client, config, phase_costs,
+                    current_phase=f"audit_{auditor_name}",
+                )
+                if intervention:
+                    cost += await _drain_interventions(
+                        client, intervention, config, phase_costs,
+                    )
+        except Exception as exc:
+            print_warning(f"Auditor '{auditor_name}' failed: {exc}")
+        return cost
+
+    # Track which auditors to run each cycle (initially all, then only those with issues)
+    auditors_to_run = list(auditors)
+
+    for fix_round in range(config.audit_team.max_fix_rounds + 1):
+        # --- Phase 1: Run auditors in parallel (selective after first round) ---
+        tasks = [_run_single_auditor(name) for name in auditors_to_run]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for r in results:
+            if isinstance(r, (int, float)):
+                total_cost += r
+            elif isinstance(r, Exception):
+                print_warning(f"Auditor exception: {r}")
+
+        # --- Phase 2: Parse and score ---
+        all_findings = parse_all_audit_reports(str(audit_dir))
+        report = score_audit_findings(
+            all_findings,
+            pass_threshold=config.audit_team.pass_threshold,
+            auditors_deployed=list(auditors),
+        )
+        report.fix_rounds_used = fix_round
+
+        print_info(
+            f"[Audit-Team {scope_label}] Round {fix_round}: "
+            f"score={report.overall_score:.2f}, health={report.health}, "
+            f"PASS={report.total_pass} FAIL={report.total_fail} PARTIAL={report.total_partial}"
+        )
+
+        # --- Phase 3: Check if done ---
+        if report.health == "passed":
+            break
+        if fix_round >= config.audit_team.max_fix_rounds:
+            break
+
+        # --- Phase 4: Fix dispatch ---
+        fixable = filter_findings_for_fix(
+            report.findings,
+            severity_gate=config.audit_team.severity_gate,
+        )
+        if not fixable:
+            print_info(f"[Audit-Team {scope_label}] No fixable findings above severity gate.")
+            break
+
+        # Selective re-audit: only re-run auditors that reported fixable findings
+        auditors_to_run = list({f.auditor for f in fixable} & set(auditors))
+        if not auditors_to_run:
+            auditors_to_run = list(auditors)  # Fallback: re-run all
+
+        fix_cost = await _run_audit_fix(
+            cwd=cwd,
+            config=config,
+            findings=fixable,
+            constraints=constraints,
+            intervention=intervention,
+            task_text=task_text,
+            depth=depth,
+            scope_label=scope_label,
+            fix_round=fix_round,
+        )
+        total_cost += fix_cost
+
+    return total_cost, report
+
+
+async def _run_audit_fix(
+    cwd: str,
+    config: AgentTeamConfig,
+    findings: list[AuditFinding],
+    constraints: list | None = None,
+    intervention: "InterventionQueue | None" = None,
+    task_text: str | None = None,
+    depth: str = "standard",
+    scope_label: str = "end-of-run",
+    fix_round: int = 0,
+) -> float:
+    """Dispatch fix agents for audit findings grouped by file scope.
+
+    Groups findings to avoid conflicting edits, then runs a fix session
+    per group.  Fix groups run concurrently via ``asyncio.gather``.
+    Returns total cost.
+    """
+    if not findings:
+        return 0.0
+
+    groups = group_findings_by_file(findings)
+    print_info(
+        f"[Audit-Team {scope_label}] Fixing {len(findings)} issues "
+        f"across {len(groups)} file group(s)"
+    )
+
+    # Build fix cycle log section if enabled
+    fix_cycle_section = ""
+    if config.tracking_documents.fix_cycle_log:
+        try:
+            from .tracking_documents import (
+                FIX_CYCLE_LOG_INSTRUCTIONS,
+                build_fix_cycle_entry,
+                initialize_fix_cycle_log,
+            )
+            req_dir_str = str(Path(cwd) / config.convergence.requirements_dir)
+            initialize_fix_cycle_log(req_dir_str)
+            cycle_entry = build_fix_cycle_entry(
+                phase="Audit-Team",
+                cycle_number=fix_round + 1,
+                failures=[
+                    f"{f.file_path}:{f.line_number} — [{f.severity}] {f.description}"
+                    for f in findings[:20]
+                ],
+            )
+            fix_cycle_section = (
+                f"\n\n{FIX_CYCLE_LOG_INSTRUCTIONS.format(requirements_dir=req_dir_str)}\n\n"
+                f"Current fix cycle entry:\n{cycle_entry}\n"
+            )
+        except Exception:
+            pass
+
+    total_cost = 0.0
+
+    # Run fix groups concurrently (each targets different files, no conflicts)
+    async def _fix_file_group(file_key: str, file_findings: list[AuditFinding]) -> float:
+        fix_prompt = build_audit_fix_prompt(file_findings, fix_cycle_log=fix_cycle_section)
+        options = _build_options(
+            config, cwd, constraints=constraints,
+            task_text=task_text, depth=depth, backend=_backend,
+        )
+        phase_costs: dict[str, float] = {}
+        cost = 0.0
+
+        try:
+            async with ClaudeSDKClient(options=options) as client:
+                await client.query(fix_prompt)
+                cost = await _process_response(
+                    client, config, phase_costs,
+                    current_phase="audit_fix",
+                )
+                if intervention:
+                    cost += await _drain_interventions(
+                        client, intervention, config, phase_costs,
+                    )
+        except Exception as exc:
+            print_warning(f"Audit fix for '{file_key}' failed: {exc}")
+
+        return cost
+
+    fix_tasks = [
+        _fix_file_group(fk, ff) for fk, ff in groups.items()
+    ]
+    results = await asyncio.gather(*fix_tasks, return_exceptions=True)
+    for r in results:
+        if isinstance(r, (int, float)):
+            total_cost += r
+        elif isinstance(r, Exception):
+            print_warning(f"Audit fix group exception: {r}")
+
+    return total_cost
 
 
 def _run_contract_generation(
@@ -4987,6 +5283,55 @@ def main() -> None:
                     _current_state.convergence_cycles = convergence_report.review_cycles
         except Exception as exc:
             print_warning(f"Review recovery pass failed: {exc}")
+
+    # -------------------------------------------------------------------
+    # End-of-run: Audit-Team parallel review (after review recovery)
+    # -------------------------------------------------------------------
+    audit_report: AuditTeamReport | None = None
+    if config.audit_team.enabled and config.audit_team.end_of_run:
+        # Resume guard — skip if already completed in a previous run
+        if _current_state and "audit_team" in _current_state.completed_phases:
+            print_info("Audit-team already completed in previous run, skipping.")
+        else:
+            if _current_state:
+                _current_state.current_phase = "audit_team"
+            try:
+                audit_cost, audit_report = asyncio.run(_run_audit_team(
+                    cwd=cwd,
+                    config=config,
+                    depth=depth,
+                    constraints=constraints,
+                    intervention=intervention,
+                    task_text=effective_task,
+                    scope_label="end-of-run",
+                ))
+                if _current_state:
+                    _current_state.total_cost += audit_cost
+                    _current_state.audit_score = audit_report.overall_score
+                    _current_state.audit_health = audit_report.health
+                    _current_state.audit_fix_rounds = audit_report.fix_rounds_used
+                if audit_report.health == "passed":
+                    print_success(
+                        f"Audit-team passed: score={audit_report.overall_score:.2f}, "
+                        f"{audit_report.total_pass} pass, {audit_report.total_fail} fail."
+                    )
+                elif audit_report.health == "critical":
+                    print_warning(
+                        f"Audit-team CRITICAL: score={audit_report.overall_score:.2f}, "
+                        f"{audit_report.total_fail} failures after {audit_report.fix_rounds_used} fix rounds."
+                    )
+                else:
+                    print_info(
+                        f"Audit-team needs-fixes: score={audit_report.overall_score:.2f}, "
+                        f"{audit_report.total_fail} failures after {audit_report.fix_rounds_used} fix rounds."
+                    )
+                # NOTE: "critical" health is intentionally NOT marked complete.
+                # On resume, the audit will re-run to give another chance after
+                # potential manual or intermediate fixes between runs.
+                if _current_state and audit_report and audit_report.health in ("passed", "needs-fixes"):
+                    _current_state.completed_phases.append("audit_team")
+            except Exception as exc:
+                print_warning(f"Audit-team failed: {exc}\n{traceback.format_exc()}")
 
     # -------------------------------------------------------------------
     # Compute scan scope based on depth for post-orchestration scans
