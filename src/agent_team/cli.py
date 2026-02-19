@@ -4349,9 +4349,14 @@ def _detect_gemini_cli() -> bool:
 
 def _check_claude_cli_auth() -> bool:
     """Check if claude CLI is installed and authenticated."""
+    import shutil
+
+    claude_cmd = shutil.which("claude")
+    if not claude_cmd:
+        return False
     try:
         result = subprocess.run(
-            ["claude", "--version"],
+            [claude_cmd, "--version"],
             capture_output=True,
             timeout=5,
         )
@@ -7046,6 +7051,9 @@ def main() -> None:
 
     # -------------------------------------------------------------------
     # Clear STATE.json on successful completion
+    # Skip clearing when running as a subprocess builder (AGENT_TEAM_KEEP_STATE=1)
+    # so the parent orchestrator can read the final state.
     # -------------------------------------------------------------------
-    from .state import clear_state
-    clear_state()
+    if not os.environ.get("AGENT_TEAM_KEEP_STATE"):
+        from .state import clear_state
+        clear_state()

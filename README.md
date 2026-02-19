@@ -1542,6 +1542,232 @@ For detailed upgrade documentation with all fixes, hardening passes, review roun
 
 ---
 
+## v15.2 Changelog Highlights
+
+### Summary
+
+Version 15.2 represents the culmination of 13 major upgrade cycles (v2.0 through v13.0) that transformed agent-team from a basic orchestration tool into a production-certified multi-agent system with 5300+ tests and 15 post-orchestration quality scan layers.
+
+### Key Additions Since v1.0
+
+| Area | What Changed |
+|------|-------------|
+| **Post-Orchestration Pipeline** | 15-step pipeline with depth-gated scans: mock data, UI compliance, deployment config, asset references, PRD reconciliation, database integrity (3 scans), API contract verification, silent data loss, endpoint XREF, E2E testing (backend + frontend), browser MCP testing |
+| **Quality Scan Patterns** | 40+ regex patterns across 9 categories: MOCK-001..008, UI-001..004, DEPLOY-001..004, ASSET-001..003, DB-001..008, API-001..004, SDL-001, XREF-001..002, E2E-001..007 |
+| **Depth-Gated Execution** | Entire post-orchestration pipeline is depth-aware. Quick skips all scans. Standard scopes to changed files (git diff). Thorough/exhaustive auto-enable E2E and browser testing |
+| **Browser MCP Testing** | Playwright-based visual testing: workflow execution, screenshot capture, regression sweeps, fix loops. Triple-gated (config + depth + E2E pass rate) |
+| **API Contract Verification** | 3-layer system (prevention + detection + guarantee) catches DTO field mismatches. PascalCase-aware for C# properties |
+| **Endpoint Cross-Reference** | Frontend-backend endpoint matching across .NET, Express, and Python backends. 3-level matching with function-call URL filtering |
+| **Database Integrity Scans** | Dual ORM type consistency, default value validation, relationship completeness across C#, TypeScript, and Python |
+| **Tracking Documents** | E2E coverage matrix, fix cycle log, milestone handoff -- structured agent memory between phases |
+| **Drawspace Critical Fixes** | h2-h4 header resilience, infinite loop guard, recovery prompt de-escalation, MOCK-008 component-level detection |
+| **Test Count** | 3 tests (v1.0) to 5300+ tests (v15.2), with 100% production ready certification at v12.3 |
+
+---
+
+## Windows SDK Patch (WinError 206)
+
+On Windows, the `claude_agent_sdk` passes `--system-prompt` (~44K chars) and `--agents` (~110K chars) as CLI arguments, which exceeds the Windows `CreateProcess` limit of 32,767 characters.
+
+### Symptoms
+
+```
+OSError: [WinError 206] The filename or extension is too long
+```
+
+This occurs when the orchestrator spawns agent subprocesses, because the combined CLI argument length exceeds the Windows limit.
+
+### Fix
+
+Apply a temp file optimization to `subprocess_cli.py` in the installed SDK package. The fix writes any flag value >4K characters to a temporary file and passes a `@tempfile` reference instead of the raw value.
+
+**File to patch:**
+```
+<python-install>/Lib/site-packages/claude_agent_sdk/_internal/transport/subprocess_cli.py
+```
+
+**Typical location:**
+```
+C:\Users\<user>\AppData\Local\Programs\Python\Python312\Lib\site-packages\claude_agent_sdk\_internal\transport\subprocess_cli.py
+```
+
+**After patching:**
+```bash
+# Delete the cached bytecode to force recompilation
+del __pycache__\subprocess_cli.cpython-312.pyc
+```
+
+### Patch Logic
+
+The patch modifies the argument construction to detect oversized values and redirect them:
+
+1. Before building the subprocess command, check each flag value length
+2. If any value exceeds 4,096 characters, write it to a temp file
+3. Replace the inline value with `@<tempfile_path>`
+4. The SDK's argument parser reads files prefixed with `@`
+
+This patch is required for all Windows users. Linux and macOS are not affected due to higher process argument limits.
+
+---
+
+## Audit System with 6 Auditors
+
+The production audit system (used in v3.2 and v7.0) employs 6 specialized auditor agents that independently review the codebase:
+
+| Auditor | Focus Area | What It Checks |
+|---------|-----------|---------------|
+| **Requirements Auditor** | Spec fidelity | Every REQ-xxx, TECH-xxx, WIRE-xxx checklist item matches code |
+| **Technical Auditor** | Code quality | Architecture patterns, error handling, type safety, security |
+| **Interface Auditor** | API contracts | Endpoint signatures, request/response schemas, status codes |
+| **Test Auditor** | Test coverage | Test existence, assertion quality, edge case coverage |
+| **Library Auditor** | Dependencies | Version pinning, vulnerability scanning, license compliance |
+| **Security Auditor** | OWASP checks | Input validation, authentication, authorization, credential scanning |
+
+### Audit Process
+
+1. Each auditor independently reviews the codebase and produces a report
+2. Reports are scored on a 0.0-1.0 scale
+3. Findings are classified by severity: CRITICAL, HIGH, MEDIUM, LOW
+4. A fix agent attempts to resolve HIGH+ findings (configurable via `severity_gate`)
+5. Maximum fix rounds: 2 (configurable via `max_fix_rounds`) -- Round 3 has been observed to cause regressions
+
+### Audit Configuration (for agent-team runs)
+
+```yaml
+# In config.yaml for audit-team orchestration
+audit_team:
+  max_fix_rounds: 2          # 2 rounds is the sweet spot; 3 causes regressions
+  severity_gate: HIGH        # Skip MEDIUM/LOW fixes to save cost
+```
+
+### Audit vs Health Gate
+
+The audit system and the convergence health gate can disagree. The health gate checks review fleet convergence (checkbox counts), while the audit checks code quality. It is possible for:
+
+- Health gate = FAILED + Audit = PASSED (convergence issues but code quality is good)
+- Health gate = PASSED + Audit = FAILED (all checkboxes done but code has quality issues)
+
+---
+
+## Scanner Exclusion Configuration
+
+Several scanners can produce false positives when scanning virtual environment directories, vendored dependencies, or coverage tool output. Use these configuration flags to suppress known false positive patterns:
+
+### Known False Positive Sources
+
+| Scanner | False Positive Source | Description |
+|---------|---------------------|-------------|
+| **Mock Data Scan** | `.venv/` files | `charset_normalizer` uses `.format()` patterns that match RxJS `of()` regex |
+| **Default Value Scan** | `.venv/` files | Same `charset_normalizer` false positive as mock data scan |
+| **UI Compliance Scan** | `.venv/` coverage.py CSS | Coverage tool CSS files trigger font/spacing rules |
+
+### Recommended Exclusion Settings
+
+```yaml
+# In config.yaml
+post_orchestration_scans:
+  mock_data_scan: false       # Disable if .venv/ false positives are problematic
+  ui_compliance_scan: false   # Disable if coverage.py CSS triggers violations
+
+database_scans:
+  default_value_scan: false   # Disable if .venv/ false positives are problematic
+
+codebase_map:
+  exclude_patterns:           # Directories to exclude from scanning
+    - ".venv"
+    - "node_modules"
+    - "__pycache__"
+    - ".git"
+    - "dist"
+    - "build"
+    - "coverage"
+```
+
+### Per-Scan Scope Control
+
+Scans that support scoped mode (via `git diff`) are less prone to false positives because they only examine changed files:
+
+```yaml
+depth:
+  scan_scope_mode: "auto"     # "auto" = depth-based, "full" = always full, "changed" = always scoped
+```
+
+At **standard** depth with `scan_scope_mode: "auto"`, most scans run in scoped mode (only changed files), which naturally excludes `.venv/` and `node_modules/` from the scan.
+
+---
+
+## Resume / Recovery Guide
+
+### Automatic State Saving
+
+When a run is interrupted (Ctrl+C or crash), state is automatically saved to `.agent-team/STATE.json`. This includes:
+
+- Current phase and task progress
+- Completed requirements
+- Convergence cycle count
+- Cost accumulation
+- Milestone progress (PRD mode)
+
+### Checking State
+
+```bash
+# View the current state
+agent-team status
+
+# Shows:
+#   - Run ID
+#   - Current phase
+#   - Files in .agent-team/
+#   - Cost so far (if available)
+```
+
+### Resuming a Run
+
+```bash
+# Resume from saved state (experimental)
+agent-team resume
+```
+
+### Resuming PRD Milestone Runs
+
+For PRD-based milestone runs, you can manually edit `STATE.json` to skip past a failed milestone:
+
+1. Open `.agent-team/STATE.json`
+2. Move the failed milestone ID from `failed_milestones` to `completed_milestones`
+3. Set `current_milestone` to the next milestone ID
+4. Re-run with the same command:
+
+```bash
+python -m agent_team --prd your_prd.md --config config.yaml --cwd /path/to/project --no-interview
+```
+
+The system reads `STATE.json` and resumes from the next uncompleted milestone.
+
+### Recovery from Common Failures
+
+| Failure | Recovery |
+|---------|----------|
+| **Budget exceeded** | Increase `max_budget_usd` in config.yaml, then resume |
+| **Max turns reached** | Increase `max_turns`, then resume |
+| **Convergence stuck** | Check `.agent-team/REQUIREMENTS.md` Review Log for repeatedly failing items. Consider lowering `escalation_threshold` or manually marking items |
+| **Subprocess crash** | State is saved on crash. Run `agent-team status` to verify, then `agent-team resume` |
+| **Audit fix regression** | Set `audit_team.max_fix_rounds: 2` to prevent Round 3 regressions. Resume from the milestone after the regressed one |
+| **Windows WinError 206** | Apply the SDK temp file patch (see section above), then resume |
+
+### Clean Start
+
+If recovery is not viable, clean the state and start fresh:
+
+```bash
+# Delete all agent-team state
+agent-team clean
+
+# Or manually
+rm -rf .agent-team/
+```
+
+---
+
 ## License
 
 MIT
