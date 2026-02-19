@@ -20,6 +20,7 @@ import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 import re
 import shutil
 import sys
@@ -1070,16 +1071,142 @@ async def _run_command(
 # ---------------------------------------------------------------------------
 
 
+def _build_audit_progression_section(
+    agent_team_dir: Path,
+    run_state: Any | None = None,
+) -> list[str]:
+    """Build the Audit Score Progression markdown section.
+
+    Reads per-milestone audit scores from *run_state*.artifacts (keys
+    like ``audit_milestone-1_score`` and ``audit_milestone-1_health``).
+    For round-by-round detail, reads ``AUDIT_PROGRESSION.md`` from
+    *agent_team_dir* if it exists.
+
+    Returns a list of markdown lines (empty list if no data available).
+    """
+    artifacts: dict[str, str] = {}
+    if run_state is not None:
+        artifacts = getattr(run_state, "artifacts", {})
+
+    # Collect milestone IDs that have audit data
+    milestone_ids: list[str] = []
+    for key in sorted(artifacts.keys()):
+        if key.startswith("audit_") and key.endswith("_score"):
+            ms_id = key[len("audit_"):-len("_score")]
+            if ms_id:
+                milestone_ids.append(ms_id)
+
+    if not milestone_ids:
+        return []
+
+    # Try to load round-by-round progression from AUDIT_PROGRESSION.md
+    round_data: dict[str, list[str]] = {}  # ms_id -> [round0, round1, ...]
+    progression_path = agent_team_dir / "AUDIT_PROGRESSION.md"
+    if progression_path.is_file():
+        try:
+            prog_content = progression_path.read_text(encoding="utf-8")
+            round_data = _parse_audit_progression(prog_content)
+        except (OSError, UnicodeDecodeError):
+            pass  # Non-critical -- table still works with final scores only
+
+    lines: list[str] = []
+    lines.append("## Audit Score Progression")
+    lines.append("")
+    lines.append("| Milestone | Round 0 | Round 1 | Round 2 | Final | Health |")
+    lines.append("|-----------|---------|---------|---------|-------|--------|")
+
+    for ms_id in milestone_ids:
+        final_score = artifacts.get(f"audit_{ms_id}_score", "N/A")
+        health = artifacts.get(f"audit_{ms_id}_health", "unknown")
+        rounds = round_data.get(ms_id, [])
+
+        # Pad rounds to 3 columns (Round 0, 1, 2)
+        r0 = rounds[0] if len(rounds) > 0 else final_score
+        r1 = rounds[1] if len(rounds) > 1 else "\u2014"
+        r2 = rounds[2] if len(rounds) > 2 else "\u2014"
+
+        lines.append(f"| {ms_id} | {r0} | {r1} | {r2} | {final_score} | {health} |")
+
+    return lines
+
+
+def _parse_audit_progression(content: str) -> dict[str, list[str]]:
+    """Parse AUDIT_PROGRESSION.md into per-milestone round scores.
+
+    Handles the table format written by ``_run_audit_team``::
+
+        ## milestone:milestone-1
+
+        | Round | Score | Health | PASS | FAIL | PARTIAL | Action |
+        |-------|-------|--------|------|------|---------|--------|
+        | 0 | 1.00 | passed | 5 | 0 | 0 | Initial audit |
+
+    Also handles a simple ``milestone-id: score`` line format as a
+    fallback.
+
+    Returns a dict mapping milestone ID to a list of score strings
+    (one per round, in order).
+    """
+    result: dict[str, list[str]] = {}
+    current_scope: str = ""
+
+    for line in content.splitlines():
+        stripped = line.strip()
+
+        # Detect section headers like "## milestone:milestone-1"
+        if stripped.startswith("## "):
+            header = stripped[3:].strip()
+            # Extract milestone ID from "milestone:milestone-1" or use as-is
+            if header.startswith("milestone:"):
+                current_scope = header.split(":", 1)[1].strip()
+            elif header.startswith("end-of-run"):
+                current_scope = "end-of-run"
+            else:
+                current_scope = header
+            continue
+
+        # Skip empty lines, pure header/separator rows
+        if not stripped or stripped.startswith("|--") or stripped.startswith("| Round"):
+            continue
+
+        # Parse table data rows: "| 0 | 1.00 | passed | ... |"
+        if stripped.startswith("|") and current_scope:
+            cells = [c.strip() for c in stripped.split("|")]
+            # cells[0] is empty (before first |), cells[1]=Round, cells[2]=Score
+            if len(cells) >= 3 and cells[2]:
+                try:
+                    float(cells[2])  # Validate it looks like a score
+                    result.setdefault(current_scope, []).append(cells[2])
+                except ValueError:
+                    pass  # Not a score row (header, etc.)
+            continue
+
+        # Fallback: simple "milestone-id: score" format
+        if ":" in stripped and not stripped.startswith("#"):
+            ms_id, _, score_part = stripped.partition(":")
+            ms_id = ms_id.strip()
+            score_part = score_part.strip()
+            if ms_id and score_part:
+                result.setdefault(ms_id, []).append(score_part)
+
+    return result
+
+
 def write_verification_summary(
     state: ProgressiveVerificationState,
     path: Path,
     *,
     milestone_id: str | None = None,
+    run_state: Any | None = None,
 ) -> None:
     """Write verification state to ``.agent-team/VERIFICATION.md``.
 
     When *milestone_id* is provided, writes to
     ``.agent-team/milestones/{milestone_id}/VERIFICATION.md`` instead.
+
+    When *run_state* is provided (a ``RunState`` instance), the audit
+    score progression table is appended from the state's ``artifacts``
+    dict and any ``AUDIT_PROGRESSION.md`` file on disk.
 
     Creates the parent directory if it does not exist. The output
     format is a Markdown document with a summary table and issue list.
@@ -1130,6 +1257,12 @@ def write_verification_summary(
     else:
         lines.append("No issues found.")
     lines.append("")
+
+    # Audit Score Progression section --------------------------------------
+    audit_lines = _build_audit_progression_section(path.parent, run_state)
+    if audit_lines:
+        lines.extend(audit_lines)
+        lines.append("")
 
     path.write_text("\n".join(lines), encoding="utf-8")
 

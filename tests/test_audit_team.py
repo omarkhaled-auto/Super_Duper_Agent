@@ -18,6 +18,7 @@ from agent_team.audit_team import (
     AUDIT_SCORER_PROMPT,
     INTERFACE_AUDITOR_PROMPT,
     LIBRARY_AUDITOR_PROMPT,
+    PRD_FIDELITY_AUDITOR_PROMPT,
     REQUIREMENTS_AUDITOR_PROMPT,
     TECHNICAL_AUDITOR_PROMPT,
     TEST_AUDITOR_PROMPT,
@@ -151,7 +152,7 @@ class TestValidConstants:
 
     def test_valid_auditors(self):
         assert VALID_AUDITORS == frozenset({
-            "requirements", "technical", "interface", "test", "library",
+            "requirements", "technical", "interface", "test", "library", "prd_fidelity",
         })
 
 
@@ -634,6 +635,29 @@ class TestGetAuditorPrompt:
         assert "mcp__context7__resolve-library-id" in prompt
         assert "mcp__context7__query-docs" in prompt
 
+    def test_prd_fidelity_auditor(self):
+        prompt = get_auditor_prompt(
+            "prd_fidelity", "REQ.md", "out/prd_fidelity.md",
+            prd_text="Build a TODO app with 5 endpoints.",
+            requirements_dir="requirements",
+        )
+        assert "out/prd_fidelity.md" in prompt
+        assert "Build a TODO app with 5 endpoints." in prompt
+        assert "requirements" in prompt
+        assert "PRD FIDELITY AUDITOR" in prompt
+        assert "DROPPED" in prompt
+        assert "DISTORTED" in prompt
+        assert "ORPHANED" in prompt
+
+    def test_prd_fidelity_auditor_with_empty_prd(self):
+        """prd_fidelity with empty prd_text still generates a valid prompt."""
+        prompt = get_auditor_prompt(
+            "prd_fidelity", "REQ.md", "out.md",
+            prd_text="", requirements_dir="",
+        )
+        assert len(prompt) > 100
+        assert "PRD FIDELITY AUDITOR" in prompt
+
     def test_unknown_auditor_raises(self):
         with pytest.raises(ValueError, match="Unknown auditor"):
             get_auditor_prompt("banana", "REQ.md", "out.md")
@@ -869,6 +893,16 @@ class TestPromptConstants:
         assert "{findings_block}" in AUDIT_FIX_PROMPT
         assert "{fix_cycle_log_section}" in AUDIT_FIX_PROMPT
 
+    def test_prd_fidelity_prompt_mentions_dropped_distorted_orphaned(self):
+        assert "DROPPED" in PRD_FIDELITY_AUDITOR_PROMPT
+        assert "DISTORTED" in PRD_FIDELITY_AUDITOR_PROMPT
+        assert "ORPHANED" in PRD_FIDELITY_AUDITOR_PROMPT
+
+    def test_prd_fidelity_prompt_has_placeholders(self):
+        assert "{prd_text}" in PRD_FIDELITY_AUDITOR_PROMPT
+        assert "{requirements_dir}" in PRD_FIDELITY_AUDITOR_PROMPT
+        assert "{output_path}" in PRD_FIDELITY_AUDITOR_PROMPT
+
     def test_all_prompts_have_phase_header(self):
         for prompt in [
             REQUIREMENTS_AUDITOR_PROMPT,
@@ -876,6 +910,7 @@ class TestPromptConstants:
             INTERFACE_AUDITOR_PROMPT,
             TEST_AUDITOR_PROMPT,
             LIBRARY_AUDITOR_PROMPT,
+            PRD_FIDELITY_AUDITOR_PROMPT,
             AUDIT_SCORER_PROMPT,
             AUDIT_FIX_PROMPT,
         ]:
@@ -888,6 +923,7 @@ class TestPromptConstants:
             INTERFACE_AUDITOR_PROMPT,
             TEST_AUDITOR_PROMPT,
             LIBRARY_AUDITOR_PROMPT,
+            PRD_FIDELITY_AUDITOR_PROMPT,
         ]:
             assert "FINDING-" in prompt
 
@@ -898,6 +934,7 @@ class TestPromptConstants:
             INTERFACE_AUDITOR_PROMPT,
             TEST_AUDITOR_PROMPT,
             LIBRARY_AUDITOR_PROMPT,
+            PRD_FIDELITY_AUDITOR_PROMPT,
         ]:
             assert "{output_path}" in prompt
 
@@ -1057,8 +1094,11 @@ class TestC1LibraryAuditorPromptHasRequirementsPath:
         assert "{requirements_path}" in LIBRARY_AUDITOR_PROMPT
 
     def test_all_auditor_prompts_have_requirements_path(self):
-        """All 5 auditor prompts must contain {requirements_path}."""
-        for name in VALID_AUDITORS:
+        """All 5 core auditor prompts must contain {requirements_path}.
+        The prd_fidelity auditor uses {requirements_dir} and {prd_text} instead."""
+        # prd_fidelity uses different parameters (requirements_dir, prd_text)
+        core_auditors = VALID_AUDITORS - {"prd_fidelity"}
+        for name in core_auditors:
             prompt = get_auditor_prompt(name, "/req.md", "/out.md")
             # After formatting, the path should appear in the prompt
             assert "/req.md" in prompt, f"Auditor '{name}' missing requirements_path"
@@ -1742,3 +1782,269 @@ class TestRunStateAuditFields:
         assert state2.audit_score == 0.85
         assert state2.audit_health == "needs-fixes"
         assert state2.audit_fix_rounds == 2
+
+
+# ===================================================================
+# PRD Fidelity Auditor Tests
+# ===================================================================
+
+class TestPrdFidelityAuditorPrompt:
+    """Tests for the prd_fidelity auditor prompt and integration."""
+
+    def test_prompt_contains_classification_categories(self):
+        assert "DROPPED" in PRD_FIDELITY_AUDITOR_PROMPT
+        assert "DISTORTED" in PRD_FIDELITY_AUDITOR_PROMPT
+        assert "ORPHANED" in PRD_FIDELITY_AUDITOR_PROMPT
+
+    def test_prompt_has_severity_guidelines(self):
+        assert "CRITICAL" in PRD_FIDELITY_AUDITOR_PROMPT
+        assert "HIGH" in PRD_FIDELITY_AUDITOR_PROMPT
+        assert "MEDIUM" in PRD_FIDELITY_AUDITOR_PROMPT
+        assert "LOW" in PRD_FIDELITY_AUDITOR_PROMPT
+        assert "INFO" in PRD_FIDELITY_AUDITOR_PROMPT
+
+    def test_prompt_mentions_requirement_id_prefixes(self):
+        """PRD fidelity auditor should check all requirement ID prefixes."""
+        for prefix in ("REQ-xxx", "TECH-xxx", "WIRE-xxx", "SVC-xxx", "TEST-xxx", "SEC-xxx"):
+            assert prefix in PRD_FIDELITY_AUDITOR_PROMPT, f"Missing {prefix}"
+
+    def test_prompt_has_finding_format(self):
+        assert "FINDING-NNN" in PRD_FIDELITY_AUDITOR_PROMPT
+        assert "**Requirement**" in PRD_FIDELITY_AUDITOR_PROMPT
+        assert "**Verdict**" in PRD_FIDELITY_AUDITOR_PROMPT
+        assert "**Severity**" in PRD_FIDELITY_AUDITOR_PROMPT
+        assert "**File**" in PRD_FIDELITY_AUDITOR_PROMPT
+        assert "**Description**" in PRD_FIDELITY_AUDITOR_PROMPT
+        assert "**Evidence**" in PRD_FIDELITY_AUDITOR_PROMPT
+
+    def test_prompt_formatting_with_prd_text(self):
+        prompt = get_auditor_prompt(
+            "prd_fidelity", "REQ.md", "out/prd_fidelity.md",
+            prd_text="Build a chat app with WebSocket support and 3 API endpoints.",
+            requirements_dir="requirements",
+        )
+        assert "out/prd_fidelity.md" in prompt
+        assert "Build a chat app with WebSocket support and 3 API endpoints." in prompt
+        assert "requirements" in prompt
+        assert "PRD FIDELITY AUDITOR" in prompt
+        assert "DROPPED" in prompt
+        assert "DISTORTED" in prompt
+        assert "ORPHANED" in prompt
+
+    def test_prompt_phase_header(self):
+        assert "[PHASE: AUDIT-TEAM" in PRD_FIDELITY_AUDITOR_PROMPT
+        assert "PRD FIDELITY AUDITOR" in PRD_FIDELITY_AUDITOR_PROMPT
+
+
+class TestPrdFidelityGetActiveAuditors:
+    """Tests for prd_fidelity auditor activation via get_active_auditors."""
+
+    def _make_config(self, **overrides) -> AgentTeamConfig:
+        cfg = AgentTeamConfig()
+        for k, v in overrides.items():
+            setattr(cfg.audit_team, k, v)
+        return cfg
+
+    def test_thorough_without_prd_excludes_prd_fidelity(self):
+        """Without has_prd, prd_fidelity should NOT be in auditor list."""
+        cfg = self._make_config()
+        result = get_active_auditors(cfg, "thorough", has_prd=False)
+        assert "prd_fidelity" not in result
+        assert len(result) == 5  # The original 5
+
+    def test_thorough_with_prd_includes_prd_fidelity(self):
+        """With has_prd=True, prd_fidelity should be in the auditor list."""
+        cfg = self._make_config()
+        result = get_active_auditors(cfg, "thorough", has_prd=True)
+        assert "prd_fidelity" in result
+        assert len(result) == 6  # All 6 auditors
+
+    def test_exhaustive_with_prd_includes_prd_fidelity(self):
+        cfg = self._make_config()
+        result = get_active_auditors(cfg, "exhaustive", has_prd=True)
+        assert "prd_fidelity" in result
+        assert len(result) == 6
+
+    def test_standard_with_prd_excludes_prd_fidelity(self):
+        """Standard depth should NOT include prd_fidelity even with PRD."""
+        cfg = self._make_config()
+        result = get_active_auditors(cfg, "standard", has_prd=True)
+        assert "prd_fidelity" not in result
+
+    def test_quick_with_prd_returns_empty(self):
+        cfg = self._make_config()
+        result = get_active_auditors(cfg, "quick", has_prd=True)
+        assert result == []
+
+    def test_prd_fidelity_disabled_excludes_it(self):
+        """When prd_fidelity_auditor=False, it should not be included."""
+        cfg = self._make_config(prd_fidelity_auditor=False)
+        result = get_active_auditors(cfg, "exhaustive", has_prd=True)
+        assert "prd_fidelity" not in result
+        assert len(result) == 5
+
+    def test_has_prd_default_is_false(self):
+        """Default has_prd should be False (backward compatible)."""
+        cfg = self._make_config()
+        result = get_active_auditors(cfg, "exhaustive")
+        assert "prd_fidelity" not in result
+
+
+class TestPrdFidelityConfig:
+    """Tests for prd_fidelity_auditor config field."""
+
+    def test_default_enabled(self):
+        cfg = AuditTeamConfig()
+        assert cfg.prd_fidelity_auditor is True
+
+    def test_on_agent_team_config(self):
+        cfg = AgentTeamConfig()
+        assert cfg.audit_team.prd_fidelity_auditor is True
+
+    def test_yaml_override(self, tmp_path):
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(
+            "audit_team:\n  prd_fidelity_auditor: false\n",
+            encoding="utf-8",
+        )
+        cfg, overrides = load_config(config_path=str(config_file))
+        assert cfg.audit_team.prd_fidelity_auditor is False
+        assert "audit_team.prd_fidelity_auditor" in overrides
+
+    def test_standard_depth_disables_prd_fidelity(self):
+        cfg = AgentTeamConfig()
+        apply_depth_quality_gating("standard", cfg)
+        assert cfg.audit_team.prd_fidelity_auditor is False
+
+    def test_thorough_depth_keeps_prd_fidelity_enabled(self):
+        cfg = AgentTeamConfig()
+        apply_depth_quality_gating("thorough", cfg)
+        assert cfg.audit_team.prd_fidelity_auditor is True
+
+    def test_exhaustive_depth_keeps_prd_fidelity_enabled(self):
+        cfg = AgentTeamConfig()
+        apply_depth_quality_gating("exhaustive", cfg)
+        assert cfg.audit_team.prd_fidelity_auditor is True
+
+    def test_quick_depth_disables_all(self):
+        cfg = AgentTeamConfig()
+        apply_depth_quality_gating("quick", cfg)
+        assert cfg.audit_team.enabled is False
+
+    def test_user_override_preserved_on_standard(self, tmp_path):
+        """User sets prd_fidelity_auditor=true, standard depth would disable.
+        Override should be preserved."""
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(
+            "audit_team:\n  prd_fidelity_auditor: true\n",
+            encoding="utf-8",
+        )
+        cfg, overrides = load_config(config_path=str(config_file))
+        apply_depth_quality_gating("standard", cfg, user_overrides=overrides)
+        assert cfg.audit_team.prd_fidelity_auditor is True
+
+
+class TestPrdFidelityParseReport:
+    """Tests for parsing prd_fidelity audit reports."""
+
+    def test_parses_prd_fidelity_report(self, tmp_path):
+        audit_dir = tmp_path / "audit-reports"
+        audit_dir.mkdir()
+
+        (audit_dir / "prd_fidelity_audit.md").write_text(textwrap.dedent("""\
+            ## FINDING-001
+            - **Requirement**: REQ-003
+            - **Verdict**: FAIL
+            - **Severity**: HIGH
+            - **File**: milestones/MS-1/REQUIREMENTS.md
+            - **Description**: [DROPPED] PRD requirement for WebSocket support not in any REQUIREMENTS.md
+            - **Evidence**: PRD says: "Real-time WebSocket notifications" | REQUIREMENTS.md says: "NOT FOUND"
+
+            ## FINDING-002
+            - **Requirement**: REQ-007
+            - **Verdict**: PARTIAL
+            - **Severity**: MEDIUM
+            - **File**: milestones/MS-2/REQUIREMENTS.md
+            - **Description**: [DISTORTED] PRD specifies 100ms response time, REQUIREMENTS.md says 500ms
+            - **Evidence**: PRD says: "API response time < 100ms" | REQUIREMENTS.md says: "API response < 500ms"
+
+            ## FINDING-003
+            - **Requirement**: TECH-099
+            - **Verdict**: FAIL
+            - **Severity**: LOW
+            - **File**: milestones/MS-3/REQUIREMENTS.md
+            - **Description**: [ORPHANED] TECH-099 does not trace back to any PRD section
+            - **Evidence**: REQUIREMENTS.md says: "TECH-099: Use Redis for caching" | PRD says: "NOT FOUND"
+        """), encoding="utf-8")
+
+        findings = parse_all_audit_reports(str(audit_dir))
+        prd_findings = [f for f in findings if f.auditor == "prd_fidelity"]
+        assert len(prd_findings) == 3
+
+        dropped = prd_findings[0]
+        assert dropped.requirement_id == "REQ-003"
+        assert dropped.verdict == "FAIL"
+        assert dropped.severity == "HIGH"
+        assert "DROPPED" in dropped.description
+
+        distorted = prd_findings[1]
+        assert distorted.requirement_id == "REQ-007"
+        assert distorted.verdict == "PARTIAL"
+        assert distorted.severity == "MEDIUM"
+        assert "DISTORTED" in distorted.description
+
+        orphaned = prd_findings[2]
+        assert orphaned.requirement_id == "TECH-099"
+        assert orphaned.verdict == "FAIL"
+        assert orphaned.severity == "LOW"
+        assert "ORPHANED" in orphaned.description
+
+    def test_prd_fidelity_findings_integrate_with_scoring(self, tmp_path):
+        """prd_fidelity findings should be scored alongside other auditors."""
+        audit_dir = tmp_path / "audit-reports"
+        audit_dir.mkdir()
+
+        (audit_dir / "requirements_audit.md").write_text(textwrap.dedent("""\
+            ## FINDING-001
+            - **Requirement**: REQ-001
+            - **Verdict**: PASS
+            - **Severity**: INFO
+            - **File**: src/auth.ts
+            - **Description**: Auth implemented
+        """), encoding="utf-8")
+
+        (audit_dir / "prd_fidelity_audit.md").write_text(textwrap.dedent("""\
+            ## FINDING-001
+            - **Requirement**: REQ-005
+            - **Verdict**: FAIL
+            - **Severity**: CRITICAL
+            - **File**: milestones/MS-1/REQUIREMENTS.md
+            - **Description**: [DROPPED] Entire payment section missing
+        """), encoding="utf-8")
+
+        all_findings = parse_all_audit_reports(str(audit_dir))
+        assert len(all_findings) == 2
+
+        report = score_audit_findings(
+            all_findings,
+            auditors_deployed=["requirements", "prd_fidelity"],
+        )
+        assert report.total_pass == 1
+        assert report.total_fail == 1
+        # Score: 1 pass / 2 total = 0.5
+        assert report.overall_score == 0.5
+        # Has critical finding -> would be needs-fixes or critical
+        assert report.health in ("needs-fixes", "critical")
+
+
+class TestPrdFidelityCliWiring:
+    """Tests for _run_audit_team accepting prd_path parameter."""
+
+    def test_run_audit_team_accepts_prd_path(self):
+        """Verify the function signature includes prd_path."""
+        import inspect
+        from agent_team.cli import _run_audit_team
+        sig = inspect.signature(_run_audit_team)
+        assert "prd_path" in sig.parameters
+        # Default should be None
+        assert sig.parameters["prd_path"].default is None

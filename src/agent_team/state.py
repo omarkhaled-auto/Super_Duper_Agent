@@ -137,12 +137,33 @@ _STATE_FILE = "STATE.json"
 _CURRENT_SCHEMA_VERSION = 2
 
 
+def _reconcile_milestone_lists(state: RunState) -> None:
+    """Derive ``completed_milestones`` and ``failed_milestones`` from ``milestone_progress``.
+
+    This ensures a single source of truth: ``milestone_progress[ms]["status"]``
+    is canonical, and the two lists are always consistent projections of it.
+    DEGRADED milestones are treated as completed so dependent milestones can proceed.
+    """
+    state.completed_milestones = [
+        ms for ms, data in state.milestone_progress.items()
+        if data.get("status") in ("COMPLETE", "DEGRADED")
+    ]
+    state.failed_milestones = [
+        ms for ms, data in state.milestone_progress.items()
+        if data.get("status") == "FAILED"
+    ]
+
+
 def update_milestone_progress(
     state: RunState,
     milestone_id: str,
     status: str,
 ) -> None:
     """Update the milestone tracking fields on *state* in place.
+
+    The canonical status is stored in ``state.milestone_progress[milestone_id]``.
+    The ``completed_milestones`` and ``failed_milestones`` lists are derived
+    from ``milestone_progress`` so there is a single source of truth.
 
     Parameters
     ----------
@@ -151,24 +172,21 @@ def update_milestone_progress(
     milestone_id : str
         The milestone whose status changed.
     status : str
-        New status: ``"IN_PROGRESS"``, ``"COMPLETE"``, or ``"FAILED"``.
+        New status: ``"IN_PROGRESS"``, ``"COMPLETE"``, ``"DEGRADED"``, or ``"FAILED"``.
     """
     status_upper = status.upper()
     if status_upper == "IN_PROGRESS":
         state.current_milestone = milestone_id
-    elif status_upper == "COMPLETE":
+    elif status_upper in ("COMPLETE", "DEGRADED"):
         state.current_milestone = ""
-        if milestone_id not in state.completed_milestones:
-            state.completed_milestones.append(milestone_id)
-        # Remove from failed if it was retried successfully
-        if milestone_id in state.failed_milestones:
-            state.failed_milestones.remove(milestone_id)
     elif status_upper == "FAILED":
         state.current_milestone = ""
-        if milestone_id not in state.failed_milestones:
-            state.failed_milestones.append(milestone_id)
 
+    # Canonical source of truth: milestone_progress dict
     state.milestone_progress[milestone_id] = {"status": status_upper}
+
+    # Derive completed_milestones and failed_milestones from milestone_progress
+    _reconcile_milestone_lists(state)
 
 
 def get_resume_milestone(state: RunState) -> str | None:
@@ -205,6 +223,11 @@ def save_state(state: RunState, directory: str = ".agent-team") -> Path:
     """
     dir_path = Path(directory)
     dir_path.mkdir(parents=True, exist_ok=True)
+
+    # Reconcile milestone lists from milestone_progress before saving
+    # to guarantee a single source of truth on disk.
+    if state.milestone_progress:
+        _reconcile_milestone_lists(state)
 
     # Create a copy of state data and set interrupted flag
     data = asdict(state)
@@ -245,7 +268,7 @@ def load_state(directory: str = ".agent-team") -> RunState | None:
         return None
     try:
         data = json.loads(state_path.read_text(encoding="utf-8"))
-        return RunState(
+        state = RunState(
             run_id=_expect(data.get("run_id", ""), str, ""),
             task=_expect(data.get("task", ""), str, ""),
             depth=_expect(data.get("depth", "standard"), str, "standard"),
@@ -272,6 +295,13 @@ def load_state(directory: str = ".agent-team") -> RunState | None:
             audit_health=_expect(data.get("audit_health", ""), str, ""),
             audit_fix_rounds=_expect(data.get("audit_fix_rounds", 0), (int, float), 0),
         )
+        # Deduplicate completed_phases while preserving order (defensive)
+        seen: set[str] = set()
+        state.completed_phases = [
+            p for p in state.completed_phases
+            if p not in seen and not seen.add(p)  # type: ignore[func-returns-value]
+        ]
+        return state
     except (json.JSONDecodeError, KeyError, TypeError, ValueError, OSError, UnicodeDecodeError):
         return None
 

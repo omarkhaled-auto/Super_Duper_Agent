@@ -18,6 +18,7 @@ import string
 import subprocess
 import sys
 import threading
+import time
 import traceback
 from pathlib import Path
 from typing import Any
@@ -947,6 +948,13 @@ async def _run_prd_milestones(
     req_dir = project_root / config.convergence.requirements_dir
     master_plan_path = req_dir / config.convergence.master_plan_file
 
+    # Configure scan exclusions from config before any per-milestone scans
+    try:
+        from .quality_checks import configure_scan_exclusions
+        configure_scan_exclusions(config.post_orchestration_scans.scan_exclude_dirs)
+    except Exception:
+        pass  # Non-fatal — built-in EXCLUDED_DIRS still active
+
     # ------------------------------------------------------------------
     # Phase 1: DECOMPOSITION
     # ------------------------------------------------------------------
@@ -1156,6 +1164,19 @@ async def _run_prd_milestones(
     # ------------------------------------------------------------------
     print_info(f"Phase 2: Executing {len(plan.milestones)} milestones")
 
+    # Initialize AUDIT_PROGRESSION.md for score tracking across milestones
+    _audit_prog_path = Path(cwd or ".") / ".agent-team" / "AUDIT_PROGRESSION.md"
+    if not _audit_prog_path.is_file():
+        try:
+            _audit_prog_path.parent.mkdir(parents=True, exist_ok=True)
+            _audit_prog_path.write_text(
+                "# Audit Score Progression\n\n"
+                "Tracks audit score changes across milestones and fix rounds.\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
+
     # Check for saved progress from a previous interrupted run
     progress_path = req_dir / "milestone_progress.json"
     if progress_path.is_file():
@@ -1203,7 +1224,7 @@ async def _run_prd_milestones(
         for milestone in ready:
             # Skip already-completed milestones (resume scenario)
             if resume_from and milestone.id != resume_from:
-                completed_ids = {m.id for m in plan.milestones if m.status == "COMPLETE"}
+                completed_ids = {m.id for m in plan.milestones if m.status in ("COMPLETE", "DEGRADED")}
                 if milestone.id in completed_ids:
                     continue
 
@@ -1324,7 +1345,7 @@ async def _run_prd_milestones(
                     total_cost += ms_cost
             except KeyboardInterrupt:
                 # Save progress for resume on user interrupt
-                completed_ids = [m.id for m in plan.milestones if m.status == "COMPLETE"]
+                completed_ids = [m.id for m in plan.milestones if m.status in ("COMPLETE", "DEGRADED")]
                 _save_milestone_progress(
                     cwd=cwd,
                     config=config,
@@ -1339,7 +1360,7 @@ async def _run_prd_milestones(
                 break  # Exit milestone loop
             except Exception as exc:
                 # Save progress for resume on unexpected errors
-                completed_ids = [m.id for m in plan.milestones if m.status == "COMPLETE"]
+                completed_ids = [m.id for m in plan.milestones if m.status in ("COMPLETE", "DEGRADED")]
                 _save_milestone_progress(
                     cwd=cwd,
                     config=config,
@@ -1460,11 +1481,17 @@ async def _run_prd_milestones(
                         task_text=task,
                         requirements_path=ms_req_path_audit,
                         scope_label=f"milestone:{milestone.id}",
+                        prd_path=prd_path,
                     )
                     total_cost += audit_cost
                     if _current_state:
                         _current_state.artifacts[f"audit_{milestone.id}_health"] = audit_report.health
                         _current_state.artifacts[f"audit_{milestone.id}_score"] = f"{audit_report.overall_score:.2f}"
+                        # Persist audit fields to STATE.json per-milestone (not just end-of-run)
+                        _current_state.audit_score = audit_report.overall_score
+                        _current_state.audit_health = audit_report.health
+                        _current_state.audit_fix_rounds = audit_report.fix_rounds_used
+                        save_state(_current_state, directory=str(req_dir.parent / ".agent-team"))
                     if audit_report.health == "critical":
                         print_warning(
                             f"Milestone {milestone.id} audit-team health: critical "
@@ -1638,21 +1665,52 @@ async def _run_prd_milestones(
 
             # Final health gate decision (after possible recovery)
             if config.milestone.health_gate and health_report and health_report.health == "failed":
-                print_warning(
-                    f"Milestone {milestone.id} health gate FAILED "
-                    f"({health_report.checked_requirements}/{health_report.total_requirements}). "
-                    f"Marking as FAILED."
+                # Check if audit team score overrides the health gate failure.
+                # If the audit team ran and scored >= 0.85, the milestone is
+                # DEGRADED (not FAILED) so dependent milestones can proceed.
+                _audit_score_str = (
+                    _current_state.artifacts.get(f"audit_{milestone.id}_score", "")
+                    if _current_state else ""
                 )
-                milestone.status = "FAILED"
-                plan_content = update_master_plan_status(
-                    plan_content, milestone.id, "FAILED",
-                )
-                master_plan_path.write_text(plan_content, encoding="utf-8")
-                if _current_state:
-                    update_milestone_progress(_current_state, milestone.id, "FAILED")
-                    update_completion_ratio(_current_state)
-                    save_state(_current_state, directory=str(req_dir.parent / ".agent-team"))
-                continue
+                _audit_score: float | None = None
+                if _audit_score_str:
+                    try:
+                        _audit_score = float(_audit_score_str)
+                    except (ValueError, TypeError):
+                        pass
+
+                if _audit_score is not None and _audit_score >= 0.85:
+                    print_info(
+                        f"Health gate overridden by audit score "
+                        f"({_audit_score:.2f} >= 0.85). "
+                        f"Milestone marked DEGRADED instead of FAILED."
+                    )
+                    milestone.status = "DEGRADED"
+                    plan_content = update_master_plan_status(
+                        plan_content, milestone.id, "DEGRADED",
+                    )
+                    master_plan_path.write_text(plan_content, encoding="utf-8")
+                    if _current_state:
+                        update_milestone_progress(_current_state, milestone.id, "DEGRADED")
+                        update_completion_ratio(_current_state)
+                        save_state(_current_state, directory=str(req_dir.parent / ".agent-team"))
+                    # Do NOT continue — fall through to wiring check and completion cache
+                else:
+                    print_warning(
+                        f"Milestone {milestone.id} health gate FAILED "
+                        f"({health_report.checked_requirements}/{health_report.total_requirements}). "
+                        f"Marking as FAILED."
+                    )
+                    milestone.status = "FAILED"
+                    plan_content = update_master_plan_status(
+                        plan_content, milestone.id, "FAILED",
+                    )
+                    master_plan_path.write_text(plan_content, encoding="utf-8")
+                    if _current_state:
+                        update_milestone_progress(_current_state, milestone.id, "FAILED")
+                        update_completion_ratio(_current_state)
+                        save_state(_current_state, directory=str(req_dir.parent / ".agent-team"))
+                    continue
 
             # Wiring verification with retry loop (if enabled)
             if config.milestone.wiring_check:
@@ -1685,15 +1743,16 @@ async def _run_prd_milestones(
                             f"Proceeding anyway."
                         )
 
-            # Mark complete
-            milestone.status = "COMPLETE"
+            # Mark complete (preserve DEGRADED status if already set by audit override)
+            _final_status = milestone.status if milestone.status == "DEGRADED" else "COMPLETE"
+            milestone.status = _final_status
             plan_content = update_master_plan_status(
-                plan_content, milestone.id, "COMPLETE",
+                plan_content, milestone.id, _final_status,
             )
             master_plan_path.write_text(plan_content, encoding="utf-8")
 
             if _current_state:
-                update_milestone_progress(_current_state, milestone.id, "COMPLETE")
+                update_milestone_progress(_current_state, milestone.id, _final_status)
                 update_completion_ratio(_current_state)
                 save_state(_current_state, directory=str(req_dir.parent / ".agent-team"))
 
@@ -1712,10 +1771,10 @@ async def _run_prd_milestones(
         # Re-read plan for next iteration (agent may have overwritten MASTER_PLAN.md)
         plan_content = master_plan_path.read_text(encoding="utf-8")
 
-        # Re-assert completed statuses that the agent may have reset
+        # Re-assert completed/degraded statuses that the agent may have reset
         for _m in plan.milestones:
-            if _m.status == "COMPLETE":
-                plan_content = update_master_plan_status(plan_content, _m.id, "COMPLETE")
+            if _m.status in ("COMPLETE", "DEGRADED"):
+                plan_content = update_master_plan_status(plan_content, _m.id, _m.status)
         master_plan_path.write_text(plan_content, encoding="utf-8")
 
         plan = parse_master_plan(plan_content)
@@ -3282,6 +3341,13 @@ def _subcommand_resume() -> tuple[argparse.Namespace, str] | None:
         print_error("No saved state found. Nothing to resume.")
         return None
 
+    # Deduplicate completed_phases on resume (preserving order)
+    seen: set[str] = set()
+    state.completed_phases = [
+        p for p in state.completed_phases
+        if p not in seen and not seen.add(p)  # type: ignore[func-returns-value]
+    ]
+
     issues = validate_for_resume(state)
     for issue in issues:
         if issue.startswith("ERROR"):
@@ -3642,6 +3708,81 @@ async def _run_review_only(
     return cost
 
 
+def _audit_precheck(
+    cwd: str,
+    req_path: str,
+    auditors: list[str],
+    scope_label: str,
+) -> list[str]:
+    """Run a quick pre-check to decide how many auditors to deploy.
+
+    Executes ``pytest`` on the milestone's test files and counts the
+    requirements checked ratio from REQUIREMENTS.md.  Based on these
+    signals, returns a potentially reduced auditor list:
+
+    - tests pass AND req_ratio > 0.9  -> 2 auditors (quick mode)
+    - tests pass AND req_ratio > 0.7  -> 3 auditors (standard mode)
+    - otherwise                       -> all auditors (full mode)
+
+    Returns the (possibly trimmed) auditor list.
+    """
+    milestone = scope_label  # e.g. "milestone:milestone-1"
+
+    # --- Step 1: Count requirements checked ratio ---
+    req_ratio = 0.0
+    try:
+        req_content = Path(req_path).read_text(encoding="utf-8")
+        checked = len(re.findall(r"^\s*-\s*\[x\]", req_content, re.MULTILINE | re.IGNORECASE))
+        unchecked = len(re.findall(r"^\s*-\s*\[ \]", req_content, re.MULTILINE))
+        total_reqs = checked + unchecked
+        if total_reqs > 0:
+            req_ratio = checked / total_reqs
+    except (OSError, UnicodeDecodeError):
+        pass  # Could not read requirements -- fall through to full mode
+
+    # --- Step 2: Run pytest quick check ---
+    test_passed = False
+    try:
+        test_result = subprocess.run(
+            [sys.executable, "-m", "pytest", "--tb=no", "-q", "--no-header", "-x"],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        test_passed = test_result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        pass  # pytest not available or timed out -- fall through to full mode
+
+    test_label = "PASS" if test_passed else "FAIL"
+
+    # --- Step 3: Decision logic ---
+    if test_passed and req_ratio > 0.9:
+        # Quick mode: only requirements + test auditors
+        reduced = [a for a in auditors if a in ("requirements", "test")]
+        if not reduced:
+            reduced = auditors[:2]  # Fallback if neither is in the list
+        mode = "quick"
+    elif test_passed and req_ratio > 0.7:
+        # Standard mode: requirements + test + technical
+        reduced = [a for a in auditors if a in ("requirements", "test", "technical")]
+        if not reduced:
+            reduced = auditors[:3]
+        mode = "standard"
+    else:
+        # Full mode: deploy all auditors
+        reduced = auditors
+        mode = "full"
+
+    print_info(
+        f"[Audit-Team {milestone}] Quick pre-check: {test_label}, "
+        f"{req_ratio:.0%} requirements. "
+        f"Deploying {len(reduced)} auditors ({mode} mode)."
+    )
+
+    return reduced
+
+
 async def _run_audit_team(
     cwd: str,
     config: AgentTeamConfig,
@@ -3651,10 +3792,11 @@ async def _run_audit_team(
     task_text: str | None = None,
     requirements_path: str | None = None,
     scope_label: str = "end-of-run",
+    prd_path: str | None = None,
 ) -> tuple[float, AuditTeamReport]:
-    """Run the 5-auditor parallel audit team and return (cost, report).
+    """Run the 6-auditor parallel audit team and return (cost, report).
 
-    Deploys up to 5 specialized auditors in parallel, each writing findings
+    Deploys up to 6 specialized auditors in parallel, each writing findings
     to a separate file.  A scorer aggregates findings.  If the health is
     "needs-fixes" or "critical", fix agents are dispatched, then relevant
     auditors re-run (up to ``config.audit_team.max_fix_rounds`` cycles).
@@ -3665,9 +3807,32 @@ async def _run_audit_team(
         Label for logging: "end-of-run" or "milestone:<id>".
     requirements_path : str | None
         Explicit path to REQUIREMENTS.md.  ``None`` uses top-level default.
+    prd_path : str | None
+        Path to the original PRD file.  When provided, the prd_fidelity
+        auditor is eligible to run (subject to depth and config gating).
     """
     total_cost = 0.0
-    auditors = get_active_auditors(config, depth)
+
+    # Resolve PRD text for the prd_fidelity auditor (if PRD file is available)
+    _prd_text: str = ""
+    _has_prd = False
+    if prd_path:
+        try:
+            _prd_text = Path(prd_path).read_text(encoding="utf-8")
+            _has_prd = True
+        except (OSError, UnicodeDecodeError):
+            pass  # PRD file unreadable -- prd_fidelity auditor will be skipped
+    # Fallback: check state artifacts for prd_path if not passed directly
+    if not _has_prd and _current_state:
+        _state_prd = _current_state.artifacts.get("prd_path")
+        if _state_prd:
+            try:
+                _prd_text = Path(_state_prd).read_text(encoding="utf-8")
+                _has_prd = True
+            except (OSError, UnicodeDecodeError):
+                pass
+
+    auditors = get_active_auditors(config, depth, has_prd=_has_prd)
     if not auditors:
         return 0.0, AuditTeamReport(health="passed")
 
@@ -3683,6 +3848,20 @@ async def _run_audit_team(
         audit_dir = Path(cwd) / config.convergence.requirements_dir / "audit-reports"
     audit_dir.mkdir(parents=True, exist_ok=True)
 
+    # --- Selective auditor pre-check (cost optimization) ---
+    # For milestone scopes, run a quick pre-check before deploying the full
+    # auditor fleet.  If tests pass and most requirements are checked, only
+    # deploy a subset of auditors to save $3-5 per clean milestone.
+    if scope_label.startswith("milestone:"):
+        auditors = _audit_precheck(
+            cwd=cwd,
+            req_path=req_path,
+            auditors=auditors,
+            scope_label=scope_label,
+        )
+        if not auditors:
+            return 0.0, AuditTeamReport(health="passed")
+
     print_info(
         f"[Audit-Team {scope_label}] Deploying {len(auditors)} auditors: {', '.join(auditors)}"
     )
@@ -3693,7 +3872,15 @@ async def _run_audit_team(
     async def _run_single_auditor(auditor_name: str) -> float:
         """Run a single auditor session. Returns cost."""
         output_file = str(audit_dir / f"{auditor_name}_audit.md")
-        prompt = get_auditor_prompt(auditor_name, req_path, output_file)
+        # PRD fidelity auditor uses different prompt parameters
+        if auditor_name == "prd_fidelity":
+            _req_dir = str(Path(cwd) / config.convergence.requirements_dir)
+            prompt = get_auditor_prompt(
+                auditor_name, req_path, output_file,
+                prd_text=_prd_text, requirements_dir=_req_dir,
+            )
+        else:
+            prompt = get_auditor_prompt(auditor_name, req_path, output_file)
 
         # Library auditor needs Context7 MCP
         if auditor_name == "library":
@@ -3737,6 +3924,37 @@ async def _run_audit_team(
     # Track which auditors to run each cycle (initially all, then only those with issues)
     auditors_to_run = list(auditors)
 
+    # --- Audit progression tracking: persist per-round scores to AUDIT_PROGRESSION.md ---
+    _progression_dir = Path(cwd) / ".agent-team"
+    _progression_dir.mkdir(parents=True, exist_ok=True)
+    _progression_path = _progression_dir / "AUDIT_PROGRESSION.md"
+    _prev_fixable_count = 0  # track fixes dispatched in prior round for action column
+
+    # --- Rollback & convergence state ---
+    best_score: float = -1.0
+    best_round: int = 0
+    best_snapshot: dict[str, str] = {}       # filepath -> file content at best score
+    previous_scores: list[float] = []        # score history for plateau detection
+
+    def _snapshot_files(file_paths: set[str]) -> dict[str, str]:
+        """Read current content of files into a snapshot dict."""
+        snap: dict[str, str] = {}
+        for fp in file_paths:
+            abs_path = Path(cwd) / fp if not Path(fp).is_absolute() else Path(fp)
+            try:
+                snap[str(abs_path)] = abs_path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                pass  # File may not exist yet or be binary -- skip
+        return snap
+
+    def _restore_snapshot(snap: dict[str, str]) -> None:
+        """Write snapshot content back to disk (rollback)."""
+        for abs_path_str, content in snap.items():
+            try:
+                Path(abs_path_str).write_text(content, encoding="utf-8")
+            except OSError as exc:
+                print_warning(f"[Audit-Team] Rollback failed for {abs_path_str}: {exc}")
+
     for fix_round in range(config.audit_team.max_fix_rounds + 1):
         # --- Phase 1: Run auditors in parallel (selective after first round) ---
         tasks = [_run_single_auditor(name) for name in auditors_to_run]
@@ -3762,25 +3980,131 @@ async def _run_audit_team(
             f"PASS={report.total_pass} FAIL={report.total_fail} PARTIAL={report.total_partial}"
         )
 
+        # --- Append round data to AUDIT_PROGRESSION.md ---
+        try:
+            _prog_lines: list[str] = []
+            if fix_round == 0:
+                # Section header + table header for this scope
+                _prog_lines.append("\n## " + scope_label + "\n")
+                _prog_lines.append("| Round | Score | Health | PASS | FAIL | PARTIAL | Action |")
+                _prog_lines.append("|-------|-------|--------|------|------|---------|--------|")
+            _action = "Initial audit" if fix_round == 0 else f"Fixed {_prev_fixable_count} issues"
+            _prog_lines.append(
+                f"| {fix_round} "
+                f"| {report.overall_score:.2f} "
+                f"| {report.health} "
+                f"| {report.total_pass} "
+                f"| {report.total_fail} "
+                f"| {report.total_partial} "
+                f"| {_action} |"
+            )
+            with open(_progression_path, "a", encoding="utf-8") as _pf:
+                _pf.write("\n".join(_prog_lines) + "\n")
+        except OSError:
+            pass  # Non-critical -- do not block orchestration on file write failure
+
+        # --- Phase 2b: Regression detection & rollback ---
+        current_score = report.overall_score
+        if fix_round > 0 and best_score >= 0 and current_score < best_score - 0.01:
+            print_warning(
+                f"[Audit-Team {scope_label}] Audit score regressed "
+                f"({current_score:.2f} < {best_score:.2f}). "
+                f"Rolling back to Round {best_round} state."
+            )
+            _restore_snapshot(best_snapshot)
+            report.fix_rounds_used = best_round
+            report.overall_score = best_score
+            break
+
+        # Update best score tracking
+        if current_score > best_score:
+            best_score = current_score
+            best_round = fix_round
+
+        # Record score history for plateau detection
+        previous_scores.append(current_score)
+
         # --- Phase 3: Check if done ---
         if report.health == "passed":
             break
         if fix_round >= config.audit_team.max_fix_rounds:
             break
 
-        # --- Phase 4: Fix dispatch ---
+        # --- Phase 3b: Smart convergence checks (before dispatching next fix) ---
+
+        # Plateau detection: 2 consecutive rounds with < 0.03 improvement
+        if len(previous_scores) >= 3:
+            delta_prev = abs(previous_scores[-1] - previous_scores[-2])
+            delta_prev2 = abs(previous_scores[-2] - previous_scores[-3])
+            if delta_prev < 0.03 and delta_prev2 < 0.03:
+                print_info(
+                    f"[Audit-Team {scope_label}] Score plateau detected "
+                    f"(last 3 rounds: {previous_scores[-3]:.2f} -> "
+                    f"{previous_scores[-2]:.2f} -> {previous_scores[-1]:.2f}). "
+                    f"Stopping fix loop."
+                )
+                break
+
+        # No blocking findings: if FAIL count is 0 and only PARTIAL remains
+        if report.total_fail == 0 and report.total_partial > 0:
+            print_info(
+                f"[Audit-Team {scope_label}] No blocking findings remain "
+                f"(0 FAIL, {report.total_partial} PARTIAL). Stopping fix loop."
+            )
+            break
+
+        # --- Phase 3c: Cost-awareness check before next fix round ---
         fixable = filter_findings_for_fix(
             report.findings,
             severity_gate=config.audit_team.severity_gate,
         )
+        estimated_round_cost = len(auditors_to_run) * 1.5 + len(fixable) * 0.5
+        max_budget = config.orchestrator.max_budget_usd
+        if max_budget is not None and max_budget > 0:
+            if total_cost + estimated_round_cost > max_budget * 0.9:
+                remaining = max_budget - total_cost
+                print_warning(
+                    f"Stopping audit fix loop: next round would exceed budget "
+                    f"(${remaining:.2f} remaining)"
+                )
+                # Log as INFO finding in the report
+                report.findings.append(AuditFinding(
+                    auditor="cost-gate",
+                    severity="INFO",
+                    requirement_id="",
+                    verdict="PASS",
+                    description=(
+                        f"Audit fix loop stopped early: estimated next round cost "
+                        f"${estimated_round_cost:.2f} would exceed 90% of budget "
+                        f"(${max_budget:.2f}). ${remaining:.2f} remaining."
+                    ),
+                    file_path="",
+                    line_number=0,
+                    evidence=f"total_cost=${total_cost:.2f}, budget=${max_budget:.2f}",
+                ))
+                break
+
+        # --- Phase 4: Fix dispatch ---
         if not fixable:
             print_info(f"[Audit-Team {scope_label}] No fixable findings above severity gate.")
             break
+
+        _prev_fixable_count = len(fixable)
 
         # Selective re-audit: only re-run auditors that reported fixable findings
         auditors_to_run = list({f.auditor for f in fixable} & set(auditors))
         if not auditors_to_run:
             auditors_to_run = list(auditors)  # Fallback: re-run all
+
+        # --- Phase 4b: Snapshot files before fix agents modify them ---
+        fix_file_paths: set[str] = set()
+        for f in fixable:
+            if f.file_path and f.file_path != "_general":
+                fix_file_paths.add(f.file_path)
+        current_snapshot = _snapshot_files(fix_file_paths)
+        # Persist snapshot at best-score point for potential rollback
+        if current_score >= best_score:
+            best_snapshot = current_snapshot
 
         fix_cost = await _run_audit_fix(
             cwd=cwd,
@@ -4209,6 +4533,31 @@ def main() -> None:
         print_info("Backend: Claude subscription (claude login)")
 
     # -------------------------------------------------------------------
+    # Warn if existing state will be overwritten by a new --prd run
+    # -------------------------------------------------------------------
+    if not _resume_ctx and args.prd:
+        _existing_state_path = Path(cwd) / ".agent-team" / "STATE.json"
+        if _existing_state_path.is_file():
+            try:
+                from .state import load_state as _load_state_check
+                _existing = _load_state_check(str(Path(cwd) / ".agent-team"))
+                if _existing:
+                    _completed = _existing.completed_phases or []
+                    print_warning(
+                        f"Existing state found (run {_existing.run_id}, "
+                        f"phase: {_existing.current_phase}, "
+                        f"{len(_completed)} milestones complete). "
+                        f"Starting a new run will overwrite this state."
+                    )
+                    print_info(
+                        "To resume the existing run, use: python -m agent_team resume"
+                    )
+                    print_info("Proceeding in 5 seconds... (Ctrl+C to cancel)")
+                    time.sleep(5)
+            except Exception:
+                pass  # Non-critical — proceed with new run
+
+    # -------------------------------------------------------------------
     # C4: Dry-run mode (early gate before interview)
     # -------------------------------------------------------------------
     if args.dry_run:
@@ -4334,7 +4683,8 @@ def main() -> None:
             # Update state with merged URLs
             _current_state.artifacts["design_ref_urls"] = ",".join(design_ref_urls)
 
-    _current_state.completed_phases.append("interview")
+    if "interview" not in _current_state.completed_phases:
+        _current_state.completed_phases.append("interview")
     _current_state.current_phase = "constraints"
 
     # -------------------------------------------------------------------
@@ -4350,7 +4700,8 @@ def main() -> None:
     except Exception as exc:
         print_warning(f"Constraint extraction failed: {exc}")
 
-    _current_state.completed_phases.append("constraints")
+    if "constraints" not in _current_state.completed_phases:
+        _current_state.completed_phases.append("constraints")
     _current_state.current_phase = "codebase_map"
 
     # ---------------------------------------------------------------
@@ -4403,7 +4754,8 @@ def main() -> None:
             print_warning(f"Codebase mapping failed: {exc}")
             print_info("Proceeding without codebase map.")
 
-    _current_state.completed_phases.append("codebase_map")
+    if "codebase_map" not in _current_state.completed_phases:
+        _current_state.completed_phases.append("codebase_map")
 
     # -------------------------------------------------------------------
     # Phase 0.6: Design Reference Extraction (UI_REQUIREMENTS.md)
@@ -4576,7 +4928,8 @@ def main() -> None:
                             f"continuing without UI requirements document"
                         )
 
-        _current_state.completed_phases.append("design_extraction")
+        if "design_extraction" not in _current_state.completed_phases:
+            _current_state.completed_phases.append("design_extraction")
 
     else:
         # v10: Fallback UI requirements when no --design-ref provided
@@ -4625,7 +4978,8 @@ def main() -> None:
                         f"Continuing without UI requirements."
                     )
 
-            _current_state.completed_phases.append("design_extraction")
+            if "design_extraction" not in _current_state.completed_phases:
+                _current_state.completed_phases.append("design_extraction")
 
     _current_state.current_phase = "pre_orchestration"
 
@@ -4689,7 +5043,8 @@ def main() -> None:
         except Exception as exc:
             print_warning(f"Scheduler failed: {exc}")
 
-    _current_state.completed_phases.append("pre_orchestration")
+    if "pre_orchestration" not in _current_state.completed_phases:
+        _current_state.completed_phases.append("pre_orchestration")
     _current_state.current_phase = "orchestration"
 
     # M1: Capture pre-orchestration review cycles for staleness detection (Issue #1, #2)
@@ -4879,7 +5234,8 @@ def main() -> None:
 
         # Update phase after orchestration
         if _current_state:
-            _current_state.completed_phases.append("orchestration")
+            if "orchestration" not in _current_state.completed_phases:
+                _current_state.completed_phases.append("orchestration")
             _current_state.current_phase = "post_orchestration"
         if design_ref_urls and _current_state:
             if ui_requirements_content:
@@ -5288,50 +5644,126 @@ def main() -> None:
     # End-of-run: Audit-Team parallel review (after review recovery)
     # -------------------------------------------------------------------
     audit_report: AuditTeamReport | None = None
-    if config.audit_team.enabled and config.audit_team.end_of_run:
-        # Resume guard — skip if already completed in a previous run
+    if config.audit_team.enabled and config.audit_team.end_of_run:  # cost-aware
+        # Resume guard -- skip if already completed in a previous run
         if _current_state and "audit_team" in _current_state.completed_phases:
             print_info("Audit-team already completed in previous run, skipping.")
         else:
-            if _current_state:
-                _current_state.current_phase = "audit_team"
-            try:
-                audit_cost, audit_report = asyncio.run(_run_audit_team(
-                    cwd=cwd,
-                    config=config,
-                    depth=depth,
-                    constraints=constraints,
-                    intervention=intervention,
-                    task_text=effective_task,
-                    scope_label="end-of-run",
-                ))
+            # Compute completion ratio for audit scaling decision.
+            # In milestone mode, use milestone completion; otherwise use
+            # convergence ratio (checked / total requirements).
+            _audit_completion_ratio = 1.0
+            if _use_milestones and _current_state:
+                _audit_completion_ratio = getattr(_current_state, "completion_ratio", 1.0)
+            elif convergence_report.total_requirements > 0:
+                _audit_completion_ratio = convergence_report.convergence_ratio
+
+            _skip_audit = False
+            _reduced_audit = False
+
+            if _audit_completion_ratio < 0.5:
+                print_info(
+                    "Skipping end-of-run audit — less than 50% milestones complete"
+                )
+                _skip_audit = True
+            elif _audit_completion_ratio < 0.8:
+                print_info(
+                    f"Reduced end-of-run audit (completion {_audit_completion_ratio:.0%}) "
+                    f"— running 2 auditors instead of 5"
+                )
+                _reduced_audit = True
+
+            if _skip_audit:
+                pass  # No audit at all — completion too low
+            elif _reduced_audit:
+                _saved_iface = config.audit_team.interface_auditor
+                _saved_lib = config.audit_team.library_auditor
+                _saved_tech = config.audit_team.technical_auditor
+                config.audit_team.interface_auditor = False
+                config.audit_team.library_auditor = False
+                config.audit_team.technical_auditor = False
                 if _current_state:
-                    _current_state.total_cost += audit_cost
-                    _current_state.audit_score = audit_report.overall_score
-                    _current_state.audit_health = audit_report.health
-                    _current_state.audit_fix_rounds = audit_report.fix_rounds_used
-                if audit_report.health == "passed":
-                    print_success(
-                        f"Audit-team passed: score={audit_report.overall_score:.2f}, "
-                        f"{audit_report.total_pass} pass, {audit_report.total_fail} fail."
-                    )
-                elif audit_report.health == "critical":
-                    print_warning(
-                        f"Audit-team CRITICAL: score={audit_report.overall_score:.2f}, "
-                        f"{audit_report.total_fail} failures after {audit_report.fix_rounds_used} fix rounds."
-                    )
-                else:
-                    print_info(
-                        f"Audit-team needs-fixes: score={audit_report.overall_score:.2f}, "
-                        f"{audit_report.total_fail} failures after {audit_report.fix_rounds_used} fix rounds."
-                    )
-                # NOTE: "critical" health is intentionally NOT marked complete.
-                # On resume, the audit will re-run to give another chance after
-                # potential manual or intermediate fixes between runs.
-                if _current_state and audit_report and audit_report.health in ("passed", "needs-fixes"):
-                    _current_state.completed_phases.append("audit_team")
-            except Exception as exc:
-                print_warning(f"Audit-team failed: {exc}\n{traceback.format_exc()}")
+                    _current_state.current_phase = "audit_team"
+                try:
+                    audit_cost, audit_report = asyncio.run(_run_audit_team(
+                        cwd=cwd,
+                        config=config,
+                        depth=depth,
+                        constraints=constraints,
+                        intervention=intervention,
+                        task_text=effective_task,
+                        scope_label="end-of-run",
+                        prd_path=getattr(args, "prd", None),
+                    ))
+                    if _current_state:
+                        _current_state.total_cost += audit_cost
+                        _current_state.audit_score = audit_report.overall_score
+                        _current_state.audit_health = audit_report.health
+                        _current_state.audit_fix_rounds = audit_report.fix_rounds_used
+                    if audit_report.health == "passed":
+                        print_success(
+                            f"Audit-team passed (reduced): score={audit_report.overall_score:.2f}, "
+                            f"{audit_report.total_pass} pass, {audit_report.total_fail} fail."
+                        )
+                    else:
+                        print_info(
+                            f"Audit-team {audit_report.health} (reduced): "
+                            f"score={audit_report.overall_score:.2f}, "
+                            f"{audit_report.total_fail} failures after "
+                            f"{audit_report.fix_rounds_used} fix rounds."
+                        )
+                    if _current_state and audit_report and audit_report.health in ("passed", "needs-fixes"):
+                        if "audit_team" not in _current_state.completed_phases:
+                            _current_state.completed_phases.append("audit_team")
+                except Exception as exc:
+                    print_warning(f"Audit-team (reduced) failed: {exc}\n{traceback.format_exc()}")
+                finally:
+                    config.audit_team.interface_auditor = _saved_iface
+                    config.audit_team.library_auditor = _saved_lib
+                    config.audit_team.technical_auditor = _saved_tech
+            else:
+                # Full audit: completion >= 80%
+                if _current_state:
+                    _current_state.current_phase = "audit_team"
+                try:
+                    audit_cost, audit_report = asyncio.run(_run_audit_team(
+                        cwd=cwd,
+                        config=config,
+                        depth=depth,
+                        constraints=constraints,
+                        intervention=intervention,
+                        task_text=effective_task,
+                        scope_label="end-of-run",
+                        prd_path=getattr(args, "prd", None),
+                    ))
+                    if _current_state:
+                        _current_state.total_cost += audit_cost
+                        _current_state.audit_score = audit_report.overall_score
+                        _current_state.audit_health = audit_report.health
+                        _current_state.audit_fix_rounds = audit_report.fix_rounds_used
+                    if audit_report.health == "passed":
+                        print_success(
+                            f"Audit-team passed: score={audit_report.overall_score:.2f}, "
+                            f"{audit_report.total_pass} pass, {audit_report.total_fail} fail."
+                        )
+                    elif audit_report.health == "critical":
+                        print_warning(
+                            f"Audit-team CRITICAL: score={audit_report.overall_score:.2f}, "
+                            f"{audit_report.total_fail} failures after {audit_report.fix_rounds_used} fix rounds."
+                        )
+                    else:
+                        print_info(
+                            f"Audit-team needs-fixes: score={audit_report.overall_score:.2f}, "
+                            f"{audit_report.total_fail} failures after {audit_report.fix_rounds_used} fix rounds."
+                        )
+                    # NOTE: "critical" health is intentionally NOT marked complete.
+                    # On resume, the audit will re-run to give another chance after
+                    # potential manual or intermediate fixes between runs.
+                    if _current_state and audit_report and audit_report.health in ("passed", "needs-fixes"):
+                        if "audit_team" not in _current_state.completed_phases:
+                            _current_state.completed_phases.append("audit_team")
+                except Exception as exc:
+                    print_warning(f"Audit-team failed: {exc}\n{traceback.format_exc()}")
 
     # -------------------------------------------------------------------
     # Compute scan scope based on depth for post-orchestration scans
@@ -5350,6 +5782,13 @@ def main() -> None:
                 )
         except Exception:
             pass  # Fall back to full scan on any error
+
+    # Configure scan exclusions from config (merge user dirs with built-in EXCLUDED_DIRS)
+    try:
+        from .quality_checks import configure_scan_exclusions
+        configure_scan_exclusions(config.post_orchestration_scans.scan_exclude_dirs)
+    except Exception:
+        pass  # Non-fatal — built-in EXCLUDED_DIRS still active
 
     # -------------------------------------------------------------------
     # Post-orchestration: Mock data scan (standard + milestone modes)
@@ -5984,7 +6423,8 @@ def main() -> None:
 
                 # Only mark backend phase complete when tests actually ran and passed (or partial)
                 if _current_state and api_report.health in ("passed", "partial"):
-                    _current_state.completed_phases.append("e2e_backend")
+                    if "e2e_backend" not in _current_state.completed_phases:
+                        _current_state.completed_phases.append("e2e_backend")
                     try:
                         from .state import save_state as _save_state_e2e2
                         _save_state_e2e2(_current_state, directory=str(Path(cwd) / ".agent-team"))
@@ -6062,7 +6502,8 @@ def main() -> None:
 
                 # Only mark frontend phase complete when tests actually ran and passed (or partial)
                 if _current_state and pw_report.health in ("passed", "partial"):
-                    _current_state.completed_phases.append("e2e_frontend")
+                    if "e2e_frontend" not in _current_state.completed_phases:
+                        _current_state.completed_phases.append("e2e_frontend")
                     try:
                         from .state import save_state as _save_state_e2e3
                         _save_state_e2e3(_current_state, directory=str(Path(cwd) / ".agent-team"))
@@ -6097,7 +6538,8 @@ def main() -> None:
 
             if _current_state:
                 _current_state.total_cost += e2e_cost
-                _current_state.completed_phases.append("e2e_testing")
+                if "e2e_testing" not in _current_state.completed_phases:
+                    _current_state.completed_phases.append("e2e_testing")
 
             # Display E2E results
             print_info(
@@ -6447,7 +6889,8 @@ def main() -> None:
                     generate_unresolved_issues(bw_workflows_dir, failed_results)
 
                 if _current_state and browser_report.health in ("passed", "partial"):
-                    _current_state.completed_phases.append("browser_testing")
+                    if "browser_testing" not in _current_state.completed_phases:
+                        _current_state.completed_phases.append("browser_testing")
                     _current_state.artifacts["browser_readiness_report"] = str(
                         browser_base / "BROWSER_READINESS_REPORT.md"
                     )
@@ -6497,7 +6940,8 @@ def main() -> None:
         print_recovery_report(len(recovery_types), recovery_types)
 
     if _current_state:
-        _current_state.completed_phases.append("post_orchestration")
+        if "post_orchestration" not in _current_state.completed_phases:
+            _current_state.completed_phases.append("post_orchestration")
         _current_state.current_phase = "verification"
 
         # Persist tracking document artifact paths in state
@@ -6573,7 +7017,7 @@ def main() -> None:
             # Build state and write summary
             state = ProgressiveVerificationState()
             update_verification_state(state, result)
-            write_verification_summary(state, verification_path)
+            write_verification_summary(state, verification_path, run_state=_current_state)
 
             print_verification_summary({
                 "overall_health": state.overall_health,
@@ -6596,7 +7040,8 @@ def main() -> None:
             print_warning(f"Post-orchestration verification failed: {exc}")
 
     if _current_state:
-        _current_state.completed_phases.append("verification")
+        if "verification" not in _current_state.completed_phases:
+            _current_state.completed_phases.append("verification")
         _current_state.current_phase = "complete"
 
     # -------------------------------------------------------------------

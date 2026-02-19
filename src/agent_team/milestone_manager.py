@@ -34,7 +34,7 @@ class MasterPlanMilestone:
 
     id: str  # e.g. "milestone-1"
     title: str
-    status: str = "PENDING"  # PENDING | IN_PROGRESS | COMPLETE | FAILED
+    status: str = "PENDING"  # PENDING | IN_PROGRESS | COMPLETE | DEGRADED | FAILED
     dependencies: list[str] = field(default_factory=list)
     description: str = ""
 
@@ -48,14 +48,14 @@ class MasterPlan:
     milestones: list[MasterPlanMilestone] = field(default_factory=list)
 
     def all_complete(self) -> bool:
-        """Return True when every milestone is COMPLETE."""
+        """Return True when every milestone is COMPLETE or DEGRADED."""
         return bool(self.milestones) and all(
-            m.status == "COMPLETE" for m in self.milestones
+            m.status in ("COMPLETE", "DEGRADED") for m in self.milestones
         )
 
     def get_ready_milestones(self) -> list[MasterPlanMilestone]:
-        """Return milestones whose dependencies are all COMPLETE and that are PENDING."""
-        completed_ids = {m.id for m in self.milestones if m.status == "COMPLETE"}
+        """Return milestones whose dependencies are all COMPLETE/DEGRADED and that are PENDING."""
+        completed_ids = {m.id for m in self.milestones if m.status in ("COMPLETE", "DEGRADED")}
         return [
             m
             for m in self.milestones
@@ -349,7 +349,7 @@ def compute_rollup_health(
         return {"total": 0, "health": "unknown"}
 
     counts: dict[str, int] = {
-        "PENDING": 0, "IN_PROGRESS": 0, "COMPLETE": 0, "FAILED": 0,
+        "PENDING": 0, "IN_PROGRESS": 0, "COMPLETE": 0, "DEGRADED": 0, "FAILED": 0,
     }
     for m in plan.milestones:
         key = m.status.upper()
@@ -365,7 +365,7 @@ def compute_rollup_health(
 
     return {
         "total": total,
-        "complete": counts.get("COMPLETE", 0),
+        "complete": counts.get("COMPLETE", 0) + counts.get("DEGRADED", 0),
         "in_progress": counts.get("IN_PROGRESS", 0),
         "pending": counts.get("PENDING", 0),
         "failed": failed,

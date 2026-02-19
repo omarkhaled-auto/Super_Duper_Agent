@@ -11,7 +11,7 @@ orchestrator:
   model: opus
   max_turns: 400       # Smaller run — less code to write
   permission_mode: bypassPermissions
-  max_budget_usd: 35.0
+  max_budget_usd: 300.0
 
 depth:
   default: exhaustive
@@ -65,16 +65,16 @@ tracking_documents:
 
 database_scans:
   dual_orm_scan: false
-  default_value_scan: true
+  default_value_scan: false    # Disabled — false positives on .venv/ wasted fix cycles
   relationship_scan: false
 
 post_orchestration_scans:
-  mock_data_scan: true
+  mock_data_scan: false        # Disabled — false positives on .venv/ (charset_normalizer)
   ui_compliance_scan: false
-  api_contract_scan: true     # Critical — Run 4 validates ALL SVC contracts
+  api_contract_scan: true      # Critical — Run 4 validates ALL SVC contracts
   silent_data_loss_scan: false
   endpoint_xref_scan: false
-  max_scan_fix_passes: 2
+  max_scan_fix_passes: 1       # Reduced — single pass sufficient
 
 tech_research:
   enabled: true
@@ -91,6 +91,17 @@ verification:
   run_tests: true
   run_build: true
   run_security: true
+
+audit_team:
+  enabled: true
+  auditors:
+    - requirements
+    - technical
+    - interface
+    - test
+    - library
+  max_fix_rounds: 2            # Cap at 2 — Round 3 caused regressions in M2
+  severity_gate: HIGH          # Only fix HIGH+ findings
 
 quality:
   production_defaults: true
@@ -110,9 +121,9 @@ display:
 
 # Run4-specific configuration (parsed by Run4Config, ignored by AgentTeamConfig)
 run4:
-  build1_project_root: "C:/Projects/super-team"
-  build2_project_root: "C:/Projects/agent-team-v15"
-  build3_project_root: "C:/Projects/super-team"
+  build1_project_root: "C:/MY_PROJECTS/super-team"
+  build2_project_root: "C:/MY_PROJECTS/agent-team-v15"
+  build3_project_root: "C:/MY_PROJECTS/super-team"
   output_dir: ".run4"
   compose_project_name: "super-team-run4"
   docker_compose_files:

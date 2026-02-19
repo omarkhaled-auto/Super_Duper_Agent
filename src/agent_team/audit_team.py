@@ -1,6 +1,6 @@
 """Audit-Team Review System for Agent Team.
 
-Provides a 5-auditor parallel review architecture that replaces the single
+Provides a 6-auditor parallel review architecture that replaces the single
 reviewer pattern.  Each auditor specializes in one domain:
 
 1. **Requirements auditor** — checks every REQ-xxx / DESIGN-xxx against code
@@ -8,6 +8,7 @@ reviewer pattern.  Each auditor specializes in one domain:
 3. **Interface auditor** — checks WIRE-xxx, SVC-xxx, INT-xxx contracts
 4. **Test auditor** — checks test coverage, runs tests, verifies counts
 5. **Library auditor** — checks third-party API usage via Context7
+6. **PRD fidelity auditor** — cross-references original PRD against REQUIREMENTS.md files
 
 Findings are scored and triaged, then fix agents are dispatched for
 issues CRITICAL through the configured severity gate.
@@ -26,9 +27,9 @@ from typing import Any
 
 @dataclass
 class AuditFinding:
-    """A single audit finding from one of the 5 auditors."""
+    """A single audit finding from one of the 6 auditors."""
 
-    auditor: str          # "requirements" | "technical" | "interface" | "test" | "library"
+    auditor: str          # "requirements" | "technical" | "interface" | "test" | "library" | "prd_fidelity"
     severity: str         # "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO"
     requirement_id: str   # REQ-001, TECH-002, SVC-003, etc.  May be "" for cross-cutting.
     verdict: str          # "PASS" | "FAIL" | "PARTIAL"
@@ -67,7 +68,7 @@ _SEVERITY_ORDER: dict[str, int] = {
 VALID_SEVERITIES = frozenset(_SEVERITY_ORDER.keys())
 VALID_VERDICTS = frozenset({"PASS", "FAIL", "PARTIAL"})
 VALID_AUDITORS = frozenset({
-    "requirements", "technical", "interface", "test", "library",
+    "requirements", "technical", "interface", "test", "library", "prd_fidelity",
 })
 
 
@@ -268,6 +269,86 @@ IMPORTANT: Only flag issues you can VERIFY against documentation. Do not
 guess — if Context7 doesn't have the library, note it and move on.
 """
 
+PRD_FIDELITY_AUDITOR_PROMPT = r"""[PHASE: AUDIT-TEAM — PRD FIDELITY AUDITOR]
+
+You are the PRD FIDELITY AUDITOR in the audit-team review system.  Your ONLY
+job is to verify that the ORIGINAL PRD (Product Requirements Document) is
+faithfully and completely captured in the milestone REQUIREMENTS.md files.
+
+This is a TRACEABILITY audit: you compare the source-of-truth PRD against the
+derived REQUIREMENTS.md specifications to detect requirements that were dropped,
+distorted, or invented during decomposition.
+
+## Input
+
+### Original PRD
+{prd_text}
+
+### Milestone REQUIREMENTS.md Files
+Read ALL REQUIREMENTS.md files found under {requirements_dir}/.
+This includes the top-level REQUIREMENTS.md and any milestone-specific files
+(e.g., milestones/MS-1/REQUIREMENTS.md, milestones/MS-2/REQUIREMENTS.md, etc.).
+
+## Verification Process
+
+Compare the original PRD against all milestone REQUIREMENTS.md files.
+For each REQ-xxx, TECH-xxx, WIRE-xxx, SVC-xxx, TEST-xxx, SEC-xxx in the PRD:
+
+1. Find the corresponding entry in a milestone REQUIREMENTS.md
+2. Verify the acceptance criteria match (quantitative values, counts, file names,
+   function names, field names, API endpoints, data types, constraints)
+3. Classify the result:
+
+### Classification Categories
+
+**DROPPED** — A PRD requirement exists but has NO corresponding entry in any
+REQUIREMENTS.md file. The requirement was lost during decomposition.
+- Verdict: FAIL
+- Search for: section headings, numbered items, bullet points, acceptance
+  criteria, user stories, functional requirements, non-functional requirements
+
+**DISTORTED** — A PRD requirement exists in a REQUIREMENTS.md but the acceptance
+criteria, quantities, constraints, or behavior description has been changed.
+- Verdict: PARTIAL
+- Check for: different counts/thresholds, renamed fields/functions, relaxed
+  constraints, missing edge cases, changed data types, altered API contracts
+
+**ORPHANED** — A REQUIREMENTS.md item exists but does NOT trace back to any
+section or requirement in the original PRD. It was invented during decomposition.
+- Verdict: FAIL
+- Note: Some ORPHANED items may be legitimate technical implementation details
+  (e.g., TECH-xxx for error handling patterns). Use judgment — only flag items
+  that represent FUNCTIONAL requirements not grounded in the PRD.
+
+## Output
+Write your findings to {output_path} using this EXACT format for each finding:
+
+## FINDING-NNN
+- **Requirement**: <the requirement ID from PRD or REQUIREMENTS.md>
+- **Verdict**: PASS | FAIL | PARTIAL
+- **Severity**: CRITICAL | HIGH | MEDIUM | LOW | INFO
+- **File**: <path to the REQUIREMENTS.md file where this was found or expected>
+- **Description**: [DROPPED|DISTORTED|ORPHANED] <what happened>
+- **Evidence**: PRD says: "<exact PRD text>" | REQUIREMENTS.md says: "<exact text>" (or "NOT FOUND")
+
+## Severity Guidelines
+- CRITICAL: Entire PRD section missing from all REQUIREMENTS.md files (multiple requirements DROPPED)
+- HIGH: Individual PRD requirement DROPPED — no corresponding entry in any REQUIREMENTS.md
+- MEDIUM: PRD requirement DISTORTED — acceptance criteria changed, thresholds altered, fields renamed
+- LOW: Minor wording difference that does not change functional meaning
+- INFO: ORPHANED item that is a reasonable technical addition, or PRD requirement correctly captured (PASS)
+
+## Important Rules
+1. Be EXHAUSTIVE — check EVERY quantitative claim in the PRD (counts, sizes, timeouts,
+   field names, function signatures, API endpoints, database columns)
+2. For each PRD section, report at least one finding (PASS if correctly captured)
+3. Quote the EXACT text from both documents in your evidence
+4. Do NOT compare PRD against code — that is the job of other auditors.
+   You ONLY compare PRD text against REQUIREMENTS.md text.
+5. Functional requirements that appear in the PRD but not in any REQUIREMENTS.md
+   are the MOST important findings — these represent silent requirement drops.
+"""
+
 # NOTE: AUDIT_SCORER_PROMPT is reserved for future LLM-based scoring/dedup.
 # Currently, scoring is done in Python via score_audit_findings().
 # This prompt is NOT used in the pipeline but is kept for potential upgrade
@@ -453,6 +534,7 @@ def parse_all_audit_reports(
         "interface": "interface_audit.md",
         "test": "test_audit.md",
         "library": "library_audit.md",
+        "prd_fidelity": "prd_fidelity_audit.md",
     }
 
     for auditor_name, filename in auditor_files.items():
@@ -599,8 +681,32 @@ def get_auditor_prompt(
     auditor_name: str,
     requirements_path: str,
     output_path: str,
+    *,
+    prd_text: str = "",
+    requirements_dir: str = "",
 ) -> str:
-    """Return the prompt for a specific auditor, formatted with paths."""
+    """Return the prompt for a specific auditor, formatted with paths.
+
+    Parameters
+    ----------
+    auditor_name : str
+        One of the VALID_AUDITORS names.
+    requirements_path : str
+        Path to the REQUIREMENTS.md file (used by most auditors).
+    output_path : str
+        Path where the auditor should write its findings.
+    prd_text : str
+        Original PRD text (only used by ``prd_fidelity`` auditor).
+    requirements_dir : str
+        Top-level requirements directory (only used by ``prd_fidelity`` auditor).
+    """
+    if auditor_name == "prd_fidelity":
+        return PRD_FIDELITY_AUDITOR_PROMPT.format(
+            prd_text=prd_text,
+            requirements_dir=requirements_dir,
+            output_path=output_path,
+        )
+
     prompts = {
         "requirements": REQUIREMENTS_AUDITOR_PROMPT,
         "technical": TECHNICAL_AUDITOR_PROMPT,
@@ -633,13 +739,19 @@ def get_scorer_prompt(
 def get_active_auditors(
     config: Any,
     depth: str = "standard",
+    *,
+    has_prd: bool = False,
 ) -> list[str]:
     """Return the list of auditor names to deploy based on config and depth.
 
     Depth gating:
     - quick: [] (disabled)
     - standard: requirements, technical, test
-    - thorough/exhaustive: all 5
+    - thorough/exhaustive: all 5 core auditors + prd_fidelity (if PRD available)
+
+    The ``prd_fidelity`` auditor is only included when ``has_prd`` is True
+    (a PRD file path is available) AND the auditor is enabled in config.
+    It is gated to thorough/exhaustive depth like the interface and library auditors.
     """
     if not config.audit_team.enabled:
         return []
@@ -666,5 +778,9 @@ def get_active_auditors(
         for name, enabled in mapping.items():
             if enabled:
                 auditors.append(name)
+
+        # PRD fidelity auditor: only when PRD is available and auditor is enabled
+        if has_prd and config.audit_team.prd_fidelity_auditor:
+            auditors.append("prd_fidelity")
 
     return auditors

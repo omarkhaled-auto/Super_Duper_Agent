@@ -193,7 +193,9 @@ class CodebaseMapConfig:
     max_file_size_kb_ts: int = 100   # TS/JS files (codegen can be larger)
     timeout_seconds: int = 30
     exclude_patterns: list[str] = field(default_factory=lambda: [
-        "node_modules", ".git", "__pycache__", "dist", "build", ".next", "venv",
+        "node_modules", ".git", "__pycache__", "dist", "build", ".next",
+        "venv", ".venv", "vendor", "site-packages", ".egg-info",
+        ".tox", ".mypy_cache", ".pytest_cache",
     ])
 
 
@@ -304,6 +306,11 @@ class PostOrchestrationScanConfig:
     silent_data_loss_scan: bool = True  # SDL-001 CQRS persistence check
     endpoint_xref_scan: bool = True   # XREF-001 frontend-backend endpoint cross-reference
     max_scan_fix_passes: int = 1  # Max fix iterations per scan (1=single pass, 2+=multi-pass)
+    scan_exclude_dirs: list[str] = field(default_factory=lambda: [
+        ".venv", "venv", "node_modules", "__pycache__", ".git",
+        "dist", "build", "vendor", ".tox", ".mypy_cache", ".pytest_cache",
+        "site-packages", ".egg-info",
+    ])  # Additional directories to exclude from all scans
 
 
 @dataclass
@@ -425,9 +432,11 @@ class TechResearchConfig:
 class AuditTeamConfig:
     """Configuration for the audit-team parallel review system.
 
-    When ``enabled``, a 5-auditor team runs after milestone execution and/or
+    When ``enabled``, a 6-auditor team runs after milestone execution and/or
     at end-of-run to verify requirements, code quality, wiring, tests, and
-    library API correctness.  Findings are scored and fix agents dispatched
+    library API correctness.  The 6th auditor (prd_fidelity) cross-references
+    the original PRD against derived REQUIREMENTS.md files to detect dropped
+    or distorted requirements.  Findings are scored and fix agents dispatched
     for issues above the severity gate.
     """
 
@@ -437,6 +446,7 @@ class AuditTeamConfig:
     interface_auditor: bool = True
     test_auditor: bool = True
     library_auditor: bool = True
+    prd_fidelity_auditor: bool = True  # Cross-reference PRD vs REQUIREMENTS.md (requires --prd)
     pass_threshold: float = 0.9      # 90% pass rate to skip fixes
     severity_gate: str = "MEDIUM"    # Fix everything >= this severity
     max_fix_rounds: int = 3          # Max fix-reaudit cycles
@@ -592,6 +602,7 @@ def apply_depth_quality_gating(
         # Standard: audit team runs with 3 auditors (req, tech, test) and 2 fix rounds
         _gate("audit_team.interface_auditor", False, config.audit_team, "interface_auditor")
         _gate("audit_team.library_auditor", False, config.audit_team, "library_auditor")
+        _gate("audit_team.prd_fidelity_auditor", False, config.audit_team, "prd_fidelity_auditor")
         _gate("audit_team.max_fix_rounds", 2, config.audit_team, "max_fix_rounds")
         # Standard: tech research enabled with reduced queries
         _gate("tech_research.max_queries_per_tech", 2, config.tech_research, "max_queries_per_tech")
@@ -599,7 +610,7 @@ def apply_depth_quality_gating(
         _gate("integrity_scans.prd_reconciliation", False, config.integrity_scans, "prd_reconciliation")
 
     elif depth == "thorough":
-        # Thorough: all 5 auditors, max 2 fix rounds
+        # Thorough: all 6 auditors (prd_fidelity if PRD available), max 2 fix rounds
         _gate("audit_team.max_fix_rounds", 2, config.audit_team, "max_fix_rounds")
         # Thorough auto-enables E2E and bumps retries
         _gate("e2e_testing.enabled", True, config.e2e_testing, "enabled")
@@ -611,7 +622,7 @@ def apply_depth_quality_gating(
             _gate("browser_testing.max_fix_retries", 3, config.browser_testing, "max_fix_retries")
 
     elif depth == "exhaustive":
-        # Exhaustive: all 5 auditors, max 3 fix rounds (default)
+        # Exhaustive: all 6 auditors (prd_fidelity if PRD available), max 3 fix rounds (default)
         _gate("audit_team.max_fix_rounds", 3, config.audit_team, "max_fix_rounds")
         # Exhaustive: max tech research queries
         _gate("tech_research.max_queries_per_tech", 6, config.tech_research, "max_queries_per_tech")
@@ -1243,6 +1254,7 @@ def _dict_to_config(data: dict[str, Any]) -> tuple[AgentTeamConfig, set[str]]:
             silent_data_loss_scan=pos.get("silent_data_loss_scan", cfg.post_orchestration_scans.silent_data_loss_scan),
             endpoint_xref_scan=pos.get("endpoint_xref_scan", cfg.post_orchestration_scans.endpoint_xref_scan),
             max_scan_fix_passes=_msfp_val,
+            scan_exclude_dirs=pos.get("scan_exclude_dirs", cfg.post_orchestration_scans.scan_exclude_dirs),
         )
     elif "milestone" in data and isinstance(data["milestone"], dict):
         # Backward compat: migrate milestone.mock_data_scan / ui_compliance_scan
@@ -1288,7 +1300,8 @@ def _dict_to_config(data: dict[str, Any]) -> tuple[AgentTeamConfig, set[str]]:
         at = data["audit_team"]
         for key in ("enabled", "max_fix_rounds", "per_milestone", "end_of_run",
                     "requirements_auditor", "technical_auditor", "interface_auditor",
-                    "test_auditor", "library_auditor", "pass_threshold", "severity_gate"):
+                    "test_auditor", "library_auditor", "prd_fidelity_auditor",
+                    "pass_threshold", "severity_gate"):
             if key in at:
                 user_overrides.add(f"audit_team.{key}")
         severity_gate = at.get("severity_gate", cfg.audit_team.severity_gate)
@@ -1304,6 +1317,7 @@ def _dict_to_config(data: dict[str, Any]) -> tuple[AgentTeamConfig, set[str]]:
             interface_auditor=at.get("interface_auditor", cfg.audit_team.interface_auditor),
             test_auditor=at.get("test_auditor", cfg.audit_team.test_auditor),
             library_auditor=at.get("library_auditor", cfg.audit_team.library_auditor),
+            prd_fidelity_auditor=at.get("prd_fidelity_auditor", cfg.audit_team.prd_fidelity_auditor),
             pass_threshold=float(at.get("pass_threshold", cfg.audit_team.pass_threshold)),
             severity_gate=severity_gate,
             max_fix_rounds=at.get("max_fix_rounds", cfg.audit_team.max_fix_rounds),

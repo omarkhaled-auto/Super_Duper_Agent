@@ -109,15 +109,42 @@ _MAX_VIOLATIONS = 100
 
 _MAX_FILE_SIZE = 100_000  # 100 KB — skip files larger than this
 
-_SKIP_DIRS: frozenset[str] = frozenset({
-    "node_modules",
-    ".git",
-    "__pycache__",
-    "dist",
-    "build",
-    ".next",
-    "venv",
+# Directories that should be excluded from all filesystem scans.
+# Third-party code (virtualenvs, node_modules, etc.) produces massive
+# false-positive noise — scanning them wastes money on fix agents that
+# correctly refuse to modify vendor files.
+EXCLUDED_DIRS: frozenset[str] = frozenset({
+    ".venv", "venv", "node_modules", "__pycache__", ".git",
+    "dist", "build", "vendor", ".tox", ".mypy_cache", ".pytest_cache",
+    "site-packages", ".egg-info", ".next", "env", ".angular",
+    "coverage", ".nuxt", ".output", ".svelte-kit",
 })
+
+# Mutable module-level skip set.  Starts as EXCLUDED_DIRS; callers can
+# extend it via ``configure_scan_exclusions()`` to merge config-driven dirs.
+_SKIP_DIRS: frozenset[str] = EXCLUDED_DIRS
+
+
+def configure_scan_exclusions(extra_dirs: list[str] | None = None) -> None:
+    """Merge user-configured exclusion directories into the module skip set.
+
+    Call this once from the CLI before invoking any scan functions.
+    The merged set is used by *all* scan functions (``_iter_source_files``,
+    ``_should_skip_dir``, ``_path_in_excluded_dir``, and the XREF skip set).
+
+    Args:
+        extra_dirs: Additional directory names to exclude (from config
+            ``post_orchestration_scans.scan_exclude_dirs``).  ``None`` or
+            an empty list is a no-op.
+    """
+    global _SKIP_DIRS, _XREF_SKIP_PARTS  # noqa: PLW0603
+    if extra_dirs:
+        _SKIP_DIRS = EXCLUDED_DIRS | frozenset(extra_dirs)
+    else:
+        _SKIP_DIRS = EXCLUDED_DIRS
+    # Keep XREF skip set in sync
+    _XREF_SKIP_PARTS = _SKIP_DIRS | frozenset({".env"})
+
 
 _SEVERITY_ORDER: dict[str, int] = {
     "error": 0,
@@ -1207,6 +1234,16 @@ _ALL_EXTENSIONS: frozenset[str] = (
 def _should_skip_dir(name: str) -> bool:
     """Return True if a directory named *name* should be skipped."""
     return name in _SKIP_DIRS
+
+
+def _path_in_excluded_dir(file_path: Path) -> bool:
+    """Return True if *file_path* has any excluded directory in its parts.
+
+    Catches paths like ``.venv/Lib/site-packages/...`` where the parent
+    dir was already pruned from ``os.walk`` but the file was discovered
+    via ``rglob`` or ``glob`` which do NOT prune directories.
+    """
+    return any(part in _SKIP_DIRS for part in file_path.parts)
 
 
 def _should_scan_file(path: Path) -> bool:
@@ -3049,14 +3086,19 @@ def _check_enum_serialization(project_root: Path, scope: ScanScope | None = None
     JsonStringEnumConverter, every enum field sent to the frontend will
     be an integer while the frontend expects a string.
     """
-    # 1. Detect .NET — check for .csproj files
-    csproj_files = list(project_root.rglob("*.csproj"))
+    # 1. Detect .NET — check for .csproj files (filter out excluded dirs)
+    csproj_files = [
+        f for f in project_root.rglob("*.csproj")
+        if not _path_in_excluded_dir(f.relative_to(project_root))
+    ]
     if not csproj_files:
         return []  # Not a .NET project — skip entirely
 
     # 2. Check for global JsonStringEnumConverter in startup files
     for startup_name in ("Program.cs", "Startup.cs"):
         for startup_file in project_root.rglob(startup_name):
+            if _path_in_excluded_dir(startup_file.relative_to(project_root)):
+                continue
             try:
                 content = startup_file.read_text(errors="ignore")
                 if "JsonStringEnumConverter" in content:
@@ -3521,11 +3563,8 @@ _FrontendCall = collections.namedtuple("_FrontendCall", ["method", "path", "file
 _BackendRoute = collections.namedtuple("_BackendRoute", ["method", "path", "file_path", "line"])
 
 
-# Directories to skip when scanning for XREF
-_XREF_SKIP_PARTS: frozenset[str] = frozenset({
-    "node_modules", "dist", "build", ".next", ".git", "__pycache__",
-    "venv", ".venv", "env", ".env", "coverage", ".angular",
-})
+# Directories to skip when scanning for XREF — extends EXCLUDED_DIRS
+_XREF_SKIP_PARTS: frozenset[str] = EXCLUDED_DIRS | frozenset({".env"})
 
 # File suffixes to skip (test files, specs, etc.)
 _XREF_SKIP_SUFFIXES: tuple[str, ...] = (

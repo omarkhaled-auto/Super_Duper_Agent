@@ -687,6 +687,7 @@ class TestResumeFlow:
             task="build the app",
             current_milestone="milestone-2",
             completed_milestones=["milestone-1"],
+            milestone_progress={"milestone-1": {"status": "COMPLETE"}},
             milestone_order=["milestone-1", "milestone-2", "milestone-3"],
         )
 
